@@ -20,6 +20,8 @@ from .lab_teacher_inference import Client
 from .lab_transport import Pipe
 
 LIMIT = 64*1024**2
+COUNT_TABLE_SECONDS = 1800
+COUNT_TURN_SECONDS = 120
 
 
 def validate_job(job):
@@ -62,6 +64,8 @@ class Worker:
         from .lab_paths import runtime_path
         self.client, self.cancel = client, cancel
         self.job = request.get('job', {})
+        # A fixed-count table runs to its quota; only a stall should stop it.
+        self.counted = request.get('inference', {}).get('budget', {}).get('mode') == 'count'
         self.process = subprocess.Popen([str(runtime_path(executable))], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, bufsize=0, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if cpu is not None:
@@ -113,8 +117,9 @@ class Worker:
         try:
             while True:
                 require(not self.cancel.is_set(),'Teacher table cancelled; discard unpublished labels')
-                require(time.monotonic()-started < (420 if getattr(self, 'job', {}).get('h2h') else 180),'Teacher table watchdog; incomplete table discarded')
-                require(time.monotonic()-last < 30,'Stuck native search watchdog; no labels admitted')
+                counted = getattr(self, 'counted', False)
+                require(time.monotonic()-started < (COUNT_TABLE_SECONDS if counted else 420 if getattr(self, 'job', {}).get('h2h') else 180),'Teacher table watchdog; incomplete table discarded')
+                require(time.monotonic()-last < (COUNT_TURN_SECONDS if counted else 30),'Stuck native search watchdog; no labels admitted')
                 try:event = self.events.get(timeout=.05)
                 except queue.Empty:continue
                 if isinstance(event,BaseException):
@@ -206,7 +211,8 @@ class TeacherCollector:
         for job in jobs:_validate_job(job,producer)
         require(self.model is not None, 'Frozen independent model required for bounded turn verification')
         from .lab_teacher_finalization import TurnVerifier
-        self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel)
+        from .lab_cpu_runtime import count_search_limits
+        self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel,search_limits=count_search_limits(self.inference))
         c = self.calibration
         require(c['contract'] == CONTRACT and c['source'] == producer and c['core_source'] == self.core_source
                 and c['model_id'] == jobs[0]['expected']['model_id'] and c['export_hash'] == jobs[0]['expected']['export_hash']
@@ -230,7 +236,9 @@ class TeacherCollector:
                 timings=Timings()
                 with self.service.cpu.acquire(1,timings):
                     require(not self.cancel.is_set(),'Teacher collection cancelled')
+                    mono_began = time.monotonic()
                     with Pipe(self.bootstrap,binary=False) as bootstrap:origin = bootstrap.call('init',seed=job['seed'])
+                    mono_seconds = time.monotonic()-mono_began
                     request = dict(contract=CONTRACT,op='run',job=job,origin=origin,core_source=self.core_source,
                                    estimate_ns=c['estimate_ns'],calibration_id=digest(c))
                     if self.inference is not None:request['inference'] = self.inference
@@ -239,6 +247,7 @@ class TeacherCollector:
                     result = worker.collect(job['expected'],self.core_source,verifier=self.verifier)
                     if on_result is not None:
                         result['metrics']['shadow_cache_seconds']=on_result(result,job)
+                result['metrics']['mono_bootstrap_seconds'] = mono_seconds
                 result['metrics']['python_gpu_wait_seconds'] = client.wait_seconds
                 result['metrics']['cpu_admission'] = timings.report()
                 return result

@@ -79,8 +79,15 @@ PATCHES = {
         ('"verification_policy":"sampled-unbounded-verification/3"}),',
          '"verification_policy":"sampled-unbounded-verification/3",\n'
          '        "inference":crate::cpu_eval::teacher_receipt()}),'),
+        ('                k: if turn_work.fast { 4 } else { 16 },\n',
+         '                k: crate::cpu_eval::teacher_k(turn_work.fast, calibration, if turn_work.fast { 4 } else { 16 }),\n'),
         ('                simulations: 8,\n',
          '                simulations: crate::cpu_eval::teacher_simulations(turn_work.fast, calibration),\n'),
+        ('                profile_budget(clock.now_ns(), turn_work.fast)?,\n',
+         '                match crate::cpu_eval::teacher_turn_budget(clock.now_ns(), turn_work.fast, calibration)? {\n'
+         '                    Some(budget) => budget,\n'
+         '                    None => profile_budget(clock.now_ns(), turn_work.fast)?,\n'
+         '                },\n'),
         ('            let mode = if calibration {\n                Mode::Count\n',
          '            let mode = if calibration || crate::cpu_eval::teacher_count_mode() {\n                Mode::Count\n'),
         ('                    if all_seat { row["teacher"]["search_value"] = job["search_value"].clone(); }\n',

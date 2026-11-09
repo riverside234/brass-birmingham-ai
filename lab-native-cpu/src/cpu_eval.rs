@@ -9,6 +9,7 @@
 //! are built from `lab-native/` and are never compiled with it.
 use crate::{check, Result};
 use brass_ai_core::features::{FeatureTensors, ACTION_DIM, STATE_DIM};
+use brass_ai_core::search::session::clock::Budget as SearchBudget;
 use ort::{
     session::{builder::GraphOptimizationLevel, Session},
     tensor::TensorElementType,
@@ -47,6 +48,8 @@ const MAX_CANDIDATES: usize = 8192;
 /// reading an arbitrary file into memory.
 const MAX_FILE: u64 = 512 * 1024 * 1024;
 const MAX_MANIFEST: u64 = 1024 * 1024;
+/// Fixed-count searches run to their quota; this only stops a stuck worker.
+const COUNT_CAP_PER_TRAJECTORY_NS: u64 = 60_000_000;
 
 static RUNTIME: OnceLock<std::result::Result<String, String>> = OnceLock::new();
 
@@ -379,22 +382,47 @@ pub fn widen(values: &[f32]) -> Vec<f64> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Budget {
     Timed,
-    Count { full: u64, fast: u64 },
+    Count {
+        full: u64,
+        full_k: usize,
+        fast: u64,
+        fast_k: usize,
+    },
 }
 
-/// `{"mode":"count","full":N,"fast":N}` or `{"mode":"timed"}`.
+fn budget_k(value: &Value, name: &str, default: usize) -> Result<usize> {
+    match value.get(name) {
+        None => Ok(default),
+        Some(k) => Ok(k.as_u64().ok_or("invalid teacher search K")? as usize),
+    }
+}
+
+/// `{"mode":"count","full":N,"full_k":K,"fast":N,"fast_k":K}` or
+/// `{"mode":"timed"}`. A count budget without K keeps the job's 16 and 4.
 pub fn budget(value: &Value) -> Result<Budget> {
     match value["mode"].as_str() {
         Some("timed") => Ok(Budget::Timed),
         Some("count") => {
             let full = value["full"].as_u64().ok_or("missing full search count")?;
             let fast = value["fast"].as_u64().ok_or("missing fast search count")?;
+            let full_k = budget_k(value, "full_k", 16)?;
+            let fast_k = budget_k(value, "fast_k", 4)?;
             // A halving tournament over K needs K*log2(K) visits to stay at K.
             check(
                 (64..=4096).contains(&full) && (8..=4096).contains(&fast),
                 "teacher search counts outside their bounds",
             )?;
-            Ok(Budget::Count { full, fast })
+            // Labels are only ever produced by full searches, and require K=16.
+            check(
+                full_k == 16 && matches!(fast_k, 2 | 4 | 8 | 16),
+                "teacher search K outside its bounds",
+            )?;
+            Ok(Budget::Count {
+                full,
+                full_k,
+                fast,
+                fast_k,
+            })
         }
         _ => Err("unknown teacher search budget".into()),
     }
@@ -457,14 +485,67 @@ pub fn teacher_count_mode() -> bool {
 /// Calibration probes stay at the existing eight trajectories.
 pub fn teacher_simulations(fast: bool, calibration: bool) -> u64 {
     TEACHER.with(|cell| match cell.borrow().as_ref().map(|t| t.budget) {
-        Some(Budget::Count { full, fast: f }) if !calibration => {
+        Some(Budget::Count {
+            full, fast: quick, ..
+        }) if !calibration => {
             if fast {
-                f
+                quick
             } else {
                 full
             }
         }
         _ => 8,
+    })
+}
+
+fn count_cap_ns(simulations: u64, floor_ns: u64) -> u64 {
+    floor_ns.max(simulations.saturating_mul(COUNT_CAP_PER_TRAJECTORY_NS))
+}
+
+/// The turn budget for a fixed-count search; `None` keeps the job's own limits.
+pub fn teacher_turn_budget(
+    started_ns: u64,
+    fast: bool,
+    calibration: bool,
+) -> Result<Option<SearchBudget>> {
+    let budget = TEACHER.with(|cell| cell.borrow().as_ref().map(|t| t.budget));
+    let Some(Budget::Count {
+        full, fast: quick, ..
+    }) = budget
+    else {
+        return Ok(None);
+    };
+    if calibration {
+        return Ok(None);
+    }
+    let (simulations, floor_ns, post_ns) = if fast {
+        (quick, 800_000_000, 500_000_000)
+    } else {
+        (full, 4_000_000_000, 1_000_000_000)
+    };
+    let cap_ns = count_cap_ns(simulations, floor_ns);
+    let deadline_ns = started_ns
+        .checked_add(cap_ns.saturating_add(post_ns))
+        .ok_or("turn clock overflow")?;
+    Ok(Some(SearchBudget {
+        started_ns,
+        work_deadline_ns: deadline_ns - post_ns,
+        deadline_ns,
+        reserve_ns: post_ns,
+    }))
+}
+
+/// A fixed-count budget chooses K; every other mode keeps the job's own K.
+pub fn teacher_k(fast: bool, calibration: bool, job_k: usize) -> usize {
+    TEACHER.with(|cell| match cell.borrow().as_ref().map(|t| t.budget) {
+        Some(Budget::Count { full_k, fast_k, .. }) if !calibration => {
+            if fast {
+                fast_k
+            } else {
+                full_k
+            }
+        }
+        _ => job_k,
     })
 }
 
@@ -494,7 +575,7 @@ pub fn teacher_receipt() -> Value {
             "provider":"CPUExecutionProvider","intra_threads":1,"inter_threads":1,"sequential":true,
             "budget":match t.budget {
                 Budget::Timed => json!({"mode":"timed"}),
-                Budget::Count{full,fast} => json!({"mode":"count","full":full,"fast":fast}),
+                Budget::Count{full,full_k,fast,fast_k} => json!({"mode":"count","full":full,"full_k":full_k,"fast":fast,"fast_k":fast_k}),
             },
             "positions":t.positions,"forward_ns":t.forward_ns,"model":t.model.receipt()}),
         None => Value::Null,
@@ -635,12 +716,19 @@ mod tests {
         assert_eq!(budget(&json!({"mode":"timed"})).unwrap(), Budget::Timed);
         assert_eq!(
             budget(&json!({"mode":"count","full":256,"fast":48})).unwrap(),
-            Budget::Count { full: 256, fast: 48 }
+            Budget::Count { full: 256, full_k: 16, fast: 48, fast_k: 4 }
+        );
+        assert_eq!(
+            budget(&json!({"mode":"count","full":640,"full_k":16,"fast":96,"fast_k":8})).unwrap(),
+            Budget::Count { full: 640, full_k: 16, fast: 96, fast_k: 8 }
         );
         for bad in [
             json!({"mode":"count","full":8,"fast":48}),
             json!({"mode":"count","full":256,"fast":4}),
             json!({"mode":"count","full":256}),
+            json!({"mode":"count","full":640,"full_k":8,"fast":96,"fast_k":8}),
+            json!({"mode":"count","full":640,"full_k":16,"fast":96,"fast_k":3}),
+            json!({"mode":"count","full":640,"full_k":"16","fast":96}),
             json!({"mode":"other"}),
         ] {
             assert!(budget(&bad).is_err());
@@ -652,6 +740,27 @@ mod tests {
         assert_eq!(teacher_simulations(false, false), 8);
         assert_eq!(teacher_simulations(true, true), 8);
         assert!(!teacher_enabled() && !teacher_count_mode());
+    }
+
+    #[test]
+    fn the_safety_cap_scales_with_the_quota_and_keeps_its_floor() {
+        assert_eq!(count_cap_ns(640, 4_000_000_000), 38_400_000_000);
+        assert_eq!(count_cap_ns(96, 800_000_000), 5_760_000_000);
+        assert_eq!(count_cap_ns(8, 4_000_000_000), 4_000_000_000);
+        assert_eq!(count_cap_ns(u64::MAX, 1), u64::MAX);
+    }
+
+    #[test]
+    fn the_job_budget_stays_without_a_count_budget() {
+        assert!(teacher_turn_budget(0, false, false).unwrap().is_none());
+        assert!(teacher_turn_budget(0, true, true).unwrap().is_none());
+    }
+
+    #[test]
+    fn search_k_defaults_to_the_job_without_a_count_budget() {
+        assert_eq!(teacher_k(false, false, 16), 16);
+        assert_eq!(teacher_k(true, false, 4), 4);
+        assert_eq!(teacher_k(true, true, 4), 4);
     }
 
     #[test]

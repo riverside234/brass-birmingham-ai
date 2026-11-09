@@ -13,6 +13,7 @@ from .lab_contract import pin
 CONTRACT = 'brass-lab-cpu-inference/1.0.0'
 BUILD = 'brass-lab-cpu-build/1.0.0'
 SELECTOR = 'artifacts/rust-backend/cpu-inference/build.json'
+COUNT_CAP_PER_TRAJECTORY_NS = 60_000_000  # Must equal the constant in lab-native-cpu/src/cpu_eval.rs.
 
 
 def selector(root):
@@ -80,6 +81,15 @@ def core_allocation(count):
             if pool:
                 ordered.append(pool.pop(0))
     return [ordered[i % len(ordered)] for i in range(count)]
+
+
+def count_search_limits(inference):
+    """The worker's fixed-count caps, so verified turns are not refused; None if timed."""
+    if inference is None or inference['budget'].get('mode') != 'count':
+        return None
+    budget = inference['budget']
+    return dict(full=max(4_000_000_000, budget['full']*COUNT_CAP_PER_TRAJECTORY_NS),
+                fast=max(800_000_000, budget['fast']*COUNT_CAP_PER_TRAJECTORY_NS))
 
 
 def raise_open_file_limit(target=65536):

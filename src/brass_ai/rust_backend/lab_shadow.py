@@ -193,6 +193,10 @@ class ShadowCollector:
                         return admit_teacher_rows(result['rows'],job=job,model=model,history=state['history'])
                 phase.admit_collection(results,model,verifier=MixedVerifier())
             if cpu_metrics is not None:phase.metrics['cpu_inference']=cpu_metrics
+            mono=sorted(r['metrics']['mono_bootstrap_seconds'] for r in live if 'mono_bootstrap_seconds' in r['metrics'])
+            if mono:
+                phase.metrics['mono_bootstrap_seconds']=dict(tables=len(mono),min=mono[0],p50=mono[len(mono)//2],max=mono[-1],total=sum(mono))
+                print(f"Teacher Mono bootstrap: {len(mono)} tables, p50 {mono[len(mono)//2]:.3f}s, max {mono[-1]:.3f}s",flush=True)
             phase.metrics.update(shadow=phase.options['mode']=='shadow',mode=phase.options['mode'],
                 cached_tables=len(jobs)-len(missing),new_tables=len(live),wall_seconds=time.monotonic()-began,
                 gradient_qualification='Measured during ordinary PPO; never applied' if phase.options['mode']=='shadow' else

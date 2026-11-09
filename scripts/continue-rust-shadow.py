@@ -45,7 +45,7 @@ def inference_choice(args):
     if args.inference=='keep':return 'keep'
     if args.inference=='gpu':return None
     from brass_ai.recovery.collector_runtime import cpu_block,validate_cpu
-    budget=dict(mode='timed') if args.teacher_budget=='timed' else dict(mode='count',full=args.teacher_full,fast=args.teacher_fast)
+    budget=dict(mode='timed') if args.teacher_budget=='timed' else dict(mode='count',full=args.teacher_full,full_k=16,fast=args.teacher_fast,fast_k=args.teacher_fast_k)
     block=cpu_block(workers=args.workers,teacher_budget=budget,pinning='none' if args.no_pinning else 'one-lane-per-cpu')
     validate_cpu(block)
     return block
@@ -128,8 +128,9 @@ def main(*,default_mode='shadow',default_stage_revision=False):
         help='cpu: in-worker ONNX Runtime for search, ordinary and rating lanes; gpu: original service; keep: last recorded choice')
     p.add_argument('--workers',type=int,default=64,help='CPU lanes; each owns one logical CPU')
     p.add_argument('--teacher-budget',choices=('count','timed'),default='count',help='Teacher search budget on the CPU path')
-    p.add_argument('--teacher-full',type=int,default=256,help='Trajectories per full teacher search')
-    p.add_argument('--teacher-fast',type=int,default=48,help='Trajectories per fast teacher search')
+    p.add_argument('--teacher-full',type=int,default=640,help='Trajectories per full teacher search (K is fixed at 16)')
+    p.add_argument('--teacher-fast',type=int,default=96,help='Trajectories per quick teacher search')
+    p.add_argument('--teacher-fast-k',type=int,choices=(2,4,8,16),default=8,help='Considered actions per quick teacher search')
     p.add_argument('--no-pinning',action='store_true',help='Leave CPU lane placement to the operating system')
     args=p.parse_args()
     import os
@@ -146,7 +147,9 @@ def main(*,default_mode='shadow',default_stage_revision=False):
         tables=dict(train=28,held_out=4),share_target=args.share_target,qualification_iterations=4,expected_generation=args.expected_generation)
     try:
         report['execution_source']=execution()
-        kwargs=dict(mode=args.mode,inference=inference_choice(args))
+        kwargs=dict(mode=args.mode)
+        choice=inference_choice(args)
+        if choice!='keep':kwargs['inference']=choice
         if args.revise_stages:kwargs['revise_stages']=True
         state,config,remaining=prepare(ROOT,args.run,args.expected_generation,args.iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config

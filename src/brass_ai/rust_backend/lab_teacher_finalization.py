@@ -19,8 +19,9 @@ from brass_ai.recovery.teacher_labels import prepare_rows, check_logits
 
 
 class TurnVerifier:
-    def __init__(self, model, history, jobs, cancel, *, diagnostic=False):
+    def __init__(self, model, history, jobs, cancel, *, diagnostic=False, search_limits=None):
         self.model, self.history, self.cancel = model, copy.deepcopy(history), cancel
+        self.search_limits = search_limits  # Fixed-count searches may run past the job's own allowance.
         self.model_id = model_id(model)
         self.model_config = copy.deepcopy(model.config.to_dict())
         self.model_binding = self._binding()
@@ -61,6 +62,7 @@ class TurnVerifier:
         require(profile in ('fast','full'),'Invalid teacher search profile')
         fast = profile == 'fast'
         search_ns, post_ns = (800_000_000,int(FAST_POST_SECONDS*1e9)) if fast else (4_000_000_000,1_000_000_000)
+        if self.search_limits is not None:search_ns = self.search_limits[profile]
         require(not fast or (job.get('seating') == 'all-seat-search' and not meta['rows']), 'Fast searches cannot label')
         require(type(meta['remaining_ns']) is int and 0 <= meta['remaining_ns'] <= post_ns
                 and type(meta['native_post_ns']) is int and 0 <= meta['native_post_ns'] < 2**64

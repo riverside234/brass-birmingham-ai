@@ -38,6 +38,13 @@ def headed_model():
     return model
 
 
+def anchor_model():
+    """A league anchor: the imitation-learning network has no utility head."""
+    from brass_ai.learning.model import FourSeatNet, ModelConfig
+    torch.manual_seed(925)
+    return FourSeatNet(ModelConfig.preset('small')).eval()
+
+
 class Configuration(unittest.TestCase):
     def test_absent_block_keeps_the_exact_execution_object(self):
         execution = dict(processes=24, hosts_per_process=2, cpu_budget=64, cpu_reserve=4)
@@ -56,12 +63,28 @@ class Configuration(unittest.TestCase):
     def test_default_block_uses_fixed_count_budgets(self):
         block = R.cpu_block()
         R.validate_cpu(block)
-        self.assertEqual(block['teacher_budget'], dict(mode='count', full=256, fast=48))
+        self.assertEqual(block['teacher_budget'], dict(mode='count', full=640, full_k=16, fast=96, fast_k=8))
         self.assertEqual({block[k] for k in ('ordinary', 'teacher', 'rating')}, {'cpu-ort'})
 
+    def test_python_and_native_safety_caps_stay_equal(self):
+        import re
+        from brass_ai.rust_backend.lab_cpu_runtime import COUNT_CAP_PER_TRAJECTORY_NS, count_search_limits
+        text = (SOURCE_ROOT/'lab-native-cpu/src/cpu_eval.rs').read_text(encoding='utf-8')
+        native = int(re.search(r'COUNT_CAP_PER_TRAJECTORY_NS: u64 = ([0-9_]+);', text).group(1).replace('_', ''))
+        self.assertEqual(native, COUNT_CAP_PER_TRAJECTORY_NS)
+        self.assertEqual(count_search_limits(dict(budget=R.cpu_block()['teacher_budget'])), dict(full=38_400_000_000, fast=5_760_000_000))
+        self.assertIsNone(count_search_limits(None))
+        self.assertIsNone(count_search_limits(dict(budget=dict(mode='timed'))))
+
+    def test_a_recorded_budget_without_k_stays_readable(self):
+        R.validate_cpu(dict(R.cpu_block(), teacher_budget=dict(mode='count', full=256, fast=48)))
+
     def test_invalid_blocks_are_rejected(self):
+        full = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8)
         for change in (dict(workers=0), dict(pinning='sometimes'), dict(teacher_budget=dict(mode='count', full=8, fast=48)),
-                       dict(teacher_budget=dict(mode='count', full=256)), dict(teacher='tpu'), dict(extra=1)):
+                       dict(teacher_budget=dict(mode='count', full=256)), dict(teacher='tpu'), dict(extra=1),
+                       dict(teacher_budget=dict(full, full_k=8)), dict(teacher_budget=dict(full, fast_k=3)),
+                       dict(teacher_budget={k: v for k, v in full.items() if k != 'fast_k'})):
             with self.assertRaises(ValueError):
                 R.validate_cpu(dict(R.cpu_block(), **change))
         with self.assertRaises(ValueError):
@@ -77,7 +100,7 @@ class Configuration(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('continue_rust_shadow_fixture', path)
         launcher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(launcher)
-        options = dict(workers=64, teacher_budget='count', teacher_full=256, teacher_fast=48, no_pinning=False)
+        options = dict(workers=64, teacher_budget='count', teacher_full=640, teacher_fast=96, teacher_fast_k=8, no_pinning=False)
         block = launcher.inference_choice(SimpleNamespace(inference='cpu', **options))
         self.assertEqual(block, R.cpu_block())
         self.assertIsNone(launcher.inference_choice(SimpleNamespace(inference='gpu', **options)))
@@ -91,6 +114,49 @@ class Configuration(unittest.TestCase):
         rolled_back = R.configured(selected, {k: v for k, v in R.from_config(selected).items() if k != 'native_inference'})
         self.assertNotIn('native_inference', rolled_back['execution'])
         self.assertEqual(R.recipe(rolled_back), base)
+
+
+class Startup(unittest.TestCase):
+    def test_breakdown_reports_every_phase_and_the_lane_spread(self):
+        from brass_ai.rust_backend.lab_pool import STARTUP, startup_breakdown
+        lanes = [dict(spawn_seconds=.1*i, python_import_seconds=1., lane_wait_seconds=0., lease_seconds=0., session_import_seconds=.2,
+                      mono_spawn_seconds=.01, mono_bootstrap_seconds=.15+.01*i, total_seconds=2.+i, ready_time=100.+i) for i in range(4)]
+        report = startup_breakdown(lanes, 99., width=4, lanes=4, barrier=False, process_start_seconds=.5, channel_seconds=0.)
+        self.assertEqual(report['contract'], STARTUP)
+        self.assertEqual((report['first_lane_ready_seconds'], report['last_lane_ready_seconds']), (1., 4.))
+        mono = report['phases']['mono_bootstrap_seconds']
+        self.assertAlmostEqual(mono['min'], .15)
+        self.assertAlmostEqual(mono['max'], .18)
+        self.assertEqual(mono['lanes'], 4)
+        self.assertEqual(len(report['per_lane']), 4)
+        self.assertNotIn('ready_time', report['per_lane'][0])
+        self.assertFalse(report['waits_for_all_lanes'])
+
+    def test_no_lane_reports_still_produce_a_receipt(self):
+        from brass_ai.rust_backend.lab_pool import startup_breakdown
+        report = startup_breakdown([], 0., width=0, lanes=0, barrier=False, process_start_seconds=0., channel_seconds=0.)
+        self.assertIsNone(report['first_lane_ready_seconds'])
+        self.assertEqual(report['phases'], {})
+
+    def test_a_cpu_lane_needs_no_service_channel(self):
+        from brass_ai.recovery.inference import endpoint_encoder
+        from brass_ai.rust_backend.lab_cpu_inference import NoServiceEndpoint
+        endpoint = NoServiceEndpoint()
+        self.assertIs(endpoint_encoder(endpoint), endpoint_encoder(endpoint))
+        endpoint.close()
+
+    def test_a_lane_ready_message_never_counts_as_a_job_result(self):
+        from brass_ai.rust_backend.lab_pool import NativePool
+        pool = NativePool.__new__(NativePool)
+        pool.stop, pool.processes = threading.Event(), []
+        pool.service = SimpleNamespace(error=None)
+        seen = []
+        messages = [dict(ready=True, startup=dict(total_seconds=1.)), dict(result='job')]
+        connection = SimpleNamespace(poll=lambda timeout: True, recv=lambda: messages.pop(0))
+        self.assertEqual(pool.receive(connection, on_ready=seen.append), dict(result='job'))
+        self.assertEqual(seen[0]['startup'], dict(total_seconds=1.))
+        messages[:] = [dict(ready=True, startup={})]
+        self.assertEqual(pool.receive(connection)['ready'], True)
 
 
 class Probability(unittest.TestCase):
@@ -171,6 +237,62 @@ class Bundles(unittest.TestCase):
     def test_export_does_not_consume_trainer_randomness(self):
         self.assertTrue(self.rng_unchanged)
 
+    def test_anchor_without_a_utility_head_exports_a_zero_head(self):
+        import onnxruntime as ort
+        from brass_ai.learning.onnx_tools import cpu_options
+        from brass_ai.personality.laptop.export import samples
+        from brass_ai.rust_backend.lab_cpu_models import NO_REWARD, export_bundle
+        model = anchor_model()
+        self.assertIsNone(getattr(model.config, 'utility', None))
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = export_bundle(model, Path(directory)/'bundle')
+            self.assertEqual((manifest['utility'], manifest['reward_id'], manifest['max_cost']), (False, NO_REWARD, 0.))
+            self.assertEqual(manifest['outputs'][-1], 'remaining_utility_4')
+            self.assertFalse(manifest['search_delta'])
+            self.assertLess(max(manifest['parity']['errors'].values()), 2e-4)
+            session = ort.InferenceSession(str(Path(directory)/'bundle/model.onnx'), cpu_options(1), providers=['CPUExecutionProvider'])
+            config = dict(model.config.to_dict(), utility=dict(insolvency=dict(max_cost=1.)))
+            for batch in samples(config, False)[:2]:
+                out = session.run(None, batch)
+                self.assertTrue((out[4] == 0).all())
+                inputs = (torch.from_numpy(batch[k]) for k in ('states', 'actions', 'legal_mask', 'stable_to_relative'))
+                with torch.inference_mode():
+                    logits, win, placement, vp = model(*inputs)
+                finite = torch.isfinite(logits).numpy()
+                np.testing.assert_allclose(out[0][finite], logits.numpy()[finite], rtol=2e-4, atol=2e-4)
+                for index, head in enumerate((win, placement, vp), 1):
+                    np.testing.assert_allclose(out[index], head.numpy(), rtol=2e-4, atol=2e-4)
+
+    def test_rating_reply_omits_utility_for_an_anchor_exactly_like_the_service(self):
+        from brass_ai.bank import sha
+        from brass_ai.learning.batching import Request, accept_response, collate, predict_encoded
+        from brass_ai.rust_backend import lab_cpu_inference as I
+        from brass_ai.rust_backend.lab_cpu_models import export_bundle
+        from test_b025 import example
+        model = anchor_model()
+        row, _ = example(self.model)
+        identity = model_id(model)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'bundle'
+            export_bundle(model, path)
+            receipt = dict(manifest=str((path/'manifest.json').resolve()), sha256=sha(path/'manifest.json'))
+            encoder = SimpleNamespace(encode=lambda *a, **k: row.encoded)
+            endpoint = SimpleNamespace(lock=threading.RLock(), _encoder=encoder, encoding_cache=None)
+            evaluator = I.OrtEvaluator(endpoint, identity, {identity: receipt})
+            view, choices = row.row['view'], row.row['choices']
+            request = Request('r1', identity, view, choices, __import__('time').monotonic()+60)
+            reply = evaluator.predict([request])[0]
+            I.SESSIONS.values.clear()
+        accept_response(request, reply, view['context']['revision'], identity)
+        self.assertNotIn('utility', reply)
+        self.assertNotIn('reward_id', reply)
+        with torch.inference_mode():
+            arrays = predict_encoded(model, [row.encoded], 'cpu', 8192, None)
+        self.assertEqual(len(arrays), 4)
+        np.testing.assert_allclose(reply['probabilities'], arrays[0][0, :len(choices)], rtol=3e-3, atol=3e-5)
+        for index, name in enumerate(('win_share', 'placement', 'vp'), 1):
+            np.testing.assert_allclose(reply[name], arrays[index][0], rtol=2e-4, atol=2e-4)
+
     def test_search_delta_matches_the_gpu_correction(self):
         import onnxruntime as ort
         from brass_ai.learning.onnx_tools import cpu_options
@@ -247,10 +369,13 @@ class NativeWorkers(unittest.TestCase):
     def setUpClass(cls):
         torch.set_num_threads(2)
         cls.model = headed_model()
+        cls.anchor = anchor_model()
         cls.directory = tempfile.TemporaryDirectory()
         from brass_ai.rust_backend.lab_cpu_models import ensure
-        cls.bundles, _ = ensure(cls.directory.name, {model_id(cls.model): cls.model}, [model_id(cls.model)])
+        models = {model_id(cls.model): cls.model, model_id(cls.anchor): cls.anchor}
+        cls.bundles, _ = ensure(cls.directory.name, models, list(models))
         cls.identity = model_id(cls.model)
+        cls.anchor_id = model_id(cls.anchor)
         from brass_ai.rust_backend.lab_contract import pin
         runtime = pin(os.environ['BRASS_CPU_RUNTIME'])
         cls.runtime = dict(path=runtime['path'], sha256=runtime['sha256'])
@@ -296,6 +421,49 @@ class NativeWorkers(unittest.TestCase):
             self.assertEqual(report['positions'], 2)
             self.assertEqual(report['loads'], 1)
 
+    def test_collector_serves_an_anchor_with_no_utility_head(self):
+        from brass_ai.learning.batching import collate
+        from brass_ai.rust_backend.lab_transport import DecisionEncoder, feature_context
+        wide = max(self.roots, key=lambda r: len(r['expected']['choices']))
+        with self.collector() as lane:
+            lane.begin(wide['id'], dict(state=wide['expected']['state'], rail_keys=list(range(64))), 5000)
+            loaded = lane.call('load_model', model_id=self.anchor_id, bundle=self.bundles[self.anchor_id])
+            self.assertEqual(loaded['receipt']['reward_id'], '')
+            d = lane.current['decision']
+            style, intent = [0.]*4, [0.]*8
+            encoded = DecisionEncoder(lane, self.anchor_id).encode(d['view'], d['choices'], style, intent)
+            page = lane.call('infer', token=lane.token, revision=d['view']['context']['revision'],
+                             context=feature_context(self.anchor_id, style, intent))
+            n = len(d['choices'])
+            values = np.frombuffer(page['_arrays'], '<f4')
+            with torch.inference_mode():
+                logits, win, placement, vp = self.anchor(*collate([encoded], 'cpu'))
+            np.testing.assert_allclose(values[:n], logits[0].numpy(), rtol=2e-4, atol=2e-4)
+            for index, head in enumerate((win, placement, vp)):
+                np.testing.assert_allclose(values[n+4*index:n+4*index+4], head[0].numpy(), rtol=2e-4, atol=2e-4)
+            self.assertTrue((values[n+12:n+16] == 0).all())
+            lane.release()
+
+    def test_a_game_mixes_anchors_and_utility_models_like_the_league(self):
+        """The exact shape that stopped the first lab run."""
+        from brass_ai.rust_backend.lab_session import OrdinarySession
+        from brass_ai.rust_backend.lab_collection import collect_lane
+        from brass_ai.recovery.execution import neural_spec
+        native = Path(os.environ['BRASS_CPU_NATIVE'])
+        state = json.loads((native/'brass-ai-core/tests/data/initial-state.json').read_text())
+        origin = dict(state=state, rail_keys=list(range(64)))
+        binary = os.environ['BRASS_CPU_COLLECTOR']
+        endpoint = SimpleNamespace(lock=threading.RLock())
+        execution = dict(max_decisions=5000, batch_size=32, max_candidate_cells=8192)
+        learner, anchor = (neural_spec(i, 0., 'neutral', version=3) for i in (self.identity, self.anchor_id))
+        job = dict(index=0, seed=19, sampling_seed=31, policies=[learner, anchor, learner, anchor], provenance={})
+        cpu = dict(contract=R.CPU_CONTRACT, runtime=self.runtime, bundles=self.bundles, model_cache=2, pinning='none')
+        with OrdinarySession(SOURCE_ROOT, binary, endpoint, execution, cpu=cpu) as session:
+            first = collect_lane(SOURCE_ROOT, binary, None, job, endpoint, execution, origin=origin, session=session)
+        records = first['game']['records']
+        self.assertEqual({r['behavior']['policy_id'] for r in records}, {learner['policy_id'], anchor['policy_id']})
+        self.assertGreater(first['timings']['cpu_model_setup_seconds'], 0)
+
     def test_wrong_manifest_pin_and_unloaded_model_fail_closed(self):
         root = self.roots[0]
         from brass_ai.rust_backend.lab_transport import feature_context
@@ -333,12 +501,12 @@ class NativeWorkers(unittest.TestCase):
         self.assertGreater(first['timings']['ipc_cpu_forward_ns'], 0)
         self.assertEqual(second['timings']['policy_reuses'], 4)
 
-    def teacher_request(self, job, state):
+    def teacher_request(self, job, state, budget=None):
         from brass_ai.rust_backend.lab_teacher import CONTRACT
         return dict(contract=CONTRACT, op='run', job=job, origin=dict(state=state, rail_keys=list(range(64))),
                     core_source=os.environ['BRASS_CPU_CORE'], estimate_ns=1000, calibration_id='fixed-count',
                     inference=dict(contract=R.CPU_CONTRACT, runtime=self.runtime, bundle=self.bundles[self.identity],
-                                   budget=dict(mode='count', full=64, fast=8)))
+                                   budget=budget or dict(mode='count', full=64, fast=8)))
 
     def test_teacher_table_uses_count_budget_and_passes_gpu_verification(self):
         from test_b04 import job as frozen_job
@@ -396,34 +564,72 @@ class NativeWorkers(unittest.TestCase):
         job['readiness'] = dict(ready=True, reward_id=job['expected']['reward_id'])
         return job
 
-    @unittest.skip('Fixture lacks the stage schedule, so its blend is not the expected weight')
-    def test_all_seat_table_blends_the_search_head_like_the_gpu_path(self):
-        from brass_ai.learning.search_value import correction
+    def run_all_seat(self, weight, budget):
         from brass_ai.rust_backend.lab_teacher import Worker
         from brass_ai.rust_backend.lab_teacher_finalization import TurnVerifier
         native = Path(os.environ['BRASS_CPU_NATIVE'])
         state = json.loads((native/'brass-ai-core/tests/data/initial-state.json').read_text())
-        job = self.all_seat_job(.45)
-        self.assertEqual(job['search_value']['w'], .5)
+        job = self.all_seat_job(weight)
+        self.assertEqual(job['search_value']['w'], weight)
         cancel = threading.Event()
-        verifier = TurnVerifier(self.model, [dict(generation=10, model_id=self.identity)], [job], cancel)
-        worker = Worker(os.environ['BRASS_CPU_TEACHER'], self.teacher_request(job, state), None, cancel)
+        from brass_ai.rust_backend.lab_cpu_runtime import count_search_limits
+        verifier = TurnVerifier(self.model, [dict(generation=10, model_id=self.identity)], [job], cancel,
+                                search_limits=count_search_limits(dict(budget=budget)))
+        worker = Worker(os.environ['BRASS_CPU_TEACHER'], self.teacher_request(job, state, budget), None, cancel)
         result = worker.collect(job['expected'], os.environ['BRASS_CPU_CORE'], verifier=verifier)
-        self.assertEqual(len(result['value_rows']), 64)
-        self.assertEqual(result['metrics']['searched_turns'], 64)
-        rows = [r for r in result['value_rows'] if r['n'] == 0]
-        self.assertTrue(rows or result['value_rows'])
-        first = result['value_rows'][0]
-        self.assertEqual(first['search_value'], job['search_value'])
-        states = torch.as_tensor(first['state'], dtype=torch.float32)[None]
-        mapping = torch.as_tensor(first['mapping'])[None]
-        remaining = torch.as_tensor(first['remaining'], dtype=torch.float32)[None]
+        return job, result, verifier
+
+    def root_heads(self, row):
+        """The GPU path's float32 utility and search-head correction at one root."""
+        from brass_ai.learning.search_value import correction
+        states = torch.as_tensor(row['state'], dtype=torch.float32)[None]
+        mapping = torch.as_tensor(row['mapping'])[None]
+        remaining = torch.as_tensor(row['remaining'], dtype=torch.float32)[None]
         with torch.inference_mode():
             encoded = self.model.encode_state(states)
-            utility = self.model.heads_from_encoded(encoded, mapping, remaining)[3]
-            delta = correction(self.model, encoded, mapping, remaining)
-        np.testing.assert_allclose(first['v'], (utility+.5*delta)[0].double().numpy(), rtol=2e-4, atol=2e-4)
-        self.assertGreater(float(delta.abs().max()), 1e-5)
+            utility = self.model.heads_from_encoded(encoded, mapping, remaining)[3].float()
+            delta = correction(self.model, encoded, mapping, remaining).float()
+        return utility, delta
+
+    def test_all_seat_table_blends_the_search_head_like_the_gpu_path(self):
+        budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)
+        job, result, verifier = self.run_all_seat(.45, budget)
+        self.assertEqual(job['search_value']['value_source'], 'corrected')
+        rows, metrics = result['value_rows'], result['metrics']
+        self.assertEqual(len(rows), metrics['searched_turns'])
+        self.assertGreater(len(rows), 16)
+        self.assertEqual({r['profile'] for r in rows}, {'full', 'fast'})
+        self.assertEqual({str(s['frozen_n']) for s in metrics['searches'] if s['frozen_n'] > 0 and s['profile'] == 'full'}, {'64'})
+        self.assertEqual({str(s['frozen_n']) for s in metrics['searches'] if s['frozen_n'] > 0 and s['profile'] == 'fast'}, {'24'})
+        self.assertTrue(all(s['completed'] == s['frozen_n'] for s in metrics['searches'] if s['frozen_n'] > 0))
+        self.assertTrue(all(s['effective_k'] <= (16 if s['profile'] == 'full' else 8)
+                            for s in metrics['searches'] if s['frozen_n'] > 0))
+        self.assertEqual(max(s['effective_k'] for s in metrics['searches'] if s['frozen_n'] > 0 and s['profile'] == 'fast'), 8)
+        self.assertEqual(metrics['cpu_inference']['budget'], budget)
+        self.assertTrue(all(r['search_value'] == job['search_value'] for r in rows))
+        for row in rows[:6]:
+            utility, delta = self.root_heads(row)
+            self.assertGreater(float(delta.abs().max()), 1e-5)
+            blended = utility+torch.tensor(.45, dtype=torch.float32)*delta
+            np.testing.assert_allclose(row['v'], blended[0].double().numpy(), rtol=2e-4, atol=2e-4)
+            # The unblended value differs by more than the bound, so a dropped head fails.
+            self.assertGreater(float((blended-utility).abs().max()), 4e-4)
+        accepted, rejected = verifier.take(result, job, self.model)
+        self.assertEqual(len(accepted)+sum(rejected.values()), len(result['rows']))
+        self.assertTrue(accepted)
+
+    def test_zero_blend_table_keeps_the_exact_utility(self):
+        job, result, _ = self.run_all_seat(0., dict(mode='count', full=64, full_k=16, fast=24, fast_k=8))
+        self.assertEqual(job['search_value']['value_source'], 'main')
+        for row in result['value_rows'][:6]:
+            utility, _ = self.root_heads(row)
+            np.testing.assert_allclose(row['v'], utility[0].double().numpy(), rtol=2e-4, atol=2e-4)
+
+    def test_blended_search_differs_from_the_unblended_one(self):
+        budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)
+        _, zero, _ = self.run_all_seat(0., budget)
+        _, blended, _ = self.run_all_seat(.45, budget)
+        self.assertNotEqual([r['counts'] for r in zero['value_rows']], [r['counts'] for r in blended['value_rows']])
 
     @unittest.skip('Fixture job is not all-seat, so its fast probe cannot produce valid labels')
     def test_timed_budget_calibrates_on_every_lane_and_runs_one_turn(self):
@@ -461,6 +667,123 @@ class NativeWorkers(unittest.TestCase):
         with self.assertRaises(ValueError):
             worker.collect(job['expected'], os.environ['BRASS_CPU_CORE'], verifier=SimpleNamespace())
         self.assertIn('differs from the frozen job', worker.stderr.decode())
+
+
+def fixture_cpu_actors(connections, root, build, execution, mono, lease, cpu, stop, directory, inference, core, started):
+    """Spawned lane that starts like a CPU lane but answers from a fixture part."""
+    from concurrent.futures import ThreadPoolExecutor
+    from brass_ai.rust_backend import lab_pool as P
+    assert lease is None and inference['contract'] == R.CPU_CONTRACT
+    def lane(connection):
+        connection.send(dict(ready=True, startup=dict(spawn_seconds=.1, python_import_seconds=.2, lane_wait_seconds=0., lease_seconds=0.,
+            session_import_seconds=.01, mono_spawn_seconds=.01, mono_bootstrap_seconds=.15, total_seconds=.5, ready_time=__import__('time').time())))
+        while not stop.is_set():
+            if not connection.poll(.05):
+                continue
+            command = connection.recv()
+            if command is None:
+                return
+            part = json.loads(Path(build['fixture']).read_text())
+            connection.send(dict(result=P.part_write(directory, part)))
+    with ThreadPoolExecutor(max_workers=len(connections)) as pool:
+        list(pool.map(lane, connections))
+
+
+class CpuPool(unittest.TestCase):
+    def test_cpu_lanes_need_no_channels_and_report_their_startup(self):
+        import multiprocessing
+        from unittest.mock import Mock, patch
+        from brass_ai.recovery.resources import CPUAdmission
+        from brass_ai.rust_backend import lab_pool as P
+        from brass_ai.step5.league import write_json
+        from test_b03 import family_fixture
+        torch.set_num_threads(2)
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as directory:
+            out = Path(directory)
+            f, _, c = family_fixture()
+            job = f['frozen_job']
+            job['path'] = str(out/'job.jsonl.gz')
+            write_json(out/'fixture.json', f['parent'])
+            cpu = CPUAdmission(multiprocessing.get_context('spawn'), 4, 1)
+            service = SimpleNamespace(cpu=cpu, error=None, channels=Mock(side_effect=AssertionError('CPU lanes lease no channels')),
+                                      release_channels=Mock())
+            execution = dict(processes=1, hosts_per_process=1, worker_threads=1, cpu_budget=4, cpu_reserve=1)
+            build = dict(_receipt_sha256=f['producer']['build_sha256'], b01={'sha256': f['producer']['b01_sha256']}, fixture=str(out/'fixture.json'))
+            settings = dict(contract=R.CPU_CONTRACT, pinning='none', model_cache=8, runtime=dict(path='runtime', sha256='0'*64),
+                            bundles={}, exported_bundles=0)
+            pool = P.NativePool(SOURCE_ROOT, service, execution, build, c, f['producer']['signature'], scope='ordinary', cpu=settings)
+            with patch.object(P, '_actors', fixture_cpu_actors):
+                records = pool.collect([job])
+            self.assertEqual(len(records), 1)
+            service.channels.assert_not_called()
+            service.release_channels.assert_not_called()
+            report = pool.last_collection_report
+            breakdown = report['startup_breakdown']
+            self.assertEqual(breakdown['lanes_reported'], 1)
+            self.assertFalse(breakdown['waits_for_all_lanes'])
+            self.assertEqual(breakdown['phases']['mono_bootstrap_seconds']['p50'], .15)
+            self.assertGreater(report['actor_startup_seconds'], 0)
+            self.assertEqual(report['collector_runtime']['cpu_inference']['contract'], R.CPU_CONTRACT)
+            self.assertFalse(pool.processes)
+
+
+@unittest.skipUnless(NATIVE and os.environ.get('BRASS_CPU_BOOTSTRAP'), 'Needs the built workers and a bootstrap')
+class RealLane(unittest.TestCase):
+    def test_a_spawned_cpu_lane_reports_mono_bootstrap_and_finishes_a_game(self):
+        """The real lane: spawn, Mono probe, Rust collector, CPU evaluator, raw export."""
+        import multiprocessing
+        from brass_ai.recovery.execution import neural_spec
+        from brass_ai.recovery.resources import CPUAdmission
+        from brass_ai.rust_backend import lab_pool as P, lab_shared
+        from brass_ai.rust_backend.lab_contract import pin
+        from brass_ai.rust_backend.lab_cpu_models import ensure
+        model = headed_model()
+        identity = model_id(model)
+        mp = multiprocessing.get_context('spawn')
+        with tempfile.TemporaryDirectory() as directory:
+            bundles, _ = ensure(directory, {identity: model}, [identity])
+            runtime = pin(os.environ['BRASS_CPU_RUNTIME'])
+            cpu = dict(contract=R.CPU_CONTRACT, runtime=dict(path=runtime['path'], sha256=runtime['sha256']), bundles=bundles,
+                       exported_bundles=1, model_cache=2, pinning='none')
+            build = dict(bootstrap=dict(binary=dict(path=os.environ['BRASS_CPU_BOOTSTRAP'])), collector=dict(path=os.environ['BRASS_CPU_COLLECTOR']))
+            execution = dict(max_decisions=5000, batch_size=32, max_candidate_cells=8192, worker_threads=1, processes=1, hosts_per_process=1,
+                             collector_validation='strict', replay_bindings=True, native_inference=R.cpu_block(workers=1))
+            spec = neural_spec(identity, 0., 'neutral', version=3)
+            job = dict(index=0, seed=19, sampling_seed=31, policies=[spec]*4, provenance={}, stable_game_id='lane-fixture')
+            parent, child = mp.Pipe()
+            stop = mp.Event()
+            admission = CPUAdmission(mp, 2, 0)
+            process = mp.Process(target=P._actors, args=([child], str(SOURCE_ROOT), build, execution, 'mono', None, admission, stop,
+                                                         str(Path(directory)/'parts'), cpu, None, __import__('time').time()))
+            registry = lab_shared.Registry(stop)
+            process.start()
+            child.close()
+            try:
+                self.assertTrue(parent.poll(120), 'lane never became ready')
+                ready = parent.recv()
+                self.assertTrue(ready['ready'], ready)
+                startup = ready['startup']
+                self.assertGreater(startup['mono_bootstrap_seconds'], 0)
+                self.assertGreater(startup['total_seconds'], startup['mono_bootstrap_seconds'])
+                parent.send(dict(job=job, continuation=None, validation=None))
+                result = None
+                while result is None:
+                    self.assertTrue(parent.poll(240), 'lane stopped answering')
+                    message = parent.recv()
+                    self.assertNotIn('error', message, message.get('error'))
+                    if 'shared_allocate' in message:
+                        parent.send(dict(shared_lease=registry.allocate(message['shared_allocate']['size'])))
+                    elif 'result' in message:
+                        result = message['result']
+                self.assertEqual(result['format'], lab_shared.FORMAT)
+                self.assertGreater(result['size'], 0)
+            finally:
+                stop.set()
+                parent.send(None)
+                process.join(30)
+                if process.is_alive():
+                    process.terminate()
+                registry.close()
 
 
 @unittest.skipUnless(os.environ.get('BRASS_CPU_RATING_GAME'), 'Set BRASS_CPU_RATING_GAME for a real hosted game')

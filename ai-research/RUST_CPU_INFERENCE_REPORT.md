@@ -1,54 +1,98 @@
 # Rust CPU inference, 64 workers and search_v3: implementation report
 
-Date: 2026-11-09. Plan: [RUST_CPU_INFERENCE_AND_SEARCH_V3_PLAN.md](RUST_CPU_INFERENCE_AND_SEARCH_V3_PLAN.md). Everything below ran on the development laptop (Windows, 14 cores). **Nothing has run on the lab yet**, so the lab speedups in the plan are still estimates.
+Date: 2026-11-09. Plan: [RUST_CPU_INFERENCE_AND_SEARCH_V3_PLAN.md](RUST_CPU_INFERENCE_AND_SEARCH_V3_PLAN.md).
 
 ## 1. Continue from g1290
 
-On the lab, with the trainer stopped and this commit pulled:
+On the lab, with the trainer stopped and this commit pulled, run these in order:
 
 ```bash
 python scripts/prepare-rust-cpu-inference.py --expected-generation 1290
+```
+
+```bash
+python scripts/qualify-rust-cpu-inference.py --expected-generation 1290
+```
+
+```bash
 python scripts/continue-rust-teacher.py --expected-generation 1290 --iterations 10 --share-target 0.25 --inference cpu
 ```
 
-The prepare step builds the two CPU workers, pins ONNX Runtime 1.22.1 and runs the focused regressions. It downloads the official Linux archive if the Python wheel has no `libonnxruntime.so.1.22.1`; on a machine with no download access, pass `--onnxruntime-library /path/to/libonnxruntime.so.1.22.1`. It takes no training action.
+The prepare step rebuilds the two workers, because their source changed. The qualification only reads the run and takes roughly 15–20 minutes; see section 3. Push its evidence with the commands it prints.
 
-To return to the GPU path at any committed generation, use `--inference gpu`. Add `--teacher-budget timed` for 4 s / 0.8 s searches on the CPU path.
+To return to the GPU path at any committed generation, use `--inference gpu`.
+
+**The first iteration keeps its old teacher tables.** The crashed run had already finished and published the 32 teacher tables for g1290 at N=256/48. The next run reuses them, which is the normal crash recovery. Recollecting them at the new budget would stop on `Uncommitted teacher shard differs`, because those shards are bound to their bytes. N=640/96 starts with the tables for g1291.
 
 ## 2. What changed
 
 | Area | Change |
 | --- | --- |
+| Crash fix | `export_bundle` assumed every model has a utility head. The imitation-learning anchor (generation 0, `FourSeatNet`) does not. Its bundle now carries an all-zero utility output, and evaluators omit `utility` and `reward_id` for it, as the GPU service does. |
+| Teacher budget | Fixed count: full searches N=640 with K=16, quick searches N=96 with K=8. Set with `--teacher-full`, `--teacher-fast` and `--teacher-fast-k`. Full K stays 16 because labels require it. |
+| Search limits | A fixed-count search now runs to its quota. The cap is N × 60 ms (38 s full, 5.8 s quick), which only stops a stuck worker. The Python verifier, the 180 s table watchdog (now 1800 s) and the 30 s turn watchdog (now 120 s) use the same limits on this path only. The sealed job, and its 4 s and 0.8 s fields, are unchanged. |
 | Teacher search | Each Rust worker runs ONNX Runtime in process. Search code, feature encoder, labels and value rows are untouched. |
 | Ordinary lanes | New `infer` operation in the Rust collector. Python keeps sampling, RNG and every check. |
 | Rating | Same C# host and game flow. Rating lanes evaluate with Python ONNX Runtime instead of the GPU service. |
-| Bundles | One immutable ONNX bundle per `model_id` under `artifacts/rust-backend/cpu-bundles/`, with `search_delta_4` when the model has a search head and parity checked at six shapes. About 3 s per model on the laptop. |
 | Workers | 64 lanes × 1, CPU budget 64, reserve 0, one lane per CPU, spread across sockets. Applied at run time only. |
-| Teacher budget (D1) | Fixed-count: N=256 full, N=48 fast. The existing 4 s / 0.8 s stay as the safety cap, so job digests and the label buffer are unchanged. |
-| Teacher β (D2) | Unchanged. |
+| Lane startup | CPU lanes start work as soon as they are ready instead of waiting for the slowest one, and no longer lease GPU reply channels. Each lane warms its Mono bootstrap before its first game. |
+| Startup measurement | Every collection records `startup_breakdown` per lane, and teacher tables record `mono_bootstrap_seconds`. See section 5. |
 | Tolerance | CPU-sourced labels use the 2e-4 cross-runtime bound in `check_logits`. GPU labels keep 2e-5 / 1e-5. |
 
-The whole feature sits behind the `native_inference` block in `execution`, which `collector_runtime.recipe` strips before the training signature. With the block absent, the GPU code path, binaries and call arguments are as they were. `lab-native/` is not edited: `lab-native-cpu/` and `lab_cpu_overlay.py` patch a detached copy, so the qualified GPU binaries keep their fingerprints. The source review in `b07-replay-location-review.json` records the new execution identity and accepts the g1290 checkpoint's recorded one.
+The whole feature sits behind the `native_inference` block in `execution`, which `collector_runtime.recipe` strips before the training signature. With the block absent, the GPU code path, binaries and call arguments are as they were, apart from the extra startup measurement. `lab-native/` is not edited: `lab-native-cpu/` and `lab_cpu_overlay.py` patch a detached copy, so the qualified GPU binaries keep their fingerprints. The review in `b07-replay-location-review.json` records the new execution identity.
 
-## 3. Verification on the laptop
+### What the first lab run showed
 
-- 28 of 30 focused CPU regressions passed with real compiled workers: export parity with the search head, collector outputs against PyTorch, a full fixed-count teacher table through the usual label verification, an ordinary game through `collect_lane`, and a complete rating game through the real actor pool that matched the service path and never used it.
-- 2 tests are skipped because their fixtures are wrong. All-seat blending is therefore verified only by unit tests and delta parity, and the one-turn run of the timed-budget option is unverified.
-- The existing lab suites showed no new failures. Their remaining errors come from old test fixtures; two of those tests were confirmed to fail on the untouched last commit too.
-- `scripts/prepare-rust-cpu-inference.py` has never been run end to end, and nothing has run on Linux.
+The results in `rust-lab-qualification/20261109T071049919614Z-…` say `passed: false`. The prepare step and the CPU teacher phase did work on Linux: 32 tables finished in about two minutes at N=256/48. The run then stopped in ordinary collection on the anchor export above, before any game or checkpoint.
 
-**search_v3 was not adopted.** The lab and the game stay on search_v1, and nothing was installed. The local smokes did more search work (+15% to +20% trajectories) but finished fewer full halving rounds. A fix for that was still being tested when the work stopped, so there is no result for it. `scripts/search_v3_patch.py`, `build-search-v3.py` and `run-search-v3-smoke.py` remain for later.
+### Lane startup: the Mono bootstrap is not the cost
 
-## 4. What to read after the first lab iteration
+An earlier version of this report guessed that the per-lane Mono bootstrap caused the 16.6 s lane startup. The stored reports show that guess was wrong.
 
+- Across all 37 stored collections at 24 processes and 48 lanes, actor startup was 16.3–16.9 s, and the 24 publisher processes took about 0.85 s.
+- A lane reports ready before it has used Mono, so Mono time is not part of that wait.
+- The first Mono call on each lane took 0.14 s (median) and at most 0.22 s, including its share of JIT.
+
+The real cause is still unknown. It is narrow and repeatable, which points to a fixed wait or a serialized step. The new per-lane phases will show it on the next run.
+
+## 3. Lab qualification
+
+`scripts/qualify-rust-cpu-inference.py` holds the run lock, reads the run and never writes to it. It keeps going after a failure, so one run shows every problem.
+
+| Stage | What it proves |
+| --- | --- |
+| `environment` | Linux, GPU, enough CPUs, Mono, ONNX Runtime version, pinned checkpoint. |
+| `regressions` | Both CPU test suites against the prepared Linux workers, including all-seat blending, an anchor-and-learner game and a real spawned lane. Only the two expected skips are allowed. |
+| `bundles` | Every model the league can seat has a bundle with parity under 2e-4, including an anchor with no utility head. |
+| `parity` | Rust collector against PyTorch on real positions, for the learner, a utility-only model and the anchor. |
+| `teacher` | 16 real tables through the production collector at N=640/K=16 and N=96/K=8, at blends 0, 0.25 and 1. Checks quotas, K, labels and that the root values match PyTorch's `utility + w·delta`. |
+| `ordinary` | 128 real frozen jobs at 64 lanes with strict validation, seating anchors first. 16 of them are matched against the GPU path. |
+| `rating` | Real rated games with the learner and anchor, on CPU and on the GPU service. |
+| `startup` | Per-lane startup phases, Mono bootstrap and peak memory from the 64-lane run. |
+
+A diverged game is counted, not ignored. Probabilities must agree within 3e-3 relative or 3e-5 absolute up to the first different action, and at most 15% of matched games may diverge. No more than 2% of searches may hit the safety cap, and no more than 5% of labels may be rejected.
+
+It does not run a full training iteration: PPO, PPG and checkpointing are not exercised, because a full iteration cannot run on a copy of the run. The continue command is the first real training use.
+
+## 4. Verification on the laptop
+
+- All 65 CPU tests pass with real compiled workers, apart from the two expected skips: the timed-budget one-turn run, which you asked to skip, and the local-host rating game, whose real version is the `rating` stage. Covered: all-seat blending at zero and non-zero weights, every anchor path, a full mixed-model game, a spawned lane through to its export, and the qualification's own checks.
+- One all-seat table at the full production budget, with the fixture model: every search reached its quota, none hit the cap, the table took 124 s, and a full search took about 3.5 s (5.5 ms per trajectory).
+- The existing lab suites show 7 errors out of 183 tests: `Admitted actor inputs are immutable` (4), `TeacherPhase.config` (1) and the rollback pin fixture (2). These come from old fixtures, and none is in code changed here.
+- The lab-only paths — 64 pinned lanes, the real league, real Linux Mono — have not run at this budget. The qualification covers them.
+
+**search_v3 was not adopted.** The lab and the game stay on search_v1, and nothing was installed. `scripts/search_v3_patch.py`, `build-search-v3.py` and `run-search-v3-smoke.py` remain for later.
+
+## 5. What to read after the first lab iteration
+
+- `report.exploration_metrics.branching.scheduling.startup_breakdown`: `phases` holds `mono_bootstrap_seconds`, `python_import_seconds`, `lease_seconds`, `session_import_seconds`, `lane_wait_seconds` and `total_seconds`, each with min, p50, p95, max and mean. `per_lane` holds each lane. The log prints a one-line summary.
 - `report.timings`: `collection_seconds`, `teacher_collection_seconds`, `evaluation_seconds`, `iteration_seconds`.
-- `report.exploration_metrics.branching.scheduling`: `collector_runtime.cpu_inference`, `actor_startup_seconds`, `lanes`.
-- `teacher_phase` metrics: `cpu_inference`, per-table `cpu_inference.positions` and `forward_ns`, `completed_trajectories`, `deadline_hit_fraction`.
+- `teacher_phase` metrics: `mono_bootstrap_seconds`, `cpu_inference`, per-table `cpu_inference.positions` and `forward_ns`, `completed_trajectories`, `deadline_hit_fraction`.
 - PPO likelihood verification and teacher logit checks must keep passing.
 
-## 5. Known limits
+## 6. Known limits
 
+- N=640 costs more search time than the previous budget. On the laptop's small fixture model, one table took 124 s. The lab model is larger, so expect the teacher phase to be several minutes. It is the first number to check after the qualification.
 - Teacher and ordinary collection still run one after the other, so the teacher phase uses only 32 of the 64 lanes.
-- Ordinary lane startup measured 16.6 s at g1289, while the 24 publisher processes started in 0.85 s. Python and torch import are therefore not the cost; the likely cause is the per-lane Mono bootstrap, which should be measured before changing it.
-- Memory at 64 lanes is unmeasured here.
-- Timed teacher scheduling keeps search_v1; fixed-count searches do not use search_v3's rolling quotas.
+- The cause of the 16.6 s startup is unmeasured until the new phases report; the changes above help only if lane readiness is uneven or the time is in the reply channels.
+- Memory at 64 lanes is unmeasured here. The `startup` stage reports it.

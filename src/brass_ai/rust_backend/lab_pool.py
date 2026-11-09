@@ -30,6 +30,9 @@ from .lab_families import FORMAT, collect_families, _failure_scope
 from .lab_transport import Pipe
 from . import lab_shared, lab_perf
 
+STARTUP='brass-lab-lane-startup/1.0.0'
+MONO_PROBE_SEED=1
+
 
 def part_write(directory, part):
     directory=Path(directory);directory.mkdir(parents=True,exist_ok=True)
@@ -224,24 +227,43 @@ def _writer(connection, directory, producer, config, scope, cpu, stop, selected_
             connection.send(dict(error=traceback.format_exc()));return
 
 
-def _actors(connections, root, build, execution, mono, lease, cpu, stop, directory, inference=None, core=None):
+def _actors(connections, root, build, execution, mono, lease, cpu, stop, directory, inference=None, core=None, started=None):
+    entered=time.time()
     import torch
     from brass_ai.recovery.telemetry import Timings
-    from .lab_b02_smoke import reference_part
     from brass_ai.recovery.collector_runtime import from_config,install,recipe
     install(from_config(dict(execution=execution)));execution=recipe(dict(execution=execution))['execution']
     if core is not None:
         from .lab_cpu_runtime import pin_process
         pin_process(core)
     torch.set_num_threads(execution['worker_threads'])
+    imported=time.time()
     def lane(connection):
-        endpoint=lease.acquire();endpoint.timeout=30.
+        lane_began=time.time()
+        if lease is None:
+            from .lab_cpu_inference import NoServiceEndpoint
+            endpoint=NoServiceEndpoint()
+        else:endpoint=lease.acquire()
+        endpoint.timeout=30.
         try:
+            leased=time.time()
             from .lab_session import OrdinarySession
+            session_imported=time.time()
             command=[build['bootstrap']['binary']['path']]
             if os.name!='nt':command.insert(0,mono)
             with Pipe(command,binary=False) as bootstrap, OrdinarySession(root,build['collector']['path'],endpoint,execution,mono,cpu=inference) as session:
-                connection.send(dict(ready=True))
+                spawned=time.time()
+                # Runtime start, assembly load and rule-engine JIT, measured to the
+                # first reply. Each `init` replaces the host, so no game can see it.
+                limit=bootstrap.timeout;bootstrap.timeout=120
+                bootstrap.call('init',seed=MONO_PROBE_SEED)
+                bootstrap.timeout=limit
+                now=time.time()
+                connection.send(dict(ready=True,startup=dict(spawn_seconds=None if started is None else entered-started,
+                    python_import_seconds=imported-entered,lane_wait_seconds=lane_began-imported,lease_seconds=leased-lane_began,
+                    session_import_seconds=session_imported-leased,mono_spawn_seconds=spawned-session_imported,
+                    mono_bootstrap_seconds=now-session_imported,total_seconds=None if started is None else now-started,
+                    ready_time=now)))
                 while not stop.is_set():
                     if not connection.poll(.1):continue
                     command=connection.recv()
@@ -256,6 +278,7 @@ def _actors(connections, root, build, execution, mono, lease, cpu, stop, directo
                                     raw_export=True,validation=command.get('validation'))
                             else:
                                 require(continuation is None,'Reference continuation unsupported')
+                                from .lab_b02_smoke import reference_part
                                 part=reference_part(root,job,endpoint,execution,mono)
                         if isinstance(part,lab_shared.Export):
                             def allocate(size):
@@ -298,6 +321,23 @@ def recover_cached(jobs,load,*,workers,cancel,on_error):
     return [records[j['index']] for j in jobs if j['index'] in records]
 
 
+def startup_breakdown(reports,began,*,width,lanes,barrier,process_start_seconds,channel_seconds):
+    """Per-lane startup, one value per phase; `began` is the wall-clock start."""
+    names=('spawn_seconds','python_import_seconds','lane_wait_seconds','lease_seconds','session_import_seconds',
+           'mono_spawn_seconds','mono_bootstrap_seconds','total_seconds')
+    phases={}
+    for name in names:
+        values=sorted(r[name] for r in reports if r.get(name) is not None)
+        if values:
+            phases[name]=dict(lanes=len(values),min=values[0],p50=values[len(values)//2],p95=values[min(len(values)-1,int(len(values)*.95))],
+                              max=values[-1],mean=sum(values)/len(values))
+    ready=[r['ready_time']-began for r in reports]
+    return dict(contract=STARTUP,processes=width,lanes=lanes,lanes_reported=len(reports),waits_for_all_lanes=barrier,
+                process_start_seconds=process_start_seconds,reply_channel_seconds=channel_seconds,
+                first_lane_ready_seconds=min(ready) if ready else None,last_lane_ready_seconds=max(ready) if ready else None,
+                phases=phases,per_lane=[{k:v for k,v in r.items() if k!='ready_time'} for r in reports])
+
+
 def publisher_workers(jobs,capacity):
     # Validation is CPU-bound Python work, like the reference's per-actor
     # writers. Shared admission still bounds actors + writers + replay readers.
@@ -330,7 +370,7 @@ class NativePool:
         producers=[dict(self.producer,build_sha256=p) for p in previous]
         self.previous_producer=producers if len(producers)>1 else (producers[0] if producers else None)
 
-    def receive(self,connection,*,submit=None,timeout=120,shared_allocate=None):
+    def receive(self,connection,*,submit=None,timeout=120,shared_allocate=None,on_ready=None):
         if not hasattr(self,'health_lock'):self.health_lock=threading.Lock();self.health_due=0.
         end=time.monotonic()+timeout
         while time.monotonic()<end:
@@ -339,6 +379,8 @@ class NativePool:
                 try:message=connection.recv()
                 except EOFError as error:raise RuntimeError('Native worker exited without a result') from error
                 require('error' not in message,message.get('error',''))
+                if on_ready is not None and message.get('ready') is True:
+                    on_ready(message);continue  # A lane that started working before it finished starting.
                 if 'shared_allocate' in message:
                     require(shared_allocate is not None,'Unexpected shared allocation')
                     connection.send(dict(shared_lease=shared_allocate(message['shared_allocate']['size'])))
@@ -426,35 +468,53 @@ class NativePool:
             cached=recover_cached(candidates,store.load,workers=publisher_count,cancel=self.stop,on_error=fail)
             recovery_seconds=time.perf_counter()-recovery_began
             recovered={r['job'] for r in cached};missing=[j for j in jobs if j['index'] not in recovered]
-            actor_began=time.perf_counter()
+            actor_began=time.perf_counter();wall_began=time.time()
+            # Lanes that evaluate in process start working as they become ready
+            # and need no GPU reply channels. The GPU path keeps its original wait.
+            progressive=self.cpu is not None
+            lane_startup=[];process_start_seconds=channel_seconds=0.
             if missing:
                 # Start only missing parents, with all configured lanes for
                 # continuations. A cache-only restart needs no engine or NN IPC.
                 width=min(config['processes'],len(missing));lanes=width*lanes_per
-                lease=self.service.channels(lanes);self.channel_leases.append(lease);new_connections=[]
+                began_channels=time.perf_counter()
+                lease=None
+                if not progressive or any(route(j)[0]!='rust' for j in missing):
+                    lease=self.service.channels(lanes);self.channel_leases.append(lease)
+                channel_seconds=time.perf_counter()-began_channels
+                new_connections=[]
                 cores=[]
                 if self.cpu is not None and self.cpu['pinning']=='one-lane-per-cpu':
                     from .lab_cpu_runtime import core_allocation
                     cores=core_allocation(width)
+                began_processes=time.perf_counter()
                 for number in range(width):
                     pairs=[]
                     try:
                         for _ in range(lanes_per):
                             a,b=self.mp.Pipe();pairs.append((a,b));self.connections.append(a)
-                        extra=() if self.cpu is None else (self.cpu,cores[number] if cores else None)
+                        extra=() if self.cpu is None else (self.cpu,cores[number] if cores else None,time.time())
                         p=self.mp.Process(target=_actors,args=([b for a,b in pairs],str(self.root),self.build,dict(config,**self.runtime),
                             self.mono,lease,self.service.cpu,self.stop,str(directory/'parts'),*extra))
                         self.processes.append(p);p.start()
                     finally:
                         for a,b in pairs:b.close()
                     for a,b in pairs:available.put(a);new_connections.append(a)
-                for connection in new_connections:require(self.receive(connection).get('ready') is True,'Native startup failed')
-            actor_startup=time.perf_counter()-actor_began if missing else 0.
+                process_start_seconds=time.perf_counter()-began_processes
+                if not progressive:
+                    for connection in new_connections:
+                        message=self.receive(connection)
+                        require(message.get('ready') is True,'Native startup failed')
+                        if message.get('startup'):lane_startup.append(message['startup'])
+            actor_startup=time.perf_counter()-actor_began if missing and not progressive else 0.
+            def on_ready(message):
+                if message.get('startup'):lane_startup.append(message['startup'])
             def collect(job,continuation,submit):
                 connection=available.get(timeout=120)
                 try:
                     connection.send(dict(job=job,continuation=continuation,validation=validations[job['index']]))
-                    return self.receive(connection,submit=submit,timeout=360,shared_allocate=self.shared.allocate)['result']
+                    return self.receive(connection,submit=submit,timeout=360,shared_allocate=self.shared.allocate,
+                                        on_ready=on_ready if progressive else None)['result']
                 except BaseException as error:
                     fail(error);raise
                 finally:available.put(connection)
@@ -462,6 +522,14 @@ class NativePool:
                 model_cohorts=config.get('model_cohorts',False),on_error=fail,
                 publication_workers=min(publisher_count,max(1,lanes)),cached_records=cached)
             live_seconds=report['wall_seconds']
+            breakdown=startup_breakdown(lane_startup,wall_began,width=width,lanes=lanes,barrier=not progressive,
+                process_start_seconds=process_start_seconds,channel_seconds=channel_seconds)
+            if progressive and lane_startup:actor_startup=breakdown['last_lane_ready_seconds']
+            if lane_startup:
+                mono=breakdown['phases']['mono_bootstrap_seconds']
+                print(f"Lane startup: {width} processes; first lane ready {breakdown['first_lane_ready_seconds']:.2f}s, "
+                      f"last {breakdown['last_lane_ready_seconds']:.2f}s; Mono bootstrap p50 {mono['p50']:.3f}s, "
+                      f"max {mono['max']:.3f}s",flush=True)
             report.update(startup_seconds=writer_startup+actor_startup,processes=width,publisher_processes=publisher_count,
                 writer_startup_seconds=writer_startup,actor_startup_seconds=actor_startup,
                 cache_recovery_seconds=recovery_seconds,cache_candidates=len(candidates),
@@ -484,6 +552,7 @@ class NativePool:
             report['binding_checks']={k:sum(r.get('binding_checks',{}).get(k,0) for r in records if r['job'] not in recovered)
                                       for k in names}
             report['shared_buffers']=self.shared.report()
+            report['startup_breakdown']=breakdown
             report['collector_runtime']=dict(build_sha256=self.build['_receipt_sha256'],
                 performance_wire=self.build.get('performance_wire','legacy-compact-arrays-forced/1'),
                 completion_export=self.build.get('completion_export','legacy-separate-pages'),

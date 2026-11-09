@@ -19,6 +19,7 @@ from brass_ai.recovery.admitted_inputs import request as admitted_request
 CONTRACT = 'brass-lab-cpu-inference/1.0.0'
 PROTOCOL = 'four-seat-inference/1.0.0'
 MODEL_CACHE = 8
+NO_REWARD = ''
 
 
 def softmax32(logits):
@@ -44,6 +45,18 @@ def _admit(request, model_id):
     require(request.expected_model == model_id and request.digest() == request.input_digest,
             'Mutated/mismatched inference request')
     require(np.isfinite(request.deadline), 'Invalid inference deadline')
+
+
+class NoServiceEndpoint:
+    """Stands in for a GPU reply channel on lanes that evaluate in process."""
+    timeout = 30.
+
+    def __init__(self):
+        self.lock = threading.RLock()
+        self._encoder = self.encoding_cache = None
+
+    def close(self):
+        pass
 
 
 class NoEncoder:
@@ -105,10 +118,12 @@ class NativeCpuEvaluator:
         self.telemetry['positions'] += 1
         self.telemetry['max_batch_positions'] = 1
         self.telemetry['predict_seconds'] += time.monotonic()-began
-        return [dict(base, status='ok', choice_ids=[x['id'] for x in request.choices],
+        reply = dict(base, status='ok', choice_ids=[x['id'] for x in request.choices],
                      probabilities=softmax32(logits).tolist(), win_share=heads[:4].tolist(),
-                     placement=heads[4:8].tolist(), vp=heads[8:12].tolist(), utility=heads[12:16].tolist(),
-                     reward_id=self.reward_id)]
+                     placement=heads[4:8].tolist(), vp=heads[8:12].tolist())
+        if self.reward_id != NO_REWARD:  # A model with no utility head omits both, like the GPU path.
+            reply.update(utility=heads[12:16].tolist(), reward_id=self.reward_id)
+        return [reply]
 
 
 class _Sessions:
@@ -143,6 +158,7 @@ def load_session(identity, bundle):
     session = ort.InferenceSession(str(graph), cpu_options(1), providers=['CPUExecutionProvider'])
     # The rating path never blends, so it fetches the five base outputs only.
     return dict(session=session, reward_id=manifest['reward_id'], max_cost=manifest['max_cost'],
+                utility=manifest.get('utility', True),
                 outputs=['policy_logits', 'win_share_4', 'placement_4', 'vp_4', 'remaining_utility_4'])
 
 
@@ -190,15 +206,20 @@ class OrtEvaluator:
             return dict(base, status=error.reason)
         self.telemetry['encoding_seconds'] += time.monotonic()-phase
         entry = SESSIONS.get(self.model_id, self.bundle)
-        cap = entry['max_cost']
-        remaining = [cap]*4 if request.remaining is None else request.remaining
-        budget = np.asarray(remaining, dtype=np.float32)[None]
-        require(budget.shape == (1, 4) and np.isfinite(budget).all() and (budget >= 0).all() and
-                (budget <= cap+1e-8).all(), 'Invalid inference utility budget')
+        if entry['utility']:
+            cap = entry['max_cost']
+            remaining = [cap]*4 if request.remaining is None else request.remaining
+            budget = np.asarray(remaining, dtype=np.float32)[None]
+            require(budget.shape == (1, 4) and np.isfinite(budget).all() and (budget >= 0).all() and
+                    (budget <= cap+1e-8).all(), 'Invalid inference utility budget')
+        else:
+            budget = np.zeros((1, 4), dtype=np.float32)  # The GPU path never reads a budget for this model.
         logits, win, placement, vp, utility = entry['session'].run(entry['outputs'], dict(
             states=e.state[None], actions=e.actions[None], legal_mask=np.ones((1, len(e.choice_ids)), dtype=bool),
             stable_to_relative=np.asarray(e.stable_to_relative, dtype=np.int64)[None], remaining=budget,
             descriptors=unknown_numpy()[None]))
-        return dict(base, status='ok', choice_ids=list(e.choice_ids), probabilities=softmax32(logits[0]).tolist(),
-                    win_share=win[0].tolist(), placement=placement[0].tolist(), vp=vp[0].tolist(),
-                    utility=utility[0].tolist(), reward_id=entry['reward_id'])
+        reply = dict(base, status='ok', choice_ids=list(e.choice_ids), probabilities=softmax32(logits[0]).tolist(),
+                     win_share=win[0].tolist(), placement=placement[0].tolist(), vp=vp[0].tolist())
+        if entry['utility']:
+            reply.update(utility=utility[0].tolist(), reward_id=entry['reward_id'])
+        return reply

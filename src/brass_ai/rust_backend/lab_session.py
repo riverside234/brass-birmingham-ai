@@ -76,7 +76,9 @@ class OrdinarySession:
                     p.context_counter, p.context_offset, p.request_deadline = 0, None, None
                     p.opening = spec.get('opening')
                     if self.cpu is not None:
+                        began = time.monotonic()
                         p.evaluator.begin_game(self.lane)
+                        timings['cpu_model_setup_seconds'] += time.monotonic()-began
                     else:
                         p.evaluator.encoder = DecisionEncoder(self.lane, p.evaluator.model_id)
                     p.native_raw = None

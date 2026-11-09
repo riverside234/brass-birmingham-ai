@@ -3,6 +3,10 @@
 Uses the local game's export pipeline (exact GELU, opset 17, parity at the same
 six shapes). A model with a search head gains one output, ``search_delta_4``,
 so workers can blend it exactly as the GPU path does. Weights are never changed.
+
+League anchors such as the imitation-learning model have no utility head. Their
+bundle carries an all-zero utility output so every bundle has one shape, and its
+manifest records ``utility=false`` so evaluators omit that field as the GPU does.
 """
 import copy
 import json
@@ -10,6 +14,7 @@ import os
 from pathlib import Path
 import shutil
 import uuid
+import warnings
 
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import require
@@ -19,13 +24,14 @@ RUNTIME_VERSION = '1.22.1'
 DIRECTORY = 'artifacts/rust-backend/cpu-bundles'
 RETAINED = 128
 SEARCH_DELTA = 'search_delta_4'
+NO_REWARD = ''
 
 
 def bundle_root(root):
     return Path(root)/DIRECTORY
 
 
-def _graph(model, head, torch):
+def _graph(model, head, utility, torch):
     """Named outputs of the same forward the GPU teacher path evaluates."""
     from torch import nn
     from brass_ai.learning.onnx_tools import SelectorMatmulExport
@@ -39,7 +45,9 @@ def _graph(model, head, torch):
         def forward(self, states, actions, legal_mask, stable_to_relative, remaining, descriptors):
             inner = self.inner
             if not head:
-                return inner(states, actions, legal_mask, stable_to_relative, remaining=remaining, descriptors=descriptors)
+                out = inner(states, actions, legal_mask, stable_to_relative, remaining=remaining, descriptors=descriptors)
+                # Multiplying by zero also keeps `remaining` a real graph input.
+                return out if utility else (*out, remaining*0)
             encoded = inner.encode_state(states)
             logits = inner.score_prepared(actions, inner.prepare_candidates(encoded)).masked_fill(~legal_mask, -torch.inf)
             heads = inner.heads_from_encoded(encoded, stable_to_relative, remaining, descriptors)
@@ -67,6 +75,7 @@ def export_bundle(model, destination):
     from brass_ai.personality.laptop.export import BASE_INPUTS, BASE_OUTPUTS, compare, samples
 
     require(ort.__version__ == RUNTIME_VERSION, 'CPU bundles require onnxruntime '+RUNTIME_VERSION)
+    ort.set_default_logger_severity(3)  # Every export repeats two harmless ORT warnings.
     model.validate_parameter_count()
     destination = Path(destination)
     partial = destination.with_name(destination.name+'.'+uuid.uuid4().hex+'.partial')
@@ -75,7 +84,11 @@ def export_bundle(model, destination):
         head = hasattr(model, 'search_value_head')
         outputs = BASE_OUTPUTS+([SEARCH_DELTA] if head else [])
         config = model.config.to_dict()
-        batches = samples(config, False)
+        utility = config.get('utility') is not None
+        require(utility or not head, 'A search head requires a utility model')
+        # The shared sampler draws budgets from the reward cap. A model with no
+        # utility head ignores them, so any positive range serves its parity check.
+        batches = samples(config if utility else dict(config, utility=dict(insolvency=dict(max_cost=1.))), False)
         path = partial/'model.onnx'
         axes = {name: {0: 'positions'} for name in BASE_INPUTS+outputs}
         axes['descriptors'] = {0: 'descriptor_positions'}
@@ -83,9 +96,10 @@ def export_bundle(model, destination):
             axes[name][1] = 'candidates'
         # Exporting neither trains nor samples; keep any generator use out of
         # the trainer's stream regardless.
-        with torch.random.fork_rng(devices=[]), torch.inference_mode():
-            reference = _graph(copy.deepcopy(model).cpu().eval(), head, torch)
-            frozen = _graph(prepare_export(model), head, torch)
+        with warnings.catch_warnings(), torch.random.fork_rng(devices=[]), torch.inference_mode():
+            warnings.simplefilter('ignore', torch.jit.TracerWarning)
+            reference = _graph(copy.deepcopy(model).cpu().eval(), head, utility, torch)
+            frozen = _graph(prepare_export(model), head, utility, torch)
             torch.onnx.export(frozen, tuple(torch.from_numpy(batches[0][k]) for k in BASE_INPUTS), str(path),
                 input_names=BASE_INPUTS, output_names=outputs, dynamic_axes=axes, opset_version=17, dynamo=False)
         onnx.checker.check_model(onnx.load(str(path)))
@@ -108,7 +122,8 @@ def export_bundle(model, destination):
         (partial/'model.json').write_text(json.dumps(model_json, indent=2, allow_nan=False)+'\n', encoding='utf-8')
         manifest = dict(contract=CONTRACT, model_id=model_id(model), export_file='model.onnx',
             export_sha256=sha(path), metadata_sha256=sha(partial/'model.json'),
-            reward_id=digest(config['utility']), max_cost=config['utility']['insolvency']['max_cost'],
+            reward_id=digest(config['utility']) if utility else NO_REWARD,
+            max_cost=config['utility']['insolvency']['max_cost'] if utility else 0., utility=utility,
             architecture=config['architecture'], feature_schema=SCHEMA, group_layout=GROUP, entity_layout=ENTITY,
             precision='float32', opset=17, inputs=BASE_INPUTS, outputs=outputs, search_delta=head,
             provider='CPUExecutionProvider', intra_threads=1, inter_threads=1, sequential=True,

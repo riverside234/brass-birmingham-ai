@@ -15,6 +15,8 @@ OPTIONAL = ('native_inference',)
 RUNTIME_KEYS = frozenset(DEFAULTS) | frozenset(OPTIONAL)
 MODES = ('production_fast', 'strict', 'profile')
 CPU_CONTRACT = 'brass-lab-cpu-inference/1.0.0'
+# Quick searches label nothing, so only their K may differ from the job's 4.
+TEACHER_BUDGET = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8)
 _current = None
 
 
@@ -22,7 +24,16 @@ def cpu_block(*, workers=64, teacher_budget=None, pinning='one-lane-per-cpu', mo
     """Opt-in CPU inference. Absent or None keeps today's GPU path unchanged."""
     return dict(contract=CPU_CONTRACT, ordinary='cpu-ort', teacher='cpu-ort', rating='cpu-ort', pinning=pinning,
                 workers=workers, model_cache=model_cache,
-                teacher_budget=teacher_budget or dict(mode='count', full=256, fast=48))
+                teacher_budget=teacher_budget or dict(TEACHER_BUDGET))
+
+
+def _valid_count_budget(budget):
+    # Recorded configs from before K was selectable omit both fields.
+    if set(budget) not in ({'mode', 'full', 'fast'}, set(TEACHER_BUDGET)):
+        return False
+    return (type(budget['full']) is int and 64 <= budget['full'] <= 4096 and
+            type(budget['fast']) is int and 8 <= budget['fast'] <= 4096 and
+            budget.get('full_k', 16) == 16 and budget.get('fast_k', 4) in (2, 4, 8, 16))
 
 
 def validate_cpu(block):
@@ -33,9 +44,7 @@ def validate_cpu(block):
             type(block['model_cache']) is int and 4 <= block['model_cache'] <= 64, 'Invalid native_inference block')
     budget = block['teacher_budget']
     require(type(budget) is dict and ((budget.get('mode') == 'timed' and set(budget) == {'mode'}) or
-            (budget.get('mode') == 'count' and set(budget) == {'mode', 'full', 'fast'} and
-             type(budget['full']) is int and 64 <= budget['full'] <= 4096 and
-             type(budget['fast']) is int and 8 <= budget['fast'] <= 4096)), 'Invalid teacher search budget')
+            (budget.get('mode') == 'count' and _valid_count_budget(budget))), 'Invalid teacher search budget')
 
 
 def validate(execution):

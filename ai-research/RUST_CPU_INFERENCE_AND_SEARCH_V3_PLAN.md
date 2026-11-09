@@ -1,6 +1,6 @@
 # Rust CPU inference, 64-worker collection and search_v3 plan
 
-Date: 2026-11-08. Status: **implemented**; see [the implementation report](RUST_CPU_INFERENCE_REPORT.md) for what was built, what was verified and the command to continue from g1290. The rest of this document is the original plan, and it was written before any benchmark ran.
+Date: 2026-11-08. Status: **implemented**; see [the implementation report](RUST_CPU_INFERENCE_REPORT.md) for what was built, what was verified and the commands to continue from g1290. The rest of this document is the original plan, and it was written before any benchmark ran.
 
 Evidence comes from the latest pulled export, [`joint7-v11-2-g1290-trained-restart-g1290-20261109T041246972332Z`](../results/joint7-v11-2-g1290-trained-restart-g1290-20261109T041246972332Z/state.json), plus the code and reports linked below. Anything marked *estimate* is a projection that the measurements in section 8 will replace. A "lane" is one game or search worker; "lane-seconds" sum time across lanes.
 
