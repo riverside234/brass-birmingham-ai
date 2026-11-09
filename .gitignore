@@ -745,6 +745,7 @@ Desktop.ini
 !/distribution/rust-lab-b07-g1250/rust-lab-b07-g1250-r8.zip
 
 # Git-delivered collector performance notes and bounded measurement evidence.
+/.training-rollback/
 !/distribution/rust-collector-performance/
 /distribution/rust-collector-performance/*
 !/distribution/rust-collector-performance/README.md

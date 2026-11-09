@@ -1,0 +1,55 @@
+{
+  "contract": "step5-old-machine-full-revision/1.0.0",
+  "date": "2026-11-08",
+  "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+  "training_source_changed": false,
+  "project_root": "/data/not_backed_up/yxu209/ai-training",
+  "restore_generation": 1284,
+  "preserve_current_generation": 1286,
+  "iterations": 5,
+  "behavior": [
+    "Verify chosen archive and full learning source before retiring current run",
+    "Journal whole newer run move into ignored .training-rollback; preserve checkpoint/state and pending work",
+    "Restore original g1284 run path and explicitly install its exact checkpoint-bound fresh-buffer/reward instruction at same ROOT",
+    "Retain archived weights/all Adam/RNG/fixed beta/residual counters; rebuild fresh buffers with auxiliary fitting/counters paused for eight return ages",
+    "Reuse prepared reward adapter and exact frozen rating runtime; continue through existing qualified teacher-on helper",
+    "Retry partial restore; once marker exists, keep subsequent commits and fresh buffers instead of rolling back again"
+  ],
+  "revision": {
+    "placement": 0.05,
+    "insolvency_event_cost": 0.0,
+    "vp_timing": "canal-and-final-delta/1.0.0",
+    "branching": 0.0,
+    "teacher_mode": "on",
+    "teacher_beta": "preserve existing qualified fixed beta",
+    "stages": [
+      10,
+      20,
+      10
+    ],
+    "stage_c_trunk_increment": 0.1,
+    "joint_kl_cap": 0.003,
+    "ppg_beta_floor": 0.25,
+    "head_to_head_games": 0,
+    "stage_c_heldout_games": 8,
+    "stage_c_buffer_iterations": 8,
+    "stage_c_loss_increase_stop": true,
+    "rejected_interval_steps": 16,
+    "diagnostic_heldout_games": 4,
+    "diagnostic_interval": 10,
+    "heldout_each_beta_qualification_iteration": true,
+    "search": "search_v1",
+    "v205_enabled": false,
+    "domino_enabled": false
+  },
+  "validation": {
+    "static_ast_files": 2,
+    "source_identity": "unchanged and matches reviewed execution",
+    "authored_regression_tests": 7,
+    "local_tests_run": false,
+    "local_benchmarks_run": false,
+    "local_training_run": false,
+    "server_validation": "Pending"
+  },
+  "command": "python scripts/continue-rust-revised.py --bundle \"$DOWNLOAD/selfplay-migration.tar.zst.parts.json\" --expected-generation 1284 --preserve-current-generation 1286 --iterations 5 --share-target 0.25 --device cuda"
+}

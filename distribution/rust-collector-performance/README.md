@@ -300,3 +300,14 @@ re-export or repeated preflight/qualification is required. Eight authored focuse
 regressions await server execution; no local tests or benchmarks were run.
 See [transfer-frozen-runtime-fix.json](transfer-frozen-runtime-fix.json) and
 the transfer guide for commands.
+
+Old-machine full revision: `scripts/continue-rust-revised.py` keeps the original
+project ROOT, preserves the newer g1286 run under ignored `.training-rollback/`,
+restores the chosen g1284 export at its original run path and explicitly adopts
+the complete revised rewards/fresh-buffer instruction. It journals the move and
+supports interruption/retry without a second rollback or buffer reset. The
+current teacher helper then enforces all A10/B20/C10, Stage-C eight-game held-out
+loss stopping, joint KL .003, PPG floor .25, validation cadence, fixed beta,
+branch-off/search_v1 and zero-charge/canal-delta reward settings. Seven authored
+regressions await server execution; only static checks were performed locally.
+See [old-machine-full-revision.json](old-machine-full-revision.json).

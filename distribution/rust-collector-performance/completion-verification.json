@@ -356,5 +356,13 @@
     "authored_regression_tests": 8,
     "server_repair_continuation": "Pending",
     "native_rebuild_required": false
+  },
+  "old_machine_full_revision": {
+    "receipt": "distribution/rust-collector-performance/old-machine-full-revision.json",
+    "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+    "restore_generation": 1284,
+    "preserved_generation": 1286,
+    "local_tests_run": false,
+    "server_validation": "Pending"
   }
 }

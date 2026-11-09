@@ -50,6 +50,31 @@ Stage B still warms up unconditionally for 20 iterations. Stage C keeps its 0.1-
 
 ## Source machine: stop and export
 
+### Apply the complete revision on the old machine, restoring g1284
+
+Keep `ROOT=/data/not_backed_up/yxu209/ai-training`. If the old command reached g1286, stop it first. The same-project driver below preserves the entire g1286 run (including incomplete next-iteration work) under the ignored `.training-rollback/` directory, restores the chosen g1284 archive into the original run path, explicitly installs the checkpoint-bound fresh-buffer/reward instruction even at the original absolute root, and launches the current teacher continuation. Project folder names and the machine do not change.
+
+```bash
+conda activate ai-training
+ROOT=/data/not_backed_up/yxu209/ai-training
+cd "$ROOT" || exit 1
+export CUDA_VISIBLE_DEVICES=0
+
+# DOWNLOAD is the existing directory containing the g1284 archive parts/index.
+python scripts/continue-rust-revised.py \
+  --bundle "$DOWNLOAD/selfplay-migration.tar.zst.parts.json" \
+  --expected-generation 1284 --preserve-current-generation 1286 \
+  --iterations 5 --share-target 0.25 --device cuda
+```
+
+The driver verifies the archive generation and complete source identity before retiring the old run; it refuses a different current committed generation instead of silently discarding more work. It journals the reversible move and verifies the g1286 state/checkpoint backup on retries. A partially completed restore resumes, and an existing completed adoption is never restored/reset a second time. It preserves all archived g1284 weights, optimizers, RNG, fixed beta and residual-stage progress. Old replay is absent from the restored working run; the g1286 backup remains available. This uses the existing revised reward/transfer/teacher code, without a new learner-source transition.
+
+The printed `revision` report checks **all** requested settings: placement `.05`, zero insolvency, canal then final-difference VP; Rust `search_v1`, V205 off, 4s teacher search plus up to 1s delivery, fast delivery `.5s`; branching 0%, teacher on with its existing fixed beta; A10/B20/C10 warmups, no 256-game gate, Stage-C hard joint KL `.003`, PPG beta floor `.25`; four diagnostic held-out games every tenth iteration with the beta-qualification override; and the Stage-C eight-game holdout from the eight-age return buffer with loss-increase stopping. The latter restores only the rejected 16-step interval (weights/both Adams/companion step count), retaining earlier accepted updates and the stage clock. Auxiliary fitting/counters pause until eight fresh new-reward teacher-return ages are ready. Existing Rust adapters are reused when matching.
+
+`--prepare-only` performs the reversible restore/instruction preparation without starting training. The driver leaves the original checkpoint/state bytes intact until the normal reviewed training loader commits the reward transition. It never substitutes a g1284 checkpoint into a g1286 state. Keep `.training-rollback/` local; its full weights/replays do not belong in Git. Focused regressions for the server (not run locally): `PYTHONPATH=src:scripts:tests/Transfer python -m unittest -v test_inplace_revised_restore`.
+
+### Export the stopped source run
+
 Finish the active command normally. An uncommitted iteration/checkpoint must be recovered on the source before exporting. Publish these code changes to your repository and use the matching commit on both machines. The exporter supports the current reviewed qualified-source alias while recording the actual complete execution-source fingerprint (recipe 4, including Rust). Unknown source versions remain rejected. Exporting itself never runs an extra training iteration.
 
 ```bash
