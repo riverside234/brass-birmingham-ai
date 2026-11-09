@@ -17,6 +17,7 @@ The current native-run exporter requires compact mode and records `fresh-buffers
 | `<run>/il-kl/probe.npz` and `<run>/il-kl/manifest.json` | The existing fixed 2048 **positions**, including encoded features and original reference probabilities |
 | Original and active Rust ordinary/teacher binaries, bootstrap DLLs, build/qualification receipts, calibration fixtures | Continue the adopted backend without losing its integrity bindings |
 | Rules DLLs and runtime manifests from `training/runtime/distribution.json` | Destination preflight and the existing C# V4 worker |
+| Frozen rating/pending-evaluation `search_runtime` receipts, runtime manifests and all pinned EXE/DLL files | Keep the original rated opponent identity; package as private runtime even in repo mode |
 | Source-transition backups and transfer instructions/evidence | Recovery and subsequent transfers |
 
 The destination config queues `win=1.0`, **`placement=0.05`**, `vp=0.001` with the existing 180-VP cap, and **zero insolvency reward charge**. Untied non-VP bonuses become `1.05 / 0.033333 / 0.016667 / 0`. Exact ties retain the existing pairwise placement and shared-win rules. The positive `.025` budget scale remains for compatible NN inputs; every event charge and resulting deduction is exactly zero. Current/source-server training keeps its old reward until the destination instruction authorizes the change.
@@ -94,7 +95,7 @@ For a manual upload, create a new Release/tag targeting the export's `git_commit
 
 ## Destination: restore and verify
 
-Use a full Git clone containing the export's exact Git commit/Release tag. Keep the training code at its recorded source and update the transfer tools to the latest repair: `scripts/step5-transfer.py`, `scripts/step5_transfer_runtime.py` and `scripts/step5_transfer_restore.py`. Newer transfer tools can restore an older archive without replacing themselves. Install the OS/Python/PyTorch/CUDA/Mono dependencies from [the lab guide](TRAINING_RECOVERY_LAB.md); the archive is not a conda/system image. Select your allocated GPU using `CUDA_VISIBLE_DEVICES`. Retained native binaries require a compatible Linux CPU/ABI; use preflight to check the destination before training.
+Use a full Git clone containing the export's exact Git commit/Release tag. Keep the training code at its recorded source and update the transfer tools to the latest repair: `scripts/step5-transfer.py`, `scripts/step5_transfer_runtime.py`, `scripts/step5_transfer_restore.py` and `scripts/step5_transfer_frozen.py`. Newer transfer tools can restore an older archive without replacing themselves. Install the OS/Python/PyTorch/CUDA/Mono dependencies from [the lab guide](TRAINING_RECOVERY_LAB.md); the archive is not a conda/system image. Select your allocated GPU using `CUDA_VISIBLE_DEVICES`. Retained native binaries require a compatible Linux CPU/ABI; use preflight to check the destination before training.
 
 ```bash
 # ROOT is the NEW checkout; DOWNLOAD contains all archive parts and the index.
@@ -119,7 +120,7 @@ The tool performs no fetch/reset/checkout. A missing commit or unresolved depend
 
 Backups and the interruption-safe receipt live under `artifacts/step5-transfer/restore-<archive-id-prefix>/`; `restore.json` lists their exact paths in `repository_reconciliation.backups`. The first destination-state identity is retained so retries cannot lose the fresh-buffer instruction after a partial restore. Later edits to an already backed-up file, changed backups, or a different journal/archive binding fail closed. Existing **checkpoints, run state, data, private binaries and untracked files** are never overwritten on a mismatch. `--strict-repo-files` retains the original policy of refusing any differing repository file. `verify` only checks; it never repairs/replaces files.
 
-Current transfer tools stay in the checkout. Their older archive versions are retained as hash-verified snapshots in that receipt directory; only these three named, non-training tools use this mapping. Other archived files remain at their original relative paths, and the full training-source fingerprint is still required. This keeps fixes available for retries and verification without weakening the archived model/config/data/source bindings. The archive itself is unchanged.
+Current transfer tools stay in the checkout. Their older archive versions are retained as hash-verified snapshots in that receipt directory; only the listed non-training transport modules use this mapping. Other archived files remain at their original relative paths, and the full training-source fingerprint is still required. This keeps fixes available for retries and verification without weakening the archived model/config/data/source bindings. The archive itself is unchanged.
 
 `--relocate` supports a different absolute project directory. `.step5-relocation.json` maps historical root components at access time, including Rust receipt/binary paths. Signed historical JSON is unchanged. Restored native workers retain their Linux executable bit. Keep the relocation mapping and restore receipt/backups with the checkout; do not edit path strings inside saved checkpoints or receipts.
 
@@ -127,10 +128,25 @@ Run archive `verify` before any subsequent training changes. Full verification a
 
 ## Destination: preflight and continue
 
+Mono is a separate Linux runtime dependency, even with the Rust training backend: preflight and C# opponent decisions still launch managed workers. The transfer archive and Python requirements do not install it. In the active training environment, check/install it before launching preflight:
+
+```bash
+conda activate ai-training
+conda install -y --freeze-installed conda-forge::mono
+command -v mono
+mono --version
+```
+
+The [conda-forge Mono package](https://anaconda.org/conda-forge/mono) supplies the Linux executable without administrator privileges; [`--freeze-installed`](https://docs.conda.io/projects/conda/en/stable/commands/install.html) asks Conda to retain existing installed package versions. If a site-provided Mono is already available, load its module or use its absolute executable path instead of installing another copy. A `FileNotFoundError: ... 'mono'` means the worker launcher could not find this executable; fix its installation/PATH and retry the same preflight. No archive re-export/restore, adapter rebuild or training-source migration is needed for that error. Keep the activated environment or loaded module in every training/SLURM job, not just the interactive setup shell.
+
+For a Mono executable outside PATH, use the existing global CLI option **before** the subcommand: `python scripts/step5.py --root "$ROOT" --config <restored-config> --device cuda --mono /absolute/path/to/mono preflight`. Pass the same `--mono /absolute/path/to/mono` before `train` in the continuation command. The generated commands use `mono` on PATH by default.
+
 The restore JSON contains ready-to-run `preflight` and `resume` commands using the reviewed destination config, IL source, original run and expected generation. Run `prepare_reward` from the restore JSON first, then the generated preflight. A shipped, compatible reward adapter is reused without rebuilding. The source machine's old preflight does not substitute for a destination check. Ordinary native collection, Rust search_v1 and the existing C# V4 worker keep their adopted profiles. Do not rebuild/requalify an unrelated successful milestone just to transfer compatible, pinned binaries.
 
 ```bash
 export CUDA_VISIBLE_DEVICES=0
+# Fail before worker launch if Mono was not installed/loaded in this job.
+command -v mono >/dev/null || { echo 'Mono is missing: install/load it as described above.' >&2; exit 1; }
 python - "$DOWNLOAD/restore.json" <<'PY'
 import json, shlex, subprocess, sys
 r = json.load(open(sys.argv[1]))
@@ -154,6 +170,23 @@ python scripts/continue-rust-teacher.py \
 ```
 
 Use the actual committed generation for later commands. The first destination continuation adopts the queued reward only with its exact restoration instruction. Running the generated reward config against the untouched source run is rejected. It does not repeat completed beta qualification. Teacher mode stays on, branching stays 0%, teacher beta remains fixed and search_v1/V205 settings are unchanged.
+
+### Missing frozen rating runtime in an older archive
+
+If continuation reports `Frozen rating runtime missing: ... search-76a2f9ad7529c0e5e2117a36`, update the checkout with this repair and retain the stopped restored run. Older exports walked `path`/`sha256` receipts but missed the rating opponent's typed `id`/`recipe` reference. Future exports now explicitly retain enabled rating and pending-evaluation runtimes, including their original receipts/manifests and every pinned binary; export refuses a missing live dependency.
+
+The Git supplement under `training/runtime/shared-search/bank-3dc65253a610191d66a5/frozen/search-76a2f9ad7529c0e5e2117a36/` contains the exact original `search.json`, `runtime.json` and authored executable. Its hashes are sealed in `supplement.json`; proprietary DLLs are reused by their exact hashes from the restored distribution. No private DLLs are added to Git. The frozen recipe, executable and runtime-manifest identities remain unchanged; old policy sources are not rebuilt or relabelled.
+
+Run on the destination, with training stopped:
+
+```bash
+python "$ROOT/scripts/step5-transfer.py" repair-runtimes --root "$ROOT" \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart
+```
+
+Then repeat the same five-iteration continuation command from `restore.json`. This is an additive repair: it does not rewrite state/checkpoints, reset rewards/ratings/Adam/RNG, change the archive or require the old machine. Keep the completed preflight and adapter qualifications. All source hashes and destination conflicts are checked before writing; mismatched existing files are preserved and block repair. `search.json` is published last, and interruption/retry reuses identical files. `--dry-run` previews the repair without writes. The repair tool requires no Mono worker/game execution.
+
+Focused regressions for the lab, without games or benchmarks (not run locally): `PYTHONPATH=src:scripts:tests/Transfer python -m unittest -v test_frozen_runtime_transfer`.
 
 The code and `results/` are separate Git repositories. For Git-visible training exports on the new machine, clone the results repository into `$ROOT/results` before continuation if it is not present:
 

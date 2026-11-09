@@ -288,3 +288,15 @@ a failed restore; the guide runs it only after restore succeeds. Keep the new
 destination `ROOT` and reuse the existing archive and adapter. See
 [transfer-git-newlines-fix.json](transfer-git-newlines-fix.json) for focused debug
 evidence; actual lab restore remains Pending.
+
+Frozen rating-runtime transfer follow-up: explicitly export live typed shared
+search references from rating agents and pending evaluations, with all exact
+receipts/manifests/binaries. Older archives can use `step5-transfer.py
+repair-runtimes` and the small Git-delivered authored supplement for
+`search-76a2f9ad7529c0e5e2117a36`. It reuses restored private DLLs by SHA-256,
+keeps the rated identity and training state unchanged, preflights conflicts and
+publishes the runtime receipt last. No old-machine access, rebuild, full archive
+re-export or repeated preflight/qualification is required. Eight authored focused
+regressions await server execution; no local tests or benchmarks were run.
+See [transfer-frozen-runtime-fix.json](transfer-frozen-runtime-fix.json) and
+the transfer guide for commands.

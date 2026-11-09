@@ -11,7 +11,7 @@ import re
 import subprocess
 import uuid
 
-TOOLS=frozenset(('scripts/step5-transfer.py','scripts/step5_transfer_runtime.py','scripts/step5_transfer_restore.py'))
+TOOLS=frozenset(('scripts/step5-transfer.py','scripts/step5_transfer_runtime.py','scripts/step5_transfer_restore.py','scripts/step5_transfer_frozen.py'))
 PREFIXES=('src/','scripts/','configs/','training/opponents/','training/runtime/','lab-native/')
 TEXT=frozenset(('.py','.json','.cs','.rs','.toml','.lock','.txt','.md','.sh','.ps1','.yml','.yaml'))
 CONTRACT='step5-clone-reconciliation/1.0.0'

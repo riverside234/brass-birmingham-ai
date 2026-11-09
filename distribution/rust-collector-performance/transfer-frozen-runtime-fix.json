@@ -1,0 +1,50 @@
+{
+  "contract": "step5-frozen-rating-runtime-transfer-repair/1.0.0",
+  "date": "2026-11-08",
+  "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+  "training_source_changed": false,
+  "runtime": "search-76a2f9ad7529c0e5e2117a36",
+  "cause": "Exporter followed path/sha256 references but omitted the enabled rating agent id/recipe search_runtime",
+  "fix": [
+    "Export all exact live frozen rating/pending-evaluation runtime receipts, manifests and binary/dependency pins",
+    "Git supplement contains original metadata and authored executable; private DLLs reused by exact SHA-256 from restored distribution",
+    "repair-runtimes holds the stopped-run lease, preflights all files, preserves mismatches, publishes receipt last and supports retry",
+    "No training state, checkpoint, rating identity, source/reward signature or resume instruction rewrite"
+  ],
+  "supplement": {
+    "path": "training/runtime/shared-search/bank-3dc65253a610191d66a5/frozen/search-76a2f9ad7529c0e5e2117a36",
+    "files": {
+      "search.json": {
+        "sha256": "316330cc73b3f543c37c3bdcdbfa045c1a394a8595ade4201a9b456ff450a506",
+        "bytes": 4800
+      },
+      "runtime.json": {
+        "sha256": "421a7d276f657905eb0899ffcc03fd1129ddacf4a6d530ce435e36d37051fb42",
+        "bytes": 21174
+      },
+      "BrassLegacyAI.exe": {
+        "sha256": "133dddd583b5679e516a2486992d9aa242ca8530fd0a7016cf814d6dc41906dc",
+        "bytes": 267264
+      }
+    },
+    "id": "5bf3a640d7e7c90143cb8260b5ac2a05b94e0731e453781becfdfa3a93a104c4",
+    "total_payload_bytes": 293238,
+    "proprietary_files_in_git": false,
+    "authored_executable_already_published": true
+  },
+  "validation": {
+    "static_ast_files_passed": 4,
+    "supplement_file_hashes": "matched original receipts and existing published executable",
+    "original_g1284_reference": "exact match",
+    "private_dependency_hash_coverage": "all 111 DLL pins declared in restored distribution",
+    "source_fingerprint": "unchanged; matches reviewed implementation",
+    "authored_regression_tests": 8,
+    "local_tests_run": false,
+    "local_benchmarks_run": false,
+    "local_training_run": false,
+    "server_repair_and_continuation": "Pending"
+  },
+  "repair_command": "python \"$ROOT/scripts/step5-transfer.py\" repair-runtimes --root \"$ROOT\" --run artifacts/step5/joint7-v11-2-g1290-trained-restart",
+  "lab_regressions": "PYTHONPATH=src:scripts:tests/Transfer python -m unittest -v test_frozen_runtime_transfer",
+  "next": "Repeat existing five-iteration resume command from restore.json; keep completed preflight and adapters"
+}

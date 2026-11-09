@@ -166,6 +166,8 @@ def inventory(root, run, *, mode='compact'):
     run = below(root, run)
     require(run.is_relative_to(root / 'artifacts'), 'Expected an owned artifacts run')
     state = read(run / 'state.json')
+    from step5_transfer_frozen import live_rating_inputs
+    frozen_inputs=[live_rating_inputs(state)]
     require(state.get('format') == 'step5-recovery-league/2.2.0', 'Unsupported self-play state')
     native = state.get('native_backend') is not None
     require(not native or mode == 'compact', 'Use compact mode for native transfer: replay buffers and original IL caches must be omitted')
@@ -248,6 +250,7 @@ def inventory(root, run, *, mode='compact'):
         if (folder / 'spec.json').is_file() and not (folder / 'report.json').is_file():
             tree(folder)
             spec = read(folder / 'spec.json')
+            frozen_inputs.append(spec)
             if spec.get('config', {}).get('host'):
                 hosts.add(below(root, spec['config']['host']))
             def references(value):
@@ -310,6 +313,8 @@ def inventory(root, run, *, mode='compact'):
             add(path)
             require(hashlib.sha256(path.read_text(encoding='utf-8-sig').replace('\r\n', '\n').encode()).hexdigest() == expected,
                     'Runtime authored source hash differs: ' + name)
+    from step5_transfer_frozen import inventory as frozen_inventory
+    frozen_inventory(root,frozen_inputs,read=read,require=require,add=add,runtime=runtime)
     environment = {name for name in files if any(name.startswith(p + '/') for p in CODE_TREES)
                    or name.startswith('requirements') or name in runtime
                    or any(below(root, name).is_relative_to(host) for host in hosts)}
@@ -802,6 +807,25 @@ def commands(root, manifest, *, iterations=20, device='cuda'):
     return result
 
 
+def repair_runtimes(root,run,*,dry_run=False):
+    """Add only exact missing runtime files; keep committed training bytes."""
+    from step5_transfer_frozen import live_rating_inputs,repair
+    root=Path(root).resolve();run=below(root,run)
+    require(run.is_relative_to(root/'artifacts') and (run/'state.json').is_file(),'Expected an existing artifacts run')
+    require(not active(run),'Run is active; stop training before runtime repair')
+    state_bytes=(run/'state.json').read_bytes();state=read(run/'state.json')
+    values=[live_rating_inputs(state)]
+    for folder in sorted((run/'evaluations').glob('*')):
+        if (folder/'spec.json').is_file() and not (folder/'report.json').is_file():values.append(read(folder/'spec.json'))
+    with ExitStack() as controls:
+        if not dry_run:controls.enter_context(lease(run))
+        require((run/'state.json').read_bytes()==state_bytes,'Training state changed before runtime repair')
+        result=repair(root,values,read=read,sha=sha,require=require,publish=publish,dry_run=dry_run)
+        require((run/'state.json').read_bytes()==state_bytes,'Training state changed during runtime repair')
+    return dict(result,run=run.relative_to(root).as_posix(),generation=state['iteration'],
+        state_sha256=hashlib.sha256(state_bytes).hexdigest(),state_unchanged=True)
+
+
 def restore(root, bundle, *, verify_only=False, relocate=False, strict_repo_files=False,use_checkout_code=False):
     require(not (strict_repo_files and use_checkout_code),'--strict-repo-files and --use-checkout-code are mutually exclusive')
     root = Path(root).resolve()
@@ -935,10 +959,16 @@ def main():
         code=cmd.add_mutually_exclusive_group()
         code.add_argument('--strict-repo-files',action='store_true',help='Reject differing Git-managed files instead of backing them up and restoring archive-pinned bytes')
         code.add_argument('--use-checkout-code',action='store_true',help='Keep existing Git-tracked text/code/config files without archive byte matches; retain checkpoint/data and training compatibility checks')
+    repair=sub.add_parser('repair-runtimes',help='Restore exact frozen opponents from Git supplements and already transferred private DLLs; never rebuild or change training state')
+    repair.add_argument('--root',required=True,type=Path)
+    repair.add_argument('--run',required=True)
+    repair.add_argument('--dry-run',action='store_true')
     a = parser.parse_args()
     if a.command == 'export':
         result = export(a.root, a.run, a.bundle, dry_run=a.dry_run, mode=a.mode, dependencies=a.dependencies, part_mb=a.part_mb,
                         archive_format=a.archive_format, zstd_level=a.zstd_level, threads=a.threads)
+    elif a.command=='repair-runtimes':
+        result=repair_runtimes(a.root,a.run,dry_run=a.dry_run)
     else:
         result = restore(a.root, a.bundle, verify_only=a.command == 'verify', relocate=a.relocate,
             strict_repo_files=a.strict_repo_files,use_checkout_code=a.use_checkout_code)
