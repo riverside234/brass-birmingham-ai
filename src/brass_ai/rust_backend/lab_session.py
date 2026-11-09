@@ -11,9 +11,10 @@ from .lab_transport import Collector, DecisionEncoder
 
 
 class OrdinarySession:
-    def __init__(self, root, executable, endpoint, execution, mono=None):
+    def __init__(self, root, executable, endpoint, execution, mono=None, cpu=None):
         self.root, self.executable, self.endpoint = root, executable, endpoint
         self.execution, self.mono = execution, mono
+        self.cpu = cpu
         self.lane = None
         self.policies = OrderedDict()
         self.active = False
@@ -30,6 +31,10 @@ class OrdinarySession:
             if self.lane is None:
                 self.lane = Collector(self.executable)
                 timings['collector_process_starts'] += 1
+                if self.cpu is not None:
+                    require(self.lane.hello.get('cpu_inference') == self.cpu['contract'], 'Collector lacks CPU inference')
+                    self.lane.call('configure_cpu', contract=self.cpu['contract'], runtime=self.cpu['runtime'],
+                                   model_cache=self.cpu['model_cache'])
             else:
                 require(not self.lane.closed and self.lane.token is None, 'Unreleased collector game')
                 timings['collector_process_reuses'] += 1
@@ -47,6 +52,11 @@ class OrdinarySession:
                     timings['policy_starts'] += 1
                     timings['policy_startup_seconds'] += time.monotonic()-began
                     if type(p) is NeuralPolicy:
+                        if self.cpu is not None:
+                            from .lab_cpu_inference import NativeCpuEvaluator
+                            require(p.evaluator.model_id in self.cpu['bundles'], 'Ordinary model has no CPU bundle')
+                            p.evaluator = NativeCpuEvaluator(self.lane, p.evaluator.model_id,
+                                                             self.cpu['bundles'][p.evaluator.model_id])
                         predict = p.evaluator.predict
                         def recorded(requests, p=p, predict=predict):
                             began = time.monotonic(); replies = predict(requests)
@@ -65,7 +75,10 @@ class OrdinarySession:
                 if type(p) is NeuralPolicy:
                     p.context_counter, p.context_offset, p.request_deadline = 0, None, None
                     p.opening = spec.get('opening')
-                    p.evaluator.encoder = DecisionEncoder(self.lane, p.evaluator.model_id)
+                    if self.cpu is not None:
+                        p.evaluator.begin_game(self.lane)
+                    else:
+                        p.evaluator.encoder = DecisionEncoder(self.lane, p.evaluator.model_id)
                     p.native_raw = None
                 policies.append(p)
             while len(self.policies)>12:

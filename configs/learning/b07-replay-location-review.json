@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+  "execution_implementation": "e9a749a0b360ba26a7b23214b30eb45b3ee6851c65511b2348c574c729c64665",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -398,6 +398,11 @@
       "implementation": "675a38930b1dca9b00b953fbce8308283312e1170d695d79157f64ebc624153c",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "90d3bd97dc85666908508b484e33d727152e88ddef7d8afcd88468342d0f329b"
+    },
+    {
+      "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "50fc205a1d72bbe2e65b83de87ff5f4779eef07635c045969a053438e58610b2"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -516,5 +521,11 @@
       "max_cost": 0.025
     },
     "scope": "Exact destination-instruction/checkpoint-bound config transition. Preserve all parameters, Adam/RNG, ordinary progress, qualified fixed teacher beta and A/B counters; invalidate old-reward readiness and buffers, pause auxiliary fitting until eight new-reward return ages. Support pre-checkpoint transition recovery. Version-3 VP payments derive from complete bound public replays; compact IPC retains paid credit, analytically subtracted for future returns/GAE while NN/PPG/search keep full-game value coordinates and unchanged tensors. Teacher payments reuse the already bound first rail root. Preserve one cumulative VP cap and branch inheritance. Separate teacher-only sealed-core validation extension admits this reward contract and exact zero charge with positive feature-budget scale; positive-cost search/traversal/equations and installed game/ordinary runtime remain unchanged. Four filtered numeric Rust regressions pass; no local gameplay/benchmark. Prepare/reuse the separate teacher variant before destination continuation."
+  },
+  "cpu_inference": {
+    "contract": "brass-lab-cpu-inference/1.0.0",
+    "source_plan": "ai-research/RUST_CPU_INFERENCE_AND_SEARCH_V3_PLAN.md",
+    "scope": "Opt-in in-worker ONNX Runtime inference for teacher search, ordinary lanes and rating, stripped from the training signature and absent by default. Without the execution block every GPU path, binary, frozen job, checkpoint and RNG stream is unchanged.",
+    "qualified_implementation_unchanged": true
   }
 }

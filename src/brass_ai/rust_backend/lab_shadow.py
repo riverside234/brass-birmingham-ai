@@ -142,7 +142,7 @@ class ShadowCollector:
             cache=TableCache(self.run,directory/'teacher-shadow',jobs)
             cached={j['expected']['job_id']:cache.load(j) for j in jobs}
             missing=[j for j in jobs if cached[j['expected']['job_id']] is None]
-            collector=None;live=[]
+            collector=None;live=[];cpu_metrics=None
             if missing:
                 build=self.build;bootstrap=[build['bootstrap']['binary']['path']]
                 import os
@@ -155,12 +155,28 @@ class ShadowCollector:
                 require(roots,'Missing qualified teacher calibration roots')
                 origins=[dict(state=r['expected']['state'],rail_keys=list(range(64))) for r in
                     (roots[0],max(roots,key=lambda r:len(r['expected']['choices'])))]
-                calibration=calibrate(build['binary']['path'],build['core_source'],origins,missing[0],service)
-                write_json(directory/'teacher-shadow/calibration.json',calibration)
-                lanes=min(len(missing),service.cpu.capacity,state['signature']['config']['execution']['processes']*
-                    state['signature']['config']['execution']['hosts_per_process'])
-                collector=TeacherCollector(build['binary']['path'],build['core_source'],bootstrap,service,calibration,
-                    lanes=lanes,model=model,history=state['history'])
+                from brass_ai.recovery.collector_runtime import native_inference
+                block=native_inference()
+                if block is not None and block['teacher']=='cpu-ort':
+                    from .lab_cpu_runtime import teacher_plan,core_allocation
+                    from .lab_teacher import calibrate_cpu,count_calibration
+                    lanes=min(len(missing),service.cpu.capacity,block['workers'])
+                    plan=teacher_plan(self.root,build,service,missing,block)
+                    cores=core_allocation(lanes) if block['pinning']=='one-lane-per-cpu' else []
+                    calibration=(count_calibration(build['core_source'],missing[0]) if block['teacher_budget']['mode']=='count' else
+                        calibrate_cpu(plan['binary'],build['core_source'],origins,missing[0],plan['inference'],cores))
+                    write_json(directory/'teacher-shadow/calibration.json',calibration)
+                    collector=TeacherCollector(plan['binary'],build['core_source'],bootstrap,service,calibration,
+                        lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores)
+                    cpu_metrics=dict(receipt=plan['receipt'],budget=plan['inference']['budget'],
+                        exported_bundles=plan['exported_bundles'],lanes=lanes,cores=len(cores),pinning=block['pinning'])
+                else:
+                    calibration=calibrate(build['binary']['path'],build['core_source'],origins,missing[0],service)
+                    write_json(directory/'teacher-shadow/calibration.json',calibration)
+                    lanes=min(len(missing),service.cpu.capacity,state['signature']['config']['execution']['processes']*
+                        state['signature']['config']['execution']['hosts_per_process'])
+                    collector=TeacherCollector(build['binary']['path'],build['core_source'],bootstrap,service,calibration,
+                        lanes=lanes,model=model,history=state['history'])
                 live=collector.collect(missing,on_result=cache.publish)
                 cached.update({r['job_id']:r for r in live})
             results=[cached[j['expected']['job_id']] for j in jobs]
@@ -176,6 +192,7 @@ class ShadowCollector:
                         if job['expected']['job_id'] in verifier.cache:return verifier.take(result,job,model)
                         return admit_teacher_rows(result['rows'],job=job,model=model,history=state['history'])
                 phase.admit_collection(results,model,verifier=MixedVerifier())
+            if cpu_metrics is not None:phase.metrics['cpu_inference']=cpu_metrics
             phase.metrics.update(shadow=phase.options['mode']=='shadow',mode=phase.options['mode'],
                 cached_tables=len(jobs)-len(missing),new_tables=len(live),wall_seconds=time.monotonic()-began,
                 gradient_qualification='Measured during ordinary PPO; never applied' if phase.options['mode']=='shadow' else

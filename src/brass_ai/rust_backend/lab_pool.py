@@ -224,12 +224,15 @@ def _writer(connection, directory, producer, config, scope, cpu, stop, selected_
             connection.send(dict(error=traceback.format_exc()));return
 
 
-def _actors(connections, root, build, execution, mono, lease, cpu, stop, directory):
+def _actors(connections, root, build, execution, mono, lease, cpu, stop, directory, inference=None, core=None):
     import torch
     from brass_ai.recovery.telemetry import Timings
     from .lab_b02_smoke import reference_part
     from brass_ai.recovery.collector_runtime import from_config,install,recipe
     install(from_config(dict(execution=execution)));execution=recipe(dict(execution=execution))['execution']
+    if core is not None:
+        from .lab_cpu_runtime import pin_process
+        pin_process(core)
     torch.set_num_threads(execution['worker_threads'])
     def lane(connection):
         endpoint=lease.acquire();endpoint.timeout=30.
@@ -237,7 +240,7 @@ def _actors(connections, root, build, execution, mono, lease, cpu, stop, directo
             from .lab_session import OrdinarySession
             command=[build['bootstrap']['binary']['path']]
             if os.name!='nt':command.insert(0,mono)
-            with Pipe(command,binary=False) as bootstrap, OrdinarySession(root,build['collector']['path'],endpoint,execution,mono) as session:
+            with Pipe(command,binary=False) as bootstrap, OrdinarySession(root,build['collector']['path'],endpoint,execution,mono,cpu=inference) as session:
                 connection.send(dict(ready=True))
                 while not stop.is_set():
                     if not connection.poll(.1):continue
@@ -305,8 +308,9 @@ def publisher_workers(jobs,capacity):
 
 
 class NativePool:
-    def __init__(self,root,service,execution,build,config,signature,*,mono='mono',scope='ordinary'):
+    def __init__(self,root,service,execution,build,config,signature,*,mono='mono',scope='ordinary',cpu=None):
         require(scope in ('ordinary','diagnostic'),'Unknown native pool scope')
+        self.cpu=cpu
         from .lab_teacher_activation import is_on
         require(config.get('teacher_phase',{}).get('mode','off') in ('off','shadow') or is_on(config),
                 'Ordinary backend excludes unqualified teacher on-mode')
@@ -428,13 +432,18 @@ class NativePool:
                 # continuations. A cache-only restart needs no engine or NN IPC.
                 width=min(config['processes'],len(missing));lanes=width*lanes_per
                 lease=self.service.channels(lanes);self.channel_leases.append(lease);new_connections=[]
-                for _ in range(width):
+                cores=[]
+                if self.cpu is not None and self.cpu['pinning']=='one-lane-per-cpu':
+                    from .lab_cpu_runtime import core_allocation
+                    cores=core_allocation(width)
+                for number in range(width):
                     pairs=[]
                     try:
                         for _ in range(lanes_per):
                             a,b=self.mp.Pipe();pairs.append((a,b));self.connections.append(a)
+                        extra=() if self.cpu is None else (self.cpu,cores[number] if cores else None)
                         p=self.mp.Process(target=_actors,args=([b for a,b in pairs],str(self.root),self.build,dict(config,**self.runtime),
-                            self.mono,lease,self.service.cpu,self.stop,str(directory/'parts')))
+                            self.mono,lease,self.service.cpu,self.stop,str(directory/'parts'),*extra))
                         self.processes.append(p);p.start()
                     finally:
                         for a,b in pairs:b.close()
@@ -479,6 +488,10 @@ class NativePool:
                 performance_wire=self.build.get('performance_wire','legacy-compact-arrays-forced/1'),
                 completion_export=self.build.get('completion_export','legacy-separate-pages'),
                 immutable_bindings=self.runtime['replay_bindings'])
+            if self.cpu is not None:
+                report['collector_runtime']['cpu_inference']=dict(contract=self.cpu['contract'],pinning=self.cpu['pinning'],
+                    model_cache=self.cpu['model_cache'],runtime_sha256=self.cpu['runtime']['sha256'],
+                    models=len(self.cpu['bundles']),exported_bundles=self.cpu['exported_bundles'])
             self.last_collection_report=report
             return records
         except BaseException:

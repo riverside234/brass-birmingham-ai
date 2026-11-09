@@ -40,7 +40,18 @@ def run_training(argv,log):
         finally:process.stdout.close()
 
 
-def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False):
+def inference_choice(args):
+    """Parse --inference: keep the recorded choice, or select CPU/GPU explicitly."""
+    if args.inference=='keep':return 'keep'
+    if args.inference=='gpu':return None
+    from brass_ai.recovery.collector_runtime import cpu_block,validate_cpu
+    budget=dict(mode='timed') if args.teacher_budget=='timed' else dict(mode='count',full=args.teacher_full,fast=args.teacher_fast)
+    block=cpu_block(workers=args.workers,teacher_budget=budget,pinning='none' if args.no_pinning else 'one-lane-per-cpu')
+    validate_cpu(block)
+    return block
+
+
+def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep'):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,from_config,recipe
@@ -85,7 +96,14 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
-        config=configured(config,from_config(existing))
+        settings=from_config(existing)
+        if inference is None:settings.pop('native_inference',None)
+        elif inference!='keep':settings['native_inference']=inference
+        if settings.get('native_inference') is not None:
+            # Fail before any config write if the CPU workers are not prepared.
+            from brass_ai.rust_backend.lab_cpu_runtime import resolve as resolve_cpu
+            resolve_cpu(root,teacher_core=teacher_build(state)['core_source'])
+        config=configured(config,settings)
         if recipe(config)!=before and not diagnostic_only:
             target=dict(state['signature'],config=recipe(config))
             if preserves_pending(state,target):
@@ -106,6 +124,13 @@ def main(*,default_mode='shadow',default_stage_revision=False):
     p.add_argument('--iterations',type=int,default=1 if default_mode=='on' else 4)
     p.add_argument('--share-target',type=float,choices=(.25,.4,.5),default=.25)
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
+    p.add_argument('--inference',choices=('keep','cpu','gpu'),default='keep',
+        help='cpu: in-worker ONNX Runtime for search, ordinary and rating lanes; gpu: original service; keep: last recorded choice')
+    p.add_argument('--workers',type=int,default=64,help='CPU lanes; each owns one logical CPU')
+    p.add_argument('--teacher-budget',choices=('count','timed'),default='count',help='Teacher search budget on the CPU path')
+    p.add_argument('--teacher-full',type=int,default=256,help='Trajectories per full teacher search')
+    p.add_argument('--teacher-fast',type=int,default=48,help='Trajectories per fast teacher search')
+    p.add_argument('--no-pinning',action='store_true',help='Leave CPU lane placement to the operating system')
     args=p.parse_args()
     import os
     os.environ['CUDA_VISIBLE_DEVICES']=os.environ.get('CUDA_VISIBLE_DEVICES','0').split(',',1)[0]
@@ -121,7 +146,7 @@ def main(*,default_mode='shadow',default_stage_revision=False):
         tables=dict(train=28,held_out=4),share_target=args.share_target,qualification_iterations=4,expected_generation=args.expected_generation)
     try:
         report['execution_source']=execution()
-        kwargs=dict(mode=args.mode)
+        kwargs=dict(mode=args.mode,inference=inference_choice(args))
         if args.revise_stages:kwargs['revise_stages']=True
         state,config,remaining=prepare(ROOT,args.run,args.expected_generation,args.iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config

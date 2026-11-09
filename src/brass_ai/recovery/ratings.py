@@ -245,16 +245,23 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,cont
     from .replay import read_shards
     jobs=jobs_for(spec,directory);rows=[];started=time.perf_counter()
     metrics=telemetry if telemetry is not None else {}
-    with InferenceService(config['execution'],device,inference_devices=inference_devices) as service:
+    from .collector_runtime import effective_execution,native_inference
+    execution=effective_execution(config['execution']);block=native_inference();cpu=None
+    with InferenceService(execution,device,inference_devices=inference_devices) as service:
         for ref in spec['agents'].values():
             if ref['kind']=='model':
                 e=ref['checkpoint'];path=project_path(root,e['path'])
                 require(sha(path)==e['sha256'],'Rated checkpoint changed')
                 if e['model_id'] not in service.models:service.register_checkpoint(path)
         metrics['model_registration_seconds']=time.perf_counter()-started
+        if block is not None and block['rating']=='cpu-ort':
+            from brass_ai.rust_backend.lab_cpu_runtime import rating_settings
+            cpu=rating_settings(root,block,service,[r['checkpoint']['model_id'] for r in spec['agents'].values() if r['kind']=='model'])
+            metrics['cpu_inference']=dict(contract=cpu['contract'],models=len(cpu['bundles']),exported_bundles=cpu['exported_bundles'],
+                workers=execution['processes']*execution['hosts_per_process'])
         # Context extraction consumes complete games in the parent process. Its
         # existing serial path stays available; ordinary PL needs outcomes only.
-        workers=min(config.get('audit_workers',1),config['execution']['cpu_budget']-config['execution']['cpu_reserve'])
+        workers=min(config.get('audit_workers',1),execution['cpu_budget']-execution['cpu_reserve'])
         parallel=workers>1 and context_sink is None
         if parallel:
             from .ingress import reader_pool
@@ -262,7 +269,7 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,cont
             began=time.perf_counter()
             with reader_pool(workers,admission=service.cpu) as readers:
                 ingress=RatingIngress(readers,jobs,spec)
-                with ActorPool(root,config['host'],service,config['execution'],mono=mono) as actors:
+                with ActorPool(root,config['host'],service,execution,mono=mono,cpu_inference=cpu) as actors:
                     records=actors.collect(jobs,on_records=ingress.submit)
                 metrics['games_seconds']=time.perf_counter()-began
                 rows,metrics['replay_validation']=ingress.finish(records)
@@ -270,7 +277,7 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,cont
             metrics['reader_shutdown_seconds']=time.perf_counter()-joined
         else:
             began=time.perf_counter()
-            with ActorPool(root,config['host'],service,config['execution'],mono=mono) as actors:
+            with ActorPool(root,config['host'],service,execution,mono=mono,cpu_inference=cpu) as actors:
                 records=actors.collect(jobs)
             metrics['games_seconds']=time.perf_counter()-began
         require(len(records)==len(jobs) and {r['job'] for r in records}==set(range(len(jobs))),

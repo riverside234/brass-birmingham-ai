@@ -113,8 +113,13 @@ class RoutedPool:
         from .lab_shadow_config import collection_signature
         if self._ordinary_build is None:self._ordinary_build=resolve(self.root,check_build(self.backend['build']))
         build=self._ordinary_build  # Deployment/reload starts a new RoutedPool.
+        from brass_ai.recovery.collector_runtime import native_inference
+        from .lab_cpu_runtime import accept_cached_cpu_work,ordinary_plan
+        block=native_inference();cpu=None
+        if block is not None and block['ordinary']=='cpu-ort':build,cpu=ordinary_plan(self.root,build,self.service,jobs,block)
+        else:build=accept_cached_cpu_work(self.root,build)
         with NativePool(self.root,self.service,self.config['execution'],build,
-                        self.config,digest(collection_signature(self.state['signature'])),mono=self.mono) as pool:
+                        self.config,digest(collection_signature(self.state['signature'])),mono=self.mono,cpu=cpu) as pool:
             result=pool.collect(jobs,on_records=on_records)
             self.last_collection_report=pool.last_collection_report
             return result

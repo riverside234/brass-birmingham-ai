@@ -58,12 +58,15 @@ def _validate_job(job,producer):
 
 class Worker:
     """Length-bounded stdout pump permits cancellation even in native traversal."""
-    def __init__(self, executable, request, client, cancel):
+    def __init__(self, executable, request, client, cancel, cpu=None):
         from .lab_paths import runtime_path
         self.client, self.cancel = client, cancel
         self.job = request.get('job', {})
         self.process = subprocess.Popen([str(runtime_path(executable))], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, bufsize=0, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        if cpu is not None:
+            from .lab_cpu_runtime import pin_child
+            pin_child(self.process.pid,cpu)
         self.events = queue.Queue(2); self.stop = threading.Event(); self.stderr = bytearray()
         def read(n):
             data = bytearray()
@@ -185,12 +188,13 @@ class TeacherCollector:
     gated by B05/B07; this class is also the exact two-table qualification path.
     """
     def __init__(self, executable, core_source, bootstrap, service, calibration, *, lanes=2, cancel=None,
-                 model=None, history=()):
+                 model=None, history=(), inference=None, cores=()):
         self.executable, self.core_source, self.bootstrap = executable,core_source,bootstrap
         self.service, self.calibration = service, calibration
-        require(type(lanes) is int and 1 <= lanes <= 64,'Invalid teacher lanes')
+        require(type(lanes) is int and 1 <= lanes <= 256,'Invalid teacher lanes')
         self.lanes = lanes;self.cancel = cancel or threading.Event()
         self.model,self.history = model,history
+        self.inference,self.cores = inference,tuple(cores)
         self.verifier = None
         self.failures = []
 
@@ -206,13 +210,16 @@ class TeacherCollector:
         c = self.calibration
         require(c['contract'] == CONTRACT and c['source'] == producer and c['core_source'] == self.core_source
                 and c['model_id'] == jobs[0]['expected']['model_id'] and c['export_hash'] == jobs[0]['expected']['export_hash']
-                and c['reward_id'] == jobs[0]['expected']['reward_id'] and c['device'] == str(self.service.device)
+                and c['reward_id'] == jobs[0]['expected']['reward_id']
+                and c['device'] == ('cpu-ort' if self.inference is not None else str(self.service.device))
                 and c['profile'] == digest(jobs[0]['search']) and c['samples'] and c['estimate_ns'] > 0,
                 'GPU trajectory calibration identity differs')
         require(all(j['expected']['model_id'] == c['model_id'] and j['expected']['export_hash'] == c['export_hash']
                     and digest(j['search']) == c['profile'] for j in jobs),'Teacher round is not frozen')
-        lease = self.service.channels(min(self.lanes,len(jobs)))
-        endpoints = queue.Queue();owned = [lease.acquire() for _ in range(min(self.lanes,len(jobs)))]
+        count = min(self.lanes,len(jobs))
+        lease = None if self.inference is not None else self.service.channels(count)
+        endpoints = queue.Queue()
+        owned = [_CpuLane(self.cores[i] if i < len(self.cores) else None) for i in range(count)] if lease is None else [lease.acquire() for _ in range(count)]
         for e in owned:endpoints.put(e)
         failure_lock = threading.Lock(); first_failure = []; self.failures = []
         def one(job):
@@ -226,8 +233,9 @@ class TeacherCollector:
                     with Pipe(self.bootstrap,binary=False) as bootstrap:origin = bootstrap.call('init',seed=job['seed'])
                     request = dict(contract=CONTRACT,op='run',job=job,origin=origin,core_source=self.core_source,
                                    estimate_ns=c['estimate_ns'],calibration_id=digest(c))
+                    if self.inference is not None:request['inference'] = self.inference
                     client = Client(endpoint,job['expected'],self.cancel,job.get('search_value'),job.get('seat_values'))
-                    worker = Worker(self.executable,request,client,self.cancel)
+                    worker = Worker(self.executable,request,client,self.cancel,cpu=getattr(endpoint,'cpu',None))
                     result = worker.collect(job['expected'],self.core_source,verifier=self.verifier)
                     if on_result is not None:
                         result['metrics']['shadow_cache_seconds']=on_result(result,job)
@@ -264,12 +272,50 @@ class TeacherCollector:
             for e in owned:
                 try:e.close()
                 except BaseException as error:close_errors.append(error)
-            try:self.service.release_channels(lease)
-            except BaseException as error:close_errors.append(error)
+            if lease is not None:
+                try:self.service.release_channels(lease)
+                except BaseException as error:close_errors.append(error)
             if close_errors:
                 if first_failure:
                     self.failures[0]['endpoint_cleanup_errors'] = [str(e) for e in close_errors]
                 else:raise close_errors[0]
+
+
+class _CpuLane:
+    """A search lane with no GPU reply channel; workers evaluate in process."""
+    def __init__(self, cpu):self.cpu = cpu
+    def close(self):pass
+
+
+def count_calibration(core_source, job):
+    """Fixed-count searches freeze N from their budget; no time estimate exists."""
+    return dict(contract=CONTRACT,source=source_fingerprint(),core_source=core_source,
+        model_id=job['expected']['model_id'],export_hash=job['expected']['export_hash'],reward_id=job['expected']['reward_id'],
+        device='cpu-ort',profile=digest(job['search']),estimate_ns=1000,samples=['fixed-count'],root_medians_ns=[],
+        rule='not-applicable-fixed-count')
+
+
+def calibrate_cpu(executable, core_source, origins, job, inference, cores):
+    """Time trajectories on every lane at once, matching collection load."""
+    validate_job(job);cancel = threading.Event();samples = []
+    def one(index):
+        lane = []
+        for root_index, origin in enumerate(origins):
+            for repetition in range(4):
+                request = dict(contract=CONTRACT,op='calibrate',job=job,origin=origin,core_source=core_source,inference=inference)
+                worker = Worker(executable,request,None,cancel,cpu=cores[index] if index < len(cores) else None)
+                sample = worker.collect(job['expected'],core_source,calibration=True)
+                lane.append(dict(sample,root_index=root_index,warmup=repetition == 0,lane=index))
+        return lane
+    with ThreadPoolExecutor(max_workers=len(cores) or 1,thread_name_prefix='rust-teacher-calibrate') as pool:
+        for lane in pool.map(one,range(len(cores) or 1)):samples.extend(lane)
+    import statistics
+    medians = [statistics.median((s['elapsed_ns']+7)//8 for s in samples
+               if s['root_index'] == i and not s['warmup']) for i in range(len(origins))]
+    return dict(contract=CONTRACT,source=source_fingerprint(),core_source=core_source,
+        model_id=job['expected']['model_id'],export_hash=job['expected']['export_hash'],reward_id=job['expected']['reward_id'],
+        device='cpu-ort',profile=digest(job['search']),estimate_ns=int(max(medians)),samples=samples,root_medians_ns=medians,
+        rule='concurrent-all-lanes; exclude-one-warmup-per-root; median; max-root-median')
 
 
 def calibrate(executable, core_source, origins, job, service):

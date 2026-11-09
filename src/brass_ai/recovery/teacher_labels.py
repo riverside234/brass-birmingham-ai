@@ -154,9 +154,21 @@ def prepare_rows(rows, *, expected, history, admitted_sources, encoder):
     return accepted, rejected
 
 
+def logit_tolerance(label):
+    """ONNX Runtime and PyTorch differ by up to about 5e-5 at float32.
+
+    CPU labels use the established cross-runtime export tolerance. Labels from
+    the GPU service keep their original bound.
+    """
+    backend = label.get('inference_backend')
+    require(backend in (None, 'cpu-ort'), 'Unknown teacher inference backend')
+    return (2e-4, 2e-4) if backend == 'cpu-ort' else (2e-5, 1e-5)
+
+
 def check_logits(model, accepted):
     from .teacher_term import policy_logits
     actual = policy_logits(model, accepted) if accepted else []
     for row, logits in zip(accepted, actual):
-        require(np.allclose(logits, row.label['logits'], atol=2e-5, rtol=1e-5),
+        atol, rtol = logit_tolerance(row.label)
+        require(np.allclose(logits, row.label['logits'], atol=atol, rtol=rtol),
                 'Teacher logits parity failed')

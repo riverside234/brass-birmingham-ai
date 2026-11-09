@@ -609,6 +609,7 @@ Desktop.ini
 # Additive lab collector sources; build products stay private.
 !/lab-native/
 /lab-native/target/
+!/lab-native-cpu/
 !/distribution/rust-lab-b02/
 /distribution/rust-lab-b02/*
 !/distribution/rust-lab-b02/README.md

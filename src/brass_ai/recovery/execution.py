@@ -94,7 +94,10 @@ def make_policy(spec,root,endpoint,config,mono,*,_replica=False):
     from .config import search_workers_per_turn
     workers=search_workers_per_turn(config,teacher=bool(spec.get('teacher_schedule')))
     endpoints=endpoints[:1+workers if workers>1 else 1]
-    evaluator=RemoteEvaluator(endpoints[0],spec['model_id'],config['batch_size'],config['max_candidate_cells'])
+    if spec['kind']=='neural' and config.get('cpu_inference') is not None:
+        from brass_ai.rust_backend.lab_cpu_inference import OrtEvaluator
+        evaluator=OrtEvaluator(endpoints[0],spec['model_id'],config['cpu_inference']['bundles'])
+    else:evaluator=RemoteEvaluator(endpoints[0],spec['model_id'],config['batch_size'],config['max_candidate_cells'])
     if spec['kind']=='neural':
         policy=NeuralPolicy(None,exploration=spec['exploration'],focus=spec['focus'],evaluator=evaluator,
             exploration_version=spec.get('exploration_version',2),opening=spec.get('opening'),temperature=spec.get('temperature',1.))
@@ -300,8 +303,9 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     return result
 
 
-def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,admission,actor_index,inboxes):
+def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,admission,actor_index,inboxes,cpu_inference=None):
     root=Path(root);torch.set_num_threads(config['worker_threads'])
+    if cpu_inference is not None:config=dict(config,cpu_inference=cpu_inference)  # worker-local; never in a recipe
     stop=threading.Event();slots=threading.Semaphore(2*lanes)
     with ThreadPoolExecutor(max_workers=1) as writer:
         def submit_publication(completed,packet,child=None):
@@ -449,9 +453,9 @@ def _actor(root,host_path,jobs,results,lease,config,mono,lanes,search_channels,a
 
 
 class ActorPool:
-    def __init__(self,root,host,service,config,*,mono=None,heavy=False):
+    def __init__(self,root,host,service,config,*,mono=None,heavy=False,cpu_inference=None):
         self.root,self.host,self.service,self.config=root,host,service,config
-        self.mono,self.heavy=mono,heavy
+        self.mono,self.heavy,self.cpu_inference=mono,heavy,cpu_inference
         self.processes=[];self.channel_leases=[];self.closed=False;self.mp=multiprocessing.get_context('spawn')
         self.jobs=self.mp.Queue();self.results=self.mp.Queue()
         self.width=config['heavy_processes'] if heavy else config['processes']
@@ -473,7 +477,8 @@ class ActorPool:
         self.channel_leases.append(lease)
         for _ in range(target-len(self.processes)):
             p=self.mp.Process(target=_actor,args=(str(self.root),str(self.host),self.jobs,self.results,
-                lease,self.config,self.mono,self.lanes,search_channels,self.service.cpu,len(self.processes),self.inboxes))
+                lease,self.config,self.mono,self.lanes,search_channels,self.service.cpu,len(self.processes),self.inboxes,
+                *(() if self.cpu_inference is None else (self.cpu_inference,))))
             self.processes.append(p);p.start()
 
     def collect(self,jobs,*,on_records=None):

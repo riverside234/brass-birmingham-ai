@@ -1,0 +1,132 @@
+"""Additive CPU-inference patches, applied only to a detached lab-native copy.
+
+The qualified GPU binaries keep building from the untouched ``lab-native`` tree.
+These exact-text patches add in-process ONNX Runtime evaluation to a separate
+pair of binaries; each anchor must match once, so upstream drift fails loudly.
+"""
+import hashlib
+from pathlib import Path
+import shutil
+
+from brass_ai.learning.contracts import SOURCE_ROOT, digest, require
+
+CONTRACT = 'brass-lab-cpu-overlay/1.0.0'
+OVERLAY_DIR = 'lab-native-cpu'
+ORT = 'ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }'
+
+PATCHES = {
+    'Cargo.toml': (
+        ('[dependencies]\nbrass-ai-core = { path = "../native/brass-ai-core" }\n',
+         '[dependencies]\n' + ORT + '\nbrass-ai-core = { path = "../native/brass-ai-core" }\n'),
+    ),
+    'src/lib.rs': (
+        ('pub mod scoring;\n', 'pub mod cpu_eval;\npub mod scoring;\n'),
+        ('impl Lane {\n    pub fn new(',
+         'impl Lane {\n'
+         '    /// Tensors of the last `feature_arrays` call, for in-process inference.\n'
+         '    pub fn feature_tensors(&self) -> Result<&brass_ai_core::features::FeatureTensors> {\n'
+         '        Ok(self.encoder.tensors().ok_or("missing tensors")?)\n'
+         '    }\n'
+         '    pub fn new('),
+    ),
+    'src/main.rs': (
+        ('    let mut export_cursors = (0usize, 0usize);\n',
+         '    let mut export_cursors = (0usize, 0usize);\n'
+         '    let mut cpu = brass_lab_collector::cpu_eval::Cache::default();\n'),
+        ('"performance_wire":"ordinary-collector-fast/1","export_pages":"ordinary-export-pages/1"}),',
+         '"performance_wire":"ordinary-collector-fast/1","export_pages":"ordinary-export-pages/1",\n'
+         '                        "cpu_inference":brass_lab_collector::cpu_eval::CONTRACT}),'),
+        ('                "checkpoint" => {\n',
+         '                "configure_cpu" => cpu.configure(&r),\n'
+         '                "load_model" => cpu.load(&r),\n'
+         '                "cpu_report" => Ok(cpu.report()),\n'
+         '                "infer" => {\n'
+         '                    check(revision <= u32::MAX as u64, "invalid revision")?;\n'
+         '                    let context: brass_ai_core::features::FeatureContext =\n'
+         '                        serde_json::from_value(r["context"].clone())?;\n'
+         '                    let model = context.model_id.clone();\n'
+         '                    let l = lane.as_mut().ok_or("missing lane")?;\n'
+         '                    let (mut meta, _) = l.feature_arrays(token, revision as u32, context)?;\n'
+         '                    let (bytes, forward_ns) = cpu.infer(&model, l.feature_tensors()?)?;\n'
+         '                    meta["wire"] = json!("ordinary-infer/1");\n'
+         '                    meta["bytes"] = json!(bytes.len());\n'
+         '                    meta["forward_ns"] = json!(forward_ns);\n'
+         '                    arrays = Some(vec![bytes]);\n'
+         '                    Ok(meta)\n'
+         '                }\n'
+         '                "checkpoint" => {\n'),
+    ),
+    'src/teacher.rs': (
+        ('        self.encoding_ns += start.elapsed().as_nanos() as u64;\n'
+         '        let mut binding = json!(',
+         '        self.encoding_ns += start.elapsed().as_nanos() as u64;\n'
+         '        if crate::cpu_eval::teacher_enabled() {\n'
+         '            let began = Instant::now();\n'
+         '            let (logits, utility) =\n'
+         '                crate::cpu_eval::teacher_evaluate(tensors, self.search_value.as_ref())?;\n'
+         '            self.wait_ns += began.elapsed().as_nanos() as u64;\n'
+         '            self.requests += 1;\n'
+         '            check(self.clock.now_ns() < self.deadline, "expired/cancelled CPU reply")?;\n'
+         '            check(logits.len() == info.actions.len(), "CPU legal width differs")?;\n'
+         '            let stats = Statistics::new(logits, utility)?;\n'
+         '            if self.root_watch.as_ref() == Some(info) { self.root_stats = Some(stats.clone()); }\n'
+         '            return Ok(stats);\n'
+         '        }\n'
+         '        let mut binding = json!('),
+        ('    let calibration = request["op"] == "calibrate";\n',
+         '    crate::cpu_eval::teacher_install(&request, &expected, reward.insolvency.max_cost)?;\n'
+         '    let calibration = request["op"] == "calibrate";\n'),
+        ('"verification_policy":"sampled-unbounded-verification/3"}),',
+         '"verification_policy":"sampled-unbounded-verification/3",\n'
+         '        "inference":crate::cpu_eval::teacher_receipt()}),'),
+        ('                simulations: 8,\n',
+         '                simulations: crate::cpu_eval::teacher_simulations(turn_work.fast, calibration),\n'),
+        ('            let mode = if calibration {\n                Mode::Count\n',
+         '            let mode = if calibration || crate::cpu_eval::teacher_count_mode() {\n                Mode::Count\n'),
+        ('                    if all_seat { row["teacher"]["search_value"] = job["search_value"].clone(); }\n',
+         '                    if all_seat { row["teacher"]["search_value"] = job["search_value"].clone(); }\n'
+         '                    if crate::cpu_eval::teacher_enabled() { row["teacher"]["inference_backend"] = json!("cpu-ort"); }\n'),
+        ('"input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources},',
+         '"input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources,\n'
+         '            "cpu_inference":crate::cpu_eval::teacher_receipt()},'),
+    ),
+}
+
+
+def _normalized(path):
+    return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
+def overlay_files(root=SOURCE_ROOT):
+    base = Path(root)/OVERLAY_DIR
+    return [p for p in sorted(base.rglob('*'))
+            if p.is_file() and 'target' not in p.relative_to(base).parts]
+
+
+def fingerprint(root=SOURCE_ROOT):
+    """Everything that decides the CPU binaries, beyond the sealed native core."""
+    root = Path(root)
+    names = sorted(['Cargo.toml', 'Cargo.lock', 'src/lib.rs', 'src/main.rs', 'src/teacher.rs', 'src/bin/teacher.rs',
+                    'src/collection_wire.rs', 'src/ordinary_delta.rs', 'src/scoring.rs', 'core-overlay/teacher.rs'])
+    return digest(dict(contract=CONTRACT, patches=PATCHES,
+        base={name: _normalized(root/'lab-native'/name) for name in names},
+        overlay={p.relative_to(root/OVERLAY_DIR).as_posix(): _normalized(p) for p in overlay_files(root)}))
+
+
+def apply(directory, root=SOURCE_ROOT):
+    """Copy the reviewed sources into ``directory`` and apply the exact patches."""
+    directory = Path(directory).resolve()
+    root = Path(root).resolve()
+    require(directory != (root/'lab-native').resolve() and not directory.exists(),
+            'CPU overlay requires a new detached build directory')
+    shutil.copytree(root/'lab-native', directory, ignore=shutil.ignore_patterns('target'))
+    for name, changes in PATCHES.items():
+        path = directory/name
+        text = path.read_bytes().replace(b'\r\n', b'\n').decode('utf-8')
+        for before, after in changes:
+            require(text.count(before) == 1, 'CPU overlay drift in '+name+': '+before[:60])
+            text = text.replace(before, after)
+        path.write_bytes(text.encode('utf-8'))
+    shutil.copyfile(root/OVERLAY_DIR/'src/cpu_eval.rs', directory/'src/cpu_eval.rs')
+    shutil.copyfile(root/OVERLAY_DIR/'Cargo.lock', directory/'Cargo.lock')
+    return dict(contract=CONTRACT, source=fingerprint(root))

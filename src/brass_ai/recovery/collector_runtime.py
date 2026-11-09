@@ -10,8 +10,32 @@ import os
 from brass_ai.learning.contracts import require
 
 DEFAULTS = dict(collector_validation='production_fast', replay_bindings=True)
+# Operational and optional: absent keeps every historical settings shape exact.
+OPTIONAL = ('native_inference',)
+RUNTIME_KEYS = frozenset(DEFAULTS) | frozenset(OPTIONAL)
 MODES = ('production_fast', 'strict', 'profile')
+CPU_CONTRACT = 'brass-lab-cpu-inference/1.0.0'
 _current = None
+
+
+def cpu_block(*, workers=64, teacher_budget=None, pinning='one-lane-per-cpu', model_cache=8):
+    """Opt-in CPU inference. Absent or None keeps today's GPU path unchanged."""
+    return dict(contract=CPU_CONTRACT, ordinary='cpu-ort', teacher='cpu-ort', rating='cpu-ort', pinning=pinning,
+                workers=workers, model_cache=model_cache,
+                teacher_budget=teacher_budget or dict(mode='count', full=256, fast=48))
+
+
+def validate_cpu(block):
+    require(type(block) is dict and set(block) == set(cpu_block()) and block['contract'] == CPU_CONTRACT and
+            all(block[k] in ('cpu-ort', 'gpu') for k in ('ordinary', 'teacher', 'rating')) and
+            block['pinning'] in ('one-lane-per-cpu', 'none') and
+            type(block['workers']) is int and 1 <= block['workers'] <= 256 and
+            type(block['model_cache']) is int and 4 <= block['model_cache'] <= 64, 'Invalid native_inference block')
+    budget = block['teacher_budget']
+    require(type(budget) is dict and ((budget.get('mode') == 'timed' and set(budget) == {'mode'}) or
+            (budget.get('mode') == 'count' and set(budget) == {'mode', 'full', 'fast'} and
+             type(budget['full']) is int and 64 <= budget['full'] <= 4096 and
+             type(budget['fast']) is int and 8 <= budget['fast'] <= 4096)), 'Invalid teacher search budget')
 
 
 def validate(execution):
@@ -20,12 +44,17 @@ def validate(execution):
                 'Invalid collector_validation')
     if 'replay_bindings' in execution:
         require(type(execution['replay_bindings']) is bool, 'Invalid replay_bindings')
+    if execution.get('native_inference') is not None:
+        validate_cpu(execution['native_inference'])
 
 
 def from_config(config):
     execution = config.get('execution', {})
     validate(execution)
-    return {k: execution.get(k, v) for k, v in DEFAULTS.items()}
+    result = {k: execution.get(k, v) for k, v in DEFAULTS.items()}
+    if execution.get('native_inference') is not None:
+        result['native_inference'] = execution['native_inference']
+    return result
 
 
 def current():
@@ -39,10 +68,14 @@ def current():
     return result
 
 
+def _check_settings(settings):
+    require(type(settings) is dict and set(DEFAULTS) <= set(settings) <= RUNTIME_KEYS, 'Invalid collector runtime settings')
+    validate(settings)
+
+
 def install(settings):
     global _current
-    require(type(settings) is dict and set(settings) == set(DEFAULTS), 'Invalid collector runtime settings')
-    validate(settings)
+    _check_settings(settings)
     _current = dict(settings)
 
 
@@ -50,6 +83,20 @@ def option(name):
     # This accessor is used per row/array. Snapshot copies belong at worker
     # launch boundaries, rather than in the replay capability hot path.
     return (_current if _current is not None else current())[name]
+
+
+def native_inference():
+    """The trainer's CPU-inference block, or None for today's GPU path."""
+    return None if _current is None else _current.get('native_inference')
+
+
+def effective_execution(execution):
+    """Worker topology for this process; the training signature never sees it."""
+    block = native_inference()
+    if block is None:
+        return execution
+    return dict(execution, processes=block['workers'], hosts_per_process=1,
+                cpu_budget=block['workers'], cpu_reserve=0)
 
 
 @contextmanager
@@ -67,14 +114,14 @@ def recipe(config):
     """Remove only operational fields; pending jobs retain their exact recipe."""
     execution = config.get('execution', {})
     validate(execution)
-    if not set(DEFAULTS).intersection(execution):
+    if not RUNTIME_KEYS.intersection(execution):
         return config
-    return dict(config, execution={k: v for k, v in execution.items() if k not in DEFAULTS})
+    return dict(config, execution={k: v for k, v in execution.items() if k not in RUNTIME_KEYS})
 
 
 def configured(config, settings=None):
     """Persist explicit defaults, preserving other execution and recipe fields."""
     settings = from_config(config) if settings is None else settings
-    require(type(settings) is dict and set(settings) == set(DEFAULTS), 'Invalid collector runtime settings')
-    validate(settings)
-    return dict(config, execution=dict(config.get('execution', {}), **settings))
+    _check_settings(settings)
+    kept = {k: v for k, v in config.get('execution', {}).items() if k not in OPTIONAL}
+    return dict(config, execution=dict(kept, **settings))
