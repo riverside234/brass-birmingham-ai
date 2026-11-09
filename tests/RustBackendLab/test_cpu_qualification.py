@@ -108,6 +108,16 @@ class Matching(unittest.TestCase):
         self.assertEqual((result['games'], result['diverged']), (2, 1))
 
 
+class RatedGames(unittest.TestCase):
+    def test_arms_pair_by_setup_whatever_their_random_ids(self):
+        left = [game(record(0), game_id='z'), game(record(0, choices=3), game_id='a')]
+        left[0]['setup_group'], left[1]['setup_group'] = 'one', 'two'
+        right = [game(record(0, choices=3), game_id='y'), game(record(0), game_id='b')]
+        right[0]['setup_group'], right[1]['setup_group'] = 'two', 'one'
+        self.assertEqual(Q.match_games(Q.by_setup(left), Q.by_setup(right))['diverged'], 0)
+        self.assertEqual(Q.match_games(sorted(left, key=lambda g: g['game_id']), sorted(right, key=lambda g: g['game_id']))['diverged'], 2)
+
+
 class BlendError(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -191,13 +201,15 @@ class Reporting(unittest.TestCase):
 
     def test_startup_stage_requires_measurements_from_every_lane(self):
         phases = dict(mono_bootstrap_seconds=dict(lanes=2), total_seconds=dict(lanes=2))
-        breakdown = dict(lanes=2, lanes_reported=2, phases=phases, waits_for_all_lanes=False, reply_channel_seconds=0.,
-                         first_lane_ready_seconds=1., last_lane_ready_seconds=2., process_start_seconds=.5)
+        breakdown = dict(processes=2, lanes=2, lanes_reported=2, phases=phases, waits_for_all_lanes=False, reply_channel_seconds=0.,
+                         first_lane_ready_seconds=1., last_lane_ready_seconds=2., process_start_seconds=.1)
         good = Q.startup(SimpleNamespace(ordinary_report=dict(startup_breakdown=breakdown), ordinary_usage=None))
         self.assertTrue(good['passed'], good)
         bad = Q.startup(SimpleNamespace(ordinary_report=dict(startup_breakdown=dict(breakdown, lanes_reported=1)), ordinary_usage=None))
         self.assertFalse(bad['passed'])
         self.assertFalse(Q.startup(SimpleNamespace(ordinary_report=None))['passed'])
+        slow = Q.startup(SimpleNamespace(ordinary_report=dict(startup_breakdown=dict(breakdown, process_start_seconds=1.4)), ordinary_usage=None))
+        self.assertFalse(slow['checks']['processes_start_without_waiting']['passed'])
 
 
 class CrashedIteration(unittest.TestCase):
@@ -290,6 +302,14 @@ class Retry(unittest.TestCase):
     def test_environment_and_bundles_always_run_again(self):
         self.attempt('1', dict(environment=dict(passed=True), bundles=dict(passed=True), startup=dict(passed=True)))
         self.assertEqual(Q.passed_stages(self.base, self.current, self.identity), {})
+
+    def test_a_reviewed_source_change_keeps_only_its_unaffected_stages(self):
+        before = dict(self.identity, implementation='before')
+        after = dict(self.identity, implementation='after')
+        self.attempt('1', dict(teacher=dict(passed=True), ordinary=dict(passed=True)), identity=before)
+        self.assertEqual(Q.reusable_stages(self.base, self.current, after), {})
+        with patch.dict(Q.REVIEWED_CHANGES, after=dict(previous='before', stages=('teacher',))):
+            self.assertEqual(sorted(Q.reusable_stages(self.base, self.current, after)), ['teacher'])
 
     def test_a_skipped_stage_is_not_a_pass(self):
         self.attempt('1', dict(ordinary=dict(passed=False, skipped='Needs bundles')))

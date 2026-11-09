@@ -227,6 +227,16 @@ def _writer(connection, directory, producer, config, scope, cpu, stop, selected_
             connection.send(dict(error=traceback.format_exc()));return
 
 
+def lane_build(build):
+    """Only the two paths a lane reads.
+
+    The full receipt pickles to about 170 KB, more than a pipe holds, so sending
+    it made every Process.start() wait until that child had finished importing.
+    """
+    if 'bootstrap' not in build:return build  # Fixture lanes carry their own fields.
+    return dict(bootstrap=dict(binary=dict(path=build['bootstrap']['binary']['path'])),collector=dict(path=build['collector']['path']))
+
+
 def _actors(connections, root, build, execution, mono, lease, cpu, stop, directory, inference=None, core=None, started=None):
     entered=time.time()
     import torch
@@ -494,7 +504,7 @@ class NativePool:
                         for _ in range(lanes_per):
                             a,b=self.mp.Pipe();pairs.append((a,b));self.connections.append(a)
                         extra=() if self.cpu is None else (self.cpu,cores[number] if cores else None,time.time())
-                        p=self.mp.Process(target=_actors,args=([b for a,b in pairs],str(self.root),self.build,dict(config,**self.runtime),
+                        p=self.mp.Process(target=_actors,args=([b for a,b in pairs],str(self.root),lane_build(self.build),dict(config,**self.runtime),
                             self.mono,lease,self.service.cpu,self.stop,str(directory/'parts'),*extra))
                         self.processes.append(p);p.start()
                     finally:

@@ -138,6 +138,17 @@ class Startup(unittest.TestCase):
         self.assertIsNone(report['first_lane_ready_seconds'])
         self.assertEqual(report['phases'], {})
 
+    def test_a_lane_receives_only_what_fits_in_a_pipe(self):
+        import pickle
+        from brass_ai.rust_backend.lab_pool import lane_build
+        full = dict(source='x'*500000, collector=dict(path='/c', sha256='0'*64), b01=dict(sha256='1'*64),
+                    bootstrap=dict(binary=dict(path='/b', sha256='2'*64), dependencies=[dict(path='d'*200)]*300))
+        small = lane_build(full)
+        self.assertEqual(small, dict(bootstrap=dict(binary=dict(path='/b')), collector=dict(path='/c')))
+        self.assertLess(len(pickle.dumps(small)), 4096)
+        fixture = dict(fixture='part.json', fail=False)
+        self.assertIs(lane_build(fixture), fixture)
+
     def test_a_cpu_lane_needs_no_service_channel(self):
         from brass_ai.recovery.inference import endpoint_encoder
         from brass_ai.rust_backend.lab_cpu_inference import NoServiceEndpoint

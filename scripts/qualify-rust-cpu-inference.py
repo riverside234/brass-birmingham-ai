@@ -60,6 +60,12 @@ OK_LINE = re.compile(r'^OK(?: \(skipped=(\d+)\))?$', re.M)
 RAN_LINE = re.compile(r'^Ran (\d+) tests?', re.M)
 # Quick host checks and the bundle receipts other stages need always run.
 REUSABLE = ('regressions', 'parity', 'teacher', 'ordinary', 'rating')
+# Reviewed source changes that cannot affect a stage that already passed.
+REVIEWED_CHANGES = {'38c3b310e6ee8a9798f4b593922f48074bfcf5e52a2eacd6a2b1c31fedaefccd': dict(
+    previous='d94919c118abb4a2182cc244d2fd0acc4d8d95aa906d4968dfd821fbe707db75',  # Only how ordinary lane processes receive their paths.
+    stages=('regressions', 'parity', 'teacher'))}
+# Starting a process should not wait for it; the old bug measured about 0.7 s each.
+MAX_PROCESS_START_SECONDS = .2
 
 
 def write(path, value):
@@ -257,6 +263,21 @@ def passed_stages(base, current, identity):
                 if result.get('passed') is True:
                     passed[name] = dict(directory=directory.name, result=result)
     return passed
+
+
+def reusable_stages(base, current, identity):
+    """Passed stages on this identity, plus reviewed ones from just before a source change."""
+    passed = passed_stages(base, current, identity)
+    review = REVIEWED_CHANGES.get(identity['implementation'])
+    if review is None:
+        return passed
+    older = passed_stages(base, current, dict(identity, implementation=review['previous']))
+    return {**{name: stage for name, stage in older.items() if name in review['stages']}, **passed}
+
+
+def by_setup(games):
+    """Rated games have random IDs, so pair the two arms by their setup."""
+    return sorted(games, key=lambda game: game['setup_group'])
 
 
 def prepared_suite(value):
@@ -615,7 +636,7 @@ def ordinary(c):
     expect(checks, 'probabilities_within_bound', comparison['tolerance_failure_count'] == 0, comparison['tolerance_failure_count'])
     fraction = comparison['diverged']/max(1, comparison['games'])
     expect(checks, 'matched_games_stay_together', fraction <= MAX_DIVERGED_GAMES, comparison['diverged'])
-    c.ordinary_report, c.ordinary_usage = report, usage
+    c.ordinary_report, c.ordinary_usage = report['report'], usage
     return finish(checks, jobs=len(chosen), matched=len(matched), comparison=comparison, gpu=gpu_report, cpu=report, usage=usage)
 
 
@@ -644,7 +665,7 @@ def rating(c):
         with ActorPool(ROOT, host, c.service, execution, mono=c.args.mono, cpu_inference=cpu) as pool:
             records = pool.collect(jobs)
         games = read_shards([r['path'] for r in records], partition='validation', receipts={r['path']: r.get('features') for r in records})
-        return sorted(games, key=lambda g: g['game_id']), c.service.metrics['positions']-before
+        return by_setup(games), c.service.metrics['positions']-before
     service_games, used = play('service', None)
     expect(checks, 'service_used_the_gpu', used > 0, used)
     with R.scope(c.cpu_settings):
@@ -670,6 +691,8 @@ def startup(c):
     expect(checks, 'startup_measured', 'total_seconds' in phases, sorted(phases))
     expect(checks, 'lanes_do_not_wait_for_each_other', not breakdown['waits_for_all_lanes'], None)
     expect(checks, 'no_reply_channels_on_the_cpu_path', breakdown['reply_channel_seconds'] < .01, breakdown['reply_channel_seconds'])
+    each = breakdown['process_start_seconds']/max(1, breakdown['processes'])
+    expect(checks, 'processes_start_without_waiting', each <= MAX_PROCESS_START_SECONDS, each)
     return finish(checks, first_lane_ready_seconds=breakdown['first_lane_ready_seconds'], last_lane_ready_seconds=breakdown['last_lane_ready_seconds'],
                   mono_bootstrap=phases.get('mono_bootstrap_seconds'), python_import=phases.get('python_import_seconds'), total=phases.get('total_seconds'),
                   process_start_seconds=breakdown['process_start_seconds'], usage=getattr(c, 'ordinary_usage', None),
@@ -739,7 +762,7 @@ def main():
                     cpu_build=c.cpu_value['receipt']['sha256'], checkpoint=snapshot['checkpoint']['sha256'], workers=args.workers,
                     budget=c.block['teacher_budget'], ordinary_games=args.ordinary_games, matched_games=args.matched_games,
                     rating_games=args.rating_games)
-                earlier = {} if args.fresh else passed_stages(ROOT/'artifacts/rust-backend', out, report['identity'])
+                earlier = {} if args.fresh else reusable_stages(ROOT/'artifacts/rust-backend', out, report['identity'])
                 torch.set_num_threads(2)
                 with InferenceService(c.cpu_execution, args.device) as c.service:
                     require(c.service.register(model) == snapshot['model_id'], 'Learner identity changed')

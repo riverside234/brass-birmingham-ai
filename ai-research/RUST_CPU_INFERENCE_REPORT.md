@@ -37,7 +37,7 @@ To return to the GPU path at any committed generation, use `--inference gpu`.
 | Ordinary lanes | New `infer` operation in the Rust collector. Python keeps sampling, RNG and every check. |
 | Rating | Same C# host and game flow. Rating lanes evaluate with Python ONNX Runtime instead of the GPU service. |
 | Workers | 64 lanes × 1, CPU budget 64, reserve 0, one lane per CPU, spread across sockets. Applied at run time only. |
-| Lane startup | CPU lanes start work as soon as they are ready instead of waiting for the slowest one, and no longer lease GPU reply channels. Each lane warms its Mono bootstrap before its first game. |
+| Lane startup | Each lane process now receives only the two paths it reads, which removes the serial wait described below. CPU lanes also start work as soon as they are ready and no longer lease GPU reply channels. Each lane warms its Mono bootstrap before its first game. |
 | Startup measurement | Every collection records `startup_breakdown` per lane, and teacher tables record `mono_bootstrap_seconds`. See section 5. |
 | Tolerance | CPU-sourced labels use the 2e-4 cross-runtime bound in `check_logits`. GPU labels keep 2e-5 / 1e-5. |
 
@@ -47,7 +47,7 @@ The whole feature sits behind the `native_inference` block in `execution`, which
 
 The results in `rust-lab-qualification/20261109T071049919614Z-…` say `passed: false`. The prepare step and the CPU teacher phase did work on Linux: 32 tables finished in about two minutes at N=256/48. The run then stopped in ordinary collection on the anchor export above, before any game or checkpoint.
 
-### Lane startup: the Mono bootstrap is not the cost
+### Lane startup: the cause, found by the new measurement
 
 An earlier version of this report guessed that the per-lane Mono bootstrap caused the 16.6 s lane startup. The stored reports show that guess was wrong.
 
@@ -55,7 +55,7 @@ An earlier version of this report guessed that the per-lane Mono bootstrap cause
 - A lane reports ready before it has used Mono, so Mono time is not part of that wait.
 - The first Mono call on each lane took 0.14 s (median) and at most 0.22 s, including its share of JIT.
 
-The real cause is still unknown. It is narrow and repeatable, which points to a fixed wait or a serialized step. The new per-lane phases will show it on the next run.
+The first lab qualification measured the real cause. Starting each lane process took 0.71 s, one after another: 11.4 s for 16 processes and 45.5 s for 64, against 24 × 0.69 s = 16.6 s before. Each process was handed the whole build receipt, which pickles to 170 KB. That is more than a pipe holds (64 KB), so `Process.start()` blocked until that child had finished importing. Lanes only read two paths from it, so they now receive just those. The next run measures the result; `processes_start_without_waiting` requires under 0.2 s per process.
 
 ## 3. Lab qualification
 
@@ -81,7 +81,19 @@ It does not run a full training iteration: PPO, PPG and checkpointing are not ex
 - All 65 CPU tests pass with real compiled workers, apart from the two expected skips: the timed-budget one-turn run, which you asked to skip, and the local-host rating game, whose real version is the `rating` stage. Covered: all-seat blending at zero and non-zero weights, every anchor path, a full mixed-model game, a spawned lane through to its export, and the qualification's own checks.
 - One all-seat table at the full production budget, with the fixture model: every search reached its quota, none hit the cap, the table took 124 s, and a full search took about 3.5 s (5.5 ms per trajectory).
 - The existing lab suites show 7 errors out of 183 tests: `Admitted actor inputs are immutable` (4), `TeacherPhase.config` (1) and the rollback pin fixture (2). These come from old fixtures, and none is in code changed here.
-- The lab-only paths — 64 pinned lanes, the real league, real Linux Mono — have not run at this budget. The qualification covers them.
+
+## 4a. First results from the lab qualification
+
+Measured on the lab at g1290, before the startup fix:
+
+| Measure | Result |
+| --- | --- |
+| Teacher, 16 tables on 16 lanes at N=640/96 | 45 s; full search median 1.75 s, quick search median 0.24 s; none hit the cap |
+| Blended root values against PyTorch | worst relative error 6e-7 |
+| Ordinary, 128 real jobs at 64 lanes | 17 s of live collection, after 46 s of startup |
+| 16 ordinary games matched against GPU | none diverged; worst probability difference 1.4e-5 relative |
+| Mono bootstrap per lane | median 0.126 s |
+| Peak memory, whole process tree | 71 GB |
 
 **search_v3 was not adopted.** The lab and the game stay on search_v1, and nothing was installed. `scripts/search_v3_patch.py`, `build-search-v3.py` and `run-search-v3-smoke.py` remain for later.
 
@@ -94,7 +106,6 @@ It does not run a full training iteration: PPO, PPG and checkpointing are not ex
 
 ## 6. Known limits
 
-- N=640 costs more search time than the previous budget. On the laptop's small fixture model, one table took 124 s. The lab model is larger, so expect the teacher phase to be several minutes. It is the first number to check after the qualification.
+- The teacher phase took 45 s for 16 tables on the lab at N=640/96, so a 32-table phase should take about the same on 32 lanes. A full iteration has not yet run at this budget.
 - Teacher and ordinary collection still run one after the other, so the teacher phase uses only 32 of the 64 lanes.
-- The cause of the 16.6 s startup is unmeasured until the new phases report; the changes above help only if lane readiness is uneven or the time is in the reply channels.
-- Memory at 64 lanes is unmeasured here. The `startup` stage reports it.
+- The lab usable CPU count is exactly 64, so 64 pinned lanes leave none spare for the publishers and the parent process; they share those CPUs.
