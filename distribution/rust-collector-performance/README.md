@@ -319,3 +319,11 @@ archive verification before moving any run data. Explicit missing paths and
 ambiguous archives have actionable messages. Eight discovery regressions are
 authored for the server; no local tests/benchmarks were run. See
 [old-machine-bundle-discovery-fix.json](old-machine-bundle-discovery-fix.json).
+
+Archive-type follow-up: runtime-only ZIPs are excluded by checking the actual
+Step 5 transfer manifest/format/digest and run/generation for unsplit archives.
+The reported `retry-20261108T225938Z/selfplay-migration.tar.zst.parts.json` can
+be passed directly with `--bundle` using the existing launcher. Discovery reads
+no model payloads; normal restore still verifies everything before a run move.
+Four additional regressions are authored; local execution remains disabled at
+the user's request. See [old-machine-archive-type-fix.json](old-machine-archive-type-fix.json).

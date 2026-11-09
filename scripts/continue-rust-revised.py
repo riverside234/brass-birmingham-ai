@@ -13,7 +13,9 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import tarfile
 import uuid
+import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'src'),str(ROOT/'scripts')]
@@ -25,10 +27,43 @@ def transfer_module(root):
     return module
 
 
+def archive_header(path):
+    """Read only the transfer manifest of an unsplit archive for discovery.
+
+    Runtime-only ZIPs have no Step 5 manifest and are not run snapshots. This
+    is a cheap identity probe; prepare still verifies every payload/checksum.
+    """
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as archive:
+            if archive.namelist().count('transfer.json')!=1:raise ValueError('Not a Step 5 run snapshot')
+            info=archive.getinfo('transfer.json')
+            if info.is_dir() or not 0<info.file_size<32_000_000:raise ValueError('Invalid transfer manifest size')
+            manifest=json.loads(archive.read(info))
+    else:
+        transfer=transfer_module(ROOT)
+        with path.open('rb') as stream:
+            if stream.read(4)!=transfer.ZSTD_MAGIC:raise ValueError('Not a Step 5 run snapshot')
+        backend=transfer.zstd_backend()
+        try:
+            with backend.ZstdFile(path,'rb') as decoded:
+                with tarfile.open(fileobj=decoded,mode='r|') as archive:
+                    info=archive.next()
+                    if info is None or info.name!='transfer.json' or not info.isfile() or not 0<info.size<32_000_000:
+                        raise ValueError('Not a Step 5 run snapshot')
+                    with archive.extractfile(info) as stream:manifest=json.loads(stream.read())
+        except backend.ZstdError as error:raise ValueError('Invalid compressed transfer header: '+str(error)) from error
+    from brass_ai.learning.contracts import digest
+    if (not isinstance(manifest,dict) or manifest.get('format') not in
+            ('step5-private-transfer/1.0.0','step5-private-transfer/1.1.0') or
+            manifest.get('id')!=digest({k:v for k,v in manifest.items() if k!='id'})):
+        raise ValueError('Invalid Step 5 transfer manifest')
+    return manifest
+
+
 def select_bundle(root,requested,run_path,generation,*,search_dir=None):
     """Find the source export without depending on a DOWNLOAD shell variable.
 
-    Discovery reads only small export receipts/indexes and checks part sizes.
+    Discovery reads small receipts/indexes/manifests and checks part sizes.
     prepare() still fully authenticates every selected archive before any move.
     Distinct eligible archives are never chosen by timestamp or silently mixed.
     """
@@ -69,7 +104,7 @@ def select_bundle(root,requested,run_path,generation,*,search_dir=None):
                     if Path(info['bundle']).name!=path.name:info=None
                 except (OSError,ValueError,KeyError,TypeError):info=None
             confirmed=bool(info and info.get('iteration')==generation and info.get('run')==run_path)
-            if info and not confirmed:continue
+            if info and not confirmed and path.name.endswith('.parts.json'):continue
             if path.name.endswith('.parts.json'):
                 from brass_ai.learning.contracts import digest
                 data=small_json(path)
@@ -90,9 +125,12 @@ def select_bundle(root,requested,run_path,generation,*,search_dir=None):
                     raise ValueError('Invalid parts size/digest')
                 identity=(data['sha256'],total)
             else:
-                identity=(info['bundle_sha256'],path.stat().st_size) if confirmed else ('file',str(path))
+                header=archive_header(path)
+                if header.get('run')!=run_path or header.get('iteration')!=generation:continue
+                identity=('manifest',header['id']);confirmed=True
             eligible.append((path,confirmed,identity))
-        except (OSError,ValueError,KeyError,TypeError) as error:rejected.append(str(path)+': '+str(error))
+        except (OSError,ValueError,KeyError,TypeError,zipfile.BadZipFile,tarfile.TarError,EOFError) as error:
+            rejected.append(str(path)+': '+str(error))
     if any(confirmed for _,confirmed,_ in eligible):eligible=[item for item in eligible if item[1]]
     groups={}
     for item in eligible:groups.setdefault(item[2],[]).append(item[0])

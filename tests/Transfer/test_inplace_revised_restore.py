@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 
 from test_native_transfer import NativeTransfer,ROOT,transfer
 from brass_ai.learning import post_transfer_reward as P
@@ -35,6 +36,14 @@ class BundleDiscovery(unittest.TestCase):
 
     def select(self,requested=None,**kwargs):
         return driver.select_bundle(self.root,requested,self.run,1284,**kwargs)
+
+    def training_zip(self,path,*,generation=1284,valid=True):
+        header=dict(format=transfer.FORMAT,run=self.run,iteration=generation)
+        header['id']=transfer.digest(header) if valid else '0'*64
+        with zipfile.ZipFile(path,'w') as archive:
+            archive.writestr('transfer.json',transfer.encode(header))
+            archive.writestr('objects/model',b'authored inert model payload')
+        return path
 
     def test_source_export_is_found_without_a_download_variable(self):
         index=self.bundle('step5-transfer-1234-1')
@@ -77,13 +86,43 @@ class BundleDiscovery(unittest.TestCase):
         index=self.bundle('manual',receipt=False)
         self.assertEqual(self.select(),index)
         index.unlink();index.with_name('selfplay-migration.tar.zst.part0001').unlink()
-        archive=index.parent/'manual.zip';archive.write_bytes(b'archive checked in prepare, not during discovery')
+        archive=self.training_zip(index.parent/'manual.zip')
         self.assertEqual(self.select(),archive)
 
     def test_directory_override_and_unsplit_filename_resolve_existing_parts_index(self):
         index=self.bundle('manual')
         self.assertEqual(self.select(search_dir=index.parent),index)
         self.assertEqual(self.select(index.with_name('selfplay-migration.tar.zst')),index)
+
+    def test_runtime_only_zips_do_not_make_source_migration_ambiguous(self):
+        index=self.bundle('retry-20261108T225938Z',receipt=False)
+        for name in ('private-rules-runtime.zip','private-rules-runtime-v4.zip'):
+            with zipfile.ZipFile(self.exports/name,'w') as archive:
+                archive.writestr('Assembly-CSharp.dll',b'authored private-runtime fixture')
+        self.assertEqual(self.select(),index)
+        self.assertFalse((self.root/'.training-rollback').exists())
+
+    def test_zip_requires_valid_manifest_with_matching_generation_and_run(self):
+        index=self.bundle('selected',receipt=False)
+        self.training_zip(self.exports/'g1286.zip',generation=1286)
+        self.training_zip(self.exports/'invalid-manifest.zip',valid=False)
+        with zipfile.ZipFile(self.exports/'not-a-snapshot.zip','w') as archive:
+            archive.writestr('transfer.json',transfer.encode(dict(format='private-runtime/1.0.0')))
+        self.assertEqual(self.select(),index)
+
+    def test_zip_discovery_reads_only_manifest_not_model_payload(self):
+        folder=self.exports/'manual';folder.mkdir(parents=True)
+        path=self.training_zip(folder/'snapshot.zip');read=zipfile.ZipFile.read
+        def guarded(archive,member,*args,**kwargs):
+            name=member.filename if isinstance(member,zipfile.ZipInfo) else member
+            if name!='transfer.json':raise AssertionError('Discovery must not read model payloads')
+            return read(archive,member,*args,**kwargs)
+        with patch.object(zipfile.ZipFile,'read',guarded):self.assertEqual(self.select(),path)
+
+    def test_duplicate_snapshot_zips_group_by_their_complete_manifest_identity(self):
+        self.exports.mkdir(parents=True)
+        a=self.training_zip(self.exports/'a.zip');self.training_zip(self.exports/'b.zip')
+        self.assertEqual(self.select(),a)
 
 
 class InplaceRevisedRestore(unittest.TestCase):
