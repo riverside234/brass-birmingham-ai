@@ -28,6 +28,58 @@ python scripts/export-training-reports.py \
   --continue
 ```
 
+### Performance reports and VP-history repair (2026-11-09)
+
+The same command now copies **small performance and profiling documents by file
+name**, so a newly added report needs no script change. A file is selected when
+its name contains one of `profile`, `profiling`, `profiler`, `perf`,
+`performance`, `timing`, `timings`, `startup`, `throughput`, `telemetry`,
+`benchmark`, `latency` or `bottleneck` as a whole word (`timing-report.json`,
+`lane-startup.json`, `perf_summary.json`, `PROFILE.md`), and it is a `.json`,
+`.jsonl`, `.md`, `.txt` or `.csv` document. They are looked for in the latest
+`--latest` iterations (including `teacher-shadow/` and `profile-*` folders),
+`evaluations/`, the exported rating slots and run-level `profile*` folders.
+
+- Raw profiler traces (`*.trace.json`, TensorBoard event files), generic names such as
+  `report.json` inside a profiler folder, logs and anything over **16 MiB** are not copied.
+  An oversized file is listed in the manifest's `missing` entries with its size limit.
+- A partly written or unreadable performance file adds a warning and is skipped; it
+  does not stop the export.
+- The per-lane startup breakdown and Mono bootstrap timings are fields inside
+  the iteration reports and `teacher-shadow/collection.json`, which were already exported.
+
+**VP history.** A compact restore (here at g1284) can leave the run's
+`ratings/vp-history.json` holding only the generations since the restore, which
+drew a chart with no complete groups. The exporter now compares that cache with
+earlier exports of the same run under `results/` that share its initial
+checkpoint. Generations that those exports still hold are added, and the
+exported `ratings/vp-history.json` and the latest slot's `progress_vp.svg` are
+rebuilt from the combined history. The run's own rows are authoritative: an
+earlier export whose rows disagree is skipped whole with a warning, and a run
+whose history is complete keeps its exact original bytes. Only each earlier
+export's small cache, iteration reports and state are read, not its retention
+history. Drawing the chart needs matplotlib; without it the run's own files are
+exported with a warning.
+
+The manifest marks both rebuilt files with `transform` =
+`selfplay-vp-history-merged/1.0.0` plus the run file's `source_bytes` and
+`source_sha256`, and `vp_history_merge` lists the added generation ranges and
+the earlier exports used. The manifest format is now `selfplay-report-export/1.4.0`;
+1.0–1.3 exports remain valid `--continue` sources. The run itself is not edited, so
+its own cache stays short; every export repairs its copy. To repair the run too, stop
+training at a committed boundary and import the repaired history:
+
+```bash
+python scripts/backfill-vp-history.py \
+  --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
+  --cache results/YOUR-NEW-BUNDLE/ratings/vp-history.json
+```
+
+Generations that no earlier export holds (for this run g1–70 and g371–440) stay
+missing; the chart shows them as gaps. Against the real g1290 evidence, the
+combined history has 1,150 generations (g71–g1290) and 115 complete groups,
+where the original export had 7 generations and none.
+
 ### Rust teacher diagnostics (2026-11-08)
 
 The same command now also selects the available `teacher-shadow/collection.json`

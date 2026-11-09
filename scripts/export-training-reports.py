@@ -9,8 +9,17 @@ With --continue, unchanged reports remain in earlier bundles and the new
 manifest records their verified locations. Detailed reports and teacher
 calibration/collection diagnostics use the latest committed iterations only.
 External training console logs and launcher failure evidence are not selected.
+Small performance and profiling documents (names such as timing-report.json,
+lane-startup.json or PROFILE.md) are selected wherever the latest iterations,
+evaluations and rating slots keep them, without listing each new file name.
+Raw profiler traces, files over 16 MiB and unreadable files are never copied;
+the first two are listed in the manifest's missing entries.
 Rating slots include only the latest
 committed generation; the cumulative archive is still included when present.
+When the run's cumulative self-play VP history lacks generations that earlier
+exports of the same run (same initial checkpoint) still hold, the exported
+ratings/vp-history.json and latest progress_vp.svg are rebuilt from both and
+marked as derived in the manifest. The run's own files are never edited.
 The CLI publishes to the independent ai-training-results repository by default.
 Fetch/push use the configured results URL directly, independently of origin.
 Git URL rewrites must preserve that repository's identity. Authentication may
@@ -39,16 +48,25 @@ import results_git
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1290-trained-restart'
-FORMAT = 'selfplay-report-export/1.3.0'
+FORMAT = 'selfplay-report-export/1.4.0'
 PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0',
-                    'selfplay-report-export/1.2.0', FORMAT}
+                    'selfplay-report-export/1.2.0', 'selfplay-report-export/1.3.0', FORMAT}
 COMPACT_JSON = 'json-whitespace-only/1.0.0'
 GZIP_JSON = 'gzip-json-whitespace-only/1.0.0'
+VP_MERGE = 'selfplay-vp-history-merged/1.0.0'
+DERIVED = (COMPACT_JSON, GZIP_JSON, VP_MERGE)
 REPORT_NAMES = {'state.json', 'retention-history.json', 'report.json', 'spec.json',
                 'config.json', 'best.json', 'summary.json', 'comparison.json',
                 'validation-comparison.json', 'receipt.json', 'manifest.json',
                 'collection.json', 'calibration.json'}
 SKIP_DIRS = {'.git', '.retention', '.retention-trash', '__pycache__', 'population'}
+# Performance documents are recognised by name, so a newly added profiler or
+# timing report needs no change here. Torch/TensorBoard traces are bulk data.
+PERFORMANCE_NAME = re.compile(r'(?:^|[-_.])(?:profile|profiling|profiler|perf|performance|timing|timings|startup|'
+                              r'throughput|telemetry|benchmark|latency|bottleneck)(?:[-_.]|$)', re.IGNORECASE)
+PERFORMANCE_DOCUMENTS = {'.json': 'json', '.jsonl': 'jsonl', '.md': 'text', '.txt': 'text', '.csv': 'text'}
+TRACE_NAME = re.compile(r'\.trace\.json$|\.pb$|\.tfevents', re.IGNORECASE)
+PERFORMANCE_MAX_BYTES = 16 * 1024 * 1024
 
 
 def require(condition, message):
@@ -141,6 +159,155 @@ def report_files(root, directory, *, skip_dirs=()):
         for name in sorted(files):
             if name in REPORT_NAMES or name.endswith(('-report.json', '-receipt.json')):
                 yield below(root, Path(parent) / name)
+
+
+def performance_kind(name):
+    """Document type of a small performance report, or None when it is not one.
+
+    The file name itself must say so (timing, startup, profile, ...); a generic
+    name such as report.json inside a profiler folder stays unselected, and raw
+    traces never count.
+    """
+    kind = PERFORMANCE_DOCUMENTS.get(Path(name).suffix.lower())
+    if kind is None or TRACE_NAME.search(name):
+        return None
+    return kind if PERFORMANCE_NAME.search(Path(name).stem) else None
+
+
+def performance_files(root, directory):
+    """Yield (path, document type) for performance reports below a directory.
+
+    Links and bulk artifact trees are skipped exactly as in report_files(), but
+    profile-* folders are entered: only files whose names say so are yielded.
+    """
+    directory = below(root, directory)
+    if not directory.exists():
+        return
+    for parent, directories, files in os.walk(directory, followlinks=False):
+        directories[:] = sorted(d for d in directories if not d.startswith('.') and d not in SKIP_DIRS)
+        for name in directories:
+            below(root, Path(parent) / name)
+        for name in sorted(files):
+            kind = performance_kind(name)
+            if kind is not None:
+                yield below(root, Path(parent) / name), kind
+
+
+def ranges(values):
+    """[[first, last], ...] for sorted integers; compact manifest evidence."""
+    result = []
+    for value in sorted(values):
+        if result and value == result[-1][1] + 1:
+            result[-1][1] = value
+        else:
+            result.append([value, value])
+    return result
+
+
+def vp_plot_module():
+    """Import the VP chart helpers lazily; the exporter itself needs no trainer packages."""
+    source = str(ROOT / 'src')
+    if source not in sys.path:
+        sys.path.insert(0, source)
+    from brass_ai.recovery import vp_plot
+    return vp_plot
+
+
+def earlier_vp_rows(vp, directory, initial, limit):
+    """Exact self-play VP rows one earlier same-run bundle holds, or None for another lineage.
+
+    Only its small cumulative cache, iteration reports and recent state are read.
+    Its large retention history is not parsed: later caches already contain it.
+    """
+    saved = load_json(directory / 'state.json')
+    if vp._initial(saved) != initial:
+        return None
+    committed = saved['iteration']
+    cap = min(limit, committed)
+    rows = {}
+    cache = directory / vp.HISTORY_PATH
+    if cache.is_file():
+        history = vp._read(cache)
+        if history.get('format') == vp.FORMAT and history.get('initial_checkpoint') == initial:
+            for item in history['iterations']:
+                generation, totals = item['generation'], vp._totals({'health_by_composition': {'selfplay': item}})
+                if type(generation) is int and 1 <= generation <= cap and totals is not None:
+                    vp._merge(rows, dict(generation=generation, **totals))
+
+    def add(report, iteration=None):
+        index = report.get('iteration')
+        require(type(index) is int and (iteration is None or index == iteration), 'Iteration identity differs in VP history')
+        totals = vp._totals(report) if 0 <= index < cap else None
+        if totals is not None:
+            vp._merge(rows, dict(generation=index + 1, **totals))
+
+    for path in sorted(directory.glob('iteration-*/report.json')):
+        match = re.fullmatch(r'iteration-(\d+)', path.parent.name)
+        if match and int(match[1]) < cap:
+            add(load_json(path), int(match[1]))
+    for report in saved.get('recent_training', []):
+        add(report)
+    return committed, rows
+
+
+def merged_vp_history(root, state, history, bundles, warnings):
+    """Run VP history plus generations earlier same-run exports still hold.
+
+    The run's own rows are authoritative. A bundle whose rows conflict with
+    them, or with a newer bundle's rows, is skipped whole and named in a warning.
+    Returns (merged history, added generations, contributing bundles) or None
+    when nothing is missing, so an intact run keeps its exact original bytes.
+    """
+    vp = vp_plot_module()
+    initial = vp._initial(state)
+    if not initial or history.get('format') != vp.FORMAT or history.get('initial_checkpoint') != initial:
+        return None
+    limit = history['committed_generation']
+    require(type(limit) is int and limit >= 0, 'Invalid VP history committed generation')
+    own = {}
+    for item in history['iterations']:
+        generation, totals = item['generation'], vp._totals({'health_by_composition': {'selfplay': item}})
+        if type(generation) is int and generation >= 1 and totals is not None:
+            vp._merge(own, dict(generation=generation, **totals))
+    candidates = []
+    for directory in bundles:
+        try:
+            candidates.append((directory, *earlier_vp_rows(vp, directory, initial, limit)))
+        except (ValueError, OSError, KeyError, TypeError) as error:
+            warnings.append(f'Skipped earlier VP history in {directory.relative_to(root)}: {error}')
+    combined, sources = dict(own), []
+    # Newest bundle first: it is the better-informed record when two overlap.
+    for directory, committed, rows in sorted((c for c in candidates if c[2]), key=lambda c: (c[1], c[0].name), reverse=True):
+        trial = dict(combined)
+        try:
+            for generation in sorted(rows):
+                vp._merge(trial, rows[generation])
+        except ValueError as error:
+            warnings.append(f'Skipped earlier VP history in {directory.relative_to(root)}: {error}')
+            continue
+        gained = sorted(set(trial) - set(combined))
+        if gained:
+            sources.append(dict(export=directory.relative_to(root).as_posix(), committed_generation=committed,
+                                added_generations=len(gained)))
+        combined = trial
+    added = sorted(set(combined) - set(own))
+    if not added:
+        return None
+    merged = dict(history, iterations=[combined[g] for g in sorted(combined)])
+    return merged, added, sources
+
+
+def vp_history_bytes(history):
+    """The same compact encoding the trainer uses for ratings/vp-history.json."""
+    return (json.dumps(history, sort_keys=True, separators=(',', ':'), allow_nan=False) + '\n').encode('utf-8')
+
+
+def vp_chart_bytes(history, generation):
+    vp = vp_plot_module()
+    with tempfile.TemporaryDirectory(prefix='.vp-chart-') as temporary:
+        output = Path(temporary) / 'progress_vp.svg'
+        vp.render(history, output, generation=generation)
+        return output.read_bytes()
 
 
 def context_files(root,run,state):
@@ -336,6 +503,22 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         return previous_index
     selected_iterations = list(range(max(0, generation - latest), generation))
 
+    def add_performance(directory, reason):
+        """Small performance reports only; one unreadable or oversized file never blocks the export."""
+        for path, kind in performance_files(root, directory):
+            source = path.relative_to(root).as_posix()
+            try:
+                size = path.stat().st_size
+            except OSError:
+                continue  # Removed while the walk was running.
+            if size > PERFORMANCE_MAX_BYTES:
+                missing[source] = f'Performance file is over the {PERFORMANCE_MAX_BYTES // 2**20} MiB export limit; not copied'
+                continue
+            try:
+                add(path, path.relative_to(run), reason, document=kind)
+            except ValueError as error:
+                warnings.append(f'Skipped unreadable performance file {source}: {error}')
+
     def add(path, destination, reason, *, expected=False, document='json'):
         path = below(root, path)
         name = Path(destination).as_posix()
@@ -360,7 +543,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             import xml.etree.ElementTree as ET
             ET.fromstring(raw); value = None
         elif document == 'text':
-            raw.decode('utf-8')
+            raw.decode('utf-8'); value = None
         else:
             raise ValueError('Unknown report document format')
         compact_history=(document=='json' and name=='retention-history.json'
@@ -454,8 +637,15 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         for path in report_files(root, directory):
             if path != report_path:
                 add(path, path.relative_to(run), 'Related iteration/teaching report')
+        add_performance(directory, 'Latest iteration performance/profiling report')
     for path in report_files(root, run / 'evaluations'):
         add(path, path.relative_to(run), 'Evaluation report or specification')
+    add_performance(run / 'evaluations', 'Evaluation performance/profiling report')
+    for child in sorted(run.glob('*')):
+        # Run-level profiler folders such as profile-collection/ contribute only named performance reports.
+        if child.is_dir() and not child.name.startswith('.') and (child.name.lower().startswith('profile')
+                                                                   or PERFORMANCE_NAME.search(child.name)):
+            add_performance(child, 'Run-level performance/profiling report')
     vp_history=run/'ratings'/'vp-history.json'
     if vp_history.is_file():
         add(vp_history,vp_history.relative_to(run),'Cumulative ordinary self-play learner VP totals')
@@ -505,6 +695,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
                 'Latest rating slot directory differs from its committed generation')
         for path in report_files(root, slot_directory):
             add(path, path.relative_to(run), 'Latest committed rating slot report or specification')
+        add_performance(slot_directory, 'Latest committed rating slot performance/profiling report')
         for key in ('records', 'panels', 'report', 'spec'):
             reference = slot[key]
             path = below(root, reference['path'])
@@ -599,6 +790,41 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             require(item.suffix == '.json', '--extra accepts JSON reports or report directories')
             add(item, Path('related') / item.relative_to(root), 'Explicit related report')
 
+    vp_merge = None
+    history_name = vp_history.relative_to(run).as_posix()
+    if history_name in files:
+        # A restore can leave the run's cumulative VP cache short while earlier
+        # exports still hold the missing generations. Rebuild only the exported copies.
+        try:
+            bundles = sorted({d for directories in previous().values() for d in directories
+                              if (d / 'state.json').is_file()})
+            merged = merged_vp_history(root, state, json.loads(files[history_name][1].decode('utf-8-sig')),
+                                       bundles, warnings)
+            chart = None
+            if merged is not None and latest_slot is not None:
+                chart = (below(root, Path(latest_slot['report']['path']).parent) / 'progress_vp.svg').relative_to(run).as_posix()
+                chart = chart if chart in files else None
+            if merged is not None:
+                history, added, sources = merged
+                svg = vp_chart_bytes(history, latest_slot['generation'] if latest_slot is not None else history['committed_generation']) \
+                    if chart is not None else None
+        except (ImportError, ValueError, OSError, KeyError, TypeError) as error:
+            warnings.append(f'VP history was not rebuilt from earlier exports: {error}')
+        else:
+            if merged is not None:
+                def derive(name, raw, reason):
+                    entry = files[name][0]
+                    files[name] = (dict(entry, bytes=len(raw), sha256=checksum(raw), reason=reason, transform=VP_MERGE,
+                                        source_bytes=entry['bytes'], source_sha256=entry['sha256']), raw)
+                derive(history_name, vp_history_bytes(history),
+                       'Cumulative self-play VP totals completed from earlier exports of this run')
+                if svg is not None:
+                    derive(chart, svg, 'Self-play learner VP curve redrawn from the completed history')
+                vp_merge = dict(contract=VP_MERGE, run_generations=len(history['iterations']) - len(added),
+                                added_generations=len(added), added_ranges=ranges(added), sources=sources,
+                                chart=chart)
+                warnings.append(f'Run ratings/vp-history.json lacked {len(added)} generations held by earlier exports; '
+                                f'the exported history and chart combine both (see vp_history_merge)')
     copied, reused, dependencies = (incremental_files(root,run,generation,files,warnings,index=previous())
                                      if continue_export else (files, [], []))
     manifest = dict(format=FORMAT, created_utc=datetime.now(timezone.utc).isoformat(),
@@ -608,6 +834,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         incremental=continue_export, reused_files=reused,
         rating_slot_generation=latest_slot['generation'] if latest_slot is not None else None,
         run_lock_present=(run / '.active-run.json').exists(),
+        vp_history_merge=vp_merge,
         files=[entry for entry, _ in copied.values()],
         missing=[dict(source=path, reason=reason) for path, reason in sorted(missing.items())],
         warnings=sorted(set(warnings)),
@@ -633,7 +860,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         for entry, raw in files.values():
             current=below(root, entry['source']).read_bytes()
             matches=(len(current)==entry['source_bytes'] and checksum(current)==entry['source_sha256']
-                     if entry.get('transform') in (COMPACT_JSON,GZIP_JSON) else current==raw)
+                     if entry.get('transform') in DERIVED else current==raw)
             require(matches,
                     f"Report changed during export; retry: {entry['source']}")
         for path, raw in dependencies:

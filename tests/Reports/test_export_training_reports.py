@@ -3,6 +3,7 @@ import gzip
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -413,7 +414,7 @@ class ExportTests(unittest.TestCase):
                 (original/'export-manifest.json').write_bytes(reports.encode(old))
         output,manifest=self.export(output='results/legacy-upgraded',continue_export=True)
         self.assertTrue((output/'retention-history.json.gz').is_file())
-        self.assertEqual(manifest['format'],'selfplay-report-export/1.3.0')
+        self.assertEqual(manifest['format'],'selfplay-report-export/1.4.0')
         self.assertTrue(any(e['path']=='state.json' for e in manifest['reused_files']))
         self.assertNotIn('retention-history.json.gz',{e['path'] for e in manifest['reused_files']})
         for folder in ('1.0.0','1.1.0','1.2.0'):
@@ -1016,6 +1017,162 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(len([e for e in manifest['reused_files'] if e['path'].startswith('ratings/slots/')]),5)
         self.assertEqual(manifest['rating_slot_generation'],60)
         self.assertIn('Reused',completed.stdout)
+
+    def test_new_performance_documents_are_found_by_name_without_traces_or_bulk_files(self):
+        base=self.run+'/iteration-0059/'
+        wanted={'timing-report.json':dict(phase='collect'),'lane-startup.json':dict(contract='brass-lab-lane-startup/1.0.0'),
+                'teacher-shadow/startup-breakdown.json':dict(mono=1),'perf_summary.json':dict(x=1),
+                'profile-ppo/profile.json':dict(top=['op']),'profile-ppo/PROFILE.md':b'# Profile\n',
+                'throughput.jsonl':b'{"t":1}\n{"t":2}\n'}
+        for name,value in wanted.items():self.put(base+name,value)
+        for name in ('profile-ppo/host_12.1730000.pt.trace.json','profile-ppo/events.out.tfevents.1','profile-ppo/report.json',
+                     'notes.json','sample.npz','run.log'):
+            self.put(base+name,b'{}' if name.endswith('.json') else b'not selected')
+        self.put(self.run+'/iteration-0050/timing-report.json',dict(old=True))   # Outside the latest iterations.
+        self.put(self.run+'/profile-collection/profile-summary.json',dict(batches=3))
+        self.put(self.run+'/profile-collection/summary.json',dict(generic=True))
+        self.put(self.run+'/profile-collection/host.pt.trace.json',b'{}')
+        output,manifest=self.export()
+        exported={e['path'] for e in manifest['files']}
+        for name in wanted:self.assertEqual((output/'iteration-0059'/name).read_bytes(),(self.root/self.run/'iteration-0059'/name).read_bytes())
+        self.assertEqual((output/'profile-collection/profile-summary.json').read_bytes(),
+                         (self.root/self.run/'profile-collection/profile-summary.json').read_bytes())
+        for name in ('iteration-0059/profile-ppo/host_12.1730000.pt.trace.json','iteration-0059/profile-ppo/events.out.tfevents.1',
+                     'iteration-0059/profile-ppo/report.json','iteration-0059/notes.json','iteration-0059/sample.npz',
+                     'iteration-0059/run.log','iteration-0050/timing-report.json','profile-collection/host.pt.trace.json',
+                     'profile-collection/summary.json'):
+            self.assertNotIn(name,exported);self.assertFalse((output/name).exists())
+        self.assertEqual(manifest['warnings'],[])
+        self.assertEqual([m for m in manifest['missing'] if 'erformance' in m['reason']],[])
+        later,again=self.export(output='results/performance-again',continue_export=True)
+        self.assertEqual({e['path'] for e in again['reused_files']}>=set('iteration-0059/'+n for n in wanted),True)
+        self.assertFalse((later/'iteration-0059/timing-report.json').exists())
+
+    def test_oversized_or_unreadable_performance_documents_are_reported_not_fatal(self):
+        base=self.run+'/iteration-0059/'
+        self.put(base+'profile-huge.json',b'{"a":"'+b'x'*200+b'"}')
+        self.put(base+'timing-partial.json',b'{"half":')
+        self.put(base+'timing-ok.json',dict(ok=True))
+        with patch.object(reports,'PERFORMANCE_MAX_BYTES',100):
+            output,manifest=self.export()
+        self.assertEqual((output/'iteration-0059/timing-ok.json').read_bytes(),(self.root/self.run/'iteration-0059/timing-ok.json').read_bytes())
+        for name in ('profile-huge.json','timing-partial.json'):self.assertFalse((output/'iteration-0059'/name).exists())
+        self.assertIn(base+'profile-huge.json',{m['source'] for m in manifest['missing']})
+        self.assertTrue(any('timing-partial.json' in w for w in manifest['warnings']))
+
+    def vp_rows(self, generations, *, shift=0.):
+        return [dict(generation=g,seat_games=896,tables=224,vp_sum=120000.+g+shift) for g in generations]
+
+    def vp_run(self, generation, rows, *, committed=None, initial='a'*64):
+        """A run whose state names an initial checkpoint, plus its cumulative VP cache and latest curve."""
+        self.state.update(iteration=generation,history=[dict(generation=0,path=self.run+'/initial.pt',sha256=initial,model_id='m0')])
+        slot=self.rating_slot(generation) if generation==60 else None
+        self.state['ratings']=dict(slots=[slot] if slot else [])
+        self.put(self.run+'/state.json',self.state)
+        self.put(self.run+'/ratings/vp-history.json',reports.vp_history_bytes(dict(format='selfplay-vp-history/1.0.0',
+            initial_checkpoint=dict(path=self.run+'/initial.pt',sha256=initial,model_id='m0'),
+            committed_generation=generation if committed is None else committed,iterations=rows)))
+        if slot:
+            self.put(f'{self.run}/ratings/slots/generation-{generation:06d}/progress_vp.svg',
+                     b'<svg xmlns="http://www.w3.org/2000/svg"><title>truncated</title></svg>\n')
+
+    def earlier_vp_export(self, generation=50, rows=None, **kwargs):
+        self.vp_run(generation,self.vp_rows(range(1,generation+1)) if rows is None else rows,**kwargs)
+        return self.export(output=f'results/earlier-g{generation}')
+
+    def chart(self, history, generation):
+        return b'<svg xmlns="http://www.w3.org/2000/svg"><title>merged %d rows g%d</title></svg>\n'%(len(history['iterations']),generation)
+
+    def test_vp_history_lost_in_a_restore_is_completed_from_earlier_exports_and_redrawn(self):
+        earlier,_=self.earlier_vp_export()
+        self.vp_run(60,self.vp_rows(range(52,61)))
+        own=(self.root/self.run/'ratings/vp-history.json').read_bytes()
+        curve=self.root/self.run/'ratings/slots/generation-000060/progress_vp.svg'
+        before=curve.read_bytes()
+        with patch.object(reports,'vp_chart_bytes',self.chart):
+            output,manifest=self.export(output='results/restored')
+        merged=json.loads((output/'ratings/vp-history.json').read_text())
+        self.assertEqual([r['generation'] for r in merged['iterations']],list(range(1,51))+list(range(52,61)))
+        self.assertEqual(merged['committed_generation'],60)
+        self.assertEqual(merged['iterations'][-1],self.vp_rows([60])[0])
+        self.assertEqual((output/'ratings/vp-history.json').read_bytes(),reports.vp_history_bytes(merged))
+        self.assertEqual((output/'ratings/slots/generation-000060/progress_vp.svg').read_bytes(),self.chart(merged,60))
+        entries={e['path']:e for e in manifest['files']}
+        for name,source in (('ratings/vp-history.json',own),('ratings/slots/generation-000060/progress_vp.svg',before)):
+            entry=entries[name];self.assertEqual(entry['transform'],reports.VP_MERGE)
+            self.assertEqual(entry['source_sha256'],reports.checksum(source));self.assertEqual(entry['source_bytes'],len(source))
+            self.assertEqual(entry['sha256'],reports.checksum((output/name).read_bytes()))
+        report=manifest['vp_history_merge']
+        self.assertEqual((report['added_generations'],report['added_ranges']),(50,[[1,50]]))
+        self.assertEqual([s['export'] for s in report['sources']],['results/earlier-g50'])
+        self.assertTrue(any('lacked 50 generations' in w for w in manifest['warnings']))
+        # The run's own files, and the earlier export, are untouched.
+        self.assertEqual((self.root/self.run/'ratings/vp-history.json').read_bytes(),own);self.assertEqual(curve.read_bytes(),before)
+        self.assertEqual(json.loads((earlier/'ratings/vp-history.json').read_text())['committed_generation'],50)
+        with patch.object(reports,'vp_chart_bytes',self.chart):
+            _,again=self.export(output='results/restored-next',continue_export=True)
+        self.assertEqual({'ratings/vp-history.json','ratings/slots/generation-000060/progress_vp.svg'}<=
+                         {e['path'] for e in again['reused_files']},True)
+
+    def test_vp_history_that_is_complete_or_has_only_other_lineages_to_draw_on_keeps_exact_run_bytes(self):
+        self.earlier_vp_export()
+        for name, rows, earlier in (('intact', self.vp_rows(range(1, 61)), None), ('other_lineage', self.vp_rows(range(52, 61)), 'b' * 64)):
+            with self.subTest(name):
+                if earlier:
+                    shutil.rmtree(self.root / 'results/case-intact')
+                    shutil.rmtree(self.root / 'results/earlier-g50')
+                    self.earlier_vp_export(initial=earlier)
+                self.vp_run(60, rows)
+                with patch.object(reports, 'vp_chart_bytes', self.chart):
+                    output, manifest = self.export(output='results/case-' + name)
+                self.assertIsNone(manifest['vp_history_merge'])
+                self.assertEqual((output / 'ratings/vp-history.json').read_bytes(), (self.root / self.run / 'ratings/vp-history.json').read_bytes())
+                self.assertNotIn('transform', next(e for e in manifest['files'] if e['path'] == 'ratings/vp-history.json'))
+                self.assertEqual((output / 'ratings/slots/generation-000060/progress_vp.svg').read_bytes(),
+                                 (self.root / self.run / 'ratings/slots/generation-000060/progress_vp.svg').read_bytes())
+
+    def test_overlapping_earlier_rows_that_disagree_are_skipped_whole(self):
+        self.earlier_vp_export(rows=self.vp_rows(range(1,51))+self.vp_rows([52],shift=5.),generation=52)
+        self.vp_run(60,self.vp_rows(range(52,61)))
+        own=(self.root/self.run/'ratings/vp-history.json').read_bytes()
+        with patch.object(reports,'vp_chart_bytes',self.chart):
+            output,manifest=self.export(output='results/conflict')
+        self.assertIsNone(manifest['vp_history_merge'])
+        self.assertEqual((output/'ratings/vp-history.json').read_bytes(),own)
+        self.assertTrue(any('Conflicting self-play VP evidence' in w for w in manifest['warnings']))
+
+    def test_vp_history_repair_failures_fall_back_to_the_run_files(self):
+        self.earlier_vp_export();self.vp_run(60,self.vp_rows(range(52,61)))
+        own=(self.root/self.run/'ratings/vp-history.json').read_bytes()
+        with patch.object(reports,'vp_chart_bytes',side_effect=ImportError('No module named matplotlib')):
+            output,manifest=self.export(output='results/no-plot')
+        self.assertEqual((output/'ratings/vp-history.json').read_bytes(),own)
+        self.assertIsNone(manifest['vp_history_merge'])
+        self.assertTrue(any('not rebuilt' in w and 'matplotlib' in w for w in manifest['warnings']))
+
+    def test_run_vp_cache_changing_during_a_derived_export_aborts_publication(self):
+        self.earlier_vp_export();self.vp_run(60,self.vp_rows(range(52,61)))
+        cache=self.root/self.run/'ratings/vp-history.json'
+        def chart(history,generation):
+            cache.write_bytes(cache.read_bytes()+b' ');return self.chart(history,generation)
+        with patch.object(reports,'vp_chart_bytes',chart),self.assertRaisesRegex(ValueError,'Report changed during export'):
+            self.export(output='results/racing')
+        self.assertFalse((self.root/'results/racing').exists())
+
+    def test_vp_history_without_a_matching_state_checkpoint_is_not_touched(self):
+        self.put(self.run+'/ratings/vp-history.json',dict(format='selfplay-vp-history/1.0.0',committed_generation=60,iterations=[]))
+        output,manifest=self.export()
+        self.assertIsNone(manifest['vp_history_merge']);self.assertEqual(manifest['warnings'],[])
+
+    @unittest.skipUnless(importlib.util.find_spec('matplotlib'),'Needs matplotlib to draw the chart')
+    def test_redrawn_vp_curve_is_a_real_chart_of_the_completed_history(self):
+        self.earlier_vp_export(generation=50,rows=self.vp_rows(range(1,51)));self.vp_run(60,self.vp_rows(range(52,61)))
+        output,manifest=self.export(output='results/drawn')
+        svg=(output/'ratings/slots/generation-000060/progress_vp.svg').read_text(encoding='utf-8')
+        import xml.etree.ElementTree as ET
+        ET.fromstring(svg)
+        self.assertIn('self-play learner VP',svg);self.assertIn('5 complete groups / 50 iterations',svg)
+        self.assertIn('1 groups missing evidence',svg)
 
     @unittest.skipUnless((ROOT / 'results/selfplay-joint/state.json').is_file(),
                          'Optional archived iteration-60 reports are not installed')
