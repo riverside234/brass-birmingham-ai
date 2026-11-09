@@ -83,6 +83,38 @@ reports and compact history. Manual IL/v4 retirement and competitive-PL override
 need no measured panel files; they are preserved as manual permissions. Older
 `joint7-v11-2-grouped-lr-critic` exports are not reused for this separate run.
 
+### Reports after compact restore or the old-machine reward revision
+
+The same `--run ... --continue` command works after restoring g1284 and rebuilding
+buffers. A compact archive may omit the original generation-zero-only
+`seed/manifest.json`; that absence must not prevent exporting a completed run.
+The exporter first uses the working seed file when present, then tries the
+checkpoint-bound `.training-rollback/` backup and physical earlier same-run
+`fresh-start.json` reports. Recovery requires the **exact full SHA-256** saved in
+`state.signature.config.fresh_selfplay_seed`; JSON is never synthesized or
+re-serialized. A recovered entry records `recovered_from` and `recorded_source`.
+If no exact copy exists, `export-manifest.json` lists the missing seed provenance
+and a warning while exporting the available analysis. A present but changed
+working seed file remains an integrity error. Matching rollback journals/states
+and selected source documents are checked again before publication.
+
+The new checkpoint-bound reward/buffer instruction and original-state receipts
+under `machine-transfer/` are exported as verified JSON. Rating slot folders
+with the supported `-source-<16 hex>` suffix are accepted after source/reward
+changes, with their existing state-pinned file hashes still required. Original
+IL/critic-upgrade provenance is selected from the signature even when the run's
+origin is a weights-seeded restart. Full iteration/state reports retain revised
+rewards, buffer-rebuild/stage progress, Stage-C held-out loss/interval retention,
+joint KL and fixed-beta fields without dropping or rewriting them.
+
+This is report-only recovery: it does not restore/delete buffers, restart
+training, alter optimizers/RNG or copy seed weights, checkpoints, full IL data
+or feature arrays. Future compact transfers retain an available seed JSON
+manifest, without adding unreferenced seed tensors. No re-export/retraining is
+needed for an existing run. Focused regression additions are authored for the
+server; local execution was not requested. Server debug checks without Git,
+training or benchmarks: `python -m unittest discover -s tests/Reports -p test_export_training_reports.py`.
+
 The version-1.3 manifest lists newly copied reports in `files`, and skipped
 reports in `reused_files`, with `previous_export`, `previous_path`, and SHA-256.
 References point directly to a physical file in an older bundle. Keep and share

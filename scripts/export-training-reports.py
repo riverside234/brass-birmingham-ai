@@ -238,8 +238,8 @@ def previous_files(root, run, generation, warnings):
     return index
 
 
-def incremental_files(root, run, generation, files, warnings):
-    index = previous_files(root, run, generation, warnings)
+def incremental_files(root,run,generation,files,warnings,*,index=None):
+    if index is None:index=previous_files(root,run,generation,warnings)
     copied, reused, dependencies = {}, [], []
     for name, (entry, raw) in files.items():
         for directory in index.get((entry['source'], name, entry['sha256']), []):
@@ -257,6 +257,55 @@ def incremental_files(root, run, generation, files, warnings):
         else:
             copied[name] = entry, raw
     return copied, reused, dependencies
+
+
+def seed_report_source(root,run,state,seed,previous,warnings,bindings):
+    """Resolve only exact original seed JSON, never seed weights or replays.
+
+    Compact transfers can omit this generation-zero-only document. A committed
+    run can still be reported; recover immutable bytes when available, otherwise
+    let the normal missing-evidence manifest describe the absent provenance.
+    """
+    path=below(root,seed['manifest']);expected=seed['sha256']
+    require(path==run/'seed/manifest.json','Fresh-start seed manifest changed or belongs to another run')
+    if path.is_file():
+        require(checksum(path.read_bytes())==expected,'Fresh-start seed manifest changed or belongs to another run')
+        return path,None
+    transfer=state.get('machine_transfer') or {};rollback=below(root,'.training-rollback')
+    if transfer.get('archive_id') and rollback.is_dir():
+        for journal in sorted(rollback.glob('restore-*.json')):
+            journal=below(root,journal);raw=journal.read_bytes();record=json.loads(raw.decode('utf-8-sig'))
+            if record.get('archive_id')!=transfer['archive_id'] or record.get('run')!=run.relative_to(root).as_posix():continue
+            identity=checksum(json.dumps({k:v for k,v in record.items() if k!='id'},
+                sort_keys=True,separators=(',',':'),allow_nan=False).encode())
+            require(record.get('contract')=='step5-inplace-export-revision/1.0.0' and record.get('id')==identity and
+                record.get('restore_generation')==transfer.get('origin_generation'),'Rollback report provenance binding changed')
+            backup=below(root,record['backup']);require(backup.parent==rollback,'Rollback report backup escaped its directory')
+            source_state=below(root,backup/'state.json')
+            if not source_state.is_file():
+                warnings.append(f'Rollback seed provenance is unavailable: {source_state.relative_to(root)}');continue
+            saved_raw=source_state.read_bytes()
+            require(checksum(saved_raw)==record['state_sha256'],'Rollback report state changed')
+            saved=json.loads(saved_raw.decode('utf-8-sig'))
+            require(saved.get('signature',{}).get('config',{}).get('fresh_selfplay_seed')==seed,
+                    'Rollback seed receipt differs from the active run')
+            candidate=below(root,backup/'seed/manifest.json')
+            if candidate.is_file():
+                require(checksum(candidate.read_bytes())==expected,'Rollback seed manifest changed')
+                bindings.extend([(journal,raw),(source_state,saved_raw)])
+                return candidate,'rollback-backup'
+    # Only physical reports from verified same-run export manifests are eligible.
+    # The state-pinned seed SHA, not file naming/age or a synthesized summary,
+    # establishes the identity. Stable ordering keeps incremental reuse flat.
+    candidates=set()
+    for (_,name,h),directories in previous().items():
+        if name=='fresh-start.json' and h==expected:
+            candidates.update(directory/name for directory in directories)
+    for candidate in sorted(candidates):
+        candidate=below(root,candidate)
+        if candidate.is_file() and checksum(candidate.read_bytes())==expected:return candidate,'previous-report'
+        warnings.append(f'Previous seed report unavailable or changed: {candidate.relative_to(root)}')
+    return None,None
 
 
 def export(root, run, output=None, *, latest=2, extras=(), continue_export=False):
@@ -280,6 +329,11 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
     require(not output.exists(), f'Output already exists; choose a new folder: {output}')
 
     files, missing, warnings = {}, {}, []
+    provenance_bindings=[];previous_index=None
+    def previous():
+        nonlocal previous_index
+        if previous_index is None:previous_index=previous_files(root,run,generation,warnings)
+        return previous_index
     selected_iterations = list(range(max(0, generation - latest), generation))
 
     def add(path, destination, reason, *, expected=False, document='json'):
@@ -336,10 +390,25 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
     require(files['state.json'][1] == state_bytes, 'Run advanced during export; retry')
     seed=state.get('signature',{}).get('config',{}).get('fresh_selfplay_seed')
     if seed is not None:
-        path=below(root,seed['manifest'])
-        require(path==run/'seed/manifest.json' and checksum(path.read_bytes())==seed['sha256'],
-                'Fresh-start seed manifest changed or belongs to another run')
-        add(path,'fresh-start.json','Weights-only source and imported history cutoff; no model tensors',expected=True)
+        path,recovered=seed_report_source(root,run,state,seed,previous,warnings,provenance_bindings)
+        if path is None:
+            add(seed['manifest'],'fresh-start.json','Original seed provenance omitted/pruned; its exact receipt remains in state.json',expected=True)
+            warnings.append('Original seed manifest is absent; no seed document or tensors were reconstructed. See state.json fresh_selfplay_seed receipt.')
+        else:
+            add(path,'fresh-start.json','Weights-only source and imported history cutoff; no model tensors',expected=True)
+            require(files['fresh-start.json'][0]['sha256']==seed['sha256'],'Fresh-start seed changed during report selection')
+            if recovered:
+                files['fresh-start.json'][0].update(recovered_from=recovered,recorded_source=seed['manifest'])
+                warnings.append(f'Recovered exact seed provenance from {recovered}: {path.relative_to(root)}')
+    transfer=state.get('machine_transfer') or {}
+    for key in ('instruction','original_state'):
+        if key not in transfer:continue
+        ref=transfer[key];path=below(root,ref['path'])
+        require(path.is_relative_to(run),'Machine-transfer report evidence is outside this run')
+        if path.is_file():require(checksum(path.read_bytes())==ref['sha256'],'Machine-transfer report evidence changed')
+        value=add(path,path.relative_to(run),'Checkpoint-bound reward revision and fresh-buffer adoption evidence',expected=True)
+        if value is not None:require(files[path.relative_to(run).as_posix()][0]['sha256']==ref['sha256'],
+                                   'Machine-transfer report evidence changed during selection')
     domino=state.get('domino_adoption')
     if domino is not None:
         add(run / f'domino-adoption-g{domino["generation"]:06d}.json', 'domino-adoption.json',
@@ -432,7 +501,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
     for slot in [s for s in slots if s['generation'] in needed]:
         slot_directory = below(root, Path(slot['report']['path']).parent)
         require(slot_directory.parent == run / 'ratings' / 'slots' and
-                re.fullmatch(r'generation-0*' + str(slot['generation']), slot_directory.name),
+                re.fullmatch(r'generation-0*' + str(slot['generation'])+r'(?:-source-[0-9a-f]{16})?', slot_directory.name),
                 'Latest rating slot directory differs from its committed generation')
         for path in report_files(root, slot_directory):
             add(path, path.relative_to(run), 'Latest committed rating slot report or specification')
@@ -521,7 +590,8 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         if parent_state:
             lineage(parent_state.get('signature', {}).get('parent_imitation'))
 
-    lineage(state.get('origin') or state.get('signature', {}).get('imitation_source'))
+    lineage(state.get('origin'))
+    lineage(state.get('signature', {}).get('imitation_source'))
     for extra in extras:
         path = below(root, extra)
         require(path.exists(), f'Extra report path does not exist: {path}')
@@ -529,7 +599,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             require(item.suffix == '.json', '--extra accepts JSON reports or report directories')
             add(item, Path('related') / item.relative_to(root), 'Explicit related report')
 
-    copied, reused, dependencies = (incremental_files(root, run, generation, files, warnings)
+    copied, reused, dependencies = (incremental_files(root,run,generation,files,warnings,index=previous())
                                      if continue_export else (files, [], []))
     manifest = dict(format=FORMAT, created_utc=datetime.now(timezone.utc).isoformat(),
         run=run.relative_to(root).as_posix(), committed_generation=generation,
@@ -569,6 +639,9 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         for path, raw in dependencies:
             require(below(root, path).read_bytes() == raw,
                     f'Previous report changed during export; retry: {path.relative_to(root)}')
+        for path,raw in provenance_bindings:
+            require(below(root,path).read_bytes()==raw,
+                    f'Report provenance changed during export; retry: {path.relative_to(root)}')
         publish(stage, output)
     return output, manifest
 

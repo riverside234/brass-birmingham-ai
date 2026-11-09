@@ -99,6 +99,21 @@ class NativeTransfer(unittest.TestCase):
         self.put('artifacts/step5/selfplay/state.json',self.state)
         with self.assertRaisesRegex(ValueError,'rehearsal to be disabled'):transfer.inventory(self.root,self.run)
 
+    def test_available_startup_seed_json_travels_without_adding_unreferenced_seed_tensors(self):
+        p=self.put('artifacts/step5/selfplay/seed/manifest.json',dict(seed_generation=1290,history_through=1330))
+        self.put('artifacts/step5/selfplay/seed/unreferenced-old-weights.pt',b'not a live model dependency')
+        self.state['signature']['config']['fresh_selfplay_seed']=dict(manifest=p.relative_to(self.root).as_posix(),sha256=transfer.sha(p))
+        self.put('artifacts/step5/selfplay/state.json',self.state);self.export()
+        names={r['path'] for r in transfer.inspect_bundle(self.bundle)['files']}
+        self.assertIn(p.relative_to(self.root).as_posix(),names)
+        self.assertNotIn('artifacts/step5/selfplay/seed/unreferenced-old-weights.pt',names)
+
+    def test_startup_only_seed_json_remains_optional_on_an_already_compact_restored_run(self):
+        self.state['signature']['config']['fresh_selfplay_seed']=dict(manifest='artifacts/step5/selfplay/seed/manifest.json',sha256='a'*64)
+        self.put('artifacts/step5/selfplay/state.json',self.state);self.export()
+        self.assertNotIn('artifacts/step5/selfplay/seed/manifest.json',
+            {r['path'] for r in transfer.inspect_bundle(self.bundle)['files']})
+
     def test_restore_preserves_bytes_and_authorizes_reset_only_at_checkpoint_boundary(self):
         self.export();m=transfer.inspect_bundle(self.bundle);state_bytes=(self.run/'state.json').read_bytes()
         self.move_source();result=transfer.restore(self.root,self.bundle)

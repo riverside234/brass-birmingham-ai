@@ -378,5 +378,12 @@
     "local_tests_run": false,
     "authored_regressions": 4,
     "server_validation": "Pending"
+  },
+  "post_migration_report_export": {
+    "receipt": "distribution/rust-collector-performance/post-migration-report-export-fix.json",
+    "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+    "authored_regressions": 11,
+    "local_tests_run": false,
+    "server_export": "Pending"
   }
 }

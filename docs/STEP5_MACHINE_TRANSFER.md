@@ -15,6 +15,7 @@ The current native-run exporter requires compact mode and records `fresh-buffers
 | Committed rating outcome summaries (`ratings/slots/.../games.jsonl`), slot spec/report/panels/bootstrap and compact rating history | Preserve immutable rating evidence and future PL refits; no action replays |
 | Completed IL source/ancestry metadata, selected IL checkpoint and dataset manifests | Preserve strict IL provenance without copying demonstrations |
 | `<run>/il-kl/probe.npz` and `<run>/il-kl/manifest.json` | The existing fixed 2048 **positions**, including encoded features and original reference probabilities |
+| `<run>/seed/manifest.json`, when present | Small startup provenance for later report export; does not add unreferenced original seed tensors |
 | Original and active Rust ordinary/teacher binaries, bootstrap DLLs, build/qualification receipts, calibration fixtures | Continue the adopted backend without losing its integrity bindings |
 | Rules DLLs and runtime manifests from `training/runtime/distribution.json` | Destination preflight and the existing C# V4 worker |
 | Frozen rating/pending-evaluation `search_runtime` receipts, runtime manifests and all pinned EXE/DLL files | Keep the original rated opponent identity; package as private runtime even in repo mode |

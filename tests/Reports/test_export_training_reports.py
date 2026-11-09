@@ -171,6 +171,103 @@ class ExportTests(unittest.TestCase):
         path.write_bytes(b'{}')
         with self.assertRaisesRegex(ValueError,'seed manifest changed'):self.export()
 
+    def seed_provenance(self,*,rollback=False):
+        seed=dict(contract='fresh-selfplay-weights/1.0.0',seed_generation=1290,history_through=1330)
+        raw=reports.encode(seed);expected=reports.checksum(raw)
+        ref=dict(contract='fresh-selfplay-weights/1.0.0',manifest=self.run+'/seed/manifest.json',sha256=expected)
+        self.state['signature']['config']['fresh_selfplay_seed']=ref
+        self.state['origin']=dict(initialization='fresh-selfplay-weights',seed_manifest_sha256=expected)
+        if rollback:
+            archive='a'*64;self.state['machine_transfer']=dict(archive_id=archive,origin_generation=58)
+            saved=dict(self.state,iteration=62)
+            backup='.training-rollback/example-g62-retained'
+            original=self.put(backup+'/state.json',saved)
+            record=dict(contract='step5-inplace-export-revision/1.0.0',archive_id=archive,run=self.run,
+                restore_generation=58,preserved_generation=62,backup=backup,state_sha256=reports.checksum(original.read_bytes()))
+            record['id']=reports.checksum(json.dumps(record,sort_keys=True,separators=(',',':'),allow_nan=False).encode())
+            self.put('.training-rollback/restore-bound.json',record)
+            source=self.put(backup+'/seed/manifest.json',raw)
+        else:source=self.put(self.run+'/seed/manifest.json',raw)
+        self.put(self.run+'/state.json',self.state)
+        return source,raw
+
+    def test_missing_startup_seed_is_explicit_and_does_not_block_committed_report_export(self):
+        source,_=self.seed_provenance();source.unlink();before=(self.root/self.run/'state.json').read_bytes()
+        output,manifest=self.export(continue_export=True)
+        self.assertFalse((output/'fresh-start.json').exists())
+        self.assertIn(self.run+'/seed/manifest.json',{r['source'] for r in manifest['missing']})
+        self.assertTrue(any('Original seed manifest is absent' in w for w in manifest['warnings']))
+        self.assertEqual((self.root/self.run/'state.json').read_bytes(),before)
+        self.assertFalse(source.exists());self.assertFalse(any(p.suffix in ('.pt','.npz') for p in output.rglob('*')))
+
+    def test_seed_recovers_from_bound_rollback_backup_without_editing_training_files_and_reuses(self):
+        source,raw=self.seed_provenance(rollback=True)
+        self.put(source.parent/'weights.pt',b'tensors must never be exported')
+        before={p:p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        output,manifest=self.export(output='results/recovered-seed',continue_export=True)
+        self.assertEqual((output/'fresh-start.json').read_bytes(),raw)
+        entry=next(e for e in manifest['files'] if e['path']=='fresh-start.json')
+        self.assertEqual(entry['recovered_from'],'rollback-backup');self.assertEqual(entry['recorded_source'],self.run+'/seed/manifest.json')
+        self.assertFalse((self.root/self.run/'seed/manifest.json').exists())
+        self.assertEqual(before,{p:p.read_bytes() for p in before})
+        self.assertFalse(any(p.suffix in ('.pt','.npz') for p in output.rglob('*')))
+        _,second=self.export(output='results/recovered-seed-next',continue_export=True)
+        self.assertIn('fresh-start.json',{e['path'] for e in second['reused_files']})
+
+    def test_seed_recovers_only_exact_bytes_from_previous_same_run_reports(self):
+        source,raw=self.seed_provenance();first,_=self.export(output='results/seed-first')
+        source.unlink()
+        output,manifest=self.export(output='results/seed-recovered',continue_export=True)
+        self.assertEqual((output/'fresh-start.json').read_bytes(),raw)
+        entry=next(e for e in manifest['files'] if e['path']=='fresh-start.json')
+        self.assertEqual(entry['recovered_from'],'previous-report')
+        (first/'fresh-start.json').write_bytes(b'{}')
+        (output/'fresh-start.json').write_bytes(b'{}')
+        final,missing=self.export(output='results/seed-missing',continue_export=True)
+        self.assertFalse((final/'fresh-start.json').exists())
+        self.assertIn(self.run+'/seed/manifest.json',{r['source'] for r in missing['missing']})
+
+    def test_rollback_seed_and_binding_corruption_remain_errors(self):
+        source,_=self.seed_provenance(rollback=True);raw=source.read_bytes();source.write_bytes(b'{}')
+        with self.assertRaisesRegex(ValueError,'Rollback seed manifest changed'):self.export()
+        source.write_bytes(raw);state=source.parent.parent/'state.json';state.write_bytes(b'{}')
+        with self.assertRaisesRegex(ValueError,'Rollback report state changed'):self.export()
+        if (self.root/'results').exists():self.assertEqual(list((self.root/'results').glob('*')),[])
+
+    def test_changed_rollback_provenance_during_publication_is_rejected(self):
+        source,_=self.seed_provenance(rollback=True);saved=source.parent.parent/'state.json';encode=reports.encode
+        def mutate(value):
+            if isinstance(value,dict) and value.get('format')==reports.FORMAT:saved.write_bytes(b'{}')
+            return encode(value)
+        with patch.object(reports,'encode',mutate),self.assertRaisesRegex(ValueError,'Report provenance changed'):
+            self.export(output='results/changed-rollback')
+        self.assertFalse((self.root/'results/changed-rollback').exists())
+
+    def test_machine_transfer_reports_are_hash_checked_and_exported_without_arrays(self):
+        instruction=self.put(self.run+'/machine-transfer-resume.json',dict(reward_revision='post-transfer-reward/1.0.0'))
+        original=self.put(self.run+'/machine-transfer/state-original.json',dict(iteration=58))
+        self.state['machine_transfer']=dict(instruction=dict(path=instruction.relative_to(self.root).as_posix(),sha256=reports.checksum(instruction.read_bytes())),
+            original_state=dict(path=original.relative_to(self.root).as_posix(),sha256=reports.checksum(original.read_bytes())))
+        self.put(self.run+'/machine-transfer/weights.pt',b'excluded tensor')
+        self.put(self.run+'/state.json',self.state)
+        output,manifest=self.export()
+        for path in (instruction,original):self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),path.read_bytes())
+        self.assertFalse((output/'machine-transfer/weights.pt').exists())
+        original.write_bytes(b'{}')
+        with self.assertRaisesRegex(ValueError,'Machine-transfer report evidence changed'):self.export()
+
+    def test_fresh_restart_origin_does_not_hide_upgraded_il_signature_lineage(self):
+        self.seed_provenance()
+        self.state['signature']['imitation_source']=dict(bc_run='artifacts/step5/upgraded-il')
+        self.put(self.run+'/state.json',self.state)
+        upgrade=self.put('artifacts/step5/upgraded-il/upgrade.json',dict(contract='completed-il-critic-upgrade/1.0.0',
+            parent=dict(bc_run='artifacts/step5/original-il')))
+        self.put('artifacts/step5/original-il/state.json',dict(signature={}))
+        self.put('artifacts/step5/original-il/report.json',dict(completed=True))
+        output,_=self.export()
+        self.assertEqual((output/'lineage'/upgrade.relative_to(self.root)).read_bytes(),upgrade.read_bytes())
+        self.assertTrue((output/'lineage/artifacts/step5/original-il/report.json').is_file())
+
     def test_trained_restart_default_cli_and_incremental_manual_panel_overrides(self):
         self.run='artifacts/step5/joint7-v11-2-g1290-trained-restart'
         receipt=dict(seed_generation=1290,history_through=1330)
@@ -740,6 +837,26 @@ class ExportTests(unittest.TestCase):
         return dict(generation=generation, **{
             key:dict(path=path.relative_to(self.root).as_posix(),sha256=reports.checksum(path.read_bytes()))
             for key,path in paths.items()})
+
+    def test_source_suffixed_rating_slot_after_reward_migration_exports_and_reuses(self):
+        slot=self.rating_slot(60);old=self.root/Path(slot['report']['path']).parent
+        renamed=old.with_name(old.name+'-source-'+'a'*16);old.rename(renamed)
+        for ref in (v for v in slot.values() if isinstance(v,dict)):
+            ref['path']=(renamed/Path(ref['path']).name).relative_to(self.root).as_posix()
+        self.state['ratings']=dict(slots=[slot]);self.put(self.run+'/state.json',self.state)
+        output,manifest=self.export(output='results/source-slot')
+        name=Path(slot['report']['path']).relative_to(self.run).as_posix()
+        self.assertTrue((output/name).is_file());self.assertEqual(manifest['rating_slot_generation'],60)
+        _,continued=self.export(output='results/source-slot-next',continue_export=True)
+        self.assertIn(name,{e['path'] for e in continued['reused_files']})
+
+    def test_invalid_source_suffix_does_not_bypass_rating_slot_identity(self):
+        slot=self.rating_slot(60);old=self.root/Path(slot['report']['path']).parent
+        renamed=old.with_name(old.name+'-source-invalid');old.rename(renamed)
+        for ref in (v for v in slot.values() if isinstance(v,dict)):
+            ref['path']=(renamed/Path(ref['path']).name).relative_to(self.root).as_posix()
+        self.state['ratings']=dict(slots=[slot]);self.put(self.run+'/state.json',self.state)
+        with self.assertRaisesRegex(ValueError,'rating slot directory differs'):self.export()
 
     def active_anchor_at_latest_rating(self):
         self.advance_run(320)

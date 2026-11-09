@@ -327,3 +327,13 @@ be passed directly with `--bundle` using the existing launcher. Discovery reads
 no model payloads; normal restore still verifies everything before a run move.
 Four additional regressions are authored; local execution remains disabled at
 the user's request. See [old-machine-archive-type-fix.json](old-machine-archive-type-fix.json).
+
+Post-migration report export now recovers only the exact state-pinned seed JSON
+from bound rollback backups or earlier same-run physical reports. If absent,
+missing provenance is explicit and available reports still export; changed live
+files remain errors. Reward/buffer transfer receipts, source-suffixed rating
+slots and signature IL-upgrade lineage are included without tensors/replays or
+training-state edits. Future compact exports retain available seed JSON only.
+Eleven focused regressions are authored for the server; only static checks and
+the historical seed-hash audit were performed locally. See
+[post-migration-report-export-fix.json](post-migration-report-export-fix.json).

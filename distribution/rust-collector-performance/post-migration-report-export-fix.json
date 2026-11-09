@@ -1,0 +1,36 @@
+{
+  "contract": "step5-post-migration-report-export-repair/1.0.0",
+  "date": "2026-11-08",
+  "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+  "cause": "Report exporter required an on-disk generation-zero seed manifest omitted from compact restored runs",
+  "fix": [
+    "Recover only exact state-pinned seed JSON from a bound same-project rollback backup or previous physical same-run report",
+    "If immutable historical seed JSON is unavailable, list missing provenance and continue report export; reject changed live seed bytes",
+    "Revalidate selected source and rollback provenance before publication; retain existing incremental byte/dependency checks",
+    "Include hash-verified machine-transfer instruction/original-state reports and source-suffixed rating slot paths",
+    "Export IL/critic-upgrade lineage from both origin and signature, with deduplication",
+    "Retain available startup seed JSON in future compact native exports; do not add unreferenced seed weights"
+  ],
+  "historical_provenance": {
+    "path": "results/joint7-v11-2-g1290-trained-restart-g0200-20261102T015209145176Z/fresh-start.json",
+    "sha256": "c2e0f614e840aa474f3b0a98bd5288dc5a8d3310fb4386348182bffc2356fba4",
+    "match": "exact current restart receipt"
+  },
+  "command": "python scripts/export-training-reports.py --run artifacts/step5/joint7-v11-2-g1290-trained-restart --continue",
+  "preserved": [
+    "training/checkpoint/optimizer/RNG/beta/reward/buffer/stage state",
+    "original report JSON bytes and immutable hashes",
+    "no model/checkpoint/NPZ/full-replay data in report bundles",
+    "existing results Git destination/authorization behavior"
+  ],
+  "validation": {
+    "static_ast_files": 4,
+    "learner_source_unchanged": true,
+    "historical_seed_hash": "matched",
+    "authored_new_regressions": 11,
+    "local_tests_run": false,
+    "local_benchmarks_run": false,
+    "local_training_run": false,
+    "server_report_export": "Pending"
+  }
+}

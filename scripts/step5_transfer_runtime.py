@@ -90,6 +90,14 @@ def native_inventory(root, run, state, *, add, read, require, runtime):
             and len(metadata['rows']) == 2048, 'Transfer needs the original fixed 2048-position IL probe')
     cache = pinned(metadata['cache'])
     require(cache == run/'il-kl/probe.npz', 'Fixed IL probe array is outside its owned directory')
+    # Startup-only JSON is useful report provenance after a restore. Retain it
+    # when available, without requiring omitted g0 weights/replay on an already
+    # restored run. Its original state receipt remains authoritative.
+    seed=state['signature']['config'].get('fresh_selfplay_seed')
+    if seed is not None:
+        source=path(seed['manifest'])
+        require(source==run/'seed/manifest.json','Fresh seed provenance is outside its owned run')
+        if source.is_file():add(source,seed['sha256'])
 
     # These references are live metadata, weights and immutable probe arrays,
     # not the original IL replay or its .prepared feature cache.
