@@ -141,7 +141,9 @@ class League(unittest.TestCase):
     def test_entries_cover_learner_pool_anchor_and_population_once(self):
         make = lambda name: dict(model_id=name, path=name, sha256=name)
         learner, member, anchor, member2 = (make(x) for x in 'lmap')
-        state = dict(history=[make('old'), learner], quality_pool=dict(members=[member, member2, anchor]), evaluation_anchor=anchor,
+        # The real league holds a frozen v4 bot member, which has no checkpoint file.
+        bot = dict(kind='v4-history', model_id='v4-history-x', generation=570)
+        state = dict(history=[make('old'), learner], quality_pool=dict(members=[member, member2, anchor, bot]), evaluation_anchor=anchor,
                      champion=None, population=[member2])
         result = Q.league_entries(SimpleNamespace(snapshot=dict(state=state)))
         self.assertEqual(sorted(result), ['a', 'l', 'm', 'p'])
@@ -162,6 +164,26 @@ class Reporting(unittest.TestCase):
         result = Q.finish(checks, extra=1)
         self.assertFalse(result['passed'])
         self.assertEqual(result['extra'], 1)
+
+    def test_parity_scales_with_large_heads_and_still_catches_small_ones(self):
+        self.assertLess(Q.scaled_error([100.01], [100.]), 1.)
+        self.assertGreater(Q.scaled_error([.101], [.1]), 1.)
+        self.assertGreater(Q.scaled_error([100.1], [100.]), 1.)
+        self.assertEqual(Q.scaled_error([1., 2.], [1., 2.]), 0.)
+
+    def test_a_failed_collection_leaves_a_working_gate_for_later_stages(self):
+        import multiprocessing
+        from brass_ai.recovery.resources import CPUAdmission
+        mp = multiprocessing.get_context('spawn')
+        original = CPUAdmission(mp, 4, 1)
+        service = SimpleNamespace(mp=mp, cpu=original)
+        Q.restore_admission(service, dict(cpu_budget=8, cpu_reserve=0))
+        self.assertIs(service.cpu, original)
+        original.abort()
+        Q.restore_admission(service, dict(cpu_budget=8, cpu_reserve=0))
+        self.assertIsNot(service.cpu, original)
+        self.assertFalse(service.cpu.aborted.value)
+        self.assertEqual(service.cpu.capacity, 8)
 
     def test_spread_of_nothing_is_none(self):
         self.assertIsNone(Q.spread([]))
@@ -372,7 +394,7 @@ class StagesOnFixtures(unittest.TestCase):
         self.assertTrue(result['passed'], result)
         self.assertEqual(set(result['kinds']), {'search_head', 'utility', 'anchor'})
         for kind in result['kinds'].values():
-            self.assertLessEqual(kind['worst_absolute_error'], 4e-4)
+            self.assertLessEqual(kind['worst_scaled_error'], 1.)
 
     def test_teacher_stage_runs_real_tables_at_each_blend(self):
         with patch('brass_ai.rust_backend.lab_shadow.teacher_build', return_value=self.build), \
