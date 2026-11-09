@@ -1,0 +1,89 @@
+{
+  "contract": "step5-transfer-git-newlines-repair/1.0.0",
+  "date": "2026-11-08",
+  "base_commit": "00dd36dc44bebec67d780fd78909bc717a263a60",
+  "implementation": "9577ab0db846fe6783963ad11cb1f5ab46d67cbe0ce57e7454425c8fa96431a4",
+  "training_source_changed": false,
+  "native_rebuild_required": false,
+  "reexport_required": false,
+  "prior_qualification_rerun": false,
+  "failure": {
+    "primary": "Repo export trusted normalized Git status and omitted mixed-line-ending manifests whose raw bytes were not recoverable by the previous raw/LF/CRLF reader",
+    "follow_on": "Verification ran after failed restore, before relocation metadata existed; the new destination ROOT was correct"
+  },
+  "repair": {
+    "legacy_archive": "Try at most five raw/LF/CRLF/single-transition variants. Archive length fixes CR count; accept only exact full SHA-256. Never enumerate arbitrary permutations",
+    "future_export": "Prove unfiltered Git blob or uniform CRLF form against each record byte count and SHA-256 before omitting code; bundle all unproved bytes even if Git status is clean",
+    "verify": "Read-only error identifies incomplete restore at the selected destination; mapping is published only after successful file/source verification",
+    "commands": "Use existing new ROOT; chain restore and verify with &&"
+  },
+  "known_manifest_debug": [
+    {
+      "path": "src/BrassLocalAI/Unity/manifest.json",
+      "bytes": 8154,
+      "sha256": "d936e60943760816b03597513c83219470f50d65910483e914c10579b48daabc",
+      "exact_recovery": true,
+      "safe_to_omit": false
+    },
+    {
+      "path": "src/BrassPatch/Persistence/manifest.json",
+      "bytes": 2446,
+      "sha256": "c9c5ec1b5efb7faea3caefb050720a44870ccff32b5d5464c2c17d7bdad9096c",
+      "exact_recovery": true,
+      "safe_to_omit": false
+    }
+  ],
+  "recorded_archive_git_commit": "8d7724a2ea79e3abf7632ac8ce3806a689774abd",
+  "preserved": [
+    "Exact archive bytes, signatures, source fingerprint and full SHA-256 checks",
+    "Backups before replacement and protection of private/untracked files",
+    "Stopped-run leases, relocation mappings and interruption-safe fresh-buffer instruction",
+    "Checkpoint/Adam/RNG/stage/beta/reward migration semantics and existing native adapters"
+  ],
+  "validation": {
+    "distinct_python_debug_checks_passed": 26,
+    "tests": [
+      "test_clone_restore.CloneRestore.test_backup_corruption_cannot_be_silently_accepted_on_retry",
+      "test_clone_restore.CloneRestore.test_backup_failure_precedes_every_repository_replacement_and_retry_recovers",
+      "test_clone_restore.CloneRestore.test_cloned_default_config_is_backed_up_then_restored_exactly_and_retry_verifies",
+      "test_clone_restore.CloneRestore.test_existing_identical_clone_files_are_reused_without_backups",
+      "test_clone_restore.CloneRestore.test_external_git_bytes_and_crlf_conflicts_are_recovered_without_reexport",
+      "test_clone_restore.CloneRestore.test_git_omission_proof_is_bound_to_record_bytes_not_only_clean_status",
+      "test_clone_restore.CloneRestore.test_interrupted_replace_recovers_from_immutable_backup_without_overwriting_new_edits",
+      "test_clone_restore.CloneRestore.test_legacy_mixed_ending_recovery_never_accepts_a_similar_hash",
+      "test_clone_restore.CloneRestore.test_legacy_mixed_recovery_preserves_missing_final_newline_and_bare_carriage_return",
+      "test_clone_restore.CloneRestore.test_legacy_omitted_mixed_manifests_recover_exact_hashes_and_verify_at_new_root",
+      "test_clone_restore.CloneRestore.test_missing_external_file_can_come_only_from_exact_committed_git_object",
+      "test_clone_restore.CloneRestore.test_native_retry_at_same_absolute_root_still_installs_fresh_buffer_instruction",
+      "test_clone_restore.CloneRestore.test_new_exports_bundle_git_normalized_mixed_endings_even_when_git_is_clean",
+      "test_clone_restore.CloneRestore.test_new_exports_prove_uniform_crlf_is_recoverable_and_bundle_content_edits",
+      "test_clone_restore.CloneRestore.test_new_transport_tool_is_kept_and_archived_version_remains_hash_verified",
+      "test_clone_restore.CloneRestore.test_private_checkpoint_and_state_conflicts_are_reported_together_before_any_mutation",
+      "test_clone_restore.CloneRestore.test_strict_mode_preserves_previous_refusal_and_untracked_files_remain_protected",
+      "test_clone_restore.CloneRestore.test_verify_after_failed_restore_reports_incomplete_restore_not_wrong_destination",
+      "test_native_transfer.NativeTransfer.test_recipe_matches_trainer_and_clean_interpreter_needs_no_torch_or_numpy",
+      "test_native_transfer.NativeTransfer.test_relocation_keeps_native_pin_spelling_but_accesses_destination_bytes",
+      "test_relocation.RelocationTests.test_corruption_and_conflicts_leave_destination_untouched",
+      "test_step5_transfer.TransferTests.test_corrupt_archive_is_rejected_before_destination_creation",
+      "test_step5_transfer.TransferTests.test_default_repo_omits_clean_tracked_files_but_includes_private_runtime",
+      "test_step5_transfer.TransferTests.test_explicit_external_reuses_clone_and_ssh_runtime_without_packing_them",
+      "test_step5_transfer.TransferTests.test_repo_keeps_all_runtime_in_assets_even_if_a_runtime_file_is_tracked",
+      "test_step5_transfer.TransferTests.test_restore_conflicts_and_wrong_root_fail_before_writes"
+    ],
+    "ast": "passed: 3 files",
+    "git_diff_check": "passed",
+    "stdlib_cli": "passed with -S",
+    "training_fingerprint": "unchanged; matches current reviewed execution source",
+    "local_benchmarks": false,
+    "local_training": false,
+    "local_native_build": false,
+    "actual_lab_restore": "Pending",
+    "logs": [
+      "artifacts/step5-transfer-mixed-fix/affected-debug.log",
+      "artifacts/step5-transfer-mixed-fix/known-manifests-debug.json"
+    ],
+    "note": "Tiny authored Git fixtures; independent copied object databases/native checkouts because of Windows sandbox MSYS clone-helper limitations. Known manifest bytes verified from this checkout; actual user archive remains on lab"
+  },
+  "guide": "docs/STEP5_MACHINE_TRANSFER.md",
+  "lab_action": "Sync updated transfer scripts, rerun restore --relocate at /data/not_backed_up/yxu209/brass-birmingham-ai, then verify only on success using the same archive and reward adapter"
+}

@@ -277,3 +277,14 @@ their original destination identity. See
 guide. Update all three transfer modules on the destination and reuse the
 existing archive and prepared adapter; no training qualification or native
 rebuild is needed.
+
+The follow-up also repairs legacy archives that omitted mixed-line-ending
+manifests because Git reported them unchanged. Recovery checks a bounded set of
+LF/CRLF forms against the full archived SHA-256; both reported Unity/Persistence
+manifest byte sequences are reproducible from the recorded commit. New exports
+prove Git blob/record byte identity before omitting code and automatically bundle
+unproved working-tree bytes. Verify now explains an incomplete relocation after
+a failed restore; the guide runs it only after restore succeeds. Keep the new
+destination `ROOT` and reuse the existing archive and adapter. See
+[transfer-git-newlines-fix.json](transfer-git-newlines-fix.json) for focused debug
+evidence; actual lab restore remains Pending.

@@ -409,8 +409,8 @@ def summary(manifest):
     return {k: manifest[k] for k in ('format', 'source_root', 'run', 'config', 'iteration', 'games_done', 'rehearsal_included')}
 
 
-def git_baseline(root):
-    """Only unchanged tracked files are expected to arrive through Git clone."""
+def git_baseline(root,*,candidates=None,expected=None):
+    """Only byte-reproducible unchanged files may arrive through Git clone."""
     def git(*args):
         return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.DEVNULL)
     try:
@@ -418,7 +418,10 @@ def git_baseline(root):
         commit = git('rev-parse', 'HEAD').decode().strip()
         tracked = {os.fsdecode(p).replace('\\', '/') for p in git('ls-files', '-z').split(b'\0') if p}
         changed = {os.fsdecode(p).replace('\\', '/') for p in git('diff', '--name-only', '-z', 'HEAD', '--').split(b'\0') if p}
-        return commit, tracked - changed
+        from step5_transfer_restore import reproducible_git_files
+        unchanged=tracked-changed
+        if candidates is not None:unchanged.intersection_update(candidates)
+        return commit,reproducible_git_files(root,commit,unchanged,expected=expected)
     except (OSError, subprocess.CalledProcessError, ValueError):
         return None, set()  # Repo mode cannot omit files without a Git baseline.
 
@@ -511,12 +514,17 @@ def export(root, run, bundle, *, dry_run=False, mode='compact', dependencies='re
         files = dict(data['files'])
         require(cfg_name not in files, 'Transfer config collides with an existing dependency')
         files[cfg_name] = cfg
-        commit, tracked = git_baseline(root) if dependencies in ('repo', 'external') else (None, set())
         records = [dict(path=name, sha256=sha(source) if isinstance(source, Path) else hashlib.sha256(source).hexdigest(),
                         bytes=source.stat().st_size if isinstance(source, Path) else len(source),
                         executable=bool(isinstance(source, Path) and source.stat().st_mode & 0o111),
-                        external=name in data['environment'] and (dependencies == 'external' or
-                            (name in tracked and name not in data['runtime']))) for name, source in sorted(files.items())]
+                        external=False) for name, source in sorted(files.items())]
+        candidates=data['environment']-data['runtime']
+        expected={r['path']:r for r in records}
+        commit, tracked = git_baseline(root,candidates=candidates,expected=expected) if dependencies in ('repo', 'external') else (None, set())
+        for record in records:
+            name=record['path']
+            record['external']=name in data['environment'] and (dependencies=='external' or
+                (name in tracked and name not in data['runtime']))
         manifest = dict(format=FORMAT, source_root=str(root), run=run.relative_to(root).as_posix(),
             runs=[p.relative_to(root).as_posix() for p in data['runs']], iteration=data['state']['iteration'],
             games_done=data['state']['games_done'], implementation=data['execution_implementation'],
@@ -794,7 +802,8 @@ def commands(root, manifest, *, iterations=20, device='cuda'):
     return result
 
 
-def restore(root, bundle, *, verify_only=False, relocate=False, strict_repo_files=False):
+def restore(root, bundle, *, verify_only=False, relocate=False, strict_repo_files=False,use_checkout_code=False):
+    require(not (strict_repo_files and use_checkout_code),'--strict-repo-files and --use-checkout-code are mutually exclusive')
     root = Path(root).resolve()
     manifest = inspect_bundle(bundle)  # verify all archive bytes BEFORE filesystem writes
     original_state_present = (root/manifest['run']/'state.json').is_file()
@@ -811,17 +820,21 @@ def restore(root, bundle, *, verify_only=False, relocate=False, strict_repo_file
     # the identical mapping and all archive file hashes are still checked.
     matching_metadata = existing == metadata or (same_root and existing is not None and
                                                 existing['source_roots'] == metadata['source_roots'])
+    require(not (verify_only and needs_mapping and existing is None),
+            'Restore has not completed at destination --root '+str(root)+
+            ': missing relocation metadata. Fix the restore failure and rerun restore --relocate successfully before verify. '+
+            'The archive records its original root '+manifest['source_root']+'; a different destination --root is supported.')
     require(same_root or relocate or existing == metadata,
             'Destination differs from the original absolute project root: ' + manifest['source_root'] +
             '. Use --relocate to map historical paths without rewriting signed evidence.')
     require(existing is None or matching_metadata, 'Conflicting destination relocation metadata; nothing overwritten')
-    require(not (verify_only and needs_mapping and existing is None), 'Missing relocation metadata; run restore --relocate first')
     runs = [below(root, n) for n in manifest['runs']]
     require(all(not p.exists() or p.is_dir() for p in runs), 'Conflicting destination run directory')
     require(all(not active(p) for p in runs), 'Destination run is active')
     from step5_transfer_restore import RestorePlan
     plan=RestorePlan(root,manifest,below=below,sha=sha,require=require,read=read,encode=encode,publish=publish,
-        verify_only=verify_only,strict=strict_repo_files,original_state_present=original_state_present)
+        verify_only=verify_only,strict=strict_repo_files,original_state_present=original_state_present,
+        use_checkout_code=use_checkout_code)
     if not verify_only:
         with ExitStack() as leases:
             for run in runs:
@@ -857,18 +870,19 @@ def restore(root, bundle, *, verify_only=False, relocate=False, strict_repo_file
         # Native Rust workers launch directly on Linux. Archive payload bytes
         # alone are insufficient if restoration loses their executable bit.
         for record in manifest['files']:
-            if record.get('executable',False):
+            if record.get('executable',False) and record['path'] not in plan.checkout:
                 path=plan.target(record)
                 path.chmod(path.stat().st_mode | stat.S_IXUSR)
     if verify_only and os.name!='nt':
-        require(all(not r.get('executable',False) or plan.target(r).stat().st_mode & stat.S_IXUSR
+        require(all(r['path'] in plan.checkout or not r.get('executable',False) or plan.target(r).stat().st_mode & stat.S_IXUSR
             for r in manifest['files']), 'Restored native executable permission is missing')
-    require(all(plan.target(r).is_file() and sha(plan.target(r))==r['sha256'] for r in manifest['files']),
+    require(all(plan.matches(r) for r in manifest['files']),
             'Restored file changed before final verification')
     # Archives written before the throughput hosts used the previous recipe.
     # Verify their original identity; never relabel it as the current source.
     require(source_identity(root, recipe=manifest.get('source_recipe', 1)) == manifest['implementation'],
-            'Destination source identity differs')
+            'Destination source identity differs'+('; --use-checkout-code skips per-file archive matches, '
+            'but training source must still be compatible with this checkpoint' if use_checkout_code else ''))
     if needs_mapping and existing is None:
         path = confined(root, (RELOCATION_FILE,))
         temporary = path.with_name('.transfer-' + uuid.uuid4().hex + '.partial')
@@ -890,6 +904,7 @@ def restore(root, bundle, *, verify_only=False, relocate=False, strict_repo_file
         marker = instruction(root, root/manifest['run'])
         require(marker is not None and marker['archive_id'] == manifest['id'], 'Missing/different fresh-buffer transfer instruction')
     return dict(summary(manifest), verified=True, destination_root=str(root), relocated=needs_mapping,
+                code_verification='checkout' if use_checkout_code else 'archive',
                 repository_reconciliation=plan.report(),
                 imitation_run=(below(root, manifest['imitation_run']).relative_to(root).as_posix()
                                if manifest['imitation_run'] else None),
@@ -917,13 +932,16 @@ def main():
         cmd.add_argument('--root', required=True, type=Path)
         cmd.add_argument('--bundle', required=True, type=Path)
         cmd.add_argument('--relocate', action='store_true', help='Use --root as a new project directory; preserve signed files and persist confined old-root mappings')
-        cmd.add_argument('--strict-repo-files',action='store_true',help='Reject differing Git-managed files instead of backing them up and restoring archive-pinned bytes')
+        code=cmd.add_mutually_exclusive_group()
+        code.add_argument('--strict-repo-files',action='store_true',help='Reject differing Git-managed files instead of backing them up and restoring archive-pinned bytes')
+        code.add_argument('--use-checkout-code',action='store_true',help='Keep existing Git-tracked text/code/config files without archive byte matches; retain checkpoint/data and training compatibility checks')
     a = parser.parse_args()
     if a.command == 'export':
         result = export(a.root, a.run, a.bundle, dry_run=a.dry_run, mode=a.mode, dependencies=a.dependencies, part_mb=a.part_mb,
                         archive_format=a.archive_format, zstd_level=a.zstd_level, threads=a.threads)
     else:
-        result = restore(a.root, a.bundle, verify_only=a.command == 'verify', relocate=a.relocate,strict_repo_files=a.strict_repo_files)
+        result = restore(a.root, a.bundle, verify_only=a.command == 'verify', relocate=a.relocate,
+            strict_repo_files=a.strict_repo_files,use_checkout_code=a.use_checkout_code)
     print(json.dumps(result, indent=2, allow_nan=False))
 
 

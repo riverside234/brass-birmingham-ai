@@ -84,7 +84,7 @@ If the error instead rejects `ratings/slots/generation-.../games.jsonl` as repla
 
 Output identifies the checkpoint generation, Git commit, archive size, parts and fresh-buffer/reward policy. Each part is bounded to 1900 decimal MB by default; the `.parts.json` index binds all parts. Keep every part and the index. The compressor streams the TAR without creating a second full uncompressed archive. Python 3.11+ is required; `requirements-transfer.txt` supplies zstd for versions that need it. `--format zip` is available for compatibility. Use a new bundle path for every export.
 
-`--dependencies repo` omits only unchanged tracked code. It bundles all required private rules/native runtime files even when their paths are tracked. `--dependencies bundled` also includes code. Neither mode includes original IL data or replay buffers for a native run. Never use `--dependencies external` unless you deliberately supply the exact pinned runtime files separately.
+`--dependencies repo` omits only unchanged tracked code whose recorded bytes are proved reproducible from the export's Git tree: an exact blob or its uniform CRLF form. Normalized Git status alone is insufficient. Mixed line endings, clean-filter differences and any other working-tree bytes that cannot be proved reproducible are bundled automatically. The proof is bound to each record's byte count and full SHA-256; later source changes abort export. It bundles all required private rules/native runtime files even when their paths are tracked. `--dependencies bundled` also includes code. Neither mode includes original IL data or replay buffers for a native run. Never use `--dependencies external` unless you deliberately supply the exact pinned runtime files separately.
 
 ## Move the parts
 
@@ -106,14 +106,16 @@ python -m pip install -r requirements-transfer.txt
 set -e
 python scripts/step5-transfer.py restore --root "$ROOT" --relocate \
   --bundle "$DOWNLOAD/selfplay-migration.tar.zst.parts.json" \
-  > "$DOWNLOAD/restore.json"
+  > "$DOWNLOAD/restore.json" &&
 python scripts/step5-transfer.py verify --root "$ROOT" \
   --bundle "$DOWNLOAD/selfplay-migration.tar.zst.parts.json"
 ```
 
 No manual concatenation is needed. Restoration verifies all archive payloads and preflights every destination file before writing. Identical files already present in a clone are reused. Differing **Git-tracked text/config/source files** in the declared repository trees are backed up first, then replaced with the exact archive-pinned bytes. All backups finish before any replacement. This handles source-machine edits to tracked launch configs such as `configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json`, and LF/CRLF differences. Git HEAD and index are unchanged; restored source/config overrides can appear as working-tree modifications.
 
-If a repository dependency was omitted from the archive in `repo` mode, the restore tool can recover it from the archive's exact recorded Git commit, including an LF/CRLF variant only when its complete SHA-256 matches. It performs no fetch/reset/checkout and never accepts merely similar content. A missing commit or unresolved dependency remains a blocking error with all affected paths reported together. No new archive export is needed for this repair.
+If a repository dependency was omitted from the archive in `repo` mode, the restore tool can recover it from the archive's exact recorded Git commit, including an LF/CRLF variant only when its complete SHA-256 matches. Older exporters could incorrectly omit mixed-line-ending files because Git reported them unchanged. Legacy recovery now also handles a single LF/CRLF transition: the archived byte count determines the number of CR bytes, and both possible prefix/suffix forms are checked against the full archived SHA-256. This covers the reported `src/BrassLocalAI/Unity/manifest.json` and `src/BrassPatch/Persistence/manifest.json`; no new archive export is needed. It never enumerates arbitrary line-ending permutations or accepts normalized-only matches. Future exports bundle non-reproducible bytes instead.
+
+The tool performs no fetch/reset/checkout. A missing commit or unresolved dependency remains a blocking error with all affected paths reported together. Keep using the **new** destination root, for example `ROOT=/data/not_backed_up/yxu209/brass-birmingham-ai`. If restore fails, verification cannot yet read the relocation mapping: its error now explains that restore must complete first. Do not switch `ROOT` back to the archive's historical `/data/not_backed_up/yxu209/ai-training` path. The `&&` above prevents the follow-on verification after a failed restore.
 
 Backups and the interruption-safe receipt live under `artifacts/step5-transfer/restore-<archive-id-prefix>/`; `restore.json` lists their exact paths in `repository_reconciliation.backups`. The first destination-state identity is retained so retries cannot lose the fresh-buffer instruction after a partial restore. Later edits to an already backed-up file, changed backups, or a different journal/archive binding fail closed. Existing **checkpoints, run state, data, private binaries and untracked files** are never overwritten on a mismatch. `--strict-repo-files` retains the original policy of refusing any differing repository file. `verify` only checks; it never repairs/replaces files.
 
