@@ -20,6 +20,9 @@ When the run's cumulative self-play VP history lacks generations that earlier
 exports of the same run (same initial checkpoint) still hold, the exported
 ratings/vp-history.json and latest progress_vp.svg are rebuilt from both and
 marked as derived in the manifest. The run's own files are never edited.
+The default run is the g1290 branch restart (artifacts/step5/joint7-v11-2-g1290-restart-g1290); pass --run for another.
+A branch-restart run reports the fresh-start seed recorded by its source run (checked by SHA-256), and its first --continue
+export copies everything because earlier exports belong to the source run.
 The CLI publishes to the independent ai-training-results repository by default.
 Fetch/push use the configured results URL directly, independently of origin.
 Git URL rewrites must preserve that repository's identity. Authentication may
@@ -47,7 +50,8 @@ import results_git
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1290-trained-restart'
+DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1290-restart-g1290'
+BRANCH_RESTART = 'rust-branch-restart/1.0.0'
 FORMAT = 'selfplay-report-export/1.4.0'
 PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0',
                     'selfplay-report-export/1.2.0', 'selfplay-report-export/1.3.0', FORMAT}
@@ -426,6 +430,19 @@ def incremental_files(root,run,generation,files,warnings,*,index=None):
     return copied, reused, dependencies
 
 
+def branch_source(root,run):
+    """The run a branch restart was prepared from (its signed config keeps that run's paths), else this run."""
+    receipt=below(root,run/'branch-restart.json')
+    if not receipt.is_file():return run
+    binding=load_json(receipt).get('binding')
+    require(isinstance(binding,dict) and binding.get('contract')==BRANCH_RESTART and
+            binding.get('destination_run')==run.relative_to(root).as_posix() and isinstance(binding.get('source_run'),str),
+            'Branch restart receipt changed or belongs to another run')
+    source=below(root,binding['source_run'])
+    require(source.is_relative_to(root/'artifacts') and source!=run,'Branch restart source must be another run under artifacts/')
+    return source
+
+
 def seed_report_source(root,run,state,seed,previous,warnings,bindings):
     """Resolve only exact original seed JSON, never seed weights or replays.
 
@@ -434,7 +451,9 @@ def seed_report_source(root,run,state,seed,previous,warnings,bindings):
     let the normal missing-evidence manifest describe the absent provenance.
     """
     path=below(root,seed['manifest']);expected=seed['sha256']
-    require(path==run/'seed/manifest.json','Fresh-start seed manifest changed or belongs to another run')
+    origin=branch_source(root,run)
+    require(path in (run/'seed/manifest.json',origin/'seed/manifest.json'),
+        'Fresh-start seed manifest changed or belongs to another run')
     if path.is_file():
         require(checksum(path.read_bytes())==expected,'Fresh-start seed manifest changed or belongs to another run')
         return path,None
@@ -465,9 +484,13 @@ def seed_report_source(root,run,state,seed,previous,warnings,bindings):
     # The state-pinned seed SHA, not file naming/age or a synthesized summary,
     # establishes the identity. Stable ordering keeps incremental reuse flat.
     candidates=set()
-    for (_,name,h),directories in previous().items():
-        if name=='fresh-start.json' and h==expected:
-            candidates.update(directory/name for directory in directories)
+    indexes=[previous()]
+    # A restarted run reports the seed its source run recorded, so that run's exports can hold it.
+    if origin!=run:indexes.append(previous_files(root,origin,state['iteration'],warnings))
+    for index in indexes:
+        for (_,name,h),directories in index.items():
+            if name=='fresh-start.json' and h==expected:
+                candidates.update(directory/name for directory in directories)
     for candidate in sorted(candidates):
         candidate=below(root,candidate)
         if candidate.is_file() and checksum(candidate.read_bytes())==expected:return candidate,'previous-report'

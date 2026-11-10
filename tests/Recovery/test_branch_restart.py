@@ -13,6 +13,7 @@ from brass_ai.learning.batching import model_id
 from brass_ai.learning.checkpoint import load_checkpoint,save_checkpoint
 from brass_ai.learning.contracts import SOURCE_ROOT as ROOT,digest
 from brass_ai.recovery import branch_restart as B,entropy_schedule as S,ppg_g210 as P,quality_pool
+from brass_ai.recovery.teacher_gradient_qualification import restore
 from brass_ai.recovery import search_value_schedule as V,training_revision_g1294 as T94,training_revision_g1307 as T07
 from brass_ai.recovery.collector_runtime import recipe as without_runtime
 from brass_ai.recovery.search_value_training import StageMachine
@@ -88,6 +89,55 @@ class Recipe(unittest.TestCase):
 
     def test_an_old_run_cannot_take_the_restart_recipe(self):
         with self.assertRaisesRegex(ValueError,'teacher-on'):B.recipe(self.shadow,share_target=.1)
+
+
+class ShareTargetChange(unittest.TestCase):
+    """After the four shadow iterations qualify the gradient ratio, the share target only rescales beta."""
+    @classmethod
+    def setUpClass(cls):
+        cls.state=read(EXPORT/'state.json')   # a real teacher-on state with its qualification
+        cls.q=cls.state['teacher_phase']['weight']['gradient_qualification']
+
+    def signature(self,target):
+        signature=copy.deepcopy(self.state['signature'])
+        signature['config']['teacher_phase']['term']['share_target']=target
+        return signature
+
+    def test_any_target_is_a_reviewed_on_to_on_transition_with_the_same_qualification(self):
+        from brass_ai.recovery.teacher_gradient_qualification import fixed_beta
+        for target in (.01,.1,.4,1.):
+            signature=self.signature(target)
+            self.assertTrue(C.signature_transition(self.state['signature'],signature))
+            self.assertTrue(C.approved(self.state,signature))
+            q=A.qualification(self.state,signature['config'])
+            self.assertEqual((q['observations'],q['raw_median'],q['qualified_generation']),
+                (self.q['observations'],self.q['raw_median'],self.q['qualified_generation']))
+            self.assertEqual(q['beta'],fixed_beta(target,self.q['raw_median']))
+            updated=dict(copy.deepcopy(self.state),signature=signature)
+            with mock.patch('brass_ai.rust_backend.lab_shadow.teacher_build',return_value=dict(receipt={})):
+                C.rebind_backend(self.state,updated)
+            self.assertEqual(updated['native_backend']['teacher']['beta'],q['beta'])
+            A.validate_backend(updated,updated['native_backend'])
+            # The next iteration stores the same qualification under the new target.
+            updated['teacher_phase']['weight']['gradient_qualification']=restore(self.q,target,4)
+            A.validate_backend(updated,updated['native_backend'])
+
+    def test_the_teacher_term_uses_the_rescaled_beta_without_new_shadow_iterations(self):
+        from brass_ai.recovery.teacher_term import TeacherTerm
+        from brass_ai.recovery.teacher_gradient_qualification import fixed_beta
+        weight=self.state['teacher_phase']['weight']
+        config=copy.deepcopy(self.state['signature']['config']['teacher_phase']);config['term']['share_target']=.4
+        term=TeacherTerm.__new__(TeacherTerm)
+        # Only the beta restore is under test; no rows or model are needed.
+        with mock.patch('brass_ai.recovery.teacher_term.policy_logits',return_value=[]):
+            term.__init__(None,config,[],seed=0,generation=1290,state=weight)
+        self.assertEqual(term.beta,fixed_beta(.4,self.q['raw_median']))
+        self.assertTrue(term.calibrated and term.qualification['passed'])
+
+    def test_a_clamped_beta_is_flagged_for_the_new_target(self):
+        low=restore(self.q,.001,4);high=restore(self.q,1.,4)
+        self.assertEqual((low['beta'],low['clamped']),(.01,True))
+        self.assertFalse(high['clamped'])
 
 
 class StageA(unittest.TestCase):

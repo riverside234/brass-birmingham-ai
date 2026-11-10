@@ -45,7 +45,9 @@ def restore(receipt,target,iterations=4):
     if target!=result['target']:
         # A manual target edit is the only way to change a qualified weight.
         result['target']=target
-        if result['passed']:result['beta']=fixed_beta(target,result['raw_median'])
+        if result['passed']:
+            result['beta']=fixed_beta(target,result['raw_median'])
+            if 'clamped' in result:result['clamped']=result['beta']!=target/result['raw_median']
         result=seal(result)
     return result
 

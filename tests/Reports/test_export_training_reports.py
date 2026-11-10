@@ -269,8 +269,34 @@ class ExportTests(unittest.TestCase):
         self.assertEqual((output/'lineage'/upgrade.relative_to(self.root)).read_bytes(),upgrade.read_bytes())
         self.assertTrue((output/'lineage/artifacts/step5/original-il/report.json').is_file())
 
+    def test_a_branch_restart_reports_its_source_runs_seed_and_then_continues_incrementally(self):
+        source='artifacts/step5/joint7-v11-2-g1290-trained-restart'
+        seed_receipt=dict(seed_generation=1290,history_through=1330);seed=self.put(source+'/seed/manifest.json',seed_receipt)
+        self.run='artifacts/step5/joint7-v11-2-g1290-restart-g1290';self.state['evaluations']=[]
+        self.state['signature']['config']['fresh_selfplay_seed']=dict(manifest=source+'/seed/manifest.json',
+            sha256=reports.checksum(seed.read_bytes()))
+        self.put(self.run+'/state.json',self.state)
+        marker=dict(binding=dict(contract=reports.BRANCH_RESTART,source_run=source,destination_run=self.run),complete=True)
+        self.put(self.run+'/branch-restart.json',marker)
+        output,manifest=self.export(output='results/branch-first',continue_export=True)
+        self.assertEqual(reports.load_json(output/'fresh-start.json'),seed_receipt)
+        self.assertIn('branch-restart.json',{e['path'] for e in manifest['files']})
+        self.assertEqual(manifest['reused_files'],[])
+        _,second=self.export(output='results/branch-second',continue_export=True)
+        self.assertIn('fresh-start.json',{e['path'] for e in second['reused_files']})
+        # The source run's seed is still checked byte for byte, and another run's seed is refused.
+        seed.write_bytes(b'{}')
+        with self.assertRaisesRegex(ValueError,'seed manifest changed'):self.export(output='results/branch-changed')
+        seed.write_bytes(reports.encode(seed_receipt))
+        marker['binding']['source_run']='artifacts/step5/unrelated'
+        self.put(self.run+'/branch-restart.json',marker)
+        with self.assertRaisesRegex(ValueError,'belongs to another run'):self.export(output='results/branch-other')
+
+    def test_the_default_run_is_the_branch_restart(self):
+        self.assertEqual(reports.DEFAULT_RUN,'artifacts/step5/joint7-v11-2-g1290-restart-g1290')
+
     def test_trained_restart_default_cli_and_incremental_manual_panel_overrides(self):
-        self.run='artifacts/step5/joint7-v11-2-g1290-trained-restart'
+        self.run='artifacts/step5/joint7-v11-2-g1290-restart-g1290'
         receipt=dict(seed_generation=1290,history_through=1330)
         seed=self.put(self.run+'/seed/manifest.json',receipt)
         auth=dict(contract='trained-selfplay-startup/1.0.0',authority='user',generation=0)
