@@ -93,7 +93,7 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
     revision = job_block(config)
     if revision is not None:
         # Short-search labels and root visit-count exploration (CPU teacher only).
-        for job in jobs: job['teacher_revision'] = copy.deepcopy(revision)
+        for job in jobs: job['teacher_revision'] = job_block(config, split=job['split'])
     return jobs, cursor
 
 
@@ -207,6 +207,9 @@ class TeacherPhase:
             self.metrics['explored_labels'] = dict(long=sum(l.get('explored', False) for l in labels),
                 short=sum(l.get('explored', False) for l in short))
         self.metrics['heldout_validation']=validation_plan(self.config,self.state)
+        from .teacher_cotton import aggregate
+        cotton=aggregate(table_metrics)
+        if cotton is not None:self.metrics['cotton_exploration']=cotton
         reached=self.metrics['reached_reserved_turns']
         self.metrics['root_label_yield']=self.metrics['root_labels']/reached if reached else None
         self.metrics['root_label_yield_pass']=bool(reached and self.metrics['root_label_yield']>=.95)

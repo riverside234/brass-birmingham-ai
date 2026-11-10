@@ -35,6 +35,8 @@ def resolve(root, *, teacher_core=None):
         require(pin(value[key]['path']) == value[key], 'CPU inference runtime changed: '+key)
     require(teacher_core is None or value['teacher_core'] == teacher_core,
             'CPU teacher was built for a different search core; rerun scripts/prepare-rust-cpu-inference.py')
+    require(isinstance(value.get('teacher_execution_core'),str) and len(value['teacher_execution_core'])==64,
+            'CPU teacher coverage core is missing; rerun scripts/prepare-rust-cpu-inference.py')
     return dict(value, receipt=receipt)
 
 
@@ -185,7 +187,7 @@ def teacher_plan(root, build, service, jobs, block):
     settings = worker_settings(root, block, service, [jobs[0]['expected']['model_id']], value)
     bundle = settings['bundles'][jobs[0]['expected']['model_id']]
     inference = dict(contract=CONTRACT, runtime=settings['runtime'], bundle=bundle, budget=copy.deepcopy(block['teacher_budget']))
-    return dict(binary=value['teacher']['path'], inference=inference, receipt=value['receipt'], exported_bundles=settings['exported_bundles'],
+    return dict(binary=value['teacher']['path'], core_source=value['teacher_execution_core'], inference=inference, receipt=value['receipt'], exported_bundles=settings['exported_bundles'],
                 pinning=block['pinning'])
 
 

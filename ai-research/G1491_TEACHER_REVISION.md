@@ -37,6 +37,53 @@ After each search the played action is sampled from the decision root's visit co
 
 Only action decisions are sampled; the following payments and sub-choices are searched as usual. When the sampled action isn't the one the search planned, the session replans that action's next decision with the same turn budget. That costs one more search per changed action, which is the main new search cost. Labels are unchanged: the target is still the improved policy from the search, and `played_action` records the sampled move with `explored: true`. Sampling uses its own deterministic stream (job seed and decision index), so a rerun of a table plays the same game.
 
+### Cotton-directed exploration (2026-11-10)
+
+New adoption through `continue-rust-g1491.py` also enables
+`teacher-cotton-exploration/1.0.0` on **training teacher tables only**. Held-out,
+rating, ordinary self-play and previously committed recipes keep their behavior.
+
+- Eligibility: a legal cotton build, the same opening-seven/long-search window,
+  fewer than **3 targeted builds per seat per era**, and no own unflipped cotton mill.
+  Three is a ceiling, not a quota. Natural cotton choices do not spend it.
+- Before a fresh root search, reserve up to two distinct cotton building locations
+  on long searches, one on short searches, **inside the existing K**. Prefer the
+  highest raw prior for each location; discard-card variants do not consume the
+  distinct-location slots. Keep an ordinary comparator where legal. The original
+  priors, Gumbel values, simulation quota, backups and improved-policy formula stay
+  unchanged. The detached CPU teacher core records its own execution fingerprint.
+- After search, **80%** uses the existing visit-count sampler; **20%** samples
+  visited cotton candidates in proportion to their counts. The actual behavior
+  probability is `0.8*N(a)/N + 0.2*I_cotton(a)*N(a)/N_cotton`. This is not a 20%
+  cotton share of all actions. An already supported cached continuation is reused;
+  if it has no cotton visits, record the fallback and use the original sampler.
+  Coverage never launches another search just to fill the cotton slots.
+- Only successful action commits spend an allowance. The two eras/four seats have
+  independent counters. Job/decision-keyed random streams reproduce the mixture
+  on retry without consuming search RNG. Stale commits are rejected; cancelled
+  tables remain unpublished and retry from their frozen seed. The normal session
+  identity checks still replan payments/second actions when the played move differs.
+- The reward and **improved policy label calculation are unchanged**. A targeted
+  played move can have a low teacher target. Small `cotton_exploration` label
+  metadata records the branch, exact behavior probability, pre-commit allowance
+  and search coverage; existing admission recomputes these from the legal choices
+  and visit counts. No cotton bonus, prior boost, one-hot target or Q gate is added.
+
+`report.teacher_phase.collection.cotton_exploration` aggregates long/short/total counts once per
+iteration: eligible decisions, blockers, covered decisions/locations, cotton and
+total visits, missing evidence/zero cotton visits, triggers, targeted/actual/natural
+builds, coverage and trigger rates, and summed base/mixed cotton probability mass.
+Each table's `cpu_inference.revision.cotton` also retains the 2×4 quota/build counts.
+Counters are fixed-size Rust accumulators; only the existing table receipt and
+eligible label metadata cross the wire. No per-action logging, timer, file write,
+NN forward or full-history copy is added for these measurements.
+
+Candidate selection is at most two linear scans plus work on K≤16 elements.
+The changed moves can still change subsequent game/search work; unchanged wall
+time is **not** claimed without lab measurement. The added implementation itself
+does not raise K or the frozen search quota. Watch actual coverage and completed
+builds, not trigger rate alone, before deciding whether to lower 20% later.
+
 ## Costs to expect
 
 - **Labels:** about 1,500 long and 4,600 short labels per iteration (now 870 long). Each short label is validated and encoded in Python like a long one (about 5–20 ms of encoding per row on this laptop). Every labelled row of a g1491 table (long and short) checks model-logit parity once, in a single batch as the table finishes, instead of once per turn under the shared model lock (0.47 s median and 8.5 s worst wait at g1490). The check still runs before anything is published.
@@ -56,23 +103,40 @@ The next export shows the actual collection, verification and PPO times.
 
 ## Commands
 
-Stop the trainer, then commit and pull on the lab. The CPU teacher changed, so rebuild it first; the build runs the native tests, including a full revised table:
+Stop the trainer and pull the updated code on the lab. The continuation command
+below detects a stale CPU build and rebuilds it once, with focused regressions.
+No full qualification, benchmark or complete game is required by that path.
+To prepare it separately:
 
 ```bash
-python scripts/prepare-rust-cpu-inference.py --run artifacts/step5/joint7-v11-2-g1290-restart-g1290 --expected-generation 1491
+python scripts/prepare-rust-cpu-inference.py --run artifacts/step5/joint7-v11-2-g1290-restart-g1290 --expected-generation 1491 --focused-regressions
 ```
 
 ```bash
 python scripts/qualify-rust-cpu-inference.py --run artifacts/step5/joint7-v11-2-g1290-restart-g1290 --expected-generation 1491 --workers 64
 ```
 
-The qualification is read only. From g1491 it plans its teacher tables under the g1491 recipe on a copy of the committed one (`--revision auto`) at n=128 for short searches (`--teacher-fast`). Its teacher stage then also requires long and short labels, every long label explored, short labels explored only in openings, and workers that echo the revision and whose sampled and label counts agree. It records a verification profile (sampled per-turn checks, the batched model check and the hand-off time per table), the label counts by profile and the full CPU view of the process (`cpu_count`, affinity, cgroup cpuset, SMT, `nproc`) in `environment.json`. An earlier qualification at `--workers 80` failed only its `enough_cpus` check, because the process has 64 CPUs and the stage requires one lane per CPU; every other stage passed.
+The full qualification above is optional and is **not needed again** for this
+cotton change. It is read only. From g1491 it plans its teacher tables under the
+g1491 recipe on a copy of the committed one (`--revision auto`) at n=128 for short
+searches (`--teacher-fast`). Existing successful unrelated qualifications remain valid.
 
 ```bash
 python scripts/continue-rust-g1491.py --expected-generation 1491 --iterations 100 --share-target 0.4
 ```
 
 The last command defaults to `--inference cpu --workers 64 --teacher-fast 128 --teacher-fast-k 8 --teacher-full 640`. It runs the two calibration iterations, then teaching for the rest (here up to g1591). If the Ctrl-C landed after g1491's teacher tables were sealed, it first finishes that iteration under the old recipe and budget, and the revision starts at g1492. After any later stop, rerun it with `--expected-generation` set to the last committed generation; it resumes whichever step is unfinished.
+
+The cotton recipe uses a distinct `-g1491-revision-cotton20-share04.json` config
+suffix. An older prepared g1491 config is retained for recovery. Existing
+committed g1491 recipes without the cotton marker remain loadable and unchanged;
+the new marker is adopted with the initial g1491 recipe transition.
+
+Cotton change verification: 42 focused Python regressions and 28 Rust unit
+regressions passed locally (including three tiny 16-trajectory root decisions,
+metadata/commit integration, stale root binding, caps, isolation and old behavior).
+No complete game, training iteration or performance benchmark was run for this
+change. Lab throughput and the resulting policy's playing strength remain to be measured.
 
 ## Verification (laptop)
 

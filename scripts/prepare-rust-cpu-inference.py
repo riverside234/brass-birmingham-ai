@@ -56,7 +56,7 @@ def locate_runtime(explicit,out):
     return destination.resolve(),origin
 
 
-def compile_worker(out,*,teacher,zero_cost,toolchain,offline):
+def compile_worker(out,*,teacher,zero_cost,toolchain,offline,focused=False):
     """Detached checkout: sealed core, then the same overlays as the GPU build."""
     from brass_ai.learning.contracts import require
     from brass_ai.rust_backend.lab_contract import SOURCE,extract_new,native_fingerprint
@@ -78,6 +78,10 @@ def compile_worker(out,*,teacher,zero_cost,toolchain,offline):
             from brass_ai.rust_backend.lab_reward_runtime import apply as apply_reward
             core=apply_reward(out/'checkout/native')['core_source']
     require(native_fingerprint(out/'checkout/native')==core,'CPU worker core source differs')
+    execution_core=core
+    if teacher:
+        from brass_ai.rust_backend.lab_cotton_overlay import apply as apply_cotton
+        execution_core=apply_cotton(out/'checkout/native')['execution_core']
     overlay=apply_cpu(out/'checkout/lab-native')
     b02.check_shared_dependencies(out/'checkout/native/Cargo.lock',out/'checkout/lab-native/Cargo.lock')
     cargo=['cargo','+'+toolchain];version=subprocess.check_output(['rustc','+'+toolchain,'-vV'],text=True,env=env,timeout=15)
@@ -88,17 +92,24 @@ def compile_worker(out,*,teacher,zero_cost,toolchain,offline):
     if offline:common+=['--offline']
     name='brass-lab-teacher' if teacher else 'brass-lab-collector'
     for op in ('test','build'):
-        base.command([*cargo,op,*common,*(['--bin',name] if op=='build' else [])],cwd=ROOT,env=env,log=out/(op+'.log'),timeout=900)
+        extra=['--bin',name] if op=='build' else (['--lib','cpu_'] if focused else [])
+        base.command([*cargo,op,*common,*extra],cwd=ROOT,env=env,log=out/(op+'.log'),timeout=900)
+    if teacher:
+        core_args=[*cargo,'test','--manifest-path',out/'checkout/native/Cargo.toml','-p','brass-ai-core',
+            '--lib','search::session::cotton','--release','--target',target,'--target-dir',out/'target','--locked','-j','8']
+        if offline:core_args+=['--offline']
+        base.command(core_args,cwd=ROOT,env=env,log=out/'cotton-core-test.log',timeout=900)
     return dict(binary=out/'target'/target/'release'/(name+('.exe' if os.name=='nt' else '')),test_log=out/'test.log',
-                build_log=out/'build.log',core=core,overlay=overlay,rustc=version)
+                build_log=out/'build.log',core=core,execution_core=execution_core,overlay=overlay,rustc=version)
 
 
-def regressions(out,*,teacher,collector,runtime,fixtures,core,native):
+def regressions(out,*,teacher,collector,runtime,fixtures,core,native,focused=False):
     env=dict(os.environ,PYTHONPATH=os.pathsep.join(str(ROOT/x) for x in TEST_PATHS),
         BRASS_CPU_TEACHER=str(teacher),BRASS_CPU_COLLECTOR=str(collector),BRASS_CPU_RUNTIME=str(runtime),
         BRASS_CPU_FIXTURES=str(fixtures),BRASS_CPU_CORE=core,BRASS_CPU_NATIVE=str(native))
     with (out/'regressions.log').open('w') as log:
-        subprocess.run([sys.executable,'-B','-m','unittest','test_cpu_inference','-v'],cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=900)
+        cases=(['test_teacher_cotton','test_training_revision_g1491','test_cpu_inference.Overlay'] if focused else ['test_cpu_inference','test_teacher_cotton'])
+        subprocess.run([sys.executable,'-B','-m','unittest',*cases,'-v'],cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=180 if focused else 900)
 
 
 def prepare(args,evidence):
@@ -127,13 +138,13 @@ def prepare(args,evidence):
             print('Reused verified CPU inference build: '+str(selected),flush=True)
             return dict(reused=True,runtime=result['receipt'],generation=state['iteration'],training_changed=False)
     runtime,origin=locate_runtime(args.onnxruntime_library,evidence)
-    collector=compile_worker(evidence/'collector',teacher=False,zero_cost=False,toolchain=args.toolchain,offline=args.offline)
-    worker=compile_worker(evidence/'teacher',teacher=True,zero_cost=teacher['core_source']==ZERO_CORE,toolchain=args.toolchain,offline=args.offline)
+    collector=compile_worker(evidence/'collector',teacher=False,zero_cost=False,toolchain=args.toolchain,offline=args.offline,focused=args.focused_regressions)
+    worker=compile_worker(evidence/'teacher',teacher=True,zero_cost=teacher['core_source']==ZERO_CORE,toolchain=args.toolchain,offline=args.offline,focused=args.focused_regressions)
     require(worker['core']==teacher['core_source'],'CPU teacher core differs from the selected GPU teacher')
     fixtures=Path(gpu['b01']['path']).parent/'inputs/fixtures.json'
     if not args.skip_regressions:
         regressions(evidence,teacher=worker['binary'],collector=collector['binary'],runtime=runtime,fixtures=fixtures,
-                    core=worker['core'],native=evidence/'teacher/checkout/native')
+                    core=worker['execution_core'],native=evidence/'teacher/checkout/native',focused=args.focused_regressions)
     with run_lock(run):
         current=read(run/'state.json')
         require(current['iteration']==args.expected_generation and current['history'][-1]==entry and fingerprint(root)==source,
@@ -141,10 +152,10 @@ def prepare(args,evidence):
         logs=evidence/'build-log.txt'
         logs.write_bytes(b''.join(Path(p).read_bytes() for p in (collector['build_log'],worker['build_log'])))
         tests=evidence/'test-log.txt'
-        tests.write_bytes(b''.join(Path(p).read_bytes() for p in (collector['test_log'],worker['test_log'])))
+        tests.write_bytes(b''.join(Path(p).read_bytes() for p in (collector['test_log'],worker['test_log'],evidence/'teacher/cotton-core-test.log')))
         value=dict(contract=BUILD,inference=CONTRACT,overlay_source=source,runtime=pin(runtime),runtime_origin=origin,
             runtime_version=VERSION,collector=pin(collector['binary']),teacher=pin(worker['binary']),
-            collector_core=collector['core'],teacher_core=worker['core'],tests=pin(tests),build_log=pin(logs),
+            collector_core=collector['core'],teacher_core=worker['core'],teacher_execution_core=worker['execution_core'],tests=pin(tests),build_log=pin(logs),
             rustc=worker['rustc'],regressions=None if args.skip_regressions else pin(evidence/'regressions.log'),
             training_changed=False)
         write_json(selected,value)
@@ -159,6 +170,7 @@ def main():
     p.add_argument('--onnxruntime-library',help=f'Path to libonnxruntime.so.{VERSION}, for machines without download access')
     p.add_argument('--toolchain',default='1.99.1');p.add_argument('--offline',action='store_true')
     p.add_argument('--skip-regressions',action='store_true',help='Build only; not for a run about to train')
+    p.add_argument('--focused-regressions',action='store_true',help='Short cotton/revision regressions, no games or benchmarks')
     args=p.parse_args()
     from brass_ai.step5.league import write_json
     from rust_lab_results import export

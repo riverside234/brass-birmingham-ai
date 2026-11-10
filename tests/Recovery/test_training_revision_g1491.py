@@ -51,8 +51,9 @@ class Recipe(unittest.TestCase):
         self.assertEqual(new['buffer'], dict(iterations=2, age_weights=[4, 3], max_staleness_ratio=1.))
         self.assertEqual(new['term'], dict(old['term'], rows_per_step=2048, shadow_iterations=2))
         self.assertEqual(new[R.KEY]['labels'], dict(searches='long-and-short', long_weight=.6, short_weight=.4))
+        from brass_ai.recovery.teacher_cotton import settings
         self.assertEqual(new[R.KEY]['exploration'], dict(contract='root-visit-count-sampling/1.0.0', temperature=1.,
-                                                         opening_actions_per_era=7, long_search='always'))
+                                                         opening_actions_per_era=7, long_search='always',cotton=settings()))
         # Search budgets and K stay in the operational CPU block; the job profiles are unchanged.
         self.assertEqual((new['search'], new['fast_search'], new['search_value']), (old['search'], old['fast_search'], old['search_value']))
 
@@ -98,10 +99,11 @@ class Recipe(unittest.TestCase):
         self.assertEqual([j['split'] for j in jobs].count('train'), 48)
         self.assertEqual([j['split'] for j in jobs].count('heldout'), 4)
         for job in jobs:
-            self.assertEqual(job['teacher_revision'], R.job_block(self.after))
+            self.assertEqual(job['teacher_revision'], R.job_block(self.after,split=job['split']))
             self.assertEqual(R.validate_job(job), job['teacher_revision'])
+        from brass_ai.recovery.teacher_cotton import settings
         self.assertEqual(R.job_block(self.after), dict(contract=R.CONTRACT, short_labels=True,
-            exploration=dict(contract='root-visit-count-sampling/1.0.0', temperature=1., opening_actions_per_era=7, long_search=True)))
+            exploration=dict(contract='root-visit-count-sampling/1.0.0', temperature=1., opening_actions_per_era=7, long_search=True,cotton=settings())))
         old, _ = plan_jobs(self.before, self.state, model_id='m'*64, export_hash='a'*64, epoch=1491, ready=True)
         self.assertEqual(len(old), 28)
         self.assertTrue(all('teacher_revision' not in j for j in old))

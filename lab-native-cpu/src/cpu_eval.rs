@@ -485,6 +485,7 @@ pub struct Revision {
     short_labels: bool,
     opening_actions: u32,
     long_search: bool,
+    cotton: bool,
 }
 
 /// Per-table exploration state; index 0 counts long searches, 1 short ones.
@@ -498,6 +499,7 @@ pub struct Exploration {
     sampled: [u64; 2],
     changed: [u64; 2],
     short_labels: u64,
+    cotton: crate::cpu_cotton::State,
 }
 
 impl Exploration {
@@ -526,7 +528,7 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         block["contract"] == REVISION_CONTRACT
             && block.as_object().is_some_and(|o| o.len() == 3)
             && block["short_labels"].is_boolean()
-            && e.as_object().is_some_and(|o| o.len() == 4)
+            && e.as_object().is_some_and(|o| o.len() == if e.get("cotton").is_some() {5} else {4})
             && e["contract"] == EXPLORATION_CONTRACT
             && e["temperature"].as_f64() == Some(1.0)
             && e["long_search"].is_boolean()
@@ -534,16 +536,20 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
             && job["seating"] == "all-seat-search",
         "unreviewed teacher revision",
     )?;
+    let cotton = e.get("cotton").is_some();
+    check(!cotton || (e["cotton"] == crate::cpu_cotton::settings() && job["split"] == "train"
+        && job["h2h"] != true && job["shadow_probe"] != true), "unreviewed cotton exploration")?;
     Ok(Some(Revision {
         job: block.clone(),
         short_labels: block["short_labels"] == true,
         opening_actions: opening as u32,
         long_search: e["long_search"] == true,
+        cotton,
     }))
 }
 
 /// splitmix64: the exploration stream, independent of the search and policy draws.
-fn mix(mut z: u64) -> u64 {
+pub(crate) fn mix(mut z: u64) -> u64 {
     z = z.wrapping_add(0x9e37_79b9_7f4a_7c15);
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
@@ -592,19 +598,48 @@ pub fn teacher_explore(
         state.decisions[profile] += 1;
         let eligible = index <= revision.opening_actions || (!fast && revision.long_search);
         let Some(counts) = counts.filter(|_| eligible && actual.actions.len() > 1) else {
+            if revision.cotton { state.cotton.no_evidence(); }
             return Ok((planned, false));
         };
         check(counts.len() == actual.actions.len(), "root visit counts differ from the legal actions")?;
         let total: u64 = counts.iter().sum();
         if total == 0 {
+            if revision.cotton { state.cotton.no_evidence(); }
             return Ok((planned, false));
         }
-        let choice = actual.actions[visit_sample(counts, total, seed, decision)?].clone();
+        let base = visit_sample(counts, total, seed, decision)?;
+        let index = if revision.cotton {
+            state.cotton.sample(base, &actual.key.choices, counts, total, seed, decision)?
+        } else { base };
+        let choice = actual.actions[index].clone();
         state.sampled[profile] += 1;
         if choice != planned {
             state.changed[profile] += 1;
         }
         Ok((choice, true))
+    })
+}
+
+/// Pure admission before the search; the matching core root alone gets coverage.
+/// A cached continuation keeps its existing evidence and never launches extra work.
+pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fast: bool) -> usize {
+    REVISION.with(|cell| {
+        let mut guard=cell.borrow_mut();
+        let Some((revision,state))=guard.as_mut().filter(|(r,_)| r.cotton) else {return 0;};
+        let c=&view.context;
+        let window=c.phase==Phase::Action &&
+            (state.action(actual.actor,c.era,c.round,c.actions_remaining)<=revision.opening_actions || (!fast && revision.long_search));
+        state.cotton.prepare(view,&actual.key.choices,fast,window)
+    })
+}
+
+pub fn teacher_cotton_commit(view: &Observation, choice: &brass_ai_core::state::dto::Choice, after_revision: u32) -> Result<()> {
+    REVISION.with(|cell| {
+        let mut guard=cell.borrow_mut();
+        if let Some((_,state))=guard.as_mut().filter(|(r,_)| r.cotton) {
+            state.cotton.commit(view,choice,after_revision)?;
+        }
+        Ok(())
     })
 }
 
@@ -633,6 +668,12 @@ pub fn teacher_mark_label(row: &mut Value, fast: bool, explored: bool) -> Result
         if explored {
             teacher["explored"] = json!(true);
         }
+        if revision.cotton {
+            if let Some(selection)=&state.cotton.selection {
+                check(teacher["played_action"] == selection.choice, "cotton label choice differs")?;
+                teacher["cotton_exploration"] = selection.label();
+            }
+        }
         Ok(())
     })
 }
@@ -640,10 +681,12 @@ pub fn teacher_mark_label(row: &mut Value, fast: bool, explored: bool) -> Result
 fn revision_receipt() -> Option<Value> {
     REVISION.with(|cell| {
         cell.borrow().as_ref().map(|(r, s)| {
-            json!({"job":r.job,"short_labels":s.short_labels,
+            let mut value=json!({"job":r.job,"short_labels":s.short_labels,
                 "decisions":{"long":s.decisions[0],"short":s.decisions[1]},
                 "sampled":{"long":s.sampled[0],"short":s.sampled[1]},
-                "changed":{"long":s.changed[0],"short":s.changed[1]}})
+                "changed":{"long":s.changed[0],"short":s.changed[1]}});
+            if r.cotton { value["cotton"]=s.cotton.receipt(); }
+            value
         })
     })
 }
@@ -1405,6 +1448,81 @@ mod tests {
         assert!(teacher_short_labels());
         install_revision(None);
         assert!(!teacher_short_labels());
+    }
+
+    #[test]
+    fn cotton_is_training_only_and_the_old_revision_keeps_its_receipt() {
+        let mut job=revision_job(7,true);
+        job["split"]=json!("train");
+        job["teacher_revision"]["exploration"]["cotton"]=crate::cpu_cotton::settings();
+        assert!(revision(&job).unwrap().unwrap().cotton);
+        for split in ["heldout","validation"] {
+            let mut bad=job.clone();bad["split"]=json!(split);assert!(revision(&bad).is_err());
+        }
+        let mut bad=job.clone();bad["teacher_revision"]["exploration"]["cotton"]["probability"]=json!(0.5);
+        assert!(revision(&bad).is_err());
+        install_revision(Some(revision_job(7,true)));
+        assert!(revision_receipt().unwrap().get("cotton").is_none());
+        install_revision(Some(job));
+        assert_eq!(revision_receipt().unwrap()["cotton"]["targeted_by_era_seat"],json!([[0,0,0,0],[0,0,0,0]]));
+        install_revision(None);
+    }
+
+    /// A real short native root with a low cotton prior: coverage spends exactly
+    /// the same 16 trajectories, and neither rewrites logits nor shapes labels.
+    #[cfg(feature = "teacher")]
+    #[test]
+    fn cotton_coverage_keeps_budget_targets_and_stale_root_binding() {
+        use brass_ai_core::search::{session::{clock::MonotonicClock, Identity, Mode, Session, Settings},Config,LeafEvaluator};
+        use std::sync::{atomic::AtomicBool,Arc};
+        struct LowCotton;
+        impl LeafEvaluator<Key,String> for LowCotton {
+            fn evaluate(&mut self,info:&Info<Key,String>)->brass_ai_core::search::Result<Statistics> {
+                Statistics::new(info.key.choices.iter().map(|c| if crate::cpu_cotton::cotton(c) {-100.} else {0.}).collect(),[0.25;4])
+            }
+        }
+        for (coverage,stale) in [(0,false),(2,false),(2,true)] {
+            let mut job=revision_job(7,true);
+            job["split"]=json!("train");job["teacher_revision"]["exploration"]["cotton"]=crate::cpu_cotton::settings();
+            install_revision(Some(job));
+            let clock=MonotonicClock::new(Arc::new(AtomicBool::new(false)));
+            let state=initial();let (input,_)=root(&state);
+            let info=Brass::new(input.clone(),false).unwrap().root().unwrap();
+            let view=input.view.clone();
+            assert_eq!(teacher_cotton_prepare(&view,&info,false),2);
+            let identity=Identity {game_instance:"cotton".into(),generation:1,export_sha256:"a".repeat(64)};
+            let mut settings=Settings::default();settings.search=Config {k:4,simulations:16,seed:7,..Config::default()};
+            let mut owner=Session::new(identity.clone(),&input,settings,SearchBudget {started_ns:0,work_deadline_ns:10_000_000_000,
+                deadline_ns:11_000_000_000,reserve_ns:1_000_000_000}).unwrap();
+            owner.enable_teacher_exports().unwrap();
+            let mut context=input.view.context.clone();if stale {context.revision+=1;}
+            owner.set_teacher_cotton(&context,coverage).unwrap();
+            let out=crate::teacher::decide_turn(&mut owner,&identity,1,input,Mode::Count,&clock,&mut LowCotton).unwrap();
+            let e=owner.take_teacher_export().unwrap();
+            assert_eq!(out.completed,16);assert_eq!(e.stats.count.iter().sum::<u64>(),16);
+            assert_eq!(out.effective_k,4);
+            let cotton:Vec<_>=e.info.key.choices.iter().enumerate().filter(|(_,c)|crate::cpu_cotton::cotton(c)).map(|(i,_)|i).collect();
+            assert!(!cotton.is_empty());
+            let visits:u64=cotton.iter().map(|i|e.stats.count[*i]).sum();
+            assert_eq!(visits>0,coverage>0 && !stale);
+            let target=e.policy().unwrap();
+            for i in cotton {assert_eq!(e.stats.logits[i],-100.);assert!(target[i]<1e-20);}
+            if coverage>0 && !stale {
+                let decision=(0..100).find(|d|u128::from(mix(7 ^ mix(*d ^ 0xc077_0a01)))*5<(1u128<<64)).unwrap();
+                let (played,explored)=teacher_explore(out.action_ids[0][0].clone(),Some(&e.stats.count),&info,&view,false,7,decision).unwrap();
+                let mut row=crate::teacher::label(&e,&info,&json!({}),&played,"root",true,owner.budget(),0).unwrap().unwrap();
+                let target_before=row["teacher"]["target"].clone();
+                teacher_mark_label(&mut row,false,explored).unwrap();
+                assert_eq!(row["teacher"]["target"],target_before);
+                assert_eq!(row["teacher"]["cotton_exploration"]["targeted"],true);
+                assert_eq!(row["teacher"]["cotton_exploration"]["used_before"],0);
+                let selected=info.key.choices.iter().find(|c|c.id==played).unwrap();
+                let next=state.after_choice(view.context.revision,&played).unwrap();
+                teacher_cotton_commit(&view,selected,next.context().revision).unwrap();
+                assert_eq!(revision_receipt().unwrap()["cotton"]["long"]["targeted_builds"],1);
+            }
+            install_revision(None);
+        }
     }
 
     /// An explored action leaves the turn's plan; the session must replan the

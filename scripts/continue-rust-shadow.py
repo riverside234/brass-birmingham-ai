@@ -129,6 +129,10 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share','-stage-a'+str(stage_a)+'-share');stages.append(prefix)
         if g1491.applied(config):
             prefix=prefix.replace('-share','-g1491-revision-share');stages.append(prefix)
+            if 'cotton' in config['teacher_phase'][g1491.KEY]['exploration']:
+                # A prepared, older g1491 config may already exist at this boundary.
+                # Keep it as a recovery recipe; never overwrite it with new behavior.
+                prefix=prefix.replace('-share','-cotton20-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')

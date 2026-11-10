@@ -419,7 +419,7 @@ def regressions(c):
         return finish(checks)
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(ROOT/p) for p in TEST_PATHS),
         BRASS_CPU_TEACHER=value['teacher']['path'], BRASS_CPU_COLLECTOR=value['collector']['path'], BRASS_CPU_RUNTIME=value['runtime']['path'],
-        BRASS_CPU_FIXTURES=str(c.fixtures), BRASS_CPU_CORE=value['teacher_core'], BRASS_CPU_NATIVE=str(native),
+        BRASS_CPU_FIXTURES=str(c.fixtures), BRASS_CPU_CORE=value['teacher_execution_core'], BRASS_CPU_NATIVE=str(native),
         BRASS_CPU_BOOTSTRAP=c.gpu_build['bootstrap']['binary']['path'], BRASS_CPU_MONO=c.args.mono, CUDA_VISIBLE_DEVICES='')
     # Prepare already ran the main suite on this exact build; only finish what it could not.
     prepared = prepared_suite(value)
@@ -602,9 +602,9 @@ def teacher(c):
     positions_before = c.service.metrics['positions']
     with R.scope(c.cpu_settings):
         plan = teacher_plan(ROOT, build, c.service, jobs, c.block)
-        calibration = count_calibration(build['core_source'], jobs[0])
+        calibration = count_calibration(plan['core_source'], jobs[0])
         require(calibration['source'] == source_fingerprint(), 'Calibration source differs')
-        collector = TeacherCollector(plan['binary'], build['core_source'], bootstrap, c.service, calibration, lanes=lanes, model=c.model,
+        collector = TeacherCollector(plan['binary'], plan['core_source'], bootstrap, c.service, calibration, lanes=lanes, model=c.model,
                                      history=state['history'], inference=plan['inference'], cores=cores)
         began = time.perf_counter()
         try:
@@ -775,10 +775,10 @@ def overlap(c):
     done = []
     with R.scope(c.cpu_settings):
         plan = teacher_plan(ROOT, build, c.service, jobs, c.block)
-        calibration = count_calibration(build['core_source'], jobs[0])
+        calibration = count_calibration(plan['core_source'], jobs[0])
         c.cpu_build, settings = ordinary_plan(ROOT, c.gpu_build, c.service, games, c.block)
         core_plan = CorePlan(cores)
-        collector = TeacherCollector(plan['binary'], build['core_source'], bootstrap, c.service, calibration, lanes=lanes, model=c.model,
+        collector = TeacherCollector(plan['binary'], plan['core_source'], bootstrap, c.service, calibration, lanes=lanes, model=c.model,
                                      history=state['history'], inference=plan['inference'], cores=cores, core_plan=core_plan)
         began = time.perf_counter()
         run = TeacherRun(collector, core_plan, lambda: collector.collect(jobs), done.extend)

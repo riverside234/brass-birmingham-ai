@@ -206,14 +206,14 @@ class ShadowCollector:
                     lanes=min(len(missing),service.cpu.capacity,block['workers'])
                     plan=teacher_plan(self.root,build,service,missing,block)
                     cores=core_allocation(lanes) if block['pinning']=='one-lane-per-cpu' else []
-                    calibration=(count_calibration(build['core_source'],missing[0]) if block['teacher_budget']['mode']=='count' else
-                        calibrate_cpu(plan['binary'],build['core_source'],origins,missing[0],plan['inference'],cores))
+                    calibration=(count_calibration(plan['core_source'],missing[0]) if block['teacher_budget']['mode']=='count' else
+                        calibrate_cpu(plan['binary'],plan['core_source'],origins,missing[0],plan['inference'],cores))
                     write_json(directory/'teacher-shadow/calibration.json',calibration)
                     from .lab_cpu_runtime import CorePlan
                     # Timed searches read a clock, so only fixed-count tables may share CPUs.
                     overlap=overlap and block['teacher_budget']['mode']=='count'
                     if overlap:core_plan=CorePlan(cores)
-                    collector=TeacherCollector(plan['binary'],build['core_source'],bootstrap,service,calibration,
+                    collector=TeacherCollector(plan['binary'],plan['core_source'],bootstrap,service,calibration,
                         lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores,core_plan=core_plan)
                     cpu_metrics=dict(receipt=plan['receipt'],budget=plan['inference']['budget'],
                         exported_bundles=plan['exported_bundles'],lanes=lanes,cores=len(cores),pinning=block['pinning'])

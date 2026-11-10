@@ -15,6 +15,7 @@ import copy
 import importlib.util
 from pathlib import Path
 import sys
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'src'))
@@ -35,6 +36,20 @@ def shared():
 def state_of(run):
     from brass_ai.bank import read
     return read(run/'state.json')
+
+
+def ensure_cpu(run, state):
+    """Rebuild a stale worker once, before adopting the new recipe. No benchmark."""
+    from brass_ai.rust_backend.lab_cpu_runtime import resolve
+    from brass_ai.rust_backend.lab_shadow import teacher_build
+    core=teacher_build(state)['core_source']
+    try:
+        resolve(ROOT,teacher_core=core)
+    except (ValueError, FileNotFoundError) as error:
+        print(f'Preparing the updated CPU teacher: {error}',flush=True)
+        subprocess.run([sys.executable,str(ROOT/'scripts/prepare-rust-cpu-inference.py'),
+            '--run',str(run),'--expected-generation',str(state['iteration']),'--focused-regressions'],check=True,cwd=ROOT)
+        resolve(ROOT,teacher_core=core)
 
 
 def interrupted(run, generation):
@@ -69,6 +84,7 @@ def main():
     generation = state['iteration']
     require(generation == args.expected_generation and args.iterations > 0,
             f"The run is at g{generation}; pass --expected-generation {generation}")
+    ensure_cpu(run,state)
     end = generation+args.iterations
     from brass_ai.recovery import training_revision_g1491 as g1491
     if not g1491.applied(state['signature']['config']) and interrupted(run, generation):

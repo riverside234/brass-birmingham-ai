@@ -32,6 +32,9 @@ def label_profile(label):
 def check_turn(label, row_round, job):
     """Long labels belong to the reserved turns; short labels only to the other turns of a g1491 job."""
     reserved = row_round == job['reservations'][str(label['seat'])][label['phase']]
+    if label.get('cotton_exploration') is not None:
+        from .teacher_cotton import enabled
+        require(job.get('split')=='train' and enabled(job), 'Cotton exploration outside the training recipe')
     if label_profile(label) == 'fast':
         require((job.get('teacher_revision') or {}).get('short_labels') is True,
                 'Short-search labels need the g1491 teacher revision')
@@ -113,6 +116,9 @@ def validate_improved_policy(label, choices):
         require(type(label[key]) is bool, 'Invalid teacher provenance ' + key)
     require(label['played_action'] in ids and isinstance(label['gumbel_draw_id'], str)
             and bool(label['gumbel_draw_id']), 'Missing teacher played-action provenance')
+    if 'cotton_exploration' in label:
+        from .teacher_cotton import validate_label
+        validate_label(label, choices)
     return None if len(ids) == 1 or not sum(label['counts']) or label['cancelled'] else target
 
 

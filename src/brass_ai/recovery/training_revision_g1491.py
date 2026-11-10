@@ -33,11 +33,15 @@ EXPLORATION = dict(contract='root-visit-count-sampling/1.0.0', temperature=1., o
                    long_search='always')
 
 
-def block():
+def block(*, cotton=True):
     """The reviewed marker. Workers receive ``job_block()``, derived from it."""
+    exploration=copy.deepcopy(EXPLORATION)
+    if cotton:
+        from .teacher_cotton import settings
+        exploration['cotton']=settings()
     return dict(contract=CONTRACT,
                 labels=dict(searches='long-and-short', long_weight=LONG_WEIGHT, short_weight=1-LONG_WEIGHT),
-                exploration=dict(EXPLORATION),
+                exploration=exploration,
                 calibration=dict(shadow_iterations=SHADOW_ITERATIONS, ppo_lr='hold'))
 
 
@@ -52,7 +56,7 @@ def applied(config):
 def validate(config):
     """Exact reviewed values; the projected recipe is validated by the caller."""
     c = config['teacher_phase']
-    require(digest(c[KEY]) == digest(block()), 'Unreviewed g1491 training revision')
+    require(digest(c[KEY]) in (digest(block()), digest(block(cotton=False))), 'Unreviewed g1491 training revision')
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',
             'The g1491 revision needs all-seat teacher search')
     require(digest(c['tables']) == digest(TABLES) and digest(c['buffer']) == digest(BUFFER),
@@ -140,27 +144,31 @@ def long_weight(config):
     return config['teacher_phase'][KEY]['labels']['long_weight'] if applied(config) else None
 
 
-def _job_block(exploration):
-    return dict(contract=CONTRACT, short_labels=True,
+def _job_block(exploration, *, split='train'):
+    result=dict(contract=CONTRACT, short_labels=True,
                 exploration=dict(contract=exploration['contract'], temperature=exploration['temperature'],
                                  opening_actions_per_era=exploration['opening_actions_per_era'],
                                  long_search=exploration['long_search'] == 'always'))
+    if split=='train' and 'cotton' in exploration:
+        result['exploration']['cotton']=copy.deepcopy(exploration['cotton'])
+    return result
 
 
-def job_block(config):
+def job_block(config, *, split='train'):
     """What a CPU teacher worker needs; absent for every earlier recipe."""
     if not applied(config):
         return None
-    return _job_block(config['teacher_phase'][KEY]['exploration'])
+    return _job_block(config['teacher_phase'][KEY]['exploration'],split=split)
 
 
 def validate_job(job):
     """A teacher job carries either no revision or exactly the reviewed one."""
-    block = job.get('teacher_revision')
-    require(block is None or (digest(block) == digest(_job_block(EXPLORATION)) and
+    revision = job.get('teacher_revision')
+    allowed=(_job_block(EXPLORATION), _job_block(block()['exploration'],split=job.get('split')))
+    require(revision is None or (digest(revision) in tuple(digest(b) for b in allowed) and
             job.get('seating') == 'all-seat-search' and not job.get('h2h') and not job.get('shadow_probe')),
             'Unreviewed g1491 teacher job revision')
-    return block
+    return revision
 
 
 def holds_ppo_lr(config):

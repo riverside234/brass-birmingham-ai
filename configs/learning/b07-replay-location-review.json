@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "3c8a3fa7ac91c62c3ded484eb1a775c6849d3af7d4a8117582c717c2761b6e8e",
+  "execution_implementation": "22b8d87ca74544ab4bc3a4441e4cba40d65f08f3a57cac5347cfbbf9fd4db4be",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -186,11 +186,11 @@
     },
     "src/brass_ai/recovery/teacher_labels.py": {
       "before": "d599ed03d3f3267cddd1c362204ed133f738a7a7c86b7a97b96353857b3536b9",
-      "after": "752700926bb3978cbce9192edcc7e416bda1eee8a3da921976774cd2c9d67a8f"
+      "after": "12083277ff244e1b9cf1ce7f7b5d670e33f2829018074a6b390df805ba89edb7"
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
-      "after": "4a6e7616257aa74338c46b39f8808f39ae6bd4249d7f303100a79b494ba4a9e2"
+      "after": "ae3ce1871bd09411530d014080784440b34e151d4f871daea0dbcf89ca16b7ed"
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
@@ -286,7 +286,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow.py": {
       "before": null,
-      "after": "f3e31f3f06ed281a5dd0d14a3058c7287aaf0183d4e36d4f07b03300912c4990"
+      "after": "6354ceaac3ac0f2d78e054af83bdf19e347af059a8df57d1290e3ab41e67d64b"
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
@@ -298,7 +298,7 @@
     },
     "src/brass_ai/rust_backend/lab_teacher.py": {
       "before": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb",
-      "after": "9a08d103aac11a2d6280086453efe63a3c730f0faa50a74ba46d4c2bf2758921"
+      "after": "a70000a83013636fb2a2df854646cb2c96c4924d31c311154082bd67a54ea9cb"
     },
     "src/brass_ai/rust_backend/lab_teacher_activation.py": {
       "before": null,
@@ -323,6 +323,70 @@
     "src/brass_ai/step5/league.py": {
       "before": "7ccf73825ec333d5d1169161ac897f89ec488f41051e828413aaad9b409b9ddb",
       "after": "897b5ff064b698ef4accf4843d5de6bf06e34965fa3fa08246483ade8167275c"
+    },
+    "ai-research/G1491_TEACHER_REVISION.md": {
+      "before": "16bc0e386b5c3556379bceef971ef865653d9a9270c606fc6d295a5ef3c393f4",
+      "after": "0344f6b5f124fe0d62a915f7de85ab98cd38b3b47479602c5fe8635dec439d46"
+    },
+    "lab-native-cpu/src/cpu_eval.rs": {
+      "before": "ff4366c142c884fbd07d543c495be0a655eeb848499558a635345c18f5ea1b20",
+      "after": "26e6591c633d1c0961babfe48fdcaa7ca8991ffccc59c508ad0a728962fa9c39"
+    },
+    "scripts/continue-rust-g1491.py": {
+      "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
+      "after": "29701b07b51a4bdecd78366763ef5428b23d6370bb416aaf84f630e7ff4f2f1f"
+    },
+    "scripts/prepare-rust-cpu-inference.py": {
+      "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
+      "after": "9542f8274f91d7c0580fb5f99648b7ba402a9e86783be94a6d0a3b7a0098b769"
+    },
+    "scripts/qualify-rust-cpu-inference.py": {
+      "before": "8637dea571eaf0351830870dd7c1904ff03d7ee95c4c55c24cdab9151bee044e",
+      "after": "10cd187746a4a034296a5b3036b068d7e3c27a70bb1f60b14b6732f61636f2cb"
+    },
+    "src/brass_ai/recovery/training_revision_g1491.py": {
+      "before": "5c6caf54055c00bc4ef2c06a33bfc651b1f82d37dcb9351bb71f997920fb832e",
+      "after": "aa9acf215068cd8c583ab65d3f03612177f744ce4007279162e190bb3a8640da"
+    },
+    "src/brass_ai/rust_backend/lab_cpu_overlay.py": {
+      "before": "e7fa0229a185321c91a6dfbb9c513ae50800ac201544e9e0c12812fff204ef21",
+      "after": "6436cc73319cc41be1a8726e526bd75a0c998d275a7b3d585f43c21c7da2991e"
+    },
+    "src/brass_ai/rust_backend/lab_cpu_runtime.py": {
+      "before": "71895897093679de776ad5a98a245f6dfca69a8ea7a0035ec7a310f0adb343c4",
+      "after": "50ae1211b56623b771c5af9ee808ac850d2895ac3deff084033a0f0606e9f4f1"
+    },
+    "tests/Recovery/test_training_revision_g1491.py": {
+      "before": "4f474254a5884adf988a508252425aef17e32debf681dc8992718dc7e40e0f44",
+      "after": "2872334a3865ab1a8be45fc732c48f9b1aed0ccee9b6328c21f2f6826d3d6f44"
+    },
+    "lab-native-cpu/core-overlay/cotton.rs": {
+      "before": null,
+      "after": "a48112011b1e2b4c49e38c117947909493ef58d326a656a84fc1553a63aca74d"
+    },
+    "lab-native-cpu/src/cpu_cotton.rs": {
+      "before": null,
+      "after": "5fdb258f7453454f80a478c703379d94abaad77e5ebbefd51db688ce7226b1ce"
+    },
+    "src/brass_ai/recovery/teacher_cotton.py": {
+      "before": null,
+      "after": "d2952466357a4c00f654c751a72f8626718f86bde30c8ddea63a7f1b92d202b1"
+    },
+    "src/brass_ai/rust_backend/lab_cotton_overlay.py": {
+      "before": null,
+      "after": "22a07bb95bc72c576e2be12c700b2f9da969d819142fddab71ed36c7d46e0de4"
+    },
+    "tests/Recovery/test_teacher_cotton.py": {
+      "before": null,
+      "after": "3ec113fac296fe880684ba721c02fbcc4c9c5192a31f9dbbc3f0c8c8339808e9"
+    },
+    "scripts/continue-rust-shadow.py": {
+      "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
+      "after": "7ca684fba58b04542d869eb2044352f9c186876271f6e6c143fe968d672eb254"
+    },
+    "tests/RustBackendLab/test_cpu_qualification.py": {
+      "before": "746a19f5f85f7026f1ef511603d1aa40a2d75dd3d28535bb75dd4df791f67b60",
+      "after": "77bf91b2372e5be2ddda0db7ef54fbb98cc14a39391c210e6096dcb1037c355c"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -453,6 +517,11 @@
       "implementation": "2a7a24f4821f148da4606f1fc9629564f4985110f42a8b7d27687e0c3efda236",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "542722af925030ef5bd2c19db78092d00ffbbad971175071b2a056e8ce845a7f"
+    },
+    {
+      "implementation": "3c8a3fa7ac91c62c3ded484eb1a775c6849d3af7d4a8117582c717c2761b6e8e",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "060214ccaa3d5e9bae5d329c832547f56291a3888f50dde3ba60a3f5636d5a49"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -607,5 +676,16 @@
     "source_report": "ai-research/G1491_TEACHER_REVISION.md",
     "scope": "One user-requested recipe revision at a committed boundary from g1491 on the g1290 restart run: 48 teacher tables, labels from long and short searches with L=.6 mean(L_long)+.4 mean(L_short), 2048 teacher rows per PPO step from a two-iteration buffer (age weights 4:3), one PPO epoch, root visit-count sampling of the played action for each seat's first seven actions of each era and every long search (CPU teacher overlay), and a two-iteration shadow re-calibration of the fixed beta with the PPO LR controller held. Weights, Adams, RNG, replay, PPG and search-head state are preserved; old teacher labels and their beta retire together.",
     "qualified_implementation_unchanged": true
+  },
+  "teacher_cotton_exploration": {
+    "contract": "teacher-cotton-exploration/1.0.0",
+    "source_report": "ai-research/G1491_TEACHER_REVISION.md",
+    "scope": "Opt-in g1491 training teacher recipe: reserve distinct cotton candidates within existing K and quota, then sample a 20% cotton visit-count mixture, cap three committed targeted builds per seat/era and pause for own unflipped cotton. Preserve original reward and improved-policy equations. Held-out, ordinary, GPU, game and existing committed recipes are unchanged. CPU execution core has its own fingerprint. Aggregate statistics at table end; independently verify behavior metadata. Rebuild stale CPU workers with focused regressions through the existing continuation command.",
+    "qualified_implementation_unchanged": true,
+    "verification": {
+      "python_tests": 42,
+      "rust_unit_tests": 28,
+      "scope": "Focused regressions only; no full games or benchmarks. Lab throughput pending."
+    }
   }
 }

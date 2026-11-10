@@ -20,7 +20,7 @@ PATCHES = {
          '[dependencies]\n' + ORT + '\nbrass-ai-core = { path = "../native/brass-ai-core" }\n'),
     ),
     'src/lib.rs': (
-        ('pub mod scoring;\n', 'pub mod cpu_eval;\npub mod scoring;\n'),
+        ('pub mod scoring;\n', 'pub mod cpu_cotton;\npub mod cpu_eval;\npub mod scoring;\n'),
         ('impl Lane {\n    pub fn new(',
          'impl Lane {\n'
          '    /// Tensors of the last `feature_arrays` call, for in-process inference.\n'
@@ -122,6 +122,8 @@ PATCHES = {
          '            && !h2h && job["shadow_probe"] != true {\n'),
         # g1491: the played action may be sampled from the decision root's visit counts.
         ('        let mut evidence = None;\n        let mut supported = false;\n',
+         '        let cotton_limit = crate::cpu_eval::teacher_cotton_prepare(&view, &actual, turn_work.fast);\n'
+         '        if let Some(owner) = &mut session { owner.set_teacher_cotton(&view.context, cotton_limit)?; }\n'
          '        let mut evidence = None;\n        let mut supported = false;\n        let mut explored = false;\n'),
         ('            supported = out.actions.first().is_some_and(|a| a.support >= 2);\n'
          '            out.action_ids\n'
@@ -148,6 +150,9 @@ PATCHES = {
          '            explored = sampled;\n'
          '            played\n'
          '        } else if actual.actions.len() == 1 {\n'),
+        ('        state = ordinary_after(&state, &choice, &rail, &mut recorder)?;\n',
+         '        state = ordinary_after(&state, &choice, &rail, &mut recorder)?;\n'
+         '        crate::cpu_eval::teacher_cotton_commit(&view, selected, state.context().revision)?;\n'),
         ('"input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources},',
          '"input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources,\n'
          '            "cpu_inference":crate::cpu_eval::teacher_receipt()},'),
@@ -170,7 +175,8 @@ def fingerprint(root=SOURCE_ROOT):
     root = Path(root)
     names = sorted(['Cargo.toml', 'Cargo.lock', 'src/lib.rs', 'src/main.rs', 'src/teacher.rs', 'src/bin/teacher.rs',
                     'src/collection_wire.rs', 'src/ordinary_delta.rs', 'src/scoring.rs', 'core-overlay/teacher.rs'])
-    return digest(dict(contract=CONTRACT, patches=PATCHES,
+    from .lab_cotton_overlay import PATCHES as cotton_patches
+    return digest(dict(contract=CONTRACT, patches=PATCHES, cotton_patches=cotton_patches,
         base={name: _normalized(root/'lab-native'/name) for name in names},
         overlay={p.relative_to(root/OVERLAY_DIR).as_posix(): _normalized(p) for p in overlay_files(root)}))
 
@@ -190,5 +196,6 @@ def apply(directory, root=SOURCE_ROOT):
             text = text.replace(before, after)
         path.write_bytes(text.encode('utf-8'))
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_eval.rs', directory/'src/cpu_eval.rs')
+    shutil.copyfile(root/OVERLAY_DIR/'src/cpu_cotton.rs', directory/'src/cpu_cotton.rs')
     shutil.copyfile(root/OVERLAY_DIR/'Cargo.lock', directory/'Cargo.lock')
     return dict(contract=CONTRACT, source=fingerprint(root))

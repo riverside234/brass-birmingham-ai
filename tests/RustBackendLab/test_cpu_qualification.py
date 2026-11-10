@@ -510,6 +510,7 @@ class StagesOnFixtures(unittest.TestCase):
         runtime = pin(os.environ['BRASS_CPU_RUNTIME'])
         receipt = dict(path=os.environ['BRASS_CPU_TEACHER'], sha256='0'*64)
         value = dict(runtime=dict(path=runtime['path'], sha256=runtime['sha256']), teacher=dict(path=os.environ['BRASS_CPU_TEACHER']),
+                     teacher_execution_core=os.environ['BRASS_CPU_CORE'],
                      collector=dict(path=os.environ['BRASS_CPU_COLLECTOR']), receipt=receipt)
         cls.service = InferenceService(execution, 'cpu')
         cls.service.__enter__()
