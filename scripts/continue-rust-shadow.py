@@ -113,10 +113,14 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         from brass_ai.recovery.training_revision_g1294 import applied as training_revised,summary as revision_summary
         from brass_ai.recovery import training_revision_g1307 as lr_floor
         if training_revised(config):
-            prefix=prefix.replace('-share','-entropy-raise-g'+str(revision_summary(config)['entropy']['start_generation'])+'-share')
+            entropy=revision_summary(config)['entropy']
+            prefix=prefix.replace('-share',('-entropy-raise-g'+str(entropy['start_generation']) if entropy else '-g1294-revision')+'-share')
             stages.append(prefix)
         if lr_floor.applied(config):
             prefix=prefix.replace('-share','-lr-floor-4e-6-share');stages.append(prefix)
+        stage_a=config['teacher_phase']['search_value'].get('schedule',{}).get('stage_a_iterations',10)
+        if stage_a!=10:
+            prefix=prefix.replace('-share','-stage-a'+str(stage_a)+'-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')

@@ -47,7 +47,8 @@ def previous(config):
     from . import entropy_schedule as S,ppg_g210 as P
     from .search_value_config import MAX_STEPS,defaults
     options=config['teacher_phase']['search_value']
-    require(raise_block(config) is not None and options['steps_per_iteration']==MAX_STEPS,'Incomplete g1294 training revision')
+    # The g1290 restart recipe keeps the PPG and search-head parts without the raise.
+    require(options['steps_per_iteration']==MAX_STEPS,'Incomplete g1294 training revision')
     result=S.without_raise(config)
     result['value_phase'].update(contract=P.TEACHER_FLOOR_CONTRACT)
     original=defaults()
@@ -64,5 +65,6 @@ def compatible(before,after):
 def summary(config):
     from . import entropy_schedule as S
     block=raise_block(config)
-    return dict(contract=CONTRACT,entropy=dict(start_generation=block['start_generation'],ramp_iterations=block['ramp_iterations'],
-        start=S.RAISE_FROM,final=S.RAISE_TARGET),ppg_kl_cap='stop-and-keep',search_head_max_steps=config['teacher_phase']['search_value']['steps_per_iteration'])
+    return dict(contract=CONTRACT,entropy=None if block is None else dict(start_generation=block['start_generation'],
+        ramp_iterations=block['ramp_iterations'],start=S.RAISE_FROM,final=S.RAISE_TARGET),
+        ppg_kl_cap='stop-and-keep',search_head_max_steps=config['teacher_phase']['search_value']['steps_per_iteration'])

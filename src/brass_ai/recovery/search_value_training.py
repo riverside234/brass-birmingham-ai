@@ -73,9 +73,10 @@ class StageMachine:
         from brass_ai.learning.search_value import binding
         binding(self.state['w'])
         require(0 <= self.state['scale'] <= 1 and self.state['lam'] in (None,.5,.8,.95,1.), 'Invalid resumed stage parameters')
+        self.stage_a=10
         if options is not None and 'schedule' in options:
-            from .search_value_schedule import initialize
-            initialize(self.state,options)
+            from .search_value_schedule import initialize,stage_a_iterations
+            initialize(self.state,options);self.stage_a=stage_a_iterations(options)
 
     def choose_lambda(self, value):
         require(value in (.5,.8,.95,1.) and self.state['lam'] in (None,value), 'Lambda changes require reviewed buffer retirement')
@@ -91,7 +92,7 @@ class StageMachine:
     def advance(self, generation, gate, *, ordinary=None, h2h=None, annealing=False, pause=False):
         s = self.state
         from .search_value_schedule import CONTRACT as SCHEDULE,advance
-        if s.get('schedule')==SCHEDULE:return advance(s,generation,gate,pause=pause)
+        if s.get('schedule')==SCHEDULE:return advance(s,generation,gate,pause=pause,stage_a=self.stage_a)
         require(type(generation) is int and generation > s['generation'], 'Stage transition already committed/out of order')
         s['generation'] = generation
         if ordinary is not None:

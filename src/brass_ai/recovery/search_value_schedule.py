@@ -4,6 +4,8 @@ import copy
 from brass_ai.learning.contracts import digest,require
 
 CONTRACT='search-value-stage-schedule/2.0.0'
+# Stage A lasts 10 iterations, or 30 in the reviewed g1290 restart recipe.
+STAGE_A_ITERATIONS=(10,30)
 
 
 def defaults():
@@ -19,9 +21,15 @@ def validate(options):
     schedule=options['schedule'];expected=defaults()
     require(type(schedule) is dict and set(schedule)==set(expected),'Invalid search-value schedule fields')
     require(type(schedule['validation_during_beta_qualification']) is bool,'Invalid beta-qualification validation switch')
-    fixed=dict(schedule,validation_during_beta_qualification=True)
+    require(type(schedule['stage_a_iterations']) is int and schedule['stage_a_iterations'] in STAGE_A_ITERATIONS,
+        'Unreviewed Stage A length')
+    fixed=dict(schedule,validation_during_beta_qualification=True,stage_a_iterations=expected['stage_a_iterations'])
     require(digest(fixed)==digest(expected),'Unreviewed search-value stage schedule')
     return schedule
+
+
+def stage_a_iterations(options):
+    return validate(options)['stage_a_iterations'] if enabled(options) else defaults()['stage_a_iterations']
 
 
 def revise(config):
@@ -79,20 +87,21 @@ def validation_plan(config,state):
 
 def initialize(state,options):
     """Adopt counters without relabelling old gated, untrained Stage-A time."""
-    validate(options)
+    a=stage_a_iterations(options)
     if state.get('schedule')==CONTRACT:
-        require(type(state.get('stage_a_iterations')) is int and 0<=state['stage_a_iterations']<=10 and
+        require(type(state.get('stage_a_iterations')) is int and 0<=state['stage_a_iterations']<=a and
             type(state.get('stage_b_iterations')) is int and 0<=state['stage_b_iterations']<=20,
             'Invalid committed residual stage counters')
         require(state['stage']!='head_to_head' and
-            (state['stage'] not in ('B','C') or state['stage_a_iterations']==10) and
+            (state['stage']!='A' or state['stage_a_iterations']<a) and
+            (state['stage'] not in ('B','C') or state['stage_a_iterations']==a) and
             (state['stage']!='B' or state['stage_b_iterations']<20 and state['w']==round(state['stage_b_iterations']/20,2)) and
             (state['stage']!='C' or state['stage_b_iterations']==20 and state['w']==1.),
             'Residual stage counters/blend differ')
         return
     require('schedule' not in state,'Unknown committed residual schedule')
     if state['stage']=='head_to_head':state.update(stage='C',scale=0.)
-    state.update(schedule=CONTRACT,stage_a_iterations=0 if state['stage']=='A' else 10,
+    state.update(schedule=CONTRACT,stage_a_iterations=0 if state['stage']=='A' else a,
         stage_b_iterations=round(state['w']*20) if state['stage']=='B' else 20 if state['stage']=='C' else 0,
         baseline=None,h2h=None,full_scale_generation=None,g0_passed=True)
 
@@ -101,14 +110,14 @@ def trunk_scale(state):
     return min(1.,round(state['scale']+.1,2)) if state['stage']=='C' else 0.
 
 
-def advance(state,generation,diagnostic,*,pause=False):
+def advance(state,generation,diagnostic,*,pause=False,stage_a=10):
     require(type(generation) is int and generation>state['generation'],'Stage transition already committed/out of order')
     state['generation']=generation
     state['history']=(state['history']+[dict(generation=generation,diagnostic=copy.deepcopy(diagnostic))])[-40:]
     if pause:return copy.deepcopy(state)
     if state['stage']=='A':
         state['stage_a_iterations']+=1
-        if state['stage_a_iterations']==10:state['stage']='B'
+        if state['stage_a_iterations']==stage_a:state['stage']='B'
     elif state['stage']=='B':
         state['stage_b_iterations']+=1
         state['w']=round(state['stage_b_iterations']/20,2)
