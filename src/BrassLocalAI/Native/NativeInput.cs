@@ -38,15 +38,15 @@ namespace BrassLegacyAI.Native
         { return FromView(view,debts,recall,focus,NativeModel.Alpha); }
         public static JObject FromView(JObject view,int[] debts,JArray recall,string focus,NativeModel model)
         {
-            var spent=debts.Select(n=>Math.Min(.075,n*.02)).ToArray();
+            var spent=debts.Select(n=>Math.Min(model.MaxCost,n*model.InsolvencyCost)).ToArray();
             var settled=new JArray();var c=view["context"];
             if((string)c["phase"]=="debt")settled.Add(new JArray(c["era"],c["round"]));
             return new JObject{["view"]=view.DeepClone(),["recall"]=(recall??new JArray()).DeepClone(),
-                ["context"]=new JObject{["model_id"]=model.Model,["reward_id"]="a84a3fccf2421d40aefc71c80d3b8839cf3ff22900eb6c5b917b821b5bb8d72e",
+                ["context"]=new JObject{["model_id"]=model.Model,["reward_id"]=model.Reward,
                     ["profile_id"]=model.Profile(focus),["style"]=NativeFocus.Style(focus),["intent"]=NativeFocus.Intent(focus),
-                    ["remaining"]=new JArray(spent.Select(s=>.075-s)),["max_cost"]=.075,["stable_descriptors"]=JValue.CreateNull()},
+                    ["remaining"]=new JArray(spent.Select(s=>model.MaxCost-s)),["max_cost"]=model.MaxCost,["stable_descriptors"]=JValue.CreateNull()},
                 ["reward"]=new JObject{["version"]="brass-combined-return/2.0.0",["win"]=1.0,["placement"]=.1,["vp"]=.001,["vp_cap"]=180,
-                    ["insolvency"]=new JObject{["event_cost"]=.02,["max_cost"]=.075}},
+                    ["insolvency"]=new JObject{["event_cost"]=model.InsolvencyCost,["max_cost"]=model.MaxCost}},
                 ["ledger"]=new JObject{["spent"]=new JArray(spent),["settled"]=settled},["sample_seed"]=17};
         }
         public static JObject Request(JObject input,string instance,string gameId,long generation,int allowance)

@@ -7,7 +7,7 @@ Date: 2026-11-10. Run: `artifacts/step5/joint7-v11-2-g1290-restart-g1290`, commi
 | Setting | g1491 | From the next iteration |
 | --- | --- | --- |
 | Teacher tables | 28 train (+4 held out when due) | 48 train (+4 held out when due) |
-| CPU workers | 64 | 80 (`--workers 80`) |
+| CPU workers | 64 | 64 (unchanged; the lab process sees 64 CPUs) |
 | Teacher labels | long searches only | long and short searches |
 | Teacher loss | mean over long labels | `0.6 mean(L_long) + 0.4 mean(L_short)` |
 | Short search | n=96, K=8 | n=128, K=8 (`--teacher-fast 128`) |
@@ -39,12 +39,20 @@ Only action decisions are sampled; the following payments and sub-choices are se
 
 ## Costs to expect
 
-- **Labels:** about 1,500 long and 4,600 short labels per iteration (now 870 long). Each short label is validated and encoded in Python like a long one (about 5–20 ms of encoding per row on this laptop). Short-label turns check model-logit parity once per table instead of once per turn, so they don't queue on the shared model lock the way long-label turns do (0.45 s median wait at g1490).
+- **Labels:** about 1,500 long and 4,600 short labels per iteration (now 870 long). Each short label is validated and encoded in Python like a long one (about 5–20 ms of encoding per row on this laptop). Every labelled row of a g1491 table (long and short) checks model-logit parity once, in a single batch as the table finishes, instead of once per turn under the shared model lock (0.47 s median and 8.5 s worst wait at g1490). The check still runs before anything is published.
 - **Teacher term:** 2048 rows per step in PPO-sized chunks (512 rows or 131,072 candidate cells), with exact gradient sums. With one epoch there are about 23 steps instead of 46.
 - **Search:** 48 tables, n=128 short searches and the replans after changed actions.
-- **CPUs:** the lab process sees 64 logical CPUs (affinity 0–63 in the g1490 report). With 80 workers, 16 CPUs host two pinned lanes each; `--no-pinning` hands placement to the OS instead.
+- **CPUs:** the lab process sees 64 logical CPUs (`nproc` 64; affinity 0–63 in the g1490 report), so the worker cap stays at 64: 52 tables (48+4) hold 52 of the pinned CPUs and ordinary lanes fill the rest as tables finish.
 
 The next export shows the actual collection, verification and PPO times.
+
+## What the g1490 export and the first qualification show
+
+- **Tables spend about 40% of their time waiting.** At g1490 a table took 76 s (median, 28 tables) but its own searches summed to 43 s (30 s long + 13 s short). The same searches in the 16-table qualification took 41 s per table with about 2 s of overhead. The wait is the verification of labelled turns: a worker acks a fixed-count turn at once and searches on, but the event queue holds two events, so a turn whose verification takes longer than the next turns' search stalls the table. The sampled verification of a labelled turn took 0.66 s median and 3.3 s at p90, almost all of it waiting for the shared policy lock (0.47 s median, 8.5 s worst), because the reserved long turns of all 28 tables reach the lock together at the phase boundaries. Python preparation itself was 0.12 s median.
+- **What changed because of it:** a revised table runs its model-logit parity once, as it finishes (`TurnVerifier.settle`), so no turn takes the shared lock during collection. Each table takes the lock once, at staggered end times. The check is the same one and still precedes publication; jobs without the revision are unchanged.
+- **What stays a risk:** with 52 tables and four times the labelled turns, the main process does about 3,300 turn verifications per iteration (encoding about 1.5 ms per early-game row on the laptop, more for late-game boards), all under one GIL. If that exceeds the collection window the tables stretch to match it. The qualification teacher stage now runs 48 tables at once for that reason and records `search_seconds`, `stall_seconds` (table time beyond its own searches; the g1490 figure to compare with is about 33 s), the labels per table and a verification profile.
+- **First qualification (`--workers 80`):** failed only `enough_cpus`. Everything else passed: 41 regression tests, bundles, parity, 16 teacher tables (n=96, K=8; 0 deadline hits), 128 ordinary games, overlap, rating and startup (all 80 lanes ready within 3.8 s). The ordinary and overlap stages report 136 s and 122 s of wall time around only 22 s and 20 s of pool collection; the rest is the stage re-reading every game with full validation, which the training run does not do. The stage now times the pool start, the pool close and that re-read separately (`outside_collection`).
+- **CPU count:** `nproc` on the lab shell is 64, which agrees with the g1490 report (`cpu_count` 64, affinity 0–63). `OMP_NUM_THREADS=1` and `MKL_NUM_THREADS=1` are what the run already used (recorded as `omp_threads` and `mkl_threads` at g1490); the trainer sets its own tensor threads (4) and each lane is one pinned thread, so leave them. `OMP_NUM_THREADS=1` doesn't change `nproc` (it only sets a minimum).
 
 ## Commands
 
@@ -55,14 +63,16 @@ python scripts/prepare-rust-cpu-inference.py --run artifacts/step5/joint7-v11-2-
 ```
 
 ```bash
-python scripts/qualify-rust-cpu-inference.py --run artifacts/step5/joint7-v11-2-g1290-restart-g1290 --expected-generation 1491 --workers 80
+python scripts/qualify-rust-cpu-inference.py --run artifacts/step5/joint7-v11-2-g1290-restart-g1290 --expected-generation 1491 --workers 64
 ```
+
+The qualification is read only. From g1491 it plans its teacher tables under the g1491 recipe on a copy of the committed one (`--revision auto`) at n=128 for short searches (`--teacher-fast`). Its teacher stage then also requires long and short labels, every long label explored, short labels explored only in openings, and workers that echo the revision and whose sampled and label counts agree. It records a verification profile (sampled per-turn checks, the batched model check and the hand-off time per table), the label counts by profile and the full CPU view of the process (`cpu_count`, affinity, cgroup cpuset, SMT, `nproc`) in `environment.json`. An earlier qualification at `--workers 80` failed only its `enough_cpus` check, because the process has 64 CPUs and the stage requires one lane per CPU; every other stage passed.
 
 ```bash
 python scripts/continue-rust-g1491.py --expected-generation 1491 --iterations 100 --share-target 0.4
 ```
 
-The last command defaults to `--inference cpu --workers 80 --teacher-fast 128 --teacher-fast-k 8 --teacher-full 640`. It runs the two calibration iterations, then teaching for the rest (here up to g1591). If the Ctrl-C landed after g1491's teacher tables were sealed, it first finishes that iteration under the old recipe and budget, and the revision starts at g1492. After any later stop, rerun it with `--expected-generation` set to the last committed generation; it resumes whichever step is unfinished.
+The last command defaults to `--inference cpu --workers 64 --teacher-fast 128 --teacher-fast-k 8 --teacher-full 640`. It runs the two calibration iterations, then teaching for the rest (here up to g1591). If the Ctrl-C landed after g1491's teacher tables were sealed, it first finishes that iteration under the old recipe and budget, and the revision starts at g1492. After any later stop, rerun it with `--expected-generation` set to the last committed generation; it resumes whichever step is unfinished.
 
 ## Verification (laptop)
 
@@ -70,4 +80,5 @@ The last command defaults to `--inference cpu --workers 80 --teacher-fast 128 --
 - Native end to end: a real all-seat table on the rebuilt CPU teacher with the revision. Long and short labels both appear and all pass Python validation and the turn checks. Every long-search action is sampled and short ones only in each seat's opening. The worker echoes the revision, the deferred logit check covers every short row, a rerun plays the identical game, and a job without the revision produces the old rows byte for byte.
 - Python: the revision applied to the real g1491 recipe changes exactly the listed fields. It passes the reviewed on→shadow and shadow→on transitions one way only. It retires the old labels and beta, and plans 48+4 jobs carrying the revision. Two synthetic 48+4 shadow iterations qualify a beta that authorizes teaching at Stage C. The teacher term matches the weighted formula's gradient for any chunking. The LR controller holds and keeps those KLs out of its window.
 - Existing suites: the full native module (48 tests) and the B04/B045/B07 sealing, Stage A, stage-schedule, turn-ack, overlap, qualification, collector, branch-restart and g1294 suites pass. The 28 tests that still fail in the teacher, B07 and LR suites fail identically on the unmodified code (old fixtures, removed exports, "Backend rollback manifest changed").
+- Qualification script: the fixture teacher stage runs under the revision (long and short labels, exploration, the one batched logit check per table) and the revised-label checks fail by name when a label kind, the exploration or the worker's counts are missing. The qualification and g1491 modules pass (73 tests). The native module's 48 tests pass; its revised-table test was adjusted to the single batched check and re-run on its own.
 - Not run on the lab. Iteration timing with 48 tables and short labels is an estimate until the next export.

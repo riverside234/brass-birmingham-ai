@@ -20,8 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'src'))
 RUN = 'artifacts/step5/joint7-v11-2-g1290-restart-g1290'
 EXTRA_CALIBRATION = 2
-# The CPU settings the run used up to g1491 (the continue scripts' defaults).
-PREVIOUS_WORKERS, PREVIOUS_TEACHER_FAST = 64, 96
+# The short-search budget the run used up to g1491 (the continue scripts' default).
+PREVIOUS_TEACHER_FAST = 96
 
 
 def shared():
@@ -61,7 +61,7 @@ def calibrated(state):
 
 def main():
     module = shared()
-    args = module.parser(default_mode='on', default_stage_revision=True, workers=80, teacher_fast=128, inference='cpu',
+    args = module.parser(default_mode='on', default_stage_revision=True, workers=64, teacher_fast=128, inference='cpu',
                          run=RUN, iterations=10, description=__doc__).parse_args()
     from brass_ai.learning.contracts import project_path, require
     run = project_path(ROOT, args.run)
@@ -72,11 +72,11 @@ def main():
     end = generation+args.iterations
     from brass_ai.recovery import training_revision_g1491 as g1491
     if not g1491.applied(state['signature']['config']) and interrupted(run, generation):
-        # Its tables were collected under the current recipe and the earlier CPU
-        # settings (64 workers, n=96 short searches): finish it with exactly those.
+        # Its tables were collected under the current recipe and the earlier short-search
+        # budget (n=96): finish it with exactly those.
         print(f'Finishing interrupted iteration g{generation}->g{generation+1} under its own recipe first', flush=True)
         recovery = copy.copy(args); recovery.inference = 'cpu'
-        recovery.workers, recovery.teacher_fast = PREVIOUS_WORKERS, PREVIOUS_TEACHER_FAST
+        recovery.teacher_fast = PREVIOUS_TEACHER_FAST
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state)

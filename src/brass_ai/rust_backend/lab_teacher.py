@@ -181,6 +181,8 @@ class Worker:
                     require(revision is None or
                             (meta['metrics'].get('cpu_inference') or {}).get('revision', {}).get('job') == revision,
                             'CPU teacher did not run the g1491 revision; rerun scripts/prepare-rust-cpu-inference.py')
+                    # Batched model-logit parity of every labelled row, once, as the table ends.
+                    if revision is not None and getattr(verifier,'settle',None) is not None:verifier.settle(expected['job_id'])
                     return dict(job_id=expected['job_id'],rows=rows,metrics=meta['metrics'],result=meta['result'],
                                 value_rows=values, final_spent=meta.get('final_spent'))
                 else:raise ValueError('Unknown teacher event')

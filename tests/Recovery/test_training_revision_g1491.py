@@ -406,13 +406,13 @@ class Command(unittest.TestCase):
     def test_its_defaults_are_the_requested_runtime(self):
         from brass_ai.recovery.collector_runtime import TEACHER_BUDGET, cpu_block
         m = self.module(); shadow = m.shared()
-        args = shadow.parser(default_mode='on', default_stage_revision=True, workers=80, teacher_fast=128,
+        args = shadow.parser(default_mode='on', default_stage_revision=True, workers=64, teacher_fast=128,
                              inference='cpu', run=m.RUN, iterations=10).parse_args(['--expected-generation', '1491'])
         self.assertEqual((args.workers, args.teacher_fast, args.teacher_fast_k, args.teacher_full, args.inference),
-                         (80, 128, 8, 640, 'cpu'))
-        self.assertEqual(shadow.inference_choice(args), cpu_block(workers=80, teacher_budget=dict(TEACHER_BUDGET, fast=128)))
+                         (64, 128, 8, 640, 'cpu'))
+        self.assertEqual(shadow.inference_choice(args), cpu_block(workers=64, teacher_budget=dict(TEACHER_BUDGET, fast=128)))
         # An interrupted g1491 iteration finishes with the settings its tables were collected with.
-        recovery = copy.copy(args); recovery.workers, recovery.teacher_fast = m.PREVIOUS_WORKERS, m.PREVIOUS_TEACHER_FAST
+        recovery = copy.copy(args); recovery.teacher_fast = m.PREVIOUS_TEACHER_FAST
         self.assertEqual(shadow.inference_choice(recovery), cpu_block(workers=64))
 
     def test_an_interrupted_iteration_is_detected_from_its_sealed_work(self):

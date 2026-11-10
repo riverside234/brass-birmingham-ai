@@ -1,8 +1,10 @@
 //! Compile-time model admission for each local package. Both binaries use the
 //! same game engine/search implementation; a package cannot replace its weights.
-#[cfg(all(feature = "local-beta", feature = "local-il"))]
+#[cfg(any(all(feature = "local-beta", feature = "local-il"),
+          all(feature = "local-beta2", feature = "local-beta"),
+          all(feature = "local-beta2", feature = "local-il")))]
 compile_error!("Select only one local model feature");
-#[cfg(not(any(feature = "local-beta", feature = "local-il")))]
+#[cfg(not(any(feature = "local-beta", feature = "local-il", feature = "local-beta2")))]
 mod selected {
     pub const BACKEND: &str = "brass-gumbel-is-mcts/alpha-g890-v1";
     pub const MODEL: &str = "1145fecba3289511df1c518bb71fbfb5b2f6df351777151a5eb999b89cba0761";
@@ -29,6 +31,25 @@ mod selected {
     pub const BETA: bool = true;
 }
 pub use selected::*;
+#[cfg(not(feature = "local-beta2"))]
+pub const REWARD: &str = "a84a3fccf2421d40aefc71c80d3b8839cf3ff22900eb6c5b917b821b5bb8d72e";
+#[cfg(not(feature = "local-beta2"))]
+pub const MAX_COST: f64 = 0.075;
+#[cfg(feature = "local-beta2")]
+mod selected {
+    pub const BACKEND: &str = "brass-gumbel-is-mcts/beta2-g1190-v1";
+    pub const MODEL: &str = "d872ea925d6643ee3a3eeec99a52d16c6a78c2de1f757617f1aaaa47d175f864";
+    pub const EXPORT: &str = "39a536967350d02ffcaa1b9aea6a3239777bae03783fabb58d4ae38e45bb73f9";
+    pub const CHECKPOINT: &str = "f228f4dd7f1a913ea11e908cb2ccb53b76cd14ca302da9e2e5479c505d1294f1";
+    pub const PROFILE: &str = "beta2-g1190-neutral/1.0.0";
+    pub const PROFILE_PREFIX: &str = "beta2-g1190-";
+    pub const SCOPE: &str = "part1-local-beta2-test";
+    pub const DECISION: &str = "user-2026-11-10";
+    pub const INDUSTRY_FOCUSES: &[&str] = &["neutral"];
+    pub const BETA: bool = false;
+    pub const REWARD: &str = "49711b4abaa95940928db567fa76ab654a5d60c417e1b5eca8dbb44ffb5327c1";
+    pub const MAX_COST: f64 = 0.025;
+}
 #[cfg(feature = "local-il")]
 mod selected {
     pub const BACKEND: &str = "brass-gumbel-is-mcts/il-v11-2-v1";

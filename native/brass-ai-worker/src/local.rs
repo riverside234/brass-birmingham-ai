@@ -29,7 +29,7 @@ use std::{
 
 pub const PROTOCOL: &str = "brass-local-native/1.0.0";
 pub use crate::local_model::{BACKEND, MODEL, EXPORT, CHECKPOINT, PROFILE, PROFILE_PREFIX, INDUSTRY_FOCUSES};
-pub const REWARD: &str = "a84a3fccf2421d40aefc71c80d3b8839cf3ff22900eb6c5b917b821b5bb8d72e";
+pub use crate::local_model::REWARD;
 // The selected allowance is entirely search work. A single additional second
 // covers retirement, legal completion and host delivery on the original clock.
 const DELIVERY_GRACE_MS: u64 = 1_000;
@@ -243,7 +243,7 @@ fn validate_input(ticket: &Ticket, input: &Input, allowance: u64, remaining: u64
     search::check(
         input.context.model_id == MODEL
             && input.context.reward_id == REWARD
-            && input.context.max_cost == 0.075
+            && input.context.max_cost == crate::local_model::MAX_COST
             && focus_context(&input.context.profile_id)
                 == Some((input.context.style, input.context.intent))
             && input.context.stable_descriptors.is_none()

@@ -64,8 +64,9 @@ public sealed partial class LocalAiUnityDriver
         var capture=Stopwatch.StartNew();var input=NativeInput.Capture(app,replay,actor,new JArray());capture.Stop();
         // Warm the other policy first, then switch under the scheduler lease.
         // This exercises table replacement without retaining two worker pools.
-        var priorModel=NativeModel.Alpha;var warmInput=(JObject)input.DeepClone();
-        warmInput["context"]["model_id"]=priorModel.Model;warmInput["context"]["profile_id"]=priorModel.Profile(industryFocus);
+        var priorModel=NativeModel.Alpha;
+        // A model switch also switches the pinned reward and remaining-cost scale.
+        var warmInput=NativeInput.FromView((JObject)input["view"],new int[4],(JArray)input["recall"],industryFocus,priorModel);
         var cold=Stopwatch.StartNew();var warmRequest=NativeInput.Request(warmInput,"warm-"+Guid.NewGuid().ToString("N"),metadata.GameId,1,4000);
         var warm=new NativeJob(warmRequest,new Stopwatch(),4000,priorK,priorTemperature);
         var warmJob=AiExecutionScheduler.Submit(warm);while(!warmJob.Completion.IsCompleted)yield return null;

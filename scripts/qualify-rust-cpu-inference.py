@@ -13,7 +13,8 @@ Stages:
   regressions  the CPU test suite against the prepared Linux workers
   bundles      every model the league can seat: parity, utility and search heads
   parity       collector outputs against PyTorch on real positions, per model kind
-  teacher      real tables at the production budgets, blended and unblended
+  teacher      real tables at the production budgets, blended and unblended; from g1491 under that recipe
+               (long and short labels, visit-count exploration), with a profile of label verification
   ordinary     real frozen jobs at full width, matched against the GPU path
   rating       a real rated table on CPU and on the service, with the anchor
   startup      per-lane Mono bootstrap, startup phases and peak memory
@@ -49,6 +50,8 @@ MAX_DIVERGED_GAMES = .15
 MAX_DEADLINE_FRACTION = .02
 MAX_REJECTED_LABELS = .05
 BLENDS = (0., .25, 1.)
+TABLES_PER_BLEND = {0.: 8, .25: 4, 1.: 4}
+TABLES_PER_BLEND_REVISED = {0.: 36, .25: 6, 1.: 6}
 EXPECTED_SKIPS = 2
 MINIMUM_TESTS = 60
 # What prepare could not run: it has no bootstrap, so these need one here.
@@ -115,6 +118,35 @@ def check_searches(checks, summary):
         expect(checks, name+'_reaches_k', str(row['requested_k']) in row['effective_k'], row['effective_k'])
         fraction = row['deadline_hits']/max(1, row['searches'])
         expect(checks, name+'_rarely_hits_the_safety_cap', fraction <= MAX_DEADLINE_FRACTION, fraction)
+
+
+def label_summary(tables):
+    """Labels by search profile and exploration, plus what the workers say they sampled."""
+    rows = [row['teacher'] for table in tables for row in table['rows']]
+    summary = {}
+    for name in ('full', 'fast'):
+        mine = [label for label in rows if label.get('profile', 'full') == name]
+        summary[name] = dict(labels=len(mine), explored=sum(label.get('explored') is True for label in mine))
+    receipts = [table['metrics']['cpu_inference'].get('revision') for table in tables]
+    if receipts and all(receipts):
+        summary['worker'] = {key: {profile: sum(r[key][profile] for r in receipts) for profile in ('long', 'short')}
+                             for key in ('decisions', 'sampled', 'changed')}
+        summary['worker']['short_labels'] = sum(r['short_labels'] for r in receipts)
+    return summary
+
+
+def check_revision(checks, jobs, tables, summary):
+    """What the g1491 recipe promises of a table: both label kinds, exploration, and a worker that says so."""
+    expect(checks, 'worker_echoed_the_revision', all(t['metrics']['cpu_inference'].get('revision', {}).get('job') == j['teacher_revision']
+           for t, j in zip(tables, jobs, strict=True)), None)
+    expect(checks, 'long_labels_produced', summary['full']['labels'] > 0, summary['full'])
+    expect(checks, 'short_labels_produced', summary['fast']['labels'] > 0, summary['fast'])
+    expect(checks, 'every_long_label_is_explored', summary['full']['explored'] == summary['full']['labels'], summary['full'])
+    # Short searches sample only in each seat's opening; later ones play the search's own choice.
+    expect(checks, 'short_labels_explore_only_openings', 0 < summary['fast']['explored'] < summary['fast']['labels'], summary['fast'])
+    worker = summary.get('worker')
+    expect(checks, 'worker_counts_match_the_labels', worker is not None and worker['short_labels'] == summary['fast']['labels'] and
+           worker['sampled']['long'] >= summary['full']['labels'] and worker['decisions']['short'] > worker['sampled']['short'], worker)
 
 
 def family(game):
@@ -300,6 +332,49 @@ class Context:
     pass
 
 
+def cpu_view():
+    """The CPUs this process can use, seen from every side.
+
+    A login shell's ``nproc`` can differ from what a launched job sees (a scheduler's cpuset, ``taskset``, a
+    container), so the evidence records each view next to the count the lanes depend on.
+    """
+    view = dict(cpu_count=os.cpu_count(), affinity=len(os.sched_getaffinity(0)) if hasattr(os, 'sched_getaffinity') else None,
+                slurm_cpus_per_task=os.environ.get('SLURM_CPUS_PER_TASK'), omp_num_threads=os.environ.get('OMP_NUM_THREADS'))
+    for name, path in (('online', '/sys/devices/system/cpu/online'), ('present', '/sys/devices/system/cpu/present'),
+                       ('smt_active', '/sys/devices/system/cpu/smt/active'), ('cgroup_cpuset', '/sys/fs/cgroup/cpuset.cpus.effective'),
+                       ('cgroup_cpu_max', '/sys/fs/cgroup/cpu.max')):
+        try:
+            view[name] = Path(path).read_text().strip()
+        except OSError:
+            view[name] = None
+    try:
+        status = Path('/proc/self/status').read_text()
+        view['allowed_list'] = next((line.split(':', 1)[1].strip() for line in status.splitlines() if line.startswith('Cpus_allowed_list')), None)
+    except OSError:
+        view['allowed_list'] = None
+    for name, command in (('nproc', ['nproc']), ('nproc_all', ['nproc', '--all'])):
+        try:
+            view[name] = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10).stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):
+            view[name] = None
+    return view
+
+
+def teacher_recipe(config, state, choice):
+    """Which recipe the teacher tables are planned under: the committed one, or g1491 applied to a copy of it.
+
+    The run is never changed. Before the revision is adopted the copy is what the first revised iteration would use.
+    """
+    from brass_ai.recovery import training_revision_g1491 as g1491
+    from brass_ai.recovery.collector_runtime import recipe
+    revised = choice == 'g1491' or (choice == 'auto' and g1491.due(state))
+    if not revised:
+        return None, config
+    if g1491.applied(config):
+        return g1491.CONTRACT, config
+    return g1491.CONTRACT, dict(g1491.configure(recipe(copy.deepcopy(config)), state), execution=config.get('execution', {}))
+
+
 def environment(c):
     import onnxruntime
     import torch
@@ -314,6 +389,7 @@ def environment(c):
         except OSError:
             socket = '?'
         sockets[socket] = sockets.get(socket, 0)+1
+    # One lane per usable CPU: pinning wraps around, so extra lanes would share a CPU and distort every timing below.
     expect(checks, 'enough_cpus', len(cpus) >= c.args.workers, dict(usable=len(cpus), lanes=c.args.workers, sockets=sockets))
     memory = {}
     meminfo = Path('/proc/meminfo')
@@ -330,7 +406,7 @@ def environment(c):
         limit = resource.getrlimit(resource.RLIMIT_NOFILE)
     except ImportError:
         pass
-    return finish(checks, python=sys.version, torch=torch.__version__, memory=memory, open_file_limit=limit,
+    return finish(checks, python=sys.version, torch=torch.__version__, memory=memory, open_file_limit=limit, cpu_view=cpu_view(),
                   checkpoint=c.snapshot['checkpoint'], cpu_build=c.cpu_value['receipt'], execution=c.execution)
 
 
@@ -476,17 +552,18 @@ def teacher_jobs(c, weight, count, offset):
     """Production-shaped tables at the requested blend, regardless of saved progress."""
     from brass_ai.recovery.teacher_phase import plan_jobs
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+    config = getattr(c, 'teacher_config', c.config)
     state = copy.deepcopy(c.snapshot['state'])
     # Table identities carry the seed, not the blend, so each blend needs its own seeds.
     state['teacher_seed_cursor'] = state.get('teacher_seed_cursor', 0)+offset
     if weight:
         # Stage B's schedule adds .05 before the first use.
-        schedule = 'schedule' in c.config['teacher_phase']['search_value']
+        schedule = 'schedule' in config['teacher_phase']['search_value']
         state['search_value'] = dict(stage=dict(stage='B', w=round(weight-(.05 if schedule else 0.), 2)))
     else:
         # A zero-weight probe must not inherit the run's Stage B/C blend.
         state['search_value'] = dict(stage=dict(stage='A', w=0.))
-    jobs, _ = plan_jobs(c.config, state, model_id=c.snapshot['model_id'], export_hash=c.snapshot['checkpoint']['sha256'], epoch=1, ready=True,
+    jobs, _ = plan_jobs(config, state, model_id=c.snapshot['model_id'], export_hash=c.snapshot['checkpoint']['sha256'], epoch=1, ready=True,
                         native_source=source_fingerprint())
     jobs = [j for j in jobs if j['split'] == 'train'][:count]
     for job in jobs:
@@ -511,8 +588,11 @@ def teacher(c):
         return finish(checks)
     c.readiness = receipt
     jobs = []
+    # A g1491 iteration runs 48 tables at once, so its qualification does too (36+6+6 over the three blends):
+    # the verification and lock contention that stretched g1490's tables from 43 s of search to 76 s grows with the table count.
+    counts = TABLES_PER_BLEND_REVISED if getattr(c, 'revision', None) else TABLES_PER_BLEND
     for number, weight in enumerate(BLENDS):
-        jobs += teacher_jobs(c, weight, 8 if weight == 0 else 4, 100000*number)
+        jobs += teacher_jobs(c, weight, counts[weight], 100000*number)
     expect(checks, 'blend_weights', sorted({j['search_value']['w'] for j in jobs}) == sorted(BLENDS), sorted({j['search_value']['w'] for j in jobs}))
     bootstrap = [build['bootstrap']['binary']['path']]
     if os.name != 'nt':
@@ -538,14 +618,28 @@ def teacher(c):
     check_searches(checks, summary)
     accepted = rejected = rows = 0
     labels_seen = 0
+    handoff = []
     for table, job in zip(tables, jobs, strict=True):
+        began_take = time.perf_counter()
         good, bad = collector.verifier.take(table, job, c.model)
+        handoff.append(time.perf_counter()-began_take)
         accepted += len(good)
         rejected += sum(bad.values())
         rows += len(table['rows'])
         labels_seen += table['metrics']['labels']
     expect(checks, 'labels_produced', accepted > 0, accepted)
     expect(checks, 'labels_accepted', rejected <= MAX_REJECTED_LABELS*max(1, rows), dict(accepted=accepted, rejected=rejected, rows=rows))
+    labels = label_summary(tables)
+    revised = any('teacher_revision' in job for job in jobs)
+    if revised:
+        check_revision(checks, jobs, tables, labels)
+    # Where a labelled turn's time goes: sampled per-turn checks and the one batched model check at hand-off.
+    samples = [t for table in tables for t in table['metrics'].get('verification', [])]
+    verification = dict(
+        handoff_seconds=spread(handoff),
+        deferred_logit_check=spread(t['metrics']['deferred_logit_check']['seconds'] for t in tables if 'deferred_logit_check' in t['metrics']),
+        deferred_rows=sum(t['metrics'].get('deferred_logit_check', {}).get('rows', 0) for t in tables),
+        **{name: spread(t['verification_seconds'] for t in samples if t['profile'] == name and t['rows']) for name in ('full', 'fast')})
     errors = []
     unblended = {}
     for table, job in zip(tables, jobs, strict=True):
@@ -558,7 +652,12 @@ def teacher(c):
     expect(checks, 'value_rows_match_pytorch_blend', errors and max(errors) <= 2*LOGIT_TOLERANCE, max(errors) if errors else None)
     expect(checks, 'every_table_used_cpu', all(t['metrics']['cpu_inference']['backend'] == 'cpu-ort' for t in tables), None)
     expect(checks, 'no_gpu_positions', c.service.metrics['positions'] == positions_before, c.service.metrics['positions']-positions_before)
-    return finish(checks, tables=len(tables), lanes=lanes, wall_seconds=wall, searches=summary, value_error=spread(errors),
+    return finish(checks, tables=len(tables), lanes=lanes, wall_seconds=wall, searches=summary, labels=labels, verification=verification,
+                  budget=budget, revision=jobs[0].get('teacher_revision'), value_error=spread(errors),
+                  # Time a table spent beyond its own searches: the wait on verification and on the shared lock.
+                  search_seconds=spread(sum(s['elapsed_ns'] for s in t['metrics']['searches'])/1e9 for t in tables),
+                  stall_seconds=spread((t['metrics']['elapsed_ns']-sum(s['elapsed_ns'] for s in t['metrics']['searches']))/1e9 for t in tables),
+                  labels_per_table=spread(len(t['rows']) for t in tables),
                   blend_effect={str(k): spread(v) for k, v in unblended.items()},
                   table_seconds=spread(t['metrics']['elapsed_ns']/1e9 for t in tables),
                   mono_bootstrap_seconds=spread(t['metrics']['mono_bootstrap_seconds'] for t in tables),
@@ -600,13 +699,18 @@ def native_arm(c, jobs, name, *, cpu, core_plan=None):
     build = c.cpu_build if cpu else c.gpu_build
     execution = c.cpu_execution if cpu else c.execution
     signature = frozen[0]['provenance']['spec']
+    entered = time.perf_counter()
     with NativePool(ROOT, c.service, execution, build, c.config, signature, mono=c.args.mono, scope='diagnostic', cpu=cpu, core_plan=core_plan) as pool:
         began = time.perf_counter()
         records = pool.collect(frozen)
         elapsed = time.perf_counter()-began
         report = pool.last_collection_report
+        left = time.perf_counter()
+    closed = time.perf_counter()
     games = [admission.read(r['path'], r['native_admission'], allow_diagnostic=True) for r in records]
-    return games, dict(collection_seconds=elapsed, records=len(records), report=report)
+    # Where the stage's time goes besides collection: starting and closing the pool, and this test's own full re-read of every game.
+    outside = dict(pool_start_seconds=began-entered, pool_close_seconds=closed-left, game_read_seconds=time.perf_counter()-closed)
+    return games, dict(collection_seconds=elapsed, records=len(records), report=report, outside_collection=outside)
 
 
 def ordinary(c):
@@ -775,6 +879,11 @@ def main():
     p.add_argument('--device', default='cuda:0')
     p.add_argument('--mono', default='mono')
     p.add_argument('--workers', type=int, default=64)
+    p.add_argument('--revision', choices=('auto', 'g1491', 'none'), default='auto',
+                   help='Plan teacher tables under the g1491 recipe (long and short labels, visit-count exploration); auto does so from g1491')
+    p.add_argument('--teacher-full', type=int, default=640, help='Long-search simulations per turn')
+    p.add_argument('--teacher-fast', type=int, default=None, help='Short-search simulations per turn (default 128 under g1491, else 96)')
+    p.add_argument('--teacher-fast-k', type=int, default=8)
     p.add_argument('--ordinary-games', type=int, default=128, help='Real frozen jobs on the CPU arm')
     p.add_argument('--matched-games', type=int, default=16, help='Of those, also run on the GPU arm')
     p.add_argument('--rating-games', type=int, default=2)
@@ -813,20 +922,23 @@ def main():
                 c = Context()
                 c.args, c.out, c.run, c.snapshot, c.model, c.raw = args, out, run, snapshot, model.eval(), raw
                 c.config = snapshot['state']['signature']['config']
+                c.revision, c.teacher_config = teacher_recipe(c.config, snapshot['state'], args.revision)
+                budget = dict(mode='count', full=args.teacher_full, full_k=16, fast=args.teacher_fast or (128 if c.revision else 96),
+                              fast_k=args.teacher_fast_k, c_scale=1.)
                 c.gpu_build = resolve_ordinary(ROOT, check_build(backend['build']))
                 c.cpu_value = resolve(ROOT, teacher_core=teacher_build(snapshot['state'])['core_source'])
                 c.fixtures = Path(c.gpu_build['b01']['path']).parent/'inputs/fixtures.json'
-                c.block = R.cpu_block(workers=args.workers)
+                c.block = R.cpu_block(workers=args.workers, teacher_budget=budget)
                 R.validate_cpu(c.block)
                 c.execution = snapshot['execution']
                 c.cpu_settings = dict(R.from_config(c.config), native_inference=c.block)
                 with R.scope(c.cpu_settings):
                     c.cpu_execution = R.effective_execution(c.execution)
-                report['budget'] = c.block['teacher_budget']
+                report['budget'], report['revision'] = c.block['teacher_budget'], c.revision
                 report['identity'] = dict(contract=CONTRACT, implementation=report['execution_source']['implementation'],
                     cpu_build=c.cpu_value['receipt']['sha256'], checkpoint=snapshot['checkpoint']['sha256'], workers=args.workers,
                     budget=c.block['teacher_budget'], ordinary_games=args.ordinary_games, matched_games=args.matched_games,
-                    rating_games=args.rating_games)
+                    rating_games=args.rating_games, revision=c.revision)
                 earlier = {} if args.fresh else reusable_stages(ROOT/'artifacts/rust-backend', out, report['identity'])
                 torch.set_num_threads(2)
                 with InferenceService(c.cpu_execution, args.device) as c.service:

@@ -111,9 +111,11 @@ class TurnVerifier:
             accepted,rejected = prepare_rows(frozen, expected=job['expected'], history=self.history,
                                              admitted_sources=self.sources, encoder=self.encoders.value)
             prepared = time.monotonic() if sampled else None
-            if fast:
-                # Short-search turns are four times as many: their model-logit
-                # parity runs batched once per table in take(), off the shared lock.
+            if fast or short_labels:
+                # A g1491 table labels every turn, four times as many as before, and its
+                # long turns reach the shared lock together at the phase boundaries
+                # (0.5 s median, 8 s worst wait at g1490). Their model-logit parity runs
+                # once per table instead, as the table finishes, before anything publishes.
                 locked = None
             else:
                 with self._policy_lock():
@@ -136,15 +138,16 @@ class TurnVerifier:
         check()
         record['raw'].extend(meta['rows'])
         record['accepted'].extend(accepted); record['rejected'].update(rejected)
-        if fast: record['deferred'].extend(accepted)
+        batched = fast or short_labels
+        if batched: record['deferred'].extend(accepted)
         record['last'] = meta['index']
         if sampled:
             ended=time.monotonic()
             timing=dict(index=meta['index'],profile=profile,rows=len(meta['rows']),
                 verification_seconds=ended-began, receive_to_ready_seconds=ended-received,
                 verification_limit_seconds=None,sampling='first-per-profile-and-every-64-turns')
-            if meta['rows'] and not self.diagnostic and fast:
-                timing.update(preparation_seconds=prepared-began,model_check='batched-per-table-in-take')
+            if meta['rows'] and not self.diagnostic and batched:
+                timing.update(preparation_seconds=prepared-began,model_check='batched-per-table')
             elif meta['rows'] and not self.diagnostic:
                 timing.update(preparation_seconds=prepared-began,model_queue_seconds=locked-prepared,
                               model_and_handoff_seconds=ended-locked)
@@ -155,6 +158,23 @@ class TurnVerifier:
             self.cache.pop(identity,None)
             raise
         return dict(job=job['expected'], index=meta['index'], status='ok')
+
+    def settle(self, key):
+        """The model-logit parity of a table's batched rows, once, in one pass.
+
+        A worker calls this as the table finishes, so the shared lock is taken once per
+        table at staggered times; take() runs it if nobody did. Nothing publishes before it.
+        """
+        record = self.cache.get(key)
+        require(record is not None and not self.diagnostic,'Changed/unverified teacher table')
+        if 'settled' not in record:
+            deferred = record.get('deferred', [])
+            began = time.monotonic()
+            if deferred:
+                with self._policy_lock():
+                    self._check_model();check_logits(self.model,deferred)
+            record['settled'] = dict(rows=len(deferred),seconds=time.monotonic()-began) if deferred else {}
+        return record['settled']
 
     def take(self, result, job, model):
         began = time.monotonic()
@@ -182,13 +202,8 @@ class TurnVerifier:
         require(record['last'] == result['metrics'].get('searched_turns',result['metrics']['reserved_turns'])
                 and record['last'] == (64 if job.get('seating') == 'all-seat-search' else 16),
                 'Incomplete turn verification')
-        deferred = record.get('deferred', [])
-        if deferred:
-            # The short-search rows' model-logit parity, in one batched pass.
-            checked = time.monotonic()
-            with self._policy_lock():
-                self._check_model();check_logits(self.model,deferred)
-            result['metrics']['deferred_logit_check'] = dict(rows=len(deferred),seconds=time.monotonic()-checked)
+        settled = self.settle(key)
+        if settled: result['metrics']['deferred_logit_check'] = dict(settled)
         # A verified table can cross the phase boundary exactly once. Fresh
         # loads always use full sealed-shard validation instead of this cache.
         del self.cache[key]

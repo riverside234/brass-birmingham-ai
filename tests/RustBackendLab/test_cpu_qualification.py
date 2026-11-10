@@ -178,6 +178,106 @@ class TeacherJobs(unittest.TestCase):
                     self.assertEqual(c.config, before.config)
 
 
+class CpuView(unittest.TestCase):
+    def test_the_evidence_shows_every_view_of_the_cpu_count(self):
+        view = Q.cpu_view()
+        self.assertTrue({'cpu_count', 'affinity', 'online', 'smt_active', 'cgroup_cpuset', 'allowed_list', 'nproc', 'nproc_all',
+                         'slurm_cpus_per_task', 'omp_num_threads'} <= set(view))
+        self.assertEqual(view['cpu_count'], os.cpu_count())
+        json.dumps(view)
+
+
+def table(long=(), short=(), receipt=None, job=None):
+    def row(label, **fields):
+        return dict(teacher=dict(label, **fields))
+    rows = [row(dict(explored=True) if e else {}) for e in long] + [row(dict(profile='fast'), **({'explored': True} if e else {})) for e in short]
+    metrics = dict(cpu_inference=dict(revision=receipt) if receipt else {})
+    return dict(rows=rows, metrics=metrics)
+
+
+def receipt(job, long=3, short=5, sampled=(3, 2)):
+    return dict(job=job, short_labels=short, decisions=dict(long=long+2, short=short+9), sampled=dict(long=sampled[0], short=sampled[1]),
+                changed=dict(long=1, short=1))
+
+
+class G1491Teacher(unittest.TestCase):
+    job = dict(contract='g1491-job', short_labels=True)
+
+    def verdict(self, *tables_):
+        checks, jobs = {}, [dict(teacher_revision=self.job)]*len(tables_)
+        Q.check_revision(checks, jobs, list(tables_), Q.label_summary(list(tables_)))
+        return {k: v['passed'] for k, v in checks.items()}
+
+    def good(self):
+        return table(long=[True]*3, short=[True]*2+[False]*3, receipt=receipt(self.job))
+
+    def test_a_table_with_both_label_kinds_explored_as_reviewed_passes(self):
+        verdict = self.verdict(self.good())
+        self.assertTrue(all(verdict.values()), verdict)
+        summary = Q.label_summary([self.good(), self.good()])
+        self.assertEqual((summary['full'], summary['fast']), (dict(labels=6, explored=6), dict(labels=10, explored=4)))
+        self.assertEqual(summary['worker']['short_labels'], 10)
+
+    def test_the_revised_qualification_runs_as_many_tables_as_an_iteration(self):
+        from brass_ai.recovery import training_revision_g1491 as g1491
+        self.assertEqual(set(Q.TABLES_PER_BLEND_REVISED), set(Q.BLENDS))
+        self.assertEqual(sum(Q.TABLES_PER_BLEND_REVISED.values()), g1491.TABLES['train'])
+        self.assertEqual(sum(Q.TABLES_PER_BLEND.values()), 16)
+
+    def test_each_departure_fails_by_name(self):
+        for name, bad in [('short_labels_produced', table(long=[True]*3, receipt=receipt(self.job, short=0))),
+                          ('long_labels_produced', table(short=[True, False], receipt=receipt(self.job, long=0, short=2, sampled=(0, 1)))),
+                          ('every_long_label_is_explored', table(long=[True, True, False], short=[True, False], receipt=receipt(self.job, short=2, sampled=(3, 1)))),
+                          ('short_labels_explore_only_openings', table(long=[True], short=[True]*4, receipt=receipt(self.job, long=1, short=4, sampled=(1, 4)))),
+                          ('short_labels_explore_only_openings', table(long=[True], short=[False]*4, receipt=receipt(self.job, long=1, short=4, sampled=(1, 0)))),
+                          ('worker_echoed_the_revision', table(long=[True], short=[True, False], receipt=receipt(dict(self.job, short_labels=False), long=1, short=2))),
+                          ('worker_counts_match_the_labels', table(long=[True], short=[True, False], receipt=receipt(self.job, long=1, short=3))),
+                          ('worker_counts_match_the_labels', table(long=[True]*3, short=[True, False], receipt=receipt(self.job, long=3, short=2, sampled=(1, 1)))),
+                          ('worker_counts_match_the_labels', table(long=[True], short=[True, False]))]:
+            with self.subTest(failed=name, labels=len(bad['rows'])):
+                self.assertFalse(self.verdict(bad)[name])
+
+
+EXPORT = SOURCE_ROOT/'results/joint7-v11-2-g1290-restart-g1290-g1491-20261110T191929753967Z'
+
+
+@unittest.skipUnless((EXPORT/'state.json').exists(), 'Needs the g1491 export')
+class G1491Recipe(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from brass_ai.bank import read
+        cls.state = read(EXPORT/'state.json')
+        cls.config = cls.state['signature']['config']
+
+    def test_the_committed_g1491_run_is_qualified_under_the_revision_by_default(self):
+        from brass_ai.recovery import training_revision_g1491 as g1491
+        for choice in ('auto', 'g1491'):
+            with self.subTest(choice=choice):
+                revision, config = Q.teacher_recipe(self.config, self.state, choice)
+                self.assertEqual(revision, g1491.CONTRACT)
+                self.assertTrue(g1491.applied(config))
+                self.assertEqual(config['execution'], self.config['execution'])
+        self.assertFalse(g1491.applied(self.config))
+        self.assertEqual(Q.teacher_recipe(self.config, self.state, 'none'), (None, self.config))
+        self.assertIsNone(Q.teacher_recipe(self.config, dict(self.state, iteration=1490), 'auto')[0])
+
+    def test_an_adopted_run_is_used_as_it_is(self):
+        _, once = Q.teacher_recipe(self.config, self.state, 'auto')
+        self.assertIs(Q.teacher_recipe(once, self.state, 'auto')[1], once)
+
+    def test_planned_tables_carry_the_revision_and_the_run_is_untouched(self):
+        revision, config = Q.teacher_recipe(self.config, self.state, 'auto')
+        before = copy.deepcopy((self.config, self.state))
+        c = SimpleNamespace(config=self.config, teacher_config=config, readiness=dict(ready=True),
+                            snapshot=dict(state=self.state, model_id=self.state['history'][-1]['model_id'], checkpoint=dict(sha256='b'*64)))
+        revised = Q.teacher_jobs(c, 0., 4, 0)
+        self.assertEqual(len(revised), 4)
+        self.assertTrue(all(j['split'] == 'train' and j['teacher_revision']['short_labels'] is True for j in revised))
+        plain = Q.teacher_jobs(SimpleNamespace(**dict(vars(c), teacher_config=self.config)), 0., 4, 0)
+        self.assertTrue(all('teacher_revision' not in j for j in plain))
+        self.assertEqual((self.config, self.state), before)
+
+
 class League(unittest.TestCase):
     def test_entries_cover_learner_pool_anchor_and_population_once(self):
         make = lambda name: dict(model_id=name, path=name, sha256=name)
@@ -458,6 +558,28 @@ class StagesOnFixtures(unittest.TestCase):
         self.assertIn('8', result['searches']['fast']['effective_k'])
         self.assertEqual(set(result['blend_effect']), {'0.25', '1.0'})
         self.assertEqual(result['mono_bootstrap_seconds']['samples'], 16)
+        self.assertNotIn('worker', result['labels'])
+        self.assertIsNone(result['revision'])
+
+    def test_teacher_stage_under_the_g1491_revision_labels_short_searches_and_explores(self):
+        from brass_ai.recovery import training_revision_g1491 as g1491
+        planned = Q.teacher_jobs
+
+        def revised(*args):
+            jobs = planned(*args)
+            for job in jobs:
+                job['teacher_revision'] = g1491._job_block(g1491.EXPLORATION)
+            return jobs
+        with patch('brass_ai.rust_backend.lab_shadow.teacher_build', return_value=self.build),                 patch('brass_ai.rust_backend.lab_cpu_runtime.resolve', return_value=self.value),                 patch.object(Q, 'teacher_jobs', revised), patch.object(Q, 'ROOT', self.root):
+            result = Q.teacher(self.c)
+        self.assertTrue(result['passed'], {k: v for k, v in result['checks'].items() if not v['passed']})
+        labels = result['labels']
+        self.assertGreater(labels['fast']['labels'], 0)
+        self.assertEqual(labels['full']['explored'], labels['full']['labels'])
+        self.assertEqual(result['revision'], g1491._job_block(g1491.EXPLORATION))
+        self.assertGreater(result['verification']['deferred_rows'], 0)
+        self.assertEqual(result['verification']['deferred_logit_check']['samples'], 16)
+        self.assertEqual(result['budget']['fast'], 24)
 
 
 if __name__ == '__main__':

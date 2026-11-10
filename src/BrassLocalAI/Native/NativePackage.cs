@@ -43,7 +43,7 @@ namespace BrassLegacyAI.Native
             ModelSpec=NativeModel.FromDirectory(Directory);
             var build=JObject.Parse(File.ReadAllText(Path.Combine(Directory,"build.json")));
             if((string)build["format"]!="brass-local-package/1.0.0" || (string)build["backend"]!=ModelSpec.Backend ||
-                (string)build["target"]!="x86_64-pc-windows-gnu" || (string)build["scope"]!=(ModelSpec==NativeModel.Alpha?"local-alpha-test":ModelSpec==NativeModel.Beta?"local-beta-test":"local-il-test")) throw new InvalidDataException("Unsupported native package");
+                (string)build["target"]!="x86_64-pc-windows-gnu" || (string)build["scope"]!=ModelSpec.Scope.Substring("part1-".Length)) throw new InvalidDataException("Unsupported native package");
             var files=(JArray)build["files"];
             string[] required={"brass-ai-local.exe","policy.json","policy-k8.json","policy-k32.json","policy-t15.json","policy-k8-t15.json","policy-k32-t15.json","warmup.json","model/manifest.json","model/model.json","model/model.onnx","model/onnxruntime.dll"};
             if(files.Count!=required.Length || required.Any(n=>files.Count(f=>(string)f["path"]==n)!=1)) throw new InvalidDataException("Incomplete native package");
@@ -70,7 +70,9 @@ namespace BrassLegacyAI.Native
         {
             if(model==null)throw new InvalidDataException("Missing NN manifest");
             var spec=NativeModel.FromModel((string)model["model_id"]);
-            if(spec==NativeModel.IL) {
+            if((string)model["reward_id"]!=spec.Reward || (double?)model["max_cost"]!=spec.MaxCost)
+                throw new InvalidDataException("NN reward identity differs from its registered checkpoint");
+            if(spec==NativeModel.IL || spec==NativeModel.Beta2) {
                 if(acceptance==null || (string)acceptance["version"]!="brass-local-utility-acceptance/1.0.0" ||
                     (string)acceptance["scope"]!=spec.Scope || (string)acceptance["decision"]!=spec.Decision ||
                     (string)acceptance["model_id"]!=spec.Model || (string)acceptance["export_sha256"]!=spec.Export ||
@@ -78,7 +80,7 @@ namespace BrassLegacyAI.Native
                     (string)model["checkpoint_sha256"]!=spec.Checkpoint || (bool?)acceptance["final_model"]!=false ||
                     (bool?)model["mechanical_only"]!=true || model["utility_calibration"]?.Type!=JTokenType.Null ||
                     acceptance["utility_calibration"]?.Type!=JTokenType.Null)
-                    throw new InvalidDataException("IL lacks its exact outcome-prior export acceptance");
+                    throw new InvalidDataException(spec.Label+" lacks its exact local export acceptance");
                 return;
             }
             if(spec==NativeModel.Beta) {

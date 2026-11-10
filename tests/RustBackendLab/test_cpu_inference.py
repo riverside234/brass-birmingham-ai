@@ -685,9 +685,13 @@ class NativeWorkers(unittest.TestCase):
         self.assertGreaterEqual(receipt['sampled']['long'], len(long))
         self.assertGreaterEqual(receipt['decisions']['short'], len(short))
         self.assertGreater(receipt['decisions']['short'], receipt['sampled']['short'])
+        # The worker already ran the table's one batched logit check as it finished; take() only reports it.
+        settled = verifier.settle(job['expected']['job_id'])
+        self.assertEqual(settled['rows'], len(rows))
         accepted, rejected = verifier.take(result, job, self.model)
         self.assertEqual(len(accepted)+sum(rejected.values()), len(rows))
-        self.assertEqual(result['metrics']['deferred_logit_check']['rows'], sum(label_profile(r.label) == 'fast' for r in accepted))
+        # Every row's logit parity ran once, as the table finished: no turn waited for the shared model lock.
+        self.assertEqual(result['metrics']['deferred_logit_check'], settled)
         # The same job plays the same explored game again.
         _, again, _ = self.run_all_seat(0., budget, revision)
         played = lambda table: [(r['teacher']['turn_key'], r['teacher']['played_action'], r['teacher'].get('explored')) for r in table['rows']]
