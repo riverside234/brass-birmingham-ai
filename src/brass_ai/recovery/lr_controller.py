@@ -215,6 +215,10 @@ def decide(state,measurements):
         vp=measurements.get('selfplay_vp_per_seat')
         state['health_window']=(state['health_window']+[vp if finite(vp) and vp>=0 else None])[-5:]
         if not measurements['warmup_done']:reason='warmup'
+        elif measurements.get('hold'):
+            # g1491 beta re-calibration: a fixed LR, and this iteration's KL does not
+            # count toward a later raise or cut.
+            reason='teacher_beta_calibration'
         else:
             state['window']=(state['window']+[dict(kl=kl,early_stop=measurements['early_stop'])])[-3:]
             window_size=len(state['window'])
@@ -282,9 +286,10 @@ def finish_iteration(optimizer,update,config,sampling,games,policy_id,kinds,anch
         guard=update['kl_guard']
         require(guard['contract']==ppo_kl_control.guard_contract(config['update']) and not guard['sampled_kl_stop_enabled'] and
             guard['stop_reason']!='sampled_full_dataset','PPO LR feedback received an incompatible sampled-KL stop')
+    from .training_revision_g1491 import holds_ppo_lr
     measurements=dict(kl=probe['categorical_kl'] if probe['positions'] else None,
         steps_done=update['optimizer_steps'],steps_planned=update['optimizer_steps_planned'],
-        early_stop=update['kl_early_stop'],warmup_done=update['controller_warmup_done'],
+        early_stop=update['kl_early_stop'],warmup_done=update['controller_warmup_done'],hold=holds_ppo_lr(config),
         data_signature=collection_signature(config,sampling),anchor_distance=probe.get('anchor_distance'),
         anchor_groups=probe.get('anchor_groups'),anchor_unassigned_positions=probe.get('anchor_unassigned_positions'),
         anchor_identity=anchor,calibrated_anchor=calibrated_anchor,economic_health=economic_health,**game_health(games,policy_id,kinds))

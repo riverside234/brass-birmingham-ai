@@ -17,6 +17,27 @@ IDENTITY = ('job_id', 'game_id', 'generation', 'model_id', 'export_hash', 'rewar
             'source_fingerprint', 'epoch')
 # c2 is the Gumbel c_scale. The qualified GPU binaries only ever produce .1.
 C_SCALES = (.1, 1.)
+# A short-search label carries profile "fast"; long labels have no profile field.
+SHORT_K = (2, 4, 8, 16)
+
+
+def label_profile(label):
+    """'full' (long search) or 'fast' (short search)."""
+    profile = label.get('profile', 'full')
+    require(profile in ('full', 'fast') and ('profile' not in label or profile == 'fast'),
+            'Unknown teacher label profile')
+    return profile
+
+
+def check_turn(label, row_round, job):
+    """Long labels belong to the reserved turns; short labels only to the other turns of a g1491 job."""
+    reserved = row_round == job['reservations'][str(label['seat'])][label['phase']]
+    if label_profile(label) == 'fast':
+        require((job.get('teacher_revision') or {}).get('short_labels') is True,
+                'Short-search labels need the g1491 teacher revision')
+        require(not reserved, 'Short-search label on a reserved long-search turn')
+    else:
+        require(reserved, 'Teacher label outside reserved turn')
 
 
 def vector(value, size, name):
@@ -73,11 +94,15 @@ def validate_improved_policy(label, choices):
     for key in ('requested_k', 'effective_k', 'frozen_n', 'completed_trajectories',
                 'node_trajectories', 'completed_rounds'):
         require(type(label[key]) is int and label[key] >= 0, 'Invalid teacher search counter ' + key)
+    # Long searches always ask for K=16. A short-search label (g1491) records its own K.
+    profile = label_profile(label)
+    requested = 16 if profile == 'full' else label['requested_k']
     root_width = label.get('root_legal_count',len(ids)) if label['kind'] == 'continuation' else len(ids)
-    require(type(root_width) is int and root_width >= 1 and
-            label['requested_k'] == 16 and label['effective_k'] in (1, 2, 4, 8, 16)
-            and label['effective_k'] <= root_width,
+    require(type(root_width) is int and root_width >= 1 and requested in SHORT_K and
+            label['requested_k'] == requested and label['effective_k'] in (1, 2, 4, 8, 16)
+            and label['effective_k'] <= min(root_width, requested),
             'Teacher K differs')
+    require(type(label.get('explored', False)) is bool, 'Invalid teacher exploration flag')
     require(sum(label['counts']) == label['node_trajectories'] <= label['completed_trajectories'],
             'Teacher completed watermark differs')
     require(label['completed_trajectories'] <= label['frozen_n'] <= 1_000_000,

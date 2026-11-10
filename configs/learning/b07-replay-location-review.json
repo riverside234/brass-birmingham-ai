@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "7ed433c587f48f98b27ef68130a4bd1a9d2cf50a48192f6c168366eaf8aeb510",
+  "execution_implementation": "2a7a24f4821f148da4606f1fc9629564f4985110f42a8b7d27687e0c3efda236",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -443,6 +443,11 @@
       "implementation": "dbbaff016f1027a696d1e73eaefc5f6060d96cf297e2ccead0e9513c6ce180ce",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "00f70fd2e3e41b3c8def90f83fa71d158b68133d7d112dccf0c4f37ec400f932"
+    },
+    {
+      "implementation": "7ed433c587f48f98b27ef68130a4bd1a9d2cf50a48192f6c168366eaf8aeb510",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "3deebd69c19cde31e3966232441bd7e1de55def5898658766e260200b867de52"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -590,6 +595,12 @@
     "contract": "rust-branch-restart/1.0.0",
     "source_report": "ai-research/G1290_BRANCH_RESTART.md",
     "scope": "A new run folder restarts from the committed g1290 state (verified results export) and its retained weights: g1307 recipe without the entropy raise, Stage A of 30 iterations, new PPO/PPG optimizers, empty PPG, label and value buffers, four shadow iterations to measure a new teacher beta, Stage A counts paused for eight iterations. The source run is read only.",
+    "qualified_implementation_unchanged": true
+  },
+  "training_revision_g1491": {
+    "contract": "training-revision-g1491/1.0.0",
+    "source_report": "ai-research/G1491_TEACHER_REVISION.md",
+    "scope": "One user-requested recipe revision at a committed boundary from g1491 on the g1290 restart run: 48 teacher tables, labels from long and short searches with L=.6 mean(L_long)+.4 mean(L_short), 2048 teacher rows per PPO step from a two-iteration buffer (age weights 4:3), one PPO epoch, root visit-count sampling of the played action for each seat's first seven actions of each era and every long search (CPU teacher overlay), and a two-iteration shadow re-calibration of the fixed beta with the PPO LR controller held. Weights, Adams, RNG, replay, PPG and search-head state are preserved; old teacher labels and their beta retire together.",
     "qualified_implementation_unchanged": true
   }
 }

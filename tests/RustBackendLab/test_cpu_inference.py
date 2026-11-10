@@ -576,12 +576,13 @@ class NativeWorkers(unittest.TestCase):
         job['readiness'] = dict(ready=True, reward_id=job['expected']['reward_id'])
         return job
 
-    def run_all_seat(self, weight, budget):
+    def run_all_seat(self, weight, budget, revision=None):
         from brass_ai.rust_backend.lab_teacher import Worker
         from brass_ai.rust_backend.lab_teacher_finalization import TurnVerifier
         native = Path(os.environ['BRASS_CPU_NATIVE'])
         state = json.loads((native/'brass-ai-core/tests/data/initial-state.json').read_text())
         job = self.all_seat_job(weight)
+        if revision is not None:job['teacher_revision'] = revision
         self.assertEqual(job['search_value']['w'], weight)
         cancel = threading.Event()
         from brass_ai.rust_backend.lab_cpu_runtime import count_search_limits
@@ -653,6 +654,48 @@ class NativeWorkers(unittest.TestCase):
         for row in result['value_rows'][:6]:
             utility, _ = self.root_heads(row)
             np.testing.assert_allclose(row['v'], utility[0].double().numpy(), rtol=2e-4, atol=2e-4)
+
+    def test_a_g1491_table_labels_short_searches_and_explores_from_visit_counts(self):
+        from brass_ai.recovery import training_revision_g1491 as R
+        from brass_ai.recovery.teacher_labels import check_turn, label_profile, validate_improved_policy
+        budget = dict(mode='count', full=64, full_k=16, fast=32, fast_k=8, c_scale=1.)
+        revision = R._job_block(R.EXPLORATION)
+        job, result, verifier = self.run_all_seat(0., budget, revision)
+        rows, metrics = result['rows'], result['metrics']
+        long = [r for r in rows if label_profile(r['teacher']) == 'full']
+        short = [r for r in rows if label_profile(r['teacher']) == 'fast']
+        self.assertTrue(long and short)
+        self.assertGreater(len(short), len(long))
+        self.assertEqual(metrics['reserved_turns'], 16)
+        for row in rows:
+            label = row['teacher']
+            self.assertIsNotNone(validate_improved_policy(label, row['choices']))
+            check_turn(label, row['view']['context']['round'], job)
+            self.assertEqual(label['requested_k'], 8 if label in [r['teacher'] for r in short] else 16)
+            self.assertLessEqual(label['effective_k'], label['requested_k'])
+        # Every long-search action is sampled from its root visit counts; short ones only in each seat's opening.
+        self.assertTrue(all(r['teacher'].get('explored') is True for r in long))
+        opening = [r for r in short if r['teacher'].get('explored')]
+        self.assertTrue(opening and len(opening) < len(short))
+        self.assertTrue(all(r['teacher']['played_action'] in r['teacher']['legal_ids'] for r in rows))
+        receipt = metrics['cpu_inference']['revision']
+        self.assertEqual(receipt['job'], revision)
+        self.assertEqual(receipt['short_labels'], len(short))
+        self.assertGreater(receipt['changed']['long'], 0)
+        self.assertGreaterEqual(receipt['sampled']['long'], len(long))
+        self.assertGreaterEqual(receipt['decisions']['short'], len(short))
+        self.assertGreater(receipt['decisions']['short'], receipt['sampled']['short'])
+        accepted, rejected = verifier.take(result, job, self.model)
+        self.assertEqual(len(accepted)+sum(rejected.values()), len(rows))
+        self.assertEqual(result['metrics']['deferred_logit_check']['rows'], sum(label_profile(r.label) == 'fast' for r in accepted))
+        # The same job plays the same explored game again.
+        _, again, _ = self.run_all_seat(0., budget, revision)
+        played = lambda table: [(r['teacher']['turn_key'], r['teacher']['played_action'], r['teacher'].get('explored')) for r in table['rows']]
+        self.assertEqual(played(result), played(again))
+        # Without the revision the same binary labels long searches only and never explores.
+        _, plain, _ = self.run_all_seat(0., budget)
+        self.assertTrue(all('profile' not in r['teacher'] and 'explored' not in r['teacher'] for r in plain['rows']))
+        self.assertNotIn('revision', plain['metrics']['cpu_inference'])
 
     def test_blended_search_differs_from_the_unblended_one(self):
         budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)

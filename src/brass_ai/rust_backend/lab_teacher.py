@@ -55,6 +55,8 @@ def _validate_job(job,producer):
     from brass_ai.recovery.teacher_phase import reserved_rounds
     require(job['reservations'] == {str(s):reserved_rounds(job['seed'],job['sampling_seed'],s) for s in range(4)},
             'Teacher reservation stream differs')
+    from brass_ai.recovery.training_revision_g1491 import validate_job as validate_revision
+    validate_revision(job)
     return e
 
 
@@ -137,7 +139,11 @@ class Worker:
                 if kind == 'evaluate':self.send(self.client.evaluate(meta,payload));continue
                 require(not payload,'Unexpected teacher binary payload')
                 if kind == 'turn':
-                    require(not calibration and verifier is not None and len(rows)+len(meta['rows']) <= 32,
+                    # Long labels: 16 reserved turns, two actions each. A g1491 job
+                    # also labels its short searches: all 64 turns.
+                    revision = getattr(self, 'job', {}).get('teacher_revision')
+                    require(not calibration and verifier is not None and
+                            len(rows)+len(meta['rows']) <= (128 if revision else 32),
                             'Unexpected/unverified/excess teacher turn')
                     if counted:
                         # A fixed-count search never reads its clock, so the worker may
@@ -170,6 +176,11 @@ class Worker:
                             'Incomplete/misrouted teacher table')
                     require(not self.cancel.is_set(),'Teacher table cancelled before publication')
                     require(meta.get('value_rows', []) == values, 'Changed root value stream')
+                    revision = getattr(self, 'job', {}).get('teacher_revision')
+                    # The worker echoes the revision it ran; a stale binary would label nothing short.
+                    require(revision is None or
+                            (meta['metrics'].get('cpu_inference') or {}).get('revision', {}).get('job') == revision,
+                            'CPU teacher did not run the g1491 revision; rerun scripts/prepare-rust-cpu-inference.py')
                     return dict(job_id=expected['job_id'],rows=rows,metrics=meta['metrics'],result=meta['result'],
                                 value_rows=values, final_spent=meta.get('final_spent'))
                 else:raise ValueError('Unknown teacher event')

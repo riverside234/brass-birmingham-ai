@@ -59,13 +59,56 @@ def summary(values):
                  p90=float(np.quantile(finite, .9))) if finite else dict(median=None, p10=None, p90=None))
 
 
+def profile(row):
+    """'full' for a long-search label, 'fast' for a short-search one (g1491)."""
+    return row.label.get('profile', 'full')
+
+
 def heldout_measure(model, rows):
+    """Long-label KL by phase, as before g1491; short-search labels under 'short' when present."""
     logits = policy_logits(model, rows); out = {}
-    for phase in ('all', *PHASES):
-        pairs = [(r, l) for r, l in zip(rows, logits) if phase == 'all' or r.label['phase'] == phase]
-        out[phase] = dict(rows=len(pairs), kl=float(np.mean([kl(r.label['target'], softmax(l)) for r, l in pairs])) if pairs else None,
+    def measure(pairs):
+        return dict(rows=len(pairs), kl=float(np.mean([kl(r.label['target'], softmax(l)) for r, l in pairs])) if pairs else None,
             top1=float(np.mean([np.argmax(r.label['target']) == np.argmax(l) for r, l in pairs])) if pairs else None)
+    long = [(r, l) for r, l in zip(rows, logits) if profile(r) == 'full']
+    for phase in ('all', *PHASES):
+        out[phase] = measure([(r, l) for r, l in long if phase == 'all' or r.label['phase'] == phase])
+    short = [(r, l) for r, l in zip(rows, logits) if profile(r) == 'fast']
+    if short: out['short'] = measure(short)
     return out
+
+
+def chunks(rows, max_rows=512, max_cells=131072):
+    """Index lists in increasing legal width, within the PPO microbatch bounds."""
+    order = sorted(range(len(rows)), key=lambda i: (len(rows[i].label['legal_ids']), i))
+    result = []; part = []; width = 0
+    for i in order:
+        wide = max(width, len(rows[i].label['legal_ids']))
+        if part and (len(part) + 1 > max_rows or (len(part) + 1) * wide > max_cells):
+            result.append(part); part = []; wide = len(rows[i].label['legal_ids'])
+        part.append(i); width = wide
+    if part: result.append(part)
+    return result
+
+
+def weighted_gradients(model, rows, weights, parameters):
+    """Exact gradients of sum_i w_i KL(target_i || policy_i), accumulated over chunks."""
+    sums = [None] * len(parameters); total = 0.; per_row = [0.] * len(rows)
+    for part in chunks(rows):
+        selected = [rows[i] for i in part]
+        logits = forward_policy(model, selected).float()
+        target = torch.zeros_like(logits)
+        for j, r in enumerate(selected): target[j, :len(r.label['target'])] = target.new_tensor(r.label['target'])
+        logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
+        losses = (torch.special.xlogy(target, target) - target * logp).sum(-1)
+        loss = (losses * losses.new_tensor([weights[i] for i in part])).sum()
+        require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
+        gradients = torch.autograd.grad(loss, parameters, allow_unused=True)
+        for k, g in enumerate(gradients):
+            if g is not None: sums[k] = g if sums[k] is None else sums[k] + g
+        total += float(loss.detach())
+        for i, value in zip(part, losses.detach().double().cpu().tolist()): per_row[i] = value
+    return total, sums, per_row
 
 
 class TeacherTerm:
@@ -94,6 +137,9 @@ class TeacherTerm:
         self.beta_used = 1. if self.mode == 'shadow' else self.beta
         self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.
         self.presentations = Counter(); self.used = set(); self.improvement_by_phase = {}
+        from .training_revision_g1491 import KEY as REVISION
+        # g1491: L = a mean(L_long) + (1-a) mean(L_short); None keeps one long-only pool.
+        self.long_weight = config[REVISION]['labels']['long_weight'] if REVISION in config else None
         if self.mode != 'off':
             logits = policy_logits(model, [r for _, r in aged_rows])
             for age in sorted({a for a, _ in aged_rows}):
@@ -106,8 +152,29 @@ class TeacherTerm:
                 if not skip:
                     self.rows.extend(r for r, _ in selected); self.ages.extend([age] * len(selected))
             for phase in PHASES:
-                values = [kl(r.label['target'], softmax(r.label['logits'])) for a, r in aged_rows if a == 0 and r.label['phase'] == phase]
+                values = [kl(r.label['target'], softmax(r.label['logits'])) for a, r in aged_rows
+                          if a == 0 and r.label['phase'] == phase and profile(r) == 'full']
                 self.improvement_by_phase[phase] = float(np.mean(values)) if values else None
+        self.profiles = [profile(r) for r in self.rows]
+        require(self.long_weight is not None or all(p == 'full' for p in self.profiles),
+                'Short-search teacher labels need the g1491 recipe')
+
+    def stratified(self, step):
+        """Age-weighted draws from each pool; per-row weights give each pool its share of the loss."""
+        n = self.config['term']['rows_per_step']; weights = self.config['buffer']['age_weights']
+        long = [i for i, p in enumerate(self.profiles) if p == 'full']
+        short = [i for i, p in enumerate(self.profiles) if p == 'fast']
+        # A missing pool gives the other one the whole loss, so beta keeps its scale.
+        if long and short: want, share = round(self.long_weight * n), self.long_weight
+        else: want, share = (n, 1.) if long else (0, 0.)
+        def draw(pool, count, stream):
+            picked = sample_indices([self.ages[i] for i in pool], weights, count, seed=self.seed,
+                                    generation=self.generation, step=step, stream=stream)
+            return [pool[j] for j in picked]
+        picked_long, picked_short = draw(long, want, 'long'), draw(short, n - want, 'short')
+        row_weights = ([share / len(picked_long)] * len(picked_long) if picked_long else []) + \
+            ([(1 - share) / len(picked_short)] * len(picked_short) if picked_short else [])
+        return picked_long + picked_short, row_weights, len(picked_long)
 
     @property
     def active(self): return self.mode != 'off' and bool(self.rows)
@@ -115,18 +182,31 @@ class TeacherTerm:
     def apply(self, model, actor, step):
         if not self.active: return
         began = time.perf_counter()
-        indices = sample_indices(self.ages, self.config['buffer']['age_weights'], self.config['term']['rows_per_step'],
-                                 seed=self.seed, generation=self.generation, step=step)
+        mix = None
+        if self.long_weight is None:
+            indices = sample_indices(self.ages, self.config['buffer']['age_weights'], self.config['term']['rows_per_step'],
+                                     seed=self.seed, generation=self.generation, step=step)
+        else:
+            indices, row_weights, long_count = self.stratified(step)
         rows = [self.rows[i] for i in indices]
         parameters = tuple(p for n, p in model.named_parameters() if n.startswith(ACTOR_PREFIXES) and p.requires_grad)
         with policy_context(model):
-            logits = forward_policy(model, rows).float()
-            target = torch.zeros_like(logits)
-            for i, r in enumerate(rows): target[i, :len(r.label['target'])] = target.new_tensor(r.label['target'])
-            logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
-            loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
-            require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
-            gradients = torch.autograd.grad(loss, parameters, allow_unused=True)
+            if self.long_weight is None:
+                logits = forward_policy(model, rows).float()
+                target = torch.zeros_like(logits)
+                for i, r in enumerate(rows): target[i, :len(r.label['target'])] = target.new_tensor(r.label['target'])
+                logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
+                loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
+                require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
+                gradients = torch.autograd.grad(loss, parameters, allow_unused=True)
+            else:
+                # 2048 rows do not fit one forward: exact gradient sums over PPO-sized chunks.
+                total, gradients, per_row = weighted_gradients(model, rows, row_weights, parameters)
+                loss = torch.tensor(total)
+                mean = lambda values: float(np.mean(values)) if values else None
+                mix = dict(long_rows=long_count, short_rows=len(rows) - long_count,
+                           long_loss=mean(per_row[:long_count]), short_loss=mean(per_row[long_count:]),
+                           long_share=sum(row_weights[:long_count]))
         by_parameter = {id(p): g for p, g in zip(parameters, gradients)}
         zero = next(model.parameters()).new_zeros(())
         an, tn, dot = zero, zero, zero
@@ -152,7 +232,8 @@ class TeacherTerm:
                 else: p.grad.add_(g)
         self.steps.append(dict(step=step, rows=len(rows), loss=float(loss.detach()), raw_share=raw_share,
             share=raw_share * self.beta_used if raw_share is not None else None,
-            cosine=d / (a * t) if measured and a * t > 0 else None, actor_norm=a if measured else None, teacher_norm=t * self.beta_used))
+            cosine=d / (a * t) if measured and a * t > 0 else None, actor_norm=a if measured else None, teacher_norm=t * self.beta_used,
+            **(mix or {})))
         for i in indices: self.presentations[i] += 1; self.used.add(i)
         self.seconds += time.perf_counter() - began
 
@@ -177,7 +258,15 @@ class TeacherTerm:
         def counts(key):
             return dict(Counter({str(k): sum(n for i, n in self.presentations.items() if key(i) == k)
                                  for k in {key(i) for i in self.presentations}}))
-        return dict(mode=self.mode, beta=self.beta_used, beta_next=self.beta, steps=len(self.steps), rows=len(self.rows),
+        mix = {}
+        if self.long_weight is not None:
+            losses = lambda key: summary([s.get(key) for s in self.steps])
+            mix = dict(long_weight=self.long_weight, rows_by_profile=dict(Counter(self.profiles)),
+                presentations_by_profile=counts(lambda i: self.profiles[i]),
+                distinct_by_profile=dict(Counter(self.profiles[i] for i in self.used)),
+                long_loss=losses('long_loss'), short_loss=losses('short_loss'),
+                rows_per_step=self.config['term']['rows_per_step'])
+        return dict(mode=self.mode, beta=self.beta_used, beta_next=self.beta, steps=len(self.steps), rows=len(self.rows), **mix,
             fixed_beta=self.qualification['beta'] if self.qualification and self.qualification['passed'] else None,
             gradient_qualification=copy.deepcopy(self.qualification),
             projected_fixed_share=summary([s['raw_share']*self.beta for s in self.steps if s['raw_share'] is not None])

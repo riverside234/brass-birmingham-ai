@@ -77,7 +77,8 @@ def signature_transition(before,after):
     if old_revised and not new_revised:return False
     from brass_ai.recovery.training_revision_g1294 import compatible
     from brass_ai.recovery.training_revision_g1307 import compatible as lr_floor_compatible
-    if not compatible(old,new) or not lr_floor_compatible(old,new):return False
+    from brass_ai.recovery import training_revision_g1491 as g1491
+    if not compatible(old,new) or not lr_floor_compatible(old,new) or not g1491.compatible(old,new):return False
     # The projection drops the schedule, so its Stage A length must not change here.
     stage_a=lambda c:c.get('teacher_phase',{}).get('search_value',{}).get('schedule',{}).get('stage_a_iterations')
     if old_revised and stage_a(old)!=stage_a(new):return False
@@ -85,9 +86,17 @@ def signature_transition(before,after):
     except (ValueError,KeyError,TypeError):return False
     if is_on(new):
         config_ok=False
-        if is_on(old) or is_shadow(old) and old['teacher_phase']['term']['shadow_iterations']==4:
+        if is_on(old) or is_shadow(old) and old['teacher_phase']['term']['shadow_iterations']==g1491.shadow_iterations(old):
             expected=copy.deepcopy(old_compare);expected['teacher_phase']['mode']='on'
             expected['teacher_phase']['term']['share_target']=new['teacher_phase']['term']['share_target']
+            config_ok=expected==new_compare
+    elif g1491.applied(new) and not g1491.applied(old):
+        # The g1491 revision re-measures beta: the on recipe goes back to a two-iteration shadow.
+        config_ok=False
+        if is_on(old) and is_shadow(new):
+            expected=copy.deepcopy(old_compare);expected['teacher_phase']['mode']='shadow'
+            expected['teacher_phase']['term'].update(share_target=new['teacher_phase']['term']['share_target'],
+                shadow_iterations=g1491.SHADOW_ITERATIONS)
             config_ok=expected==new_compare
     elif is_shadow(old):
         expected=copy.deepcopy(old_compare);expected['teacher_phase']['term']['share_target']=new.get('teacher_phase',{}).get('term',{}).get('share_target')
@@ -138,18 +147,23 @@ def rebind_backend(previous,updated):
         from brass_ai.learning.contracts import SOURCE_ROOT
         from .lab_reward_runtime import resolve
         if not is_revised(previous['signature']['config']):build=resolve(SOURCE_ROOT,build)
+    from brass_ai.recovery.training_revision_g1491 import tables
     before=previous['native_backend'];after=copy.deepcopy(before)
     after['config_sha256']=digest(updated['signature']['config'])
-    after['shadow']=dict(contract=CONTRACT,tables=dict(train=28,held_out=4),
+    after['shadow']=dict(contract=CONTRACT,tables=tables(updated['signature']['config']),
         teacher_build=build['receipt'],generation=previous['iteration'])
     from .lab_teacher_activation import is_on,authorize,CONTRACT as ON
     if is_on(updated['signature']['config']):
         q=authorize(previous,updated['signature']['config'])
-        after['teacher']=dict(contract=ON,tables=dict(train=28,held_out=4),gradient_qualification=q['sha256'],
+        after['teacher']=dict(contract=ON,tables=tables(updated['signature']['config']),gradient_qualification=q['sha256'],
             beta=q['beta'],qualified_generation=q['qualified_generation'],generation=previous['iteration'])
         options=updated['signature']['config']['teacher_phase']['search_value']
         if 'schedule' in options:
             after['teacher'].update(stage_schedule=digest(options['schedule']),ppg_beta_floor=.25)
+    else:
+        from brass_ai.recovery.training_revision_g1491 import applied
+        # A g1491 re-calibration retires the old fixed beta until the next reviewed switch.
+        if applied(updated['signature']['config']):after.pop('teacher',None)
     updated['native_backend']=after
     updated['native_backend_switch']=dict(checkpoint=copy.deepcopy(previous['history'][-1]),
         before=copy.deepcopy(before),after=copy.deepcopy(after))

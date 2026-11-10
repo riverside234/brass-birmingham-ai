@@ -63,7 +63,12 @@ class TurnVerifier:
         fast = profile == 'fast'
         search_ns, post_ns = (800_000_000,int(FAST_POST_SECONDS*1e9)) if fast else (4_000_000_000,1_000_000_000)
         if self.search_limits is not None:search_ns = self.search_limits[profile]
-        require(not fast or (job.get('seating') == 'all-seat-search' and not meta['rows']), 'Fast searches cannot label')
+        # Only a g1491 job labels its short searches; those rows say so themselves.
+        short_labels = (job.get('teacher_revision') or {}).get('short_labels') is True and not self.diagnostic
+        require(not fast or (job.get('seating') == 'all-seat-search' and (short_labels or not meta['rows'])),
+                'Fast searches cannot label')
+        require(all((row.get('teacher', {}).get('profile') == 'fast') == fast for row in meta['rows']),
+                'Teacher label profile differs from its search')
         require(type(meta['remaining_ns']) is int and 0 <= meta['remaining_ns'] <= post_ns
                 and type(meta['native_post_ns']) is int and 0 <= meta['native_post_ns'] < 2**64
                 and meta['remaining_ns'] <= max(0,post_ns-meta['native_post_ns'])
@@ -76,7 +81,8 @@ class TurnVerifier:
         def check():
             require(not self.cancel.is_set(), 'Turn verification cancelled')
         check()
-        record = self.cache.setdefault(identity, dict(raw=[], accepted=[], rejected=Counter(), timings=[], last=0, sampled_profiles=set()))
+        record = self.cache.setdefault(identity, dict(raw=[], accepted=[], rejected=Counter(), timings=[], last=0,
+                                                      sampled_profiles=set(), deferred=[]))
         require(meta['index'] == record['last'] + 1 and len(meta['rows']) <= 2,
                 'Duplicate/out-of-order/excess teacher turn')
         sampled = profile not in record['sampled_profiles'] or meta['index'] % 64 == 0
@@ -105,14 +111,18 @@ class TurnVerifier:
             accepted,rejected = prepare_rows(frozen, expected=job['expected'], history=self.history,
                                              admitted_sources=self.sources, encoder=self.encoders.value)
             prepared = time.monotonic() if sampled else None
-            with self._policy_lock():
-                check();self._check_model()
-                locked = time.monotonic() if sampled else None
-                check_logits(self.model,accepted)
-        for row in accepted:
-            ctx = row.row['view']['context']
-            require(self.diagnostic or ctx['round'] == job['reservations'][str(row.label['seat'])][row.label['phase']],
-                    'Teacher label outside reserved turn')
+            if fast:
+                # Short-search turns are four times as many: their model-logit
+                # parity runs batched once per table in take(), off the shared lock.
+                locked = None
+            else:
+                with self._policy_lock():
+                    check();self._check_model()
+                    locked = time.monotonic() if sampled else None
+                    check_logits(self.model,accepted)
+        if not self.diagnostic:
+            from brass_ai.recovery.teacher_labels import check_turn
+            for row in accepted: check_turn(row.label, row.row['view']['context']['round'], job)
         check()
         # Publish only after identity, legality, target and independent batched
         # model-logit checks pass. Verification has no search-time deadline.
@@ -126,13 +136,16 @@ class TurnVerifier:
         check()
         record['raw'].extend(meta['rows'])
         record['accepted'].extend(accepted); record['rejected'].update(rejected)
+        if fast: record['deferred'].extend(accepted)
         record['last'] = meta['index']
         if sampled:
             ended=time.monotonic()
             timing=dict(index=meta['index'],profile=profile,rows=len(meta['rows']),
                 verification_seconds=ended-began, receive_to_ready_seconds=ended-received,
                 verification_limit_seconds=None,sampling='first-per-profile-and-every-64-turns')
-            if meta['rows'] and not self.diagnostic:
+            if meta['rows'] and not self.diagnostic and fast:
+                timing.update(preparation_seconds=prepared-began,model_check='batched-per-table-in-take')
+            elif meta['rows'] and not self.diagnostic:
                 timing.update(preparation_seconds=prepared-began,model_queue_seconds=locked-prepared,
                               model_and_handoff_seconds=ended-locked)
             record['timings'].append(timing);record['sampled_profiles'].add(profile)
@@ -169,6 +182,13 @@ class TurnVerifier:
         require(record['last'] == result['metrics'].get('searched_turns',result['metrics']['reserved_turns'])
                 and record['last'] == (64 if job.get('seating') == 'all-seat-search' else 16),
                 'Incomplete turn verification')
+        deferred = record.get('deferred', [])
+        if deferred:
+            # The short-search rows' model-logit parity, in one batched pass.
+            checked = time.monotonic()
+            with self._policy_lock():
+                self._check_model();check_logits(self.model,deferred)
+            result['metrics']['deferred_logit_check'] = dict(rows=len(deferred),seconds=time.monotonic()-checked)
         # A verified table can cross the phase boundary exactly once. Fresh
         # loads always use full sealed-shard validation instead of this cache.
         del self.cache[key]

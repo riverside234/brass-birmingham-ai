@@ -113,7 +113,41 @@ PATCHES = {
          '            let mode = if calibration || crate::cpu_eval::teacher_count_mode() {\n                Mode::Count\n'),
         ('                    if all_seat { row["teacher"]["search_value"] = job["search_value"].clone(); }\n',
          '                    if all_seat { row["teacher"]["search_value"] = job["search_value"].clone(); }\n'
-         '                    if crate::cpu_eval::teacher_enabled() { row["teacher"]["inference_backend"] = json!("cpu-ort"); }\n'),
+         '                    if crate::cpu_eval::teacher_enabled() { row["teacher"]["inference_backend"] = json!("cpu-ort"); }\n'
+         '                    crate::cpu_eval::teacher_mark_label(&mut row, turn_work.fast, explored)?;\n'),
+        # g1491: a job with the reviewed revision labels its short searches too.
+        ('        if session.is_some() && view.context.phase == Phase::Action && !turn_work.fast && !h2h && job["shadow_probe"] != true {\n',
+         '        if session.is_some() && view.context.phase == Phase::Action\n'
+         '            && (!turn_work.fast || crate::cpu_eval::teacher_short_labels())\n'
+         '            && !h2h && job["shadow_probe"] != true {\n'),
+        # g1491: the played action may be sampled from the decision root's visit counts.
+        ('        let mut evidence = None;\n        let mut supported = false;\n',
+         '        let mut evidence = None;\n        let mut supported = false;\n        let mut explored = false;\n'),
+        ('            supported = out.actions.first().is_some_and(|a| a.support >= 2);\n'
+         '            out.action_ids\n'
+         '                .first()\n'
+         '                .and_then(|a| a.first())\n'
+         '                .cloned()\n'
+         '                .unwrap_or_else(|| actual.actions[0].clone())\n'
+         '        } else if actual.actions.len() == 1 {\n',
+         '            supported = out.actions.first().is_some_and(|a| a.support >= 2);\n'
+         '            let planned = out.action_ids\n'
+         '                .first()\n'
+         '                .and_then(|a| a.first())\n'
+         '                .cloned()\n'
+         '                .unwrap_or_else(|| actual.actions[0].clone());\n'
+         '            let (played, sampled) = crate::cpu_eval::teacher_explore(\n'
+         '                planned,\n'
+         '                evidence.as_ref().filter(|e| e.info == actual).map(|e| e.stats.count.as_slice()),\n'
+         '                &actual,\n'
+         '                &view,\n'
+         '                turn_work.fast,\n'
+         '                seed,\n'
+         '                rows,\n'
+         '            )?;\n'
+         '            explored = sampled;\n'
+         '            played\n'
+         '        } else if actual.actions.len() == 1 {\n'),
         ('"input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources},',
          '"input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources,\n'
          '            "cpu_inference":crate::cpu_eval::teacher_receipt()},'),

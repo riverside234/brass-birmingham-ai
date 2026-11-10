@@ -55,7 +55,8 @@ def previous_recipe(config):
     from .ppg_g210 import TEACHER_FLOOR_CONTRACT,EVERY_ITER_CONTRACT
     from .training_revision_g1294 import previous as before_revision
     from .training_revision_g1307 import previous as before_lr_floor
-    result=copy.deepcopy(before_revision(before_lr_floor(config)))
+    from .training_revision_g1491 import previous as before_g1491
+    result=copy.deepcopy(before_revision(before_lr_floor(before_g1491(config))))
     options=result.get('teacher_phase',{}).get('search_value',{})
     if not enabled(options):return result
     validate_options(options)
@@ -73,8 +74,9 @@ def validation_plan(config,state):
     if not enabled(options):return dict(due=True,games=4,reason='legacy-every-iteration')
     schedule=validate(options)
     from .teacher_gradient_qualification import restore
+    from .teacher_phase import committed_weight
     phase=config['teacher_phase'];term=phase['term']
-    q=restore(state.get('teacher_phase',{}).get('weight',{}).get('gradient_qualification'),
+    q=restore(committed_weight(config,state).get('gradient_qualification'),
         term['share_target'],term['shadow_iterations'])
     qualifying=phase['mode']=='shadow' and not (q and q['passed'])
     forced=qualifying and schedule['validation_during_beta_qualification']

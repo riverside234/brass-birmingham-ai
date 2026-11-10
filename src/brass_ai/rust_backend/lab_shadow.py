@@ -196,6 +196,10 @@ class ShadowCollector:
                     (roots[0],max(roots,key=lambda r:len(r['expected']['choices'])))]
                 from brass_ai.recovery.collector_runtime import native_inference
                 block=native_inference()
+                # Only the CPU teacher overlay implements short labels and visit-count sampling.
+                require(not any(j.get('teacher_revision') for j in missing) or
+                    (block is not None and block['teacher']=='cpu-ort' and block['teacher_budget']['mode']=='count'),
+                    'The g1491 teacher revision runs on the CPU teacher with fixed-count searches (--inference cpu)')
                 if block is not None and block['teacher']=='cpu-ort':
                     from .lab_cpu_runtime import teacher_plan,core_allocation
                     from .lab_teacher import calibrate_cpu,count_calibration

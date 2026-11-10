@@ -10,10 +10,12 @@ CONTRACT='brass-native-teacher-activation/1.0.0'
 
 def is_on(config):
     from brass_ai.recovery.collector_runtime import recipe
+    from brass_ai.recovery.training_revision_g1491 import shadow_iterations
     from .lab_shadow_config import is_shadow
     try:
         config=recipe(config)
-        if config['teacher_phase']['mode']!='on' or config['teacher_phase']['term']['shadow_iterations']!=4:return False
+        if (config['teacher_phase']['mode']!='on' or
+                config['teacher_phase']['term']['shadow_iterations']!=shadow_iterations(config)):return False
         shadow=copy.deepcopy(config);shadow['teacher_phase']['mode']='shadow'
         return is_shadow(shadow)
     except (KeyError,TypeError,ValueError):return False
@@ -23,9 +25,12 @@ def configure(before,target=None,*,revise_stages=False):
     from brass_ai.recovery.collector_runtime import recipe
     from brass_ai.recovery.config import validate_config
     from .lab_shadow_config import is_shadow
+    from brass_ai.recovery.training_revision_g1491 import shadow_iterations
     before=recipe(before)
     require(is_shadow(before) or is_on(before),'Teacher activation requires the reviewed shadow/on recipe')
-    require(before['teacher_phase']['term']['shadow_iterations']==4,'Finish four shadow measurements first')
+    required=shadow_iterations(before)
+    require(before['teacher_phase']['term']['shadow_iterations']==required,
+        'Finish '+{2:'two',4:'four'}[required]+' shadow measurements first')
     after=copy.deepcopy(before);after['teacher_phase']['mode']='on'
     if target is not None:after['teacher_phase']['term']['share_target']=target
     if revise_stages:
@@ -39,10 +44,11 @@ def configure(before,target=None,*,revise_stages=False):
 def qualification(state,config):
     """Validate the measured window against its actual checkpoint lineage."""
     from brass_ai.recovery.teacher_gradient_qualification import restore
-    options=config['teacher_phase']['term']
-    q=restore(state.get('teacher_phase',{}).get('weight',{}).get('gradient_qualification'),options['share_target'],4)
-    require(q is not None and q['passed'] and q.get('required_iterations')==4,
-        'Teacher on-mode needs four qualified full shadow iterations')
+    from brass_ai.recovery.training_revision_g1491 import shadow_iterations,qualification_tables
+    options=config['teacher_phase']['term'];required=shadow_iterations(config)
+    q=restore(state.get('teacher_phase',{}).get('weight',{}).get('gradient_qualification'),options['share_target'],required)
+    require(q is not None and q['passed'] and q.get('required_iterations')==required,
+        'Teacher on-mode needs '+{2:'two',4:'four'}[required]+' qualified full shadow iterations')
     observations=q['observations'];history={e['generation']:e for e in state['history']}
     ratios=[]
     for o in observations:
@@ -50,7 +56,7 @@ def qualification(state,config):
         require(raw and len(raw)==o['valid_steps']<=o['steps'] and
             all(type(r) in (int,float) and math.isfinite(r) and r>0 for r in raw),
             'Invalid qualified teacher gradient observations')
-        require(context['tables']=={'train':28,'heldout':4} and
+        require(context['tables']==qualification_tables(config) and
             all(context['labels_by_phase'].get(p,0)>0 for p in ('canal_early','canal_late','rail_early','rail_late')),
             'Teacher gradient qualification lacks full tables/phases')
         require(entry is not None and context['model_id']==entry['model_id'] and context['export_hash']==entry['sha256'],
@@ -58,7 +64,7 @@ def qualification(state,config):
         ratios.extend(raw)
     require(q['raw_median']==statistics.median(ratios) and
         q['qualified_generation']==observations[-1]['generation']+1<=state['iteration'],
-        'Teacher fixed beta is not bound to the measured four-iteration window')
+        'Teacher fixed beta is not bound to the measured '+{2:'two',4:'four'}[required]+'-iteration window')
     return q
 
 
@@ -79,16 +85,20 @@ def authorize(state,config):
         ready=state.get('teacher_phase',{}).get('readiness')
         require(ready is not None and ready['ready'] is True and ready['reward_id']==digest(reward_spec(config)),
             'Teacher activation requires measured current-reward utility readiness')
-        stage=state.get('search_value',{}).get('stage',{})
-        require(stage.get('stage')=='A' and stage.get('w')==stage.get('scale')==0,
-            'Teacher activation must start at search-head Stage A with w=0 and frozen trunk')
+        from brass_ai.recovery.training_revision_g1491 import applied
+        # The g1491 re-calibration resumes teaching; the search head keeps its committed stage.
+        if not applied(config):
+            stage=state.get('search_value',{}).get('stage',{})
+            require(stage.get('stage')=='A' and stage.get('w')==stage.get('scale')==0,
+                'Teacher activation must start at search-head Stage A with w=0 and frozen trunk')
     return q
 
 
 def validate_backend(state,value):
+    from brass_ai.recovery.training_revision_g1491 import tables
     q=authorize(state,state['signature']['config'])
     receipt=value.get('teacher',{})
-    require(receipt.get('contract')==CONTRACT and receipt.get('tables')=={'train':28,'held_out':4} and
+    require(receipt.get('contract')==CONTRACT and receipt.get('tables')==tables(state['signature']['config']) and
         receipt.get('gradient_qualification')==q['sha256'] and receipt.get('beta')==q['beta'] and
         receipt.get('qualified_generation')==q['qualified_generation'], 'Teacher activation receipt changed')
     options=state['signature']['config']['teacher_phase']['search_value']

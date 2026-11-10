@@ -57,10 +57,11 @@ def validate_state(state,raw=None,*,check_runtime=True):
     if config.get('teacher_phase',{}).get('mode','off')!='off':
         from .lab_teacher_activation import is_on,validate_backend
         from .lab_shadow_config import is_shadow,CONTRACT as SHADOW
+        from brass_ai.recovery.training_revision_g1491 import tables
         shadow=value.get('shadow',{})
         if is_on(config):validate_backend(state,value)
         else:require(is_shadow(config) and shadow.get('contract')==SHADOW and
-            shadow.get('tables')==dict(train=28,held_out=4),'Teacher on-mode requires qualified activation; invalid shadow adoption')
+            shadow.get('tables')==tables(config),'Teacher on-mode requires qualified activation; invalid shadow adoption')
     if raw is not None and raw['training'].get('native_backend')!=value:
         transition=state.get('native_backend_switch')
         require(transition is not None and transition['checkpoint']==state['history'][-1] and

@@ -69,7 +69,9 @@ def finish(term,state):
             all(math.isfinite(s.get(k,float('nan'))) for k in ('raw_share','cosine','actor_norm','teacher_norm')) and
             s['actor_norm']>0]
         phase_rows=context.get('labels_by_phase',{})
-        full=(context.get('tables')=={'train':28,'heldout':4} and
+        # term.config is the teacher phase; a full iteration ran all of its tables.
+        tables=term.config['tables']
+        full=(context.get('tables')=={'train':tables['train'],'heldout':tables['held_out']} and
             all(phase_rows.get(p,0)>0 for p in ('canal_early','canal_late','rail_early','rail_late')))
         if valid and full:
             observation=dict(generation=term.generation,steps=len(term.steps),valid_steps=len(valid),
@@ -82,7 +84,8 @@ def finish(term,state):
         consecutive=len(observations)==iterations and all(b['generation']==a['generation']+1 for a,b in zip(observations,observations[1:]))
         q=dict(contract=CONTRACT,passed=consecutive,target=target,observations=observations,required_iterations=iterations,
             reason=f'Qualified {iterations} complete consecutive shadow iterations' if consecutive else
-                f'Need {iterations} consecutive full 28+4 shadow iterations with finite nonzero actor/teacher measurements',
+                f"Need {iterations} consecutive full {term.config['tables']['train']}+{term.config['tables']['held_out']} "
+                'shadow iterations with finite nonzero actor/teacher measurements',
             scope='Pre-clipping PPO actor without entropy; shared state/entity encoders; shadow gradients discarded',
             beta=None,raw_median=None)
         if consecutive:

@@ -18,7 +18,7 @@ use brass_ai_core::{
         observation::{InformationState, Observation, ObservationEnvelope, Recall},
         NativeState,
     },
-    types::Phase,
+    types::{Era, Phase},
 };
 use ort::{
     session::{builder::GraphOptimizationLevel, Session},
@@ -469,12 +469,192 @@ thread_local! {
     /// The session is owned by the search thread, like the game's `!Send`
     /// evaluator. Absent means this process is answering over the GPU wire.
     static TEACHER: RefCell<Option<Teacher>> = const { RefCell::new(None) };
+    /// The job's reviewed g1491 revision and its per-table counters, if any.
+    static REVISION: RefCell<Option<(Revision, Exploration)>> = const { RefCell::new(None) };
+}
+
+const REVISION_CONTRACT: &str = "training-revision-g1491/1.0.0";
+const EXPLORATION_CONTRACT: &str = "root-visit-count-sampling/1.0.0";
+
+/// `job["teacher_revision"]`: label short searches too, and sample the played
+/// action from the root visit counts (temperature 1) for each seat's first
+/// `opening_actions` actions of an era and, with `long_search`, every long search.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Revision {
+    job: Value,
+    short_labels: bool,
+    opening_actions: u32,
+    long_search: bool,
+}
+
+/// Per-table exploration state; index 0 counts long searches, 1 short ones.
+#[derive(Default, Debug)]
+pub struct Exploration {
+    /// The action each seat is on: (era, round, actions remaining).
+    current: [Option<(Era, u8, u8)>; 4],
+    /// That seat's actions so far in the era, the current one included.
+    count: [u32; 4],
+    decisions: [u64; 2],
+    sampled: [u64; 2],
+    changed: [u64; 2],
+    short_labels: u64,
+}
+
+impl Exploration {
+    /// The seat's 1-based action index in its era; repeated decisions of one action keep it.
+    fn action(&mut self, seat: usize, era: Era, round: u8, actions_remaining: u8) -> u32 {
+        let key = (era, round, actions_remaining);
+        if self.current[seat] != Some(key) {
+            if self.current[seat].is_some_and(|(previous, _, _)| previous != era) {
+                self.count[seat] = 0;
+            }
+            self.current[seat] = Some(key);
+            self.count[seat] += 1;
+        }
+        self.count[seat]
+    }
+}
+
+pub fn revision(job: &Value) -> Result<Option<Revision>> {
+    let block = &job["teacher_revision"];
+    if block.is_null() {
+        return Ok(None);
+    }
+    let e = &block["exploration"];
+    let opening = e["opening_actions_per_era"].as_u64().unwrap_or(u64::MAX);
+    check(
+        block["contract"] == REVISION_CONTRACT
+            && block.as_object().is_some_and(|o| o.len() == 3)
+            && block["short_labels"].is_boolean()
+            && e.as_object().is_some_and(|o| o.len() == 4)
+            && e["contract"] == EXPLORATION_CONTRACT
+            && e["temperature"].as_f64() == Some(1.0)
+            && e["long_search"].is_boolean()
+            && opening <= 64
+            && job["seating"] == "all-seat-search",
+        "unreviewed teacher revision",
+    )?;
+    Ok(Some(Revision {
+        job: block.clone(),
+        short_labels: block["short_labels"] == true,
+        opening_actions: opening as u32,
+        long_search: e["long_search"] == true,
+    }))
+}
+
+/// splitmix64: the exploration stream, independent of the search and policy draws.
+fn mix(mut z: u64) -> u64 {
+    z = z.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    z ^ (z >> 31)
+}
+
+/// An index drawn with probability `counts[i] / total`, keyed by the job seed and decision.
+fn visit_sample(counts: &[u64], total: u64, seed: u64, decision: u64) -> Result<usize> {
+    check(total > 0 && counts.iter().sum::<u64>() == total, "invalid root visit counts")?;
+    let z = mix(seed ^ mix(decision ^ 0x1491_0000_0000_0000));
+    let target = ((u128::from(z) * u128::from(total)) >> 64) as u64;
+    let mut seen = 0;
+    for (i, n) in counts.iter().enumerate() {
+        seen += n;
+        if target < seen {
+            return Ok(i);
+        }
+    }
+    Err("root visit sample out of range".into())
+}
+
+/// The action to play. A g1491 job samples it from the decision root's visit
+/// counts for a seat's opening actions of each era and for every long search;
+/// otherwise, and for any other job, the search's own choice is played.
+pub fn teacher_explore(
+    planned: String,
+    counts: Option<&[u64]>,
+    actual: &Info<Key, String>,
+    view: &Observation,
+    fast: bool,
+    seed: u64,
+    decision: u64,
+) -> Result<(String, bool)> {
+    REVISION.with(|cell| {
+        let mut guard = cell.borrow_mut();
+        let Some((revision, state)) = guard.as_mut() else {
+            return Ok((planned, false));
+        };
+        let c = &view.context;
+        if c.phase != Phase::Action {
+            return Ok((planned, false));
+        }
+        check(actual.actor < 4, "invalid acting seat")?;
+        let index = state.action(actual.actor, c.era, c.round, c.actions_remaining);
+        let profile = usize::from(fast);
+        state.decisions[profile] += 1;
+        let eligible = index <= revision.opening_actions || (!fast && revision.long_search);
+        let Some(counts) = counts.filter(|_| eligible && actual.actions.len() > 1) else {
+            return Ok((planned, false));
+        };
+        check(counts.len() == actual.actions.len(), "root visit counts differ from the legal actions")?;
+        let total: u64 = counts.iter().sum();
+        if total == 0 {
+            return Ok((planned, false));
+        }
+        let choice = actual.actions[visit_sample(counts, total, seed, decision)?].clone();
+        state.sampled[profile] += 1;
+        if choice != planned {
+            state.changed[profile] += 1;
+        }
+        Ok((choice, true))
+    })
+}
+
+/// True when this table labels its short searches too.
+pub fn teacher_short_labels() -> bool {
+    REVISION.with(|cell| cell.borrow().as_ref().is_some_and(|(r, _)| r.short_labels))
+}
+
+/// Marks a short-search label with its own K and an explored played action.
+/// Rows of jobs without the revision keep their exact bytes.
+pub fn teacher_mark_label(row: &mut Value, fast: bool, explored: bool) -> Result<()> {
+    let fast_k = teacher_k(true, false, 4);
+    REVISION.with(|cell| {
+        let mut guard = cell.borrow_mut();
+        let Some((revision, state)) = guard.as_mut() else {
+            check(!fast && !explored, "short-search label without the teacher revision")?;
+            return Ok(());
+        };
+        check(!fast || revision.short_labels, "short-search label without short labels")?;
+        let teacher = row.get_mut("teacher").ok_or("label row without teacher fields")?;
+        if fast {
+            teacher["profile"] = json!("fast");
+            teacher["requested_k"] = json!(fast_k);
+            state.short_labels += 1;
+        }
+        if explored {
+            teacher["explored"] = json!(true);
+        }
+        Ok(())
+    })
+}
+
+fn revision_receipt() -> Option<Value> {
+    REVISION.with(|cell| {
+        cell.borrow().as_ref().map(|(r, s)| {
+            json!({"job":r.job,"short_labels":s.short_labels,
+                "decisions":{"long":s.decisions[0],"short":s.decisions[1]},
+                "sampled":{"long":s.sampled[0],"short":s.sampled[1]},
+                "changed":{"long":s.changed[0],"short":s.changed[1]}})
+        })
+    })
 }
 
 /// Load the frozen model named by `request["inference"]`, if any.
 pub fn teacher_install(request: &Value, expected: &Value, max_cost: f64) -> Result<()> {
+    let revision = revision(&request["job"])?;
     let block = &request["inference"];
     if block.is_null() {
+        check(revision.is_none(), "the teacher revision needs CPU inference")?;
+        REVISION.with(|cell| *cell.borrow_mut() = None);
         return Ok(());
     }
     check(block["contract"] == CONTRACT, "CPU inference contract")?;
@@ -487,6 +667,10 @@ pub fn teacher_install(request: &Value, expected: &Value, max_cost: f64) -> Resu
         "CPU bundle model/reward differs from the frozen job",
     )?;
     let budget = budget(&block["budget"])?;
+    check(
+        revision.is_none() || matches!(budget, Budget::Count { .. }),
+        "the teacher revision needs fixed-count searches",
+    )?;
     TEACHER.with(|cell| {
         *cell.borrow_mut() = Some(Teacher {
             model,
@@ -496,6 +680,7 @@ pub fn teacher_install(request: &Value, expected: &Value, max_cost: f64) -> Resu
             forward_ns: 0,
         })
     });
+    REVISION.with(|cell| *cell.borrow_mut() = revision.map(|r| (r, Exploration::default())));
     Ok(())
 }
 
@@ -664,7 +849,7 @@ pub fn teacher_evaluate(
 }
 
 pub fn teacher_receipt() -> Value {
-    TEACHER.with(|cell| match cell.borrow().as_ref() {
+    let mut receipt = TEACHER.with(|cell| match cell.borrow().as_ref() {
         Some(t) => json!({"contract":CONTRACT,"backend":"cpu-ort","runtime_sha256":t.runtime_sha256,
             "provider":"CPUExecutionProvider","intra_threads":1,"inter_threads":1,"sequential":true,
             "budget":match t.budget {
@@ -673,7 +858,12 @@ pub fn teacher_receipt() -> Value {
             },
             "positions":t.positions,"forward_ns":t.forward_ns,"model":t.model.receipt()}),
         None => Value::Null,
-    })
+    });
+    // Only a g1491 job adds the field, so every other receipt keeps its exact bytes.
+    if let (Some(revision), Some(object)) = (revision_receipt(), receipt.as_object_mut()) {
+        object.insert("revision".into(), revision);
+    }
+    receipt
 }
 
 /// Ordinary collector models, most recently used last.
@@ -1085,5 +1275,180 @@ mod tests {
             .unwrap()
             .to_string();
         assert!(message.contains("configure CPU inference"), "{message}");
+    }
+
+    fn revision_job(opening: u64, long: bool) -> Value {
+        json!({"seating":"all-seat-search","teacher_revision":{"contract":REVISION_CONTRACT,"short_labels":true,
+            "exploration":{"contract":EXPLORATION_CONTRACT,"temperature":1.0,"opening_actions_per_era":opening,
+                "long_search":long}}})
+    }
+
+    fn install_revision(job: Option<Value>) {
+        let parsed = job.map(|j| revision(&j).unwrap().unwrap());
+        REVISION.with(|cell| *cell.borrow_mut() = parsed.map(|r| (r, Exploration::default())));
+    }
+
+    fn initial() -> NativeState {
+        let start: StateDto =
+            serde_json::from_str(include_str!("../../native/brass-ai-core/tests/data/initial-state.json")).unwrap();
+        NativeState::import(&start).unwrap()
+    }
+
+    #[test]
+    fn the_teacher_revision_parses_only_its_reviewed_shape() {
+        assert!(revision(&json!({})).unwrap().is_none());
+        let r = revision(&revision_job(7, true)).unwrap().unwrap();
+        assert!(r.short_labels && r.long_search && r.opening_actions == 7);
+        let mut cold = revision_job(7, true);
+        cold["teacher_revision"]["exploration"]["temperature"] = json!(0.5);
+        assert!(revision(&cold).is_err());
+        let mut extra = revision_job(7, true);
+        extra["teacher_revision"]["other"] = json!(1);
+        assert!(revision(&extra).is_err());
+        let mut reserved = revision_job(7, true);
+        reserved["seating"] = json!("reserved");
+        assert!(revision(&reserved).is_err());
+        let mut contract = revision_job(7, true);
+        contract["teacher_revision"]["contract"] = json!("training-revision-g1491/2.0.0");
+        assert!(revision(&contract).is_err());
+    }
+
+    #[test]
+    fn exploration_counts_each_seats_actions_per_era() {
+        let mut e = Exploration::default();
+        assert_eq!(e.action(0, Era::CanalEra, 1, 1), 1);
+        // A later decision of the same action keeps its index.
+        assert_eq!(e.action(0, Era::CanalEra, 1, 1), 1);
+        assert_eq!(e.action(1, Era::CanalEra, 1, 1), 1);
+        let mut last = 0;
+        for round in 2..=4 {
+            for remaining in [2, 1] {
+                last = e.action(0, Era::CanalEra, round, remaining);
+            }
+        }
+        // Round one has one action: the seventh canal action is the last of round four.
+        assert_eq!(last, 7);
+        assert_eq!(e.action(0, Era::CanalEra, 5, 2), 8);
+        assert_eq!(e.action(0, Era::RailEra, 1, 2), 1);
+        assert_eq!(e.action(1, Era::CanalEra, 2, 2), 2);
+    }
+
+    #[test]
+    fn visit_samples_follow_the_counts_and_skip_unvisited_actions() {
+        let counts = [0, 30, 10, 0, 60];
+        let mut seen = [0u32; 5];
+        for decision in 0..20_000 {
+            seen[visit_sample(&counts, 100, 11, decision).unwrap()] += 1;
+        }
+        assert_eq!(seen[0] + seen[3], 0);
+        for (i, expected) in [(1, 0.3), (2, 0.1), (4, 0.6)] {
+            let p = f64::from(seen[i]) / 20_000.;
+            assert!((p - expected).abs() < 0.02, "{i}: {p}");
+        }
+        assert_eq!(visit_sample(&counts, 100, 11, 5).unwrap(), visit_sample(&counts, 100, 11, 5).unwrap());
+        assert!(visit_sample(&counts, 99, 11, 5).is_err());
+    }
+
+    #[test]
+    fn only_a_revised_job_explores_its_opening_and_long_searches() {
+        let state = initial();
+        let (input, _) = root(&state);
+        let info = Brass::new(input.clone(), false).unwrap().root().unwrap();
+        assert!(info.actions.len() > 2);
+        let planned = info.actions[0].clone();
+        // All visits on the last action: a sample can only pick it.
+        let mut counts = vec![0u64; info.actions.len()];
+        *counts.last_mut().unwrap() = 40;
+        let last = info.actions.last().unwrap().clone();
+        let explore = |fast: bool, counts: Option<&[u64]>| {
+            teacher_explore(planned.clone(), counts, &info, &input.view, fast, 3, 9).unwrap()
+        };
+        install_revision(None);
+        assert_eq!(explore(true, Some(&counts)), (planned.clone(), false));
+        // First canal action of this seat: inside the opening window, on either search.
+        install_revision(Some(revision_job(7, false)));
+        assert_eq!(explore(true, Some(&counts)), (last.clone(), true));
+        assert_eq!(explore(true, None), (planned.clone(), false));
+        // No opening window: only a long search explores, and only when asked to.
+        install_revision(Some(revision_job(0, false)));
+        assert_eq!(explore(false, Some(&counts)), (planned.clone(), false));
+        install_revision(Some(revision_job(0, true)));
+        assert_eq!(explore(true, Some(&counts)), (planned.clone(), false));
+        assert_eq!(explore(false, Some(&counts)), (last.clone(), true));
+        let receipt = revision_receipt().unwrap();
+        assert_eq!(receipt["sampled"]["long"], 1);
+        assert_eq!(receipt["changed"]["long"], 1);
+        assert_eq!(receipt["decisions"]["short"], 1);
+        assert!(teacher_explore(planned.clone(), Some(&counts[1..]), &info, &input.view, false, 3, 9).is_err());
+        install_revision(None);
+    }
+
+    #[test]
+    fn short_labels_carry_their_profile_and_k_and_old_rows_keep_their_bytes() {
+        let row = json!({"teacher":{"requested_k":16,"played_action":"x"}});
+        install_revision(None);
+        let mut unchanged = row.clone();
+        teacher_mark_label(&mut unchanged, false, false).unwrap();
+        assert_eq!(unchanged, row);
+        assert!(teacher_mark_label(&mut row.clone(), true, false).is_err());
+        install_revision(Some(revision_job(7, true)));
+        let mut long = row.clone();
+        teacher_mark_label(&mut long, false, false).unwrap();
+        assert_eq!(long, row);
+        let mut short = row.clone();
+        teacher_mark_label(&mut short, true, true).unwrap();
+        // Without a count budget the job's own quick K (4) stands.
+        assert_eq!(short["teacher"]["profile"], "fast");
+        assert_eq!(short["teacher"]["requested_k"], 4);
+        assert_eq!(short["teacher"]["explored"], true);
+        assert_eq!(revision_receipt().unwrap()["short_labels"], 1);
+        assert!(teacher_short_labels());
+        install_revision(None);
+        assert!(!teacher_short_labels());
+    }
+
+    /// An explored action leaves the turn's plan; the session must replan the
+    /// action's next decision with the same budget instead of failing.
+    #[cfg(feature = "teacher")]
+    #[test]
+    fn a_turn_session_replans_after_an_explored_action() {
+        use brass_ai_core::search::{
+            session::{clock::MonotonicClock, Identity, Mode, Session, Settings},
+            Config, LeafEvaluator,
+        };
+        use std::sync::{atomic::AtomicBool, Arc};
+        struct Uniform;
+        impl LeafEvaluator<Key, String> for Uniform {
+            fn evaluate(&mut self, info: &Info<Key, String>) -> brass_ai_core::search::Result<Statistics> {
+                Statistics::new(vec![0.; info.actions.len()], [0.25; 4])
+            }
+        }
+        let clock = MonotonicClock::new(Arc::new(AtomicBool::new(false)));
+        let identity = Identity { game_instance: "explore".into(), generation: 1, export_sha256: "a".repeat(64) };
+        let state = initial();
+        let (first, _) = root(&state);
+        let mut settings = Settings::default();
+        settings.search = Config { k: 4, simulations: 16, seed: 7, ..Config::default() };
+        let budget = crate::teacher::profile_budget(brass_ai_core::search::session::clock::Clock::now_ns(&clock), true).unwrap();
+        let mut owner = Session::new(identity.clone(), &first, settings, budget).unwrap();
+        let mut evaluator = Uniform;
+        let outcome =
+            crate::teacher::decide_turn(&mut owner, &identity, 1, first.clone(), Mode::Count, &clock, &mut evaluator).unwrap();
+        let planned = outcome.action_ids.first().and_then(|a| a.first()).cloned().unwrap();
+        // Another action whose next decision is still in this turn (a payment or continuation).
+        let revision = state.context().revision;
+        let next = state
+            .legal_choices()
+            .unwrap()
+            .into_iter()
+            .filter(|c| c.id != planned)
+            .map(|c| state.after_choice(revision, &c.id).unwrap())
+            .find(|s| s.context().phase != Phase::Action && s.context().actor == state.context().actor && !s.context().terminal)
+            .expect("an action with a second decision");
+        let (mut input, _) = root(&next);
+        input.recall = vec![];
+        let replanned = crate::teacher::decide_turn(&mut owner, &identity, 2, input, Mode::Count, &clock, &mut evaluator).unwrap();
+        assert!(!replanned.provenance.starts_with("continuation/"), "{}", replanned.provenance);
+        assert!(!replanned.action_ids.is_empty());
     }
 }

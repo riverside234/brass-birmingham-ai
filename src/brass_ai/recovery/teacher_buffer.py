@@ -17,10 +17,11 @@ OWNER = dict(contract=CONTRACT, purpose='policy-only search-v1 labels')
 
 
 class TeacherBuffer:
-    def __init__(self, root, run, identity, *, receipts=(), retired=(), c_scale=.1):
+    def __init__(self, root, run, identity, *, receipts=(), retired=(), c_scale=.1, iterations=4):
         self.root, self.run = owned(root, run)
         self.directory = safe(self.run, self.run / 'teacher-labels')
-        self.identity = identity; self.c_scale = c_scale
+        require(iterations in (2, 4), 'Invalid teacher buffer window')
+        self.identity = identity; self.c_scale = c_scale; self.iterations = iterations
         self.receipts = copy.deepcopy(list(receipts)); self.retired = copy.deepcopy(list(retired))
         self.pending = list(self.receipts); self._rows = {}
         require(len({r['path'] for r in self.receipts}) == len(self.receipts), 'Duplicate teacher shard receipt')
@@ -79,7 +80,8 @@ class TeacherBuffer:
     def window(self, generation):
         # A changed c_scale is a different search target, so older labels retire
         # with it. The current generation stays: a crash may have sealed its tables.
-        keep = [r for r in self.pending if r['profile_digest'] == self.identity and 0 <= generation - r['generation'] < 4
+        keep = [r for r in self.pending if r['profile_digest'] == self.identity
+                and 0 <= generation - r['generation'] < self.iterations
                 and (r['generation'] == generation or r.get('c_scale', .1) == self.c_scale)]
         removed = [r for r in self.pending if r not in keep]
         for r in removed:
@@ -129,10 +131,15 @@ class TeacherBuffer:
         self.receipts = copy.deepcopy(self.pending)
 
 
-def sample_indices(ages, weights, count, *, seed, generation, step):
-    """Per-label age weights, independent draws per step; no global RNG use."""
-    if not ages: return []
-    key = digest(dict(contract=CONTRACT, seed=seed, generation=generation, step=step))
+def sample_indices(ages, weights, count, *, seed, generation, step, stream=None):
+    """Per-label age weights, independent draws per step; no global RNG use.
+
+    ``stream`` names an independent draw (the g1491 long/short pools); None keeps
+    the historical key.
+    """
+    if not ages or count <= 0: return []
+    key = digest(dict(contract=CONTRACT, seed=seed, generation=generation, step=step,
+                      **({} if stream is None else dict(stream=stream))))
     rng = np.random.default_rng(int(key[:16], 16))
     p = np.asarray([weights[a] for a in ages], dtype=np.float64); p /= p.sum()
     return rng.choice(len(ages), min(count, len(ages)), replace=False, p=p).tolist()

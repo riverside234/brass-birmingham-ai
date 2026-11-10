@@ -39,14 +39,20 @@ def validate(config):
     c = config['teacher_phase']; expected = defaults(reward_spec(config))
     if c.get('contract') == 'teacher-phase/2.0.0':
         from .search_value_config import validate as value_validate, fast_profile
-        require(set(c) == set(expected) | {'startup', 'seating', 'fast_search', 'search_value'}, 'All-seat teacher fields differ')
+        from . import training_revision_g1491 as g1491
+        extra = {'startup', 'seating', 'fast_search', 'search_value'}
+        if g1491.KEY in c:
+            # Validate the reviewed revision, then the unchanged rest of the phase.
+            g1491.validate(config); extra = extra | {g1491.KEY}
+        require(set(c) == set(expected) | extra, 'All-seat teacher fields differ')
         require(c['seating'] == 'all-seat-search' and c['startup'] in ('immediate', 'shadow-until-search-informative'), 'Invalid all-seat startup')
         require(digest(c['fast_search']) == digest(fast_profile(c['search'])), 'Invalid fast search profile')
         value_validate(c['search_value'])
         require(c['search_value']['trunk']['scale'] == 0 or c['search_value']['stage'] == 'C' or
                 c['startup'] == 'shadow-until-search-informative', 'Pretrained trunk must wait for stage C')
         old = copy.deepcopy(config)
-        old['teacher_phase'] = {k: copy.deepcopy(c[k]) for k in expected}
+        phase = g1491.project_phase(c) if g1491.KEY in c else c
+        old['teacher_phase'] = {k: copy.deepcopy(phase[k]) for k in expected}
         old['teacher_phase']['contract'] = CONTRACT
         validate(old)
         return c
@@ -117,8 +123,11 @@ def buffer_identity(config):
     """Learning-rate, exploration, entropy, mode and PPG changes retain labels."""
     from brass_ai.learning.contracts import compatibility
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+    from .training_revision_g1491 import KEY as REVISION
     c = validate(config)
     extra = (dict(seating=c['seating'], fast_search=c['fast_search']) if 'seating' in c else {})
+    # Short-search labels are a new label set: older labels and their beta retire.
+    if REVISION in c: extra['revision'] = c[REVISION]
     return digest(dict(learning=compatibility(), architecture=config['architecture'],
         model_size=config['model_size'], backend=PROFILE, native_teacher=source_fingerprint(),
         search=c['search'], labels=c['labels'], schedule=c['schedule'], **extra))

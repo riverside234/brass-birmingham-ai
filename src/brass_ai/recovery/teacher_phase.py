@@ -15,6 +15,18 @@ from .search_value_schedule import validation_plan
 KEY = 'teacher_phase'
 
 
+def committed_weight(config, state):
+    """The committed teacher weight, or {} when this recipe's labels retire it with them.
+
+    The same rule as TeacherPhase: a changed label identity (the g1491 revision)
+    retires the fixed beta and its qualification.
+    """
+    saved = state.get(KEY, {})
+    cache = saved.get('buffer', {})
+    if cache and cache.get('identity') != buffer_identity(config): return {}
+    return saved.get('weight', {})
+
+
 def initial_cursor(config):
     return int(digest(dict(contract=CONTRACT, stream='teacher-setup', seed=config['seed']))[:8], 16) % 1_000_000_000
 
@@ -77,6 +89,11 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
         if c['startup'] == 'shadow-until-search-informative' and not progress.get('g0_passed', False):
             jobs = [j for j in jobs if j['split'] == 'heldout']
             for job in jobs: job['shadow_probe'] = True
+    from .training_revision_g1491 import job_block
+    revision = job_block(config)
+    if revision is not None:
+        # Short-search labels and root visit-count exploration (CPU teacher only).
+        for job in jobs: job['teacher_revision'] = copy.deepcopy(revision)
     return jobs, cursor
 
 
@@ -107,7 +124,8 @@ class TeacherPhase:
                 'Teacher buffer model is not in committed run lineage')
         from .collector_runtime import teacher_c_scale
         self.buffer = TeacherBuffer(root, run, buffer_identity(config), receipts=cache.get('receipts', ()),
-                                    retired=cache.get('retired', ()), c_scale=teacher_c_scale())
+                                    retired=cache.get('retired', ()), c_scale=teacher_c_scale(),
+                                    iterations=self.options['buffer']['iterations'])
         self.weight = saved.get('weight', {}); self.term = None; self.jobs = []; self.heldout = []
         if cache and cache.get('identity') != self.buffer.identity:
             self.weight = {}  # Static producer/profile changes retire beta with its labels.
@@ -146,10 +164,8 @@ class TeacherPhase:
             from brass_ai.rust_backend.lab_admission import admit_teacher_rows
             rows, dropped = (verifier.take(result,job,model) if verifier is not None else
                 admit_teacher_rows(result['rows'],job=job,model=model,history=self.state['history']))
-            for r in rows:
-                ctx = r.row['view']['context']
-                require(ctx['round'] == job['reservations'][str(r.label['seat'])][r.label['phase']],
-                        'Teacher label outside reserved turn')
+            from .teacher_labels import check_turn
+            for r in rows: check_turn(r.label, r.row['view']['context']['round'], job)
             splits[job['split']].extend(rows); rejected.update(dropped); labels.extend(r.label for r in rows)
             table_metrics.append(copy.deepcopy(result.get('metrics', {})))
             post_spent[job['expected']['job_id']]=time.perf_counter()-table_began+result.get('metrics',{}).get('shadow_cache_seconds',0.)
@@ -164,7 +180,12 @@ class TeacherPhase:
                 for job in self.jobs:
                     if job['split']==split:post_spent[job['expected']['job_id']]+=seal_seconds
         self.heldout = splits['heldout']
-        self.metrics = dict(tables=dict(Counter(j['split'] for j in self.jobs)), labels=len(labels),
+        # Per-phase/kind/search metrics describe the long (reserved-turn) labels, as
+        # before g1491; short-search labels are reported separately.
+        from .teacher_labels import label_profile
+        total = len(labels); short = [l for l in labels if label_profile(l) == 'fast']
+        labels = [l for l in labels if label_profile(l) == 'full']
+        self.metrics = dict(tables=dict(Counter(j['split'] for j in self.jobs)), labels=total, long_labels=len(labels),
             reached_reserved_turns=sum(r.get('metrics',{}).get('reserved_turns',0) for r in results),
             root_labels=sum(l['kind']=='root' for l in labels),
             reserved_turns_by_phase={p: 4 * len(self.jobs) for p in PHASES},
@@ -176,7 +197,15 @@ class TeacherPhase:
             max_overrun_seconds=max((l['overrun_seconds'] for l in labels), default=0.),
             fallback_played_fraction=sum(l['fallback_played'] for l in labels) / len(labels) if labels else None,
             collection_metrics=table_metrics,
-            scope='Native search/lane/inference metrics supplied by B04; absent metrics are unmeasured')
+            scope='Native search/lane/inference metrics supplied by B04; absent metrics are unmeasured. '
+                  'Per-phase/kind/search fields count long-search labels; short_labels counts the others')
+        if any(j.get('teacher_revision') for j in self.jobs):
+            self.metrics['short_labels'] = dict(labels=len(short), by_kind=dict(Counter(l['kind'] for l in short)),
+                by_phase=dict(Counter(l['phase'] for l in short)),
+                effective_k=dict(Counter(str(l['effective_k']) for l in short)),
+                completed_trajectories=summary([l['completed_trajectories'] for l in short]))
+            self.metrics['explored_labels'] = dict(long=sum(l.get('explored', False) for l in labels),
+                short=sum(l.get('explored', False) for l in short))
         self.metrics['heldout_validation']=validation_plan(self.config,self.state)
         reached=self.metrics['reached_reserved_turns']
         self.metrics['root_label_yield']=self.metrics['root_labels']/reached if reached else None
