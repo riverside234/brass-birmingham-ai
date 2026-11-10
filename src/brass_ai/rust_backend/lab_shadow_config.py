@@ -11,7 +11,8 @@ def configure(before,share_target=.25):
     from brass_ai.recovery.search_value_config import adopt
     from brass_ai.recovery.config import validate_config
     require(digest(before)==BASE_CONFIG,'Shadow adoption requires the reviewed restart recipe')
-    require(type(share_target) in (float,int) and share_target in (.25,.4,.5),'Choose share_target 0.25, 0.4 or 0.5')
+    from brass_ai.recovery.teacher_gradient_qualification import valid_target
+    require(valid_target(share_target),'Choose a share_target above 0 and at most 1')
     after=adopt(before)
     after['branching']['rate_per_decision']=0.
     after['teacher_phase']['mode']='shadow'

@@ -6,7 +6,11 @@ import statistics
 from brass_ai.learning.contracts import digest,require
 
 CONTRACT='teacher-fixed-beta-qualification/1.0.0'
-TARGETS=(.25,.4,.5)
+
+
+def valid_target(target):
+    """Any finite teacher gradient share in (0, 1], the range the recipe validator accepts."""
+    return type(target) in (int,float) and math.isfinite(target) and 0<target<=1
 
 
 def seal(receipt):
@@ -20,7 +24,7 @@ def fixed_beta(target,raw):return min(10.,max(.01,target/raw))
 def restore(receipt,target,iterations=4):
     if receipt is None:return None
     require(type(iterations) is int and iterations in (2,4),'Invalid gradient qualification window')
-    require(receipt==seal(receipt) and receipt['contract']==CONTRACT and receipt['target'] in TARGETS,
+    require(receipt==seal(receipt) and receipt['contract']==CONTRACT and valid_target(receipt['target']),
         'Teacher gradient qualification changed')
     result=copy.deepcopy(receipt)
     previous=result.get('required_iterations',2)
@@ -37,7 +41,7 @@ def restore(receipt,target,iterations=4):
             reason='Need four consecutive full 28+4 shadow iterations with finite nonzero actor/teacher measurements')
         for name in ('qualified_generation','clamped'):result.pop(name,None)
         result=seal(result)
-    require(target in TARGETS,'Fixed teacher beta requires target 0.25, 0.4 or 0.5')
+    require(valid_target(target),'Fixed teacher beta requires a share target above 0 and at most 1')
     if target!=result['target']:
         # A manual target edit is the only way to change a qualified weight.
         result['target']=target
@@ -49,7 +53,7 @@ def restore(receipt,target,iterations=4):
 def finish(term,state):
     if term.config['contract']!='teacher-phase/2.0.0':return
     target=term.config['term']['share_target']
-    if target not in TARGETS:return  # Retain historical diagnostic-only recipes.
+    if not valid_target(target):return
     iterations=term.config['term']['shadow_iterations']
     q=restore(term.qualification,target,iterations)
     if q is not None and q['passed']:

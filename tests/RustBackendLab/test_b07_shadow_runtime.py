@@ -26,7 +26,7 @@ class ShadowConfig(unittest.TestCase):
 
     def test_all_requested_targets_validate_and_only_requested_recipe_fields_change(self):
         from brass_ai.recovery.config import validate_config
-        for target in Q.TARGETS:
+        for target in (.1,.25,.33,.4,.5,1.):
             config=C.configure(self.base,target);validate_config(config);self.assertTrue(C.is_shadow(config))
             self.assertEqual(config['branching']['rate_per_decision'],0.)
             self.assertEqual(config['teacher_phase']['tables'],{'train':28,'held_out':4})
@@ -41,7 +41,8 @@ class ShadowConfig(unittest.TestCase):
         for count in (2.0,4.0,True,3):
             bad=C.configure(self.base);bad['teacher_phase']['term']['shadow_iterations']=count
             self.assertFalse(C.is_shadow(bad))
-        with self.assertRaises(ValueError):C.configure(self.base,.3)
+        for target in (0,-.1,1.5,float('nan')):
+            with self.assertRaises(ValueError):C.configure(self.base,target)
 
     def test_reviewed_source_mapping_keeps_new_config_and_requires_explicit_resume_flag(self):
         from brass_ai.recovery.resume import check_signature

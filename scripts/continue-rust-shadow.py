@@ -40,6 +40,14 @@ def run_training(argv,log):
         finally:process.stdout.close()
 
 
+def share_target_arg(text):
+    from brass_ai.recovery.teacher_gradient_qualification import valid_target
+    try:value=float(text)
+    except ValueError:raise argparse.ArgumentTypeError('share target must be a number')
+    if not valid_target(value):raise argparse.ArgumentTypeError('share target must be above 0 and at most 1')
+    return value
+
+
 def inference_choice(args):
     """Parse --inference: keep the recorded choice, or select CPU/GPU explicitly."""
     if args.inference=='keep':return 'keep'
@@ -124,7 +132,7 @@ def main(*,default_mode='shadow',default_stage_revision=False):
     p.add_argument('--revise-stages',action='store_true',default=default_stage_revision,
         help='Unconditional A10/B20/C10 stages, sparse validation and PPG beta floor .25')
     p.add_argument('--iterations',type=int,default=1 if default_mode=='on' else 4)
-    p.add_argument('--share-target',type=float,choices=(.25,.4,.5),default=.25)
+    p.add_argument('--share-target',type=share_target_arg,default=.25,help='Teacher gradient share, any value above 0 and at most 1')
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
     p.add_argument('--inference',choices=('keep','cpu','gpu'),default='keep',
         help='cpu: in-worker ONNX Runtime for search, ordinary and rating lanes; gpu: original service; keep: last recorded choice')

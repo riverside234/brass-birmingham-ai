@@ -21,6 +21,14 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'src'),str(ROOT/'scripts')]
 
 
+def share_target_arg(text):
+    from brass_ai.recovery.teacher_gradient_qualification import valid_target
+    try:value=float(text)
+    except ValueError:raise argparse.ArgumentTypeError('share target must be a number')
+    if not valid_target(value):raise argparse.ArgumentTypeError('share target must be above 0 and at most 1')
+    return value
+
+
 def transfer_module(root):
     spec=importlib.util.spec_from_file_location('revised_reward_transfer',root/'scripts/step5-transfer.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
@@ -270,7 +278,7 @@ def main():
     p.add_argument('--expected-generation',type=int,default=1284)
     p.add_argument('--preserve-current-generation',type=int,default=1286)
     p.add_argument('--iterations',type=int,default=5)
-    p.add_argument('--share-target',type=float,choices=(.25,.4,.5),default=.25)
+    p.add_argument('--share-target',type=share_target_arg,default=.25,help='Teacher gradient share, any value above 0 and at most 1')
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
     p.add_argument('--prepare-only',action='store_true',help='Restore/authorize the revision; do not start training')
     args=p.parse_args()
