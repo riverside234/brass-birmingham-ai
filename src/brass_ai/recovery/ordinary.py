@@ -1,6 +1,7 @@
 """Frozen ordinary collection plans and explicit learner sample attribution."""
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+import copy
 import random
 
 from brass_ai.bank import sha
@@ -86,6 +87,9 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
     bot_member=next((m for m in state.get('quality_pool',{}).get('members',[]) if v4_history.bot(m)),None)
     bot_seats=bot_member['profile_seats'] if bot_member else 0
     if bot_member:require(bot_member['policies']==fast_specs,'V4 PFSP frozen policies differ from current bank')
+    # One verified host per plan. Installing it for every game re-checks hundreds
+    # of paths each time, which cost 40 s before any game could start.
+    local_scoring_receipt=None
     for i in range(config['games_per_iteration']):
         index=state['games_done']+i;kind,boosted=v4_share.table(index,config,window,share)
         if v4_in_history and kind=='legacy':kind='selfplay'
@@ -204,10 +208,12 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         jobs.append(dict(index=i,seed=seed,rotation=rotation,sampling_seed=config['seed']*7+index,
             policies=policies,focuses=focuses,path=str(directory/f'actor-{i:06d}.jsonl.gz'),provenance=provenance))
         if config.get('local_scoring_auxiliary',{}).get('mode','off')!='off':
-            from .local_scoring_targets import identity
-            from .host_runtime import local_scoring_host
-            recorder=local_scoring_host(root)
-            provenance['local_scoring']=dict(identity(),producer=dict(runtime_sha256=sha(recorder/'runtime.json'),host_sha256=sha(recorder/'BrassHost.exe')))
+            if local_scoring_receipt is None:
+                from .local_scoring_targets import identity
+                from .host_runtime import local_scoring_host
+                recorder=local_scoring_host(root)
+                local_scoring_receipt=dict(identity(),producer=dict(runtime_sha256=sha(recorder/'runtime.json'),host_sha256=sha(recorder/'BrassHost.exe')))
+            provenance['local_scoring']=copy.deepcopy(local_scoring_receipt)
         if exploration and exploration['version']==3:
             jobs[-1]['stable_game_id']=digest(dict(seed=seed,index=index,collection=digest(signature)))
             if kind=='selfplay' and exploration['branching']:

@@ -75,6 +75,8 @@ def signature_transition(before,after):
     old_revised='schedule' in old.get('teacher_phase',{}).get('search_value',{})
     new_revised='schedule' in new.get('teacher_phase',{}).get('search_value',{})
     if old_revised and not new_revised:return False
+    from brass_ai.recovery.training_revision_g1294 import compatible
+    if not compatible(old,new):return False
     try:old_compare,new_compare=previous_recipe(previous_reward(old)),previous_recipe(previous_reward(new))
     except (ValueError,KeyError,TypeError):return False
     if is_on(new):

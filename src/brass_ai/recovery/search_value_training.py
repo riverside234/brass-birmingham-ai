@@ -186,9 +186,9 @@ class Companion:
 
     def head_only(self, rows, *, generation, steps=32):
         began=time.perf_counter()
-        require(rows and all(r['split'] == 'train' for r in rows) and 1 <= steps <= 32, 'Invalid head-only training data')
+        require(rows and all(r['split'] == 'train' for r in rows) and 1 <= steps <= 64, 'Invalid head-only training data')
         model = self.model
-        # Encode once per pass, then run all 32 head steps on cached features.
+        # Encode once per pass, then run every head step on cached features.
         # No repeated trunk work, policy candidates, replay collation or GAE.
         inputs, targets, mains, mappings = [], [], [], []
         with torch.no_grad():
@@ -216,7 +216,7 @@ class Companion:
             torch.nn.utils.clip_grad_norm_(model.search_value_head.parameters(),1.,error_if_nonfinite=True)
             self.optimizer.step(); self.steps += 1; losses.append(loss.detach())
         self.optimizer.zero_grad(set_to_none=True)
-        # Preserve every observed loss without 32 separate device-to-host reads.
+        # Preserve every observed loss without a device-to-host read per step.
         losses=torch.stack(losses).float().cpu().tolist()
         return dict(steps=steps, rows=len(rows), loss_before=losses[0], loss_after=losses[-1], trunk_gradient=0., policy_kl=0.,
             timings=dict(input_and_frozen_encoder_seconds=encoded_at-began,head_update_seconds=time.perf_counter()-encoded_at,
@@ -275,7 +275,7 @@ def guarded_pass(companion, rows, heldout, value_optimizer, *, scale, measure_or
 
 
 def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measure_joint_kl,
-                       beta,rate_for_step,kl_cap=.003,heldout=None,**unused):
+                       beta,rate_for_step,kl_cap=.003,heldout=None,intervals=2,**unused):
     """Unconditional stage schedule, with interval-level KL/loss retention.
 
     A rejected interval restores both Adams and weights. Stage counters never
@@ -304,7 +304,7 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
     targets=np.asarray([r['target'] for r in rows],dtype=np.float32)
     device=next(model.parameters()).device
     rng=np.random.default_rng(companion.seed+companion.steps);reports=[];steps=0
-    for interval in range(2):
+    for interval in range(intervals):
         rollback=Selection(model,value_optimizer,{'search':0.},companion=companion)
         try:
             for step in range(16):
@@ -320,7 +320,7 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
                     'Correction reached main value head')
                 (beta*cloning_loss()).backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(),1.,error_if_nonfinite=True)
-                for group in value_optimizer.param_groups:group['lr']=rate_for_step(interval*16+step+1,32)
+                for group in value_optimizer.param_groups:group['lr']=rate_for_step(interval*16+step+1,intervals*16)
                 value_optimizer.step();companion.optimizer.step();companion.steps+=1
             kl=measure_joint_kl();require(np.isfinite(kl) and kl>=0,'Nonfinite search/PPG joint KL')
             attempted_loss=held_loss() if held_loss is not None and kl<=kl_cap else None

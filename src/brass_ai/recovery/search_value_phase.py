@@ -188,9 +188,10 @@ class SearchValuePhase:
         elif train:
             if scale>0:
                 if guarded is not None:
-                    self.report['update']=unconditional_pass(self.companion,train,scale=scale,heldout=validation,**guarded)
+                    self.report['update']=unconditional_pass(self.companion,train,scale=scale,heldout=validation,
+                        intervals=self.options['trunk']['intervals'],**guarded)
                 else:self.report['update']=dict(steps=0,reason='No ordinary PPG probe; trunk update deferred')
-            else:self.report['update']=self.companion.head_only(train,generation=generation)
+            else:self.report['update']=self.companion.head_only(train,generation=generation,steps=self.options['steps_per_iteration'])
         else:self.report['update']=dict(steps=0,reason='No admitted training value rows')
         updated=time.perf_counter()
         # Never reuse an older validation as this iteration's observation.

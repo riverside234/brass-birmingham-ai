@@ -62,15 +62,18 @@ EVERY_ITER_DEFAULT=dict(TWO_ITER_DEFAULT,contract=EVERY_ITER_CONTRACT,
 TEACHER_FLOOR_CONTRACT='ppg-value-phase/25.0.0'
 TEACHER_FLOOR_MIGRATION='ppg-teacher-quarter-beta-floor/1.0.0'
 TEACHER_FLOOR_DEFAULT=dict(EVERY_ITER_DEFAULT,contract=TEACHER_FLOOR_CONTRACT,beta_clone_min=.25)
+KL_STOP_CONTRACT='ppg-value-phase/26.0.0'
+KL_STOP_MIGRATION='ppg-kl-cap-stop-and-keep/1.0.0'
+KL_STOP_DEFAULT=dict(TEACHER_FLOOR_DEFAULT,contract=KL_STOP_CONTRACT)
 
 
-def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT)
+def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT,KL_STOP_CONTRACT)
 
 
 def cosine(c):return c.get('contract')==COSINE_CONTRACT
 
 
-def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT)
+def linear(c):return c.get('contract') in (LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT,KL_STOP_CONTRACT)
 
 
 def short(c):return c.get('contract')==SHORT_CONTRACT
@@ -82,12 +85,26 @@ def scheduled(c):return cosine(c) or linear(c)
 def two_iteration(c):return c.get('contract')==TWO_ITER_CONTRACT
 
 
+def keeps_update_at_kl_cap(c):return c.get('contract')==KL_STOP_CONTRACT
+
+
+def kl_stop_options(config):
+    """A hit on the policy KL cap ends the phase and keeps that update."""
+    validate(config['value_phase'])
+    require(config['value_phase']['contract'] in (TEACHER_FLOOR_CONTRACT,KL_STOP_CONTRACT),
+        'Keeping an update at the KL cap requires the teacher-floor PPG recipe')
+    result=copy.deepcopy(config)
+    result['value_phase'].update(contract=KL_STOP_CONTRACT)
+    validate(result['value_phase']);return result
+
+
 def teacher_floor_options(config):
     validate(config['value_phase'])
-    require(config['value_phase']['contract'] in (EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT),
+    require(config['value_phase']['contract'] in (EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT,KL_STOP_CONTRACT),
         'Teacher stage revision requires the every-iteration PPG recipe')
     result=copy.deepcopy(config)
-    result['value_phase'].update(contract=TEACHER_FLOOR_CONTRACT,beta_clone_min=.25)
+    if result['value_phase']['contract']!=KL_STOP_CONTRACT:
+        result['value_phase'].update(contract=TEACHER_FLOOR_CONTRACT,beta_clone_min=.25)
     validate(result['value_phase']);return result
 
 
@@ -206,7 +223,7 @@ def rate_factor(step,total,config):
 
 
 def validate(c):
-    default=TEACHER_FLOOR_DEFAULT if c.get('contract')==TEACHER_FLOOR_CONTRACT else EVERY_ITER_DEFAULT if c.get('contract')==EVERY_ITER_CONTRACT else TWO_ITER_DEFAULT if two_iteration(c) else EARLY_DEFAULT if c.get('contract')==EARLY_CONTRACT else QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
+    default=KL_STOP_DEFAULT if c.get('contract')==KL_STOP_CONTRACT else TEACHER_FLOOR_DEFAULT if c.get('contract')==TEACHER_FLOOR_CONTRACT else EVERY_ITER_DEFAULT if c.get('contract')==EVERY_ITER_CONTRACT else TWO_ITER_DEFAULT if two_iteration(c) else EARLY_DEFAULT if c.get('contract')==EARLY_CONTRACT else QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():
@@ -215,7 +232,7 @@ def validate(c):
     if scheduled(c):
         require(all(type(c['rate_schedule'][k]) is type(v) for k,v in default['rate_schedule'].items()),
             'Invalid PPG rate schedule field type')
-    if c['contract'] in (EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT):
+    if c['contract'] in (EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT,KL_STOP_CONTRACT):
         require(all(type(c['early_kl_beta'][k]) is type(v) for k,v in EARLY_DEFAULT['early_kl_beta'].items()),
             'Invalid early-KL beta field type')
     require(all(type(c[k]) is int and 1<=c[k]<=DEFAULT[k] for k in ('batch_size','clone_rows','clone_batch_size'))
@@ -250,7 +267,9 @@ def beta_after_phase(beta,trips,report,config):
             minimum=config['beta_clone_min'],maximum=config['beta_clone_max'],kl_cap=config['kl_cap'],
             scope='No phase: preserve beta and the last five actual phase outcomes.')
     trips=(trips+[bool(report['kl_guard_tripped'])])[-5:]
-    retained=report['optimizer_steps']
+    # A hit now keeps its interval. Judge earliness on the steps before that
+    # interval so the beta response to an early hit stays what it was.
+    retained=report.get('steps_before_kl_cap',report['optimizer_steps'])
     require(type(retained) is int and retained>=0,'Invalid retained PPG step count')
     early=config.get('early_kl_beta')
     early_hit=bool(early and trips[-1] and retained<=early['retained_steps_at_most'])
@@ -339,12 +358,19 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             if adopting_every_iteration:options_match=every_iteration_options(saved['options'])==phases.options
             adopting_teacher_floor=config['value_phase']['contract']==TEACHER_FLOOR_CONTRACT and saved['options']['value_phase']['contract']==EVERY_ITER_CONTRACT
             if adopting_teacher_floor:options_match=teacher_floor_options(saved['options'])==phases.options
+            adopting_kl_stop=config['value_phase']['contract']==KL_STOP_CONTRACT and saved['options']['value_phase']['contract']==TEACHER_FLOOR_CONTRACT
+            if adopting_kl_stop:options_match=kl_stop_options(saved['options'])==phases.options
             if two_iteration(saved['options']['value_phase']):fields.add('phase_origin')
             expected_contract=TWO_ITER_CHECKPOINT if two_iteration(saved['options']['value_phase']) else CHECKPOINT
             require(saved.get('contract')==expected_contract and set(saved)==fields and options_match,
                 'g210 checkpoint configuration differs')
             phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
             phases.cache_origin=saved['cache_origin'];receipts=saved['rolling_buffer'];phases.adoption=saved['adoption']
+            if adopting_kl_stop:
+                phases.ppg_schedule_migration=dict(contract=KL_STOP_MIGRATION,origin=generation,
+                    beta_before=phases.beta,beta_after=phases.beta,previous_adoption=copy.deepcopy(phases.adoption),
+                    scope='A policy-KL hit stops the phase and keeps that update, with no rollback. Preserve beta/trips, Adam/RNG, cached replay and cadence.')
+                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration)
             if adopting_teacher_floor:
                 require(type(phases.beta) in (int,float) and math.isfinite(phases.beta) and
                     saved['options']['value_phase']['beta_clone_min']<=phases.beta<=32,'Invalid beta before teacher-floor adoption')
@@ -437,35 +463,14 @@ def startup(phases,generation):
     return dict(result,fresh_ppg=True,next_phase=generation+1)
 
 
-def begin_stage(phases,model):
-    """Write this collection's dense PPG cache beside PPO instead of after it.
-
-    The stage reads only the frozen critic rows and writes only new partial files,
-    so its bytes and receipts are unchanged. PPG waits for it before opening the cache.
-    """
-    from concurrent.futures import ThreadPoolExecutor
-    require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
-    require(getattr(phases,'staging',None) is None,'PPG cache stage is already running')
-    pool=ThreadPoolExecutor(max_workers=1,thread_name_prefix='ppg-cache-stage')
-    # g210 selects no policy rows, so the post-PPO actor list is not an input.
-    phases.staging=(pool,pool.submit(phases.buffer.stage,phases.critic_dataset,phases.train_ids,phases.heldout_ids,[],
-        phases.collection_source,model,phases.split['selection']))
-
-
 def fit(phases,model,preparation_pool):
     from . import value_phase
     from .ppg_phasic import RATE_KEY
     from .ppo_preparation import phase_preparation
     require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
     began=time.perf_counter();c=phases.options['value_phase'];rate=getattr(phases,'ppo_peak',None)
-    staging=getattr(phases,'staging',None)
-    if staging is None:
-        cache=phases.buffer.stage(phases.critic_dataset,phases.train_ids,phases.heldout_ids,phases.actor_ids,
-            phases.collection_source,model,phases.split['selection'])
-    else:
-        pool,future=staging;phases.staging=None
-        try:cache=future.result()
-        finally:pool.shutdown(wait=True)
+    cache=phases.buffer.stage(phases.critic_dataset,phases.train_ids,phases.heldout_ids,phases.actor_ids,
+        phases.collection_source,model,phases.split['selection'])
     staged=time.perf_counter()
     clock=None
     if two_iteration(c):

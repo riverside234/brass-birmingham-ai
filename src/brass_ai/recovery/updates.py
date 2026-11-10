@@ -568,7 +568,6 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             'Teacher term requires a nonforced ordinary PPO KL probe')
     with timings.phase('ppo.critic_prepare'):
         critic_ids=phases.prepare(ds) if phases is not None else list(range(count))
-    if hasattr(phases,'stage_early'):phases.stage_early(model)
     critic_ds=phases.critic_dataset if phases is not None else ds
     critic_count=len(critic_ids)
     planned_steps=config['epochs']*math.ceil(len(actor_ids)/config['effective_batch_size'] if actor_ids else critic_count/config['critic_batch_size'])

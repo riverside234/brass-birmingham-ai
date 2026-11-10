@@ -45,7 +45,8 @@ def previous_recipe(config):
     """Exact projection used only for reviewed recipe-transition comparison."""
     from .search_value_config import validate as validate_options,defaults as original
     from .ppg_g210 import TEACHER_FLOOR_CONTRACT,EVERY_ITER_CONTRACT
-    result=copy.deepcopy(config)
+    from .training_revision_g1294 import previous as before_revision
+    result=copy.deepcopy(before_revision(config))
     options=result.get('teacher_phase',{}).get('search_value',{})
     if not enabled(options):return result
     validate_options(options)

@@ -73,7 +73,7 @@ Model result for the current workload, with the teacher tables taking 51 s: the 
 | Skip re-hashing sealed rows when staging batches | 20.8 s of PPO main-thread staging, mostly SHA-256 on every reuse | None; rows are immutable and bytes-backed, and unsealed inputs are still re-hashed |
 | Compute exploration distributions only when used | Most of the 4.4 s `ppo.prepare`; never read with zero exploration | None |
 | Measure actor-gradient norms on one step in four once beta is fixed | A second backward pass per actor microbatch (about 3 s) | Report only; the gradient applied is byte-identical, which a test checks |
-| Write the PPG cache beside PPO | 5.9 s at the start of the PPG phase | Same bytes, same receipts; PPG waits for it before opening the cache |
+| Write the PPG cache beside PPO (removed after g1294, see [G1294_REVIEW_AND_TRAINING_REVISION.md](G1294_REVIEW_AND_TRAINING_REVISION.md)) | 5.9 s at the start of the PPG phase | Same bytes, same receipts; the GIL made it no faster |
 
 The search-head phase (`search_value`) is currently paused while the buffer rebuilds, so it costs 0.03 s. When it trains, the update is about 2 s and preparing its rows is under 1 s in a running process (up to 6.7 s on the first iteration after a restart). Neither is worth changing yet.
 

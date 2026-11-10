@@ -6,6 +6,7 @@ from brass_ai.learning.search_value import CONTRACT, binding
 
 PHASE = 'teacher-phase/2.0.0'
 FAST_POST_SECONDS = .5
+MAX_STEPS = 64
 
 
 def defaults():
@@ -35,6 +36,18 @@ def adopt(config):
     return result
 
 
+def max_steps_options(config):
+    """At most 64 search-head steps per iteration: head-only, or four 16-step trunk intervals."""
+    result = copy.deepcopy(config)
+    options = result['teacher_phase']['search_value']
+    validate(options)
+    require('schedule' in options, '64 search-head steps require the reviewed stage schedule')
+    options['steps_per_iteration'] = MAX_STEPS
+    options['trunk']['intervals'] = MAX_STEPS//options['trunk']['interval_steps']
+    validate(options)
+    return result
+
+
 def validate(c):
     expected = defaults()
     if 'schedule' in c:
@@ -47,6 +60,9 @@ def validate(c):
         expected['head_to_head']['games']=0
         expected['trunk']['kl']=.003
         expected['trunk']['ordinary_heldout_tolerance']=None
+        if c.get('steps_per_iteration') == MAX_STEPS:
+            expected['steps_per_iteration']=MAX_STEPS
+            expected['trunk']['intervals']=MAX_STEPS//expected['trunk']['interval_steps']
     require(set(c) == set(expected), 'Search value fields differ')
     fixed = copy.deepcopy(c)
     fixed['stage'] = expected['stage']

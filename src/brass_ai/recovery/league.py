@@ -772,7 +772,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     report['curriculum'].update(effective_tables=dict(composition),
                         v4_share_reduced=share['activated'] is not None)
                 report['utilization']=iteration_utilization(inference_before,ordinary_inference,records,
-                    load_began-began-shadow_seconds,len(games),config['execution'])
+                    load_began-began-shadow_seconds,len(games),worker_execution)
                 report['utilization']['replay_ingress']=ingress_metrics
                 if 'seat_contexts' in config:
                     report['seat_contexts']=dict(config['seat_contexts'],diversity_enabled=False)
@@ -923,6 +923,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if report.get('entropy_schedule'):
                         schedule=report['entropy_schedule']
                         controller_line+=f' anneal={schedule["progress"]}/{schedule["ramp_iterations"]} held={schedule["held"]} {schedule["reason"]}'
+                        if schedule.get('one_time_raise'):
+                            controller_line+=f' entropy_raise={schedule["one_time_raise"]["step"]}/{schedule["one_time_raise"]["ramp_iterations"]}'
                         if schedule['waiting_for_insolvency_step']:
                             from .entropy_schedule import automatic
                             controller_line+=(' REWARD_AUTO_NEXT' if automatic(config) else ' REWARD_STEP_PENDING')

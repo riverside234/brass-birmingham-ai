@@ -252,10 +252,14 @@ class DeferredKL:
     If a later guard trips, verify pending boundaries newest first, then restore
     the newest safe one with matching Adam and companion state. A safe later
     probe does not certify the KL of an earlier, different checkpoint.
+
+    With keep_at_cap a hit ends the phase and nothing is restored for KL, so only
+    the post-PPO snapshot (which calibration reads later) needs copying.
     """
-    def __init__(self,model,optimizer,companion,reference,probe_ids,cap,report):
+    def __init__(self,model,optimizer,companion,reference,probe_ids,cap,report,*,keep_at_cap=False):
         self.model,self.optimizer,self.companion=model,optimizer,companion
         self.reference,self.probe_ids,self.cap,self.report=reference,probe_ids,cap,report
+        self.keep_at_cap=keep_at_cap
         self.maximum=0.;self.checks=[];self.points=[]
         self.accept(0,0,0.)
 
@@ -267,6 +271,8 @@ class DeferredKL:
         return kl
 
     def accept(self,step,intervals,kl):
+        if self.keep_at_cap and step:
+            self.points=[dict(step=step,intervals=intervals,kl=kl)];return
         point=dict(step=step,intervals=intervals,kl=kl,
             model=copy.deepcopy(self.model.state_dict()),adam=copy.deepcopy(self.optimizer.state_dict()),
             auxiliary=self.companion.snapshot() if self.companion is not None else None)
@@ -278,6 +284,14 @@ class DeferredKL:
         if self.companion is not None:self.companion.restore(point['auxiliary'])
 
     def finish(self):
+        if self.keep_at_cap:
+            # The model already sits at the last kept interval.
+            point=self.points[-1];kl=point['kl']
+            if kl is None:kl=self.measure(point['step'],'retention')
+            self.report.update(kl_checks=self.checks,
+                kl_guard_scope='Exact checks every configured number of attempted optimizer steps and epoch tails; a hit stops the phase and keeps that update without rollback')
+            self.points.clear()
+            return point['intervals'],kl
         for point in reversed(self.points):
             self.restore(point)
             kl=point['kl']
@@ -292,7 +306,7 @@ class DeferredKL:
 
 def defer_train_metrics(model,config):
     from .updates import state_value_model
-    return state_value_model(model) and config['contract'] in ('ppg-value-phase/24.0.0','ppg-value-phase/25.0.0')
+    return state_value_model(model) and config['contract'] in ('ppg-value-phase/24.0.0','ppg-value-phase/25.0.0','ppg-value-phase/26.0.0')
 
 
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
@@ -369,11 +383,13 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
     max_kl=0.;attempted_kl_checks=0;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
     deferred=config.get('kl_check_steps',1)>1
-    guard=DeferredKL(model,optimizer,companion,reference,probe_ids,config['kl_cap'],report) if deferred else None
+    from .ppg_g210 import keeps_update_at_kl_cap
+    keep_at_cap=deferred and keeps_update_at_kl_cap(config)
+    guard=DeferredKL(model,optimizer,companion,reference,probe_ids,config['kl_cap'],report,keep_at_cap=keep_at_cap) if deferred else None
     # Reuse the already-owned post-PPO snapshot. A rejected phase never issues
     # readiness, so its expensive full-training diagnostics need not run.
     calibration_source=(guard.points[0]['model'] if deferred else copy.deepcopy(model.state_dict())) if deferred_train else None
-    if deferred:report['acceptance']='kl-checked-retained-interval/1.0.0'
+    if deferred:report['acceptance']='kl-cap-stops-and-keeps-interval/1.0.0' if keep_at_cap else 'kl-checked-retained-interval/1.0.0'
     retained=[]
     from .ppg_g210 import scheduled as scheduled_rate,rate_factor
     scheduled=scheduled_rate(config)
@@ -438,7 +454,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     measured=(guard.measure(step,'periodic' if step%config['kl_check_steps']==0 else 'epoch_tail')
                         if deferred else reference.measure(model,probe_ids))
                     max_kl=max(max_kl,measured);checked_step=step
-                if check and measured>config['kl_cap']:
+                if check and measured>config['kl_cap'] and not keep_at_cap:
                     model.load_state_dict(saved_model if deferred else step_model)
                     optimizer.load_state_dict(saved_adam if deferred else step_adam)
                     if companion is not None:companion.restore(saved_aux if deferred else step_aux)
@@ -454,8 +470,10 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             # checks a passing loss boundary is provisional until retention.
             last_attempt=measure('acceptance_validation_seconds',model,validation_dataset,heldout_ids,update,evidence=True)
             loss_increased=last_attempt['loss']>current['loss']
-            rejected=not safe_steps or loss_increased
-            rejection_reason='heldout_loss_increased' if loss_increased else 'no_safe_steps' if rejected else None
+            # The interval that reached the KL cap is the phase's last, and it stays.
+            kept_at_cap=keep_at_cap and report['kl_guard_tripped']
+            rejected=not kept_at_cap and (not safe_steps or loss_increased)
+            rejection_reason='heldout_loss_increased' if rejected and loss_increased else 'no_safe_steps' if rejected else None
             if report['early_stop_reason'] is None and loss_increased:
                 report['early_stop_reason']='heldout_loss_increased'
             report['interval_reports'].append(dict(epoch=epoch+1,start_step=segment+1,
@@ -463,12 +481,14 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 accepted_steps=0 if rejected else safe_steps,rejection_reason=rejection_reason,
                 heldout_loss_before=current['loss'],heldout_loss_attempted=last_attempt['loss'],
                 probe_kl=safe_kl,attempted_probe_kl=measured))
+            if keep_at_cap:report['interval_reports'][-1]['kept_at_kl_cap']=kept_at_cap
             if rejected:
                 report['rejected_intervals']+=1
                 model.load_state_dict(saved_model);optimizer.load_state_dict(saved_adam)
                 if companion is not None:companion.restore(saved_aux)
             else:
                 report['accepted_intervals']+=1;epoch_accepted+=safe_steps
+                if kept_at_cap:report['steps_before_kl_cap']=report['optimizer_steps']
                 current=last_attempt;accepted_kl=safe_kl;report['optimizer_steps']+=safe_steps
                 used.update(segment_used);presentations+=len(segment_used);clone_presentations+=segment_clones
                 previous_presentations+=sum(i>=current_count for i in segment_used)
@@ -587,7 +607,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             if a is not None:groups[a['strategy_id']].append(i)
         report['strategy_kl']={str(z):dict(rows=len(ids),kl=reference.measure(model,ids)) for z,ids in groups.items()}
         report['strategy_clone_rows']=dict(Counter(str(dataset.rows[i]['_domino']['strategy_id']) for i in clones))
-    require(report['probe_kl']<=config['kl_cap']+1e-7,'Accepted value phase exceeds policy KL cap')
+    require(keep_at_cap or report['probe_kl']<=config['kl_cap']+1e-7,'Accepted value phase exceeds policy KL cap')
     if post_fit is not None:
         started=time.perf_counter()
         post_fit(model=model,optimizer=optimizer,reference=reference,clones=clones,probe_ids=probe_ids,

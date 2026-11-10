@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "15bf2065215d83c262bb910f684ed99951864af1fd7eb4c381aed2651974a0d3",
+  "execution_implementation": "d937f96dad9e53ba2965aba1796f846f392c1bdf08c13006d8939f925d1260ca",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -413,6 +413,11 @@
       "implementation": "102d4622c3ec190e8df9ba4f4e8a17adc2f63e7a82b6264064190c985e452931",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "9708f2c5914031202389ea01584b39b0d9973cb42414f4c825d1812f2b824ed8"
+    },
+    {
+      "implementation": "15bf2065215d83c262bb910f684ed99951864af1fd7eb4c381aed2651974a0d3",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "bc4c5df8bba1c1bccbbc959739857fdbfb9cbed2b08eccfa5389d1dbf175bcb9"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -541,7 +546,13 @@
   "collection_overlap": {
     "contract": "brass-lab-collection-overlap/1.0.0",
     "source_report": "ai-research/RUST_OVERLAP_AND_TRAINING_SPEED_REPORT.md",
-    "scope": "CPU path only: teacher tables run beside ordinary games, the PPG cache is written beside PPO and replay shards are sealed as they arrive. Search c_scale (c2) comes from the operational native_inference block and is recorded on every label. Without that block every GPU path, binary, frozen job and RNG stream is unchanged.",
+    "scope": "CPU path only: teacher tables run beside ordinary games and replay shards are sealed as they arrive. Search c_scale (c2) comes from the operational native_inference block and is recorded on every label. Without that block every GPU path, binary, frozen job and RNG stream is unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "training_revision_g1294": {
+    "contract": "training-revision-g1294/1.0.0",
+    "source_report": "ai-research/G1294_REVIEW_AND_TRAINING_REVISION.md",
+    "scope": "One user-requested recipe change at a committed boundary: PPO entropy rises linearly from .001 to .005 over the next 100 committed iterations after the completed anneal; a hit on the PPG KL cap stops the phase and keeps the update with no rollback; the search head trains at most 64 steps per iteration. Weights, both Adams, RNG, replay, fixed teacher beta, stage counters and the entropy-anneal history are preserved.",
     "qualified_implementation_unchanged": true
   }
 }

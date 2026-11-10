@@ -147,7 +147,9 @@ def task_teacher_step(device):
         model.to(device)
         optimizer=torch.optim.AdamW(ordinary_parameters(model),lr=1e-5)
         report=ppo_update(model,optimizer,[game],behavior,config,teacher_term=term)
-        require(term.steps and all(s['actor_norm']>0 and s['raw_share'] is not None for s in term.steps),
+        # Once beta is fixed, actor norms are sampled on one step in four.
+        measured=[s for s in term.steps if s['actor_norm'] is not None]
+        require(measured and all(s['actor_norm']>0 and s['raw_share'] is not None for s in measured),
                 'Teacher did not measure the actual ordinary actor gradient')
         require(len(term.steps)==report['optimizer_steps'],'Teacher added an optimizer step')
         return dict(passed=True,device=str(device),optimizer_steps=report['optimizer_steps'],

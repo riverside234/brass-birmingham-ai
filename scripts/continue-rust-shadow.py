@@ -88,6 +88,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         working=revise_reward(before) if pending_reward else before
         if mode=='on':
             config=enable(working,share_target,revise_stages=revise_stages);authorize(state,config)
+            from brass_ai.recovery.training_revision_g1294 import configure as revise_training,due
+            if revise_stages and due(state):config=revise_training(config,state)
         elif is_shadow(before):
             config=copy.deepcopy(before);config['teacher_phase']['term']['share_target']=share_target
             config['teacher_phase']['term']['shadow_iterations']=4
@@ -103,10 +105,16 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if 'schedule' in config['teacher_phase']['search_value']:
             prefix='-rust-teacher-on-stages-v2-share' if mode=='on' else '-rust-shadow-stages-v2-share'
         if is_revised(config):prefix=prefix.replace('-share','-no-insolvency-share')
+        # The revised recipe gets its own file; its runtime settings start from the previous one,
+        # so --inference keep still keeps CPU inference.
+        earlier=root/'configs/step5'/(run.name+prefix+tag+'.json')
+        from brass_ai.recovery.training_revision_g1294 import applied as training_revised,summary as revision_summary
+        if training_revised(config):
+            prefix=prefix.replace('-share','-entropy-raise-g'+str(revision_summary(config)['entropy']['start_generation'])+'-share')
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
-        settings=from_config(existing)
+        settings=from_config(existing if output.exists() or not earlier.exists() else read(earlier))
         if inference is None:settings.pop('native_inference',None)
         elif inference!='keep':settings['native_inference']=inference
         if settings.get('native_inference') is not None:
@@ -177,6 +185,10 @@ def main(*,default_mode='shadow',default_stage_revision=False):
         if revised:print('Residual stages: A10 head-only; B20 blend warm-up; C10 trunk warm-up; KL cap .003; PPG beta floor .25.',flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
         if is_revised(options):print('Transferred reward: win=1, placement=.05, VP=.001 (cap 180); insolvency charge=0.',flush=True)
+        from brass_ai.recovery.training_revision_g1294 import applied as training_revised,summary as revision_summary
+        if training_revised(options):
+            report['training_revision']=revision_summary(options)
+            print('Training revision: '+str(report['training_revision']),flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

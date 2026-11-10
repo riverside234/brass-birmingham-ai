@@ -20,6 +20,12 @@ DEFAULT=dict(contract=CONTRACT,mode='off',start_generation=None,reset_generation
         dict(at_progress=50,insolvency=dict(event_cost=.005,max_cost=.05))])
 EXTENDED_STEPS=copy.deepcopy(DEFAULT['insolvency_steps'])+[
     dict(at_progress=100,insolvency=dict(event_cost=.0025,max_cost=.025))]
+# Optional field: a single linear rise in the PPO entropy weight after the anneal.
+RAISE='one_time_raise'
+RAISE_CONTRACT='entropy-one-time-raise/1.0.0'
+RAISE_FROM=.001
+RAISE_TARGET=.005
+RAISE_ITERATIONS=100
 
 
 def extended(c):
@@ -37,10 +43,20 @@ def extend_config(config):
     return result
 
 
+def validate_raise(c):
+    r=c[RAISE]
+    require(type(r) is dict and set(r)=={'contract','start_generation','ramp_iterations','final'} and
+        r['contract']==RAISE_CONTRACT and type(r['start_generation']) is int and r['start_generation']>=1 and
+        type(r['ramp_iterations']) is int and r['ramp_iterations']==RAISE_ITERATIONS and
+        r['final']==dict.fromkeys(GROUPS,RAISE_TARGET) and c['final']==dict.fromkeys(GROUPS,RAISE_FROM) and
+        c['contract']==AUTO_CONTRACT and c['mode']=='on','Invalid one-time entropy raise')
+
+
 def validate_update(update):
     c=update[KEY]
-    require(type(c) is dict and set(c)==set(DEFAULT) and c['contract'] in (CONTRACT,EXTENDED_CONTRACT,AUTO_CONTRACT),
+    require(type(c) is dict and set(c)==set(DEFAULT)|({RAISE} if RAISE in c else set()) and c['contract'] in (CONTRACT,EXTENDED_CONTRACT,AUTO_CONTRACT),
         'Invalid entropy anneal contract/fields')
+    if RAISE in c:validate_raise(c)
     if c['contract']==EXTENDED_CONTRACT:extended(c)
     if c['contract']==AUTO_CONTRACT:extended(dict(c,contract=EXTENDED_CONTRACT))
     require(c['mode'] in ('off','on') and c['shape']=='linear' and c['advance_on']=='healthy-entropy-update',
@@ -111,10 +127,21 @@ def validate(config):
     return c
 
 
+def raise_step(c,generation):
+    """Steps of the one-time raise reached by this generation; the clock is the generation."""
+    r=c.get(RAISE)
+    return 0 if r is None else max(0,min(r['ramp_iterations'],generation-r['start_generation']+1))
+
+
 def weights(c,k,generation):
     if c['mode']=='off' or generation<c['start_generation']:return copy.deepcopy(c['start'])
     fraction=min(1.,k/c['ramp_iterations'])
-    return {g:c['final'][g] if fraction==1 else c['start'][g]+(c['final'][g]-c['start'][g])*fraction for g in GROUPS}
+    annealed={g:c['final'][g] if fraction==1 else c['start'][g]+(c['final'][g]-c['start'][g])*fraction for g in GROUPS}
+    step=raise_step(c,generation)
+    if not step:return annealed
+    r=c[RAISE]
+    if step==r['ramp_iterations']:return copy.deepcopy(r['final'])
+    return {g:annealed[g]+(r['final'][g]-annealed[g])*step/r['ramp_iterations'] for g in GROUPS}
 
 
 def waiting(s):
@@ -170,6 +197,10 @@ def restore(config,saved,generation):
         same=extended(old)==c
     if not same and old['contract']==EXTENDED_CONTRACT and c['contract']==AUTO_CONTRACT:
         same=dict(old,contract=AUTO_CONTRACT)==c
+    if not same and RAISE in c and RAISE not in old:
+        same=immutable(old)==immutable({k:v for k,v in c.items() if k!=RAISE})
+        require(not same or (s['progress']==c['ramp_iterations'] and not waiting(s) and c[RAISE]['start_generation']>generation),
+            'The one-time entropy raise starts prospectively, after the completed anneal')
     require(same,'Cannot silently alter an adopted entropy ramp or reward plan')
     reset=c['reset_generation']!=old['reset_generation']
     if reset:
@@ -219,6 +250,21 @@ def effective(config,state):
     return copy.deepcopy(s['applied'])
 
 
+def raise_config(config,generation):
+    """Add the one-time raise, beginning with the next committed generation."""
+    result=copy.deepcopy(config);c=validate_update(result['update'])
+    if RAISE in c:return result
+    c[RAISE]=dict(contract=RAISE_CONTRACT,start_generation=generation+1,ramp_iterations=RAISE_ITERATIONS,
+        final=dict.fromkeys(GROUPS,RAISE_TARGET))
+    validate_update(result['update'])
+    return result
+
+
+def without_raise(config):
+    result=copy.deepcopy(config);result['update'][KEY].pop(RAISE,None)
+    return result
+
+
 def receipt(config,state):
     s=state[KEY]
     return dict(contract=s['config']['contract'],config_id=digest(config['update'][KEY]),generation=state['generation']+1,
@@ -254,6 +300,9 @@ def advance(s,config,*,generation,healthy):
         waiting_for_insolvency_step=s['waiting_for_insolvency_step'],
         next_insolvency_step=copy.deepcopy(c['insolvency_steps'][s['insolvency_steps_applied']])
             if s['insolvency_steps_applied']<len(c['insolvency_steps']) else None,
+        **({RAISE:dict(contract=c[RAISE]['contract'],start_generation=c[RAISE]['start_generation'],
+            step=raise_step(c,generation),next_step=raise_step(c,generation+1),ramp_iterations=c[RAISE]['ramp_iterations'],
+            scope='Counts committed iterations, healthy or not; the anneal itself is complete')} if RAISE in c else {}),
         scope=('Loss coefficients used this iteration; progress commits with the checkpoint. Due reward stages apply automatically before the next collection, with incompatible replay retired.'
             if automatic(config) else 'Loss coefficients used this iteration; progress commits with the checkpoint. Reward changes require a reviewed restart, never a live automatic edit.'))
     return s,report
