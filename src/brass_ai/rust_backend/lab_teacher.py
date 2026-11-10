@@ -139,7 +139,15 @@ class Worker:
                 if kind == 'turn':
                     require(not calibration and verifier is not None and len(rows)+len(meta['rows']) <= 32,
                             'Unexpected/unverified/excess teacher turn')
-                    self.send(verifier.verify(meta,received))
+                    if counted:
+                        # A fixed-count search never reads its clock, so the worker may
+                        # search its next turn while this one is verified. It holds a CPU
+                        # ticket while it waits, and under overlap that wait was a third
+                        # of each table. A failed check still stops the table: events are
+                        # handled in order, so no later turn or result is accepted.
+                        self.send(dict(job=meta['job'],index=meta['index'],status='ok'))
+                        verifier.verify(meta,received)
+                    else:self.send(verifier.verify(meta,received))
                     # Verification is outside the active search/stuck-worker
                     # watchdog. Keep generic search/IPC watchdogs and cancel.
                     ready = time.monotonic()

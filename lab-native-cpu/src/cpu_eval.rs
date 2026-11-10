@@ -11,6 +11,15 @@ use crate::{check, Result};
 use brass_ai_core::features::{FeatureTensors, ACTION_DIM, STATE_DIM};
 use brass_ai_core::search::math::{Parameters, Statistics};
 use brass_ai_core::search::session::clock::Budget as SearchBudget;
+use brass_ai_core::{
+    features::FeatureContext,
+    search::{brass::Key, reward::Ledger, Info},
+    state::{
+        observation::{InformationState, Observation, ObservationEnvelope, Recall},
+        NativeState,
+    },
+    types::Phase,
+};
 use ort::{
     session::{builder::GraphOptimizationLevel, Session},
     tensor::TensorElementType,
@@ -586,6 +595,54 @@ pub fn teacher_k(fast: bool, calibration: bool, job_k: usize) -> usize {
     })
 }
 
+/// The frozen importer refuses one legal state: the develop-bonus choice of a
+/// multi-beer sale that still owes beer. Search rebuilds every root through that
+/// importer, so it cannot start from this state.
+pub fn unimportable_bonus(state: &NativeState) -> bool {
+    state.context().phase == Phase::Bonus
+        && NativeState::import(&state.export())
+            .err()
+            .is_some_and(|e| e.to_string().contains("bonus state mismatch"))
+}
+
+/// The root a search would build, taken directly from the true state: the same
+/// permitted view, recall, sorted legal choices, context and settled ledger.
+pub fn direct_root(
+    state: &NativeState,
+    view: &Observation,
+    recall: &Recall,
+    context: &FeatureContext,
+    ledger: &Ledger,
+) -> Result<Info<Key, String>> {
+    let actor = usize::try_from(state.context().actor).map_err(|_| "invalid acting seat")?;
+    check(
+        usize::from(u8::from(view.seat)) == actor && view.context.actor == actor as i8,
+        "direct root must be the acting permitted view",
+    )?;
+    let mut choices = state.legal_choices()?;
+    choices.sort_by(|a, b| a.id.cmp(&b.id));
+    let actions = choices.iter().map(|c| c.id.clone()).collect::<Vec<_>>().into();
+    let mut context = context.clone();
+    context.remaining = ledger.remaining();
+    Ok(Info {
+        key: std::sync::Arc::new(Key {
+            information: InformationState {
+                observation: ObservationEnvelope {
+                    view: Some(view.clone()),
+                    setup: false,
+                    chance: None,
+                },
+                recall: recall.clone(),
+            },
+            choices,
+            context,
+            settled: ledger.state().settled,
+        }),
+        actor,
+        actions,
+    })
+}
+
 /// `search_value` carries `w` for the seat whose search is running.
 pub fn teacher_evaluate(
     t: &FeatureTensors,
@@ -709,6 +766,196 @@ impl Cache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use brass_ai_core::search::{
+        brass::{Brass, Input},
+        reward::{Insolvency, LedgerState, Reward},
+        Game,
+    };
+    use brass_ai_core::state::{
+        dto::{Industry, Kind, StateDto},
+        observation::RecallEntry,
+    };
+    use brass_ai_core::types::Seat;
+
+    /// The lane tests' multi-beer sale: two beers owed to a Gloucester (develop bonus) merchant.
+    fn multi_beer_sale() -> StateDto {
+        let mut d: StateDto =
+            serde_json::from_str(include_str!("../../native/brass-ai-core/tests/data/initial-state.json")).unwrap();
+        let owner = usize::from(u8::from(d.context.turn_owner));
+        let mut place = |industry, beer| {
+            let mat = d.players[owner].mat.iter_mut().find(|m| m.industry == industry).unwrap();
+            let index = mat
+                .tiles
+                .iter()
+                .position(|t| match beer {
+                    Some(n) => t.beer == n,
+                    None => true,
+                })
+                .unwrap();
+            let mut tile = mat.tiles.remove(index);
+            if industry == Industry::Brewery {
+                tile.resource = 1;
+            }
+            let slot = d.slots.iter_mut().find(|s| s.tile.is_none() && s.types.contains(&industry)).unwrap();
+            slot.tile = Some(tile);
+            slot.id.clone()
+        };
+        let target = place(Industry::Manufacturer, Some(2));
+        place(Industry::Brewery, None);
+        let merchant = d.merchants.iter().position(|m| m.id == "Gloucester:0").unwrap();
+        let donor = d
+            .merchants
+            .iter()
+            .position(|m| m.types.as_ref().is_some_and(|t| t.contains(&Industry::Manufacturer)))
+            .unwrap();
+        let types = d.merchants[merchant].types.clone();
+        d.merchants[merchant].types = d.merchants[donor].types.clone();
+        d.merchants[donor].types = types;
+        for m in &mut d.merchants {
+            m.beer = u8::from(m.types.as_ref().is_some_and(|t| !t.is_empty()));
+        }
+        d.context.phase = Phase::Payment;
+        d.pending.kind = "sell".into();
+        d.pending.target = target;
+        d.pending.merchant = "Gloucester:0".into();
+        d.pending.parts = 1;
+        d.pending.beer = 2;
+        d
+    }
+
+    fn reward() -> Reward {
+        Reward {
+            version: "brass-combined-return/2.0.0".into(),
+            win: 1.,
+            placement: 0.1,
+            vp: 0.001,
+            vp_cap: Some(180),
+            insolvency: Insolvency { event_cost: 0.025, max_cost: 0.075 },
+        }
+    }
+
+    /// The teacher's own root inputs for the acting seat of `state`.
+    fn root(state: &NativeState) -> (Input, Ledger) {
+        let seat = Seat::try_from(state.context().actor as u8).unwrap();
+        let view = state.observation(seat).unwrap();
+        let reward = reward();
+        let mut ledger = Ledger::new(reward.clone(), LedgerState { spent: [0.; 4], settled: vec![] }).unwrap();
+        ledger.observe(&view).unwrap();
+        let context = FeatureContext {
+            model_id: "frozen".into(),
+            reward_id: reward.identity().unwrap(),
+            profile_id: "brass-lab-teacher/1.1.0".into(),
+            style: [0.; 4],
+            intent: [0.; 8],
+            remaining: ledger.remaining(),
+            max_cost: reward.insolvency.max_cost,
+            stable_descriptors: None,
+        };
+        let recall = vec![RecallEntry { revision: view.context.revision, hand: view.own_hand.clone() }];
+        let input = Input {
+            view,
+            recall,
+            context,
+            reward,
+            ledger: ledger.state(),
+            shuffle_tape: None,
+            sample_seed: 7,
+        };
+        (input, ledger)
+    }
+
+    fn direct(state: &NativeState) -> Info<Key, String> {
+        let (input, ledger) = root(state);
+        direct_root(state, &input.view, &input.recall, &input.context, &ledger).unwrap()
+    }
+
+    fn step(state: &NativeState, kind: Kind, target: Option<&str>) -> NativeState {
+        let choice = state
+            .legal_choices()
+            .unwrap()
+            .into_iter()
+            .find(|c| c.kind == kind && (target.is_none() || c.target.as_deref() == target))
+            .unwrap();
+        state.after_choice(state.context().revision, &choice.id).unwrap()
+    }
+
+    #[test]
+    fn a_direct_root_equals_the_search_root_wherever_search_can_build_one() {
+        let sale = NativeState::import(&multi_beer_sale()).unwrap();
+        let start: StateDto =
+            serde_json::from_str(include_str!("../../native/brass-ai-core/tests/data/initial-state.json")).unwrap();
+        for state in [NativeState::import(&start).unwrap(), sale] {
+            assert!(!unimportable_bonus(&state));
+            let (input, _) = root(&state);
+            let searched = Brass::new(input, false).unwrap().root().unwrap();
+            assert_eq!(direct(&state), searched);
+        }
+    }
+
+    #[test]
+    fn a_mid_sale_develop_bonus_is_detected_and_still_has_a_root() {
+        for bonus in [Kind::BonusSkip, Kind::BonusDevelop] {
+            let sale = NativeState::import(&multi_beer_sale()).unwrap();
+            let state = step(&sale, Kind::Beer, Some("merchant:Gloucester:0"));
+            assert_eq!(state.context().phase, Phase::Bonus);
+            assert_eq!(state.export().pending.beer, 1);
+            // This is the teacher's failure: search cannot rebuild the root.
+            let (input, _) = root(&state);
+            assert!(Brass::new(input, false).err().unwrap().to_string().contains("bonus state mismatch"));
+            assert!(unimportable_bonus(&state));
+            let info = direct(&state);
+            let mut legal = state.legal_choices().unwrap();
+            legal.sort_by(|a, b| a.id.cmp(&b.id));
+            assert_eq!(info.key.choices, legal);
+            assert_eq!(*info.actions, legal.iter().map(|c| c.id.clone()).collect::<Vec<_>>());
+            assert_eq!(info.actor, usize::from(u8::from(state.observation(Seat::try_from(state.context().actor as u8).unwrap()).unwrap().seat)));
+            assert!(info.key.choices.iter().any(|c| c.kind == bonus));
+            // After the bonus the remaining beer is an ordinary searchable payment again.
+            let paid = step(&state, bonus, None);
+            assert!(!unimportable_bonus(&paid));
+            let (input, _) = root(&paid);
+            assert!(Brass::new(input, false).is_ok());
+        }
+    }
+
+    /// The teacher keeps one search session per turn. A bonus decision that skips
+    /// it must leave the session able to search the turn's next decision.
+    #[cfg(feature = "teacher")]
+    #[test]
+    fn a_turn_session_continues_after_the_skipped_bonus_decision() {
+        use brass_ai_core::search::{
+            session::{clock::MonotonicClock, Identity, Mode, Session, Settings},
+            Config, LeafEvaluator,
+        };
+        use std::sync::{atomic::AtomicBool, Arc};
+        struct Uniform;
+        impl LeafEvaluator<Key, String> for Uniform {
+            fn evaluate(&mut self, info: &Info<Key, String>) -> brass_ai_core::search::Result<Statistics> {
+                Statistics::new(vec![0.; info.actions.len()], [0.25; 4])
+            }
+        }
+        let clock = MonotonicClock::new(Arc::new(AtomicBool::new(false)));
+        let identity = Identity { game_instance: "bonus".into(), generation: 1, export_sha256: "a".repeat(64) };
+        let sale = NativeState::import(&multi_beer_sale()).unwrap();
+        let (first, _) = root(&sale);
+        let mut settings = Settings::default();
+        settings.search = Config { k: 4, simulations: 8, seed: 7, ..Config::default() };
+        let budget = crate::teacher::profile_budget(brass_ai_core::search::session::clock::Clock::now_ns(&clock), true).unwrap();
+        let mut owner = Session::new(identity.clone(), &first, settings, budget).unwrap();
+        let mut evaluator = Uniform;
+        crate::teacher::decide_turn(&mut owner, &identity, 1, first.clone(), Mode::Count, &clock, &mut evaluator).unwrap();
+        // Whatever the search preferred, take the merchant beer that opens the bonus.
+        let bonus = step(&sale, Kind::Beer, Some("merchant:Gloucester:0"));
+        assert!(unimportable_bonus(&bonus));
+        let (input, _) = root(&bonus);
+        assert!(crate::teacher::decide_turn(&mut owner, &identity, 2, input, Mode::Count, &clock, &mut evaluator).is_err());
+        // The patched teacher never asks the session here; it applies the policy's choice.
+        let paid = step(&bonus, Kind::BonusSkip, None);
+        let (mut next, _) = root(&paid);
+        next.recall = first.recall.clone();
+        let outcome = crate::teacher::decide_turn(&mut owner, &identity, 3, next, Mode::Count, &clock, &mut evaluator).unwrap();
+        assert!(!outcome.action_ids.is_empty() || outcome.status == "completed");
+    }
 
     #[test]
     fn zero_blend_keeps_exact_bytes_and_needs_no_delta() {

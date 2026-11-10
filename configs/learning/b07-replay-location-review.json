@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "d937f96dad9e53ba2965aba1796f846f392c1bdf08c13006d8939f925d1260ca",
+  "execution_implementation": "7b3e48df9b3b3667da1d120ee61dcd1b7f1825d8025faa3754b856aacb241b9d",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -418,6 +418,11 @@
       "implementation": "15bf2065215d83c262bb910f684ed99951864af1fd7eb4c381aed2651974a0d3",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "bc4c5df8bba1c1bccbbc959739857fdbfb9cbed2b08eccfa5389d1dbf175bcb9"
+    },
+    {
+      "implementation": "d937f96dad9e53ba2965aba1796f846f392c1bdf08c13006d8939f925d1260ca",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "dde10cc693512a2329e700d72a3e10445adcdd130c42fd4b5d4cb1c5ada0f33e"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -553,6 +558,12 @@
     "contract": "training-revision-g1294/1.0.0",
     "source_report": "ai-research/G1294_REVIEW_AND_TRAINING_REVISION.md",
     "scope": "One user-requested recipe change at a committed boundary: PPO entropy rises linearly from .001 to .005 over the next 100 committed iterations after the completed anneal; a hit on the PPG KL cap stops the phase and keeps the update with no rollback; the search head trains at most 64 steps per iteration. Weights, both Adams, RNG, replay, fixed teacher beta, stage counters and the entropy-anneal history are preserved.",
+    "qualified_implementation_unchanged": true
+  },
+  "teacher_bonus_and_lr_floor_g1307": {
+    "contract": "training-revision-g1307/1.0.0",
+    "source_report": "ai-research/G1307_TEACHER_BONUS_FIX_AND_LR_FLOOR.md",
+    "scope": "CPU-path teacher: a legal mid-sale develop-bonus root that the frozen importer refuses is built from the true state and chosen by the policy instead of the search; fixed-count tables acknowledge each turn before verifying it, and a failed check still stops the table. Recipe: the PPO LR controller minimum multiplier rises from .5 to 4.0e-6 / base rate at a committed boundary from g1307, keeping the current rate, multiplier, windows and cooldown.",
     "qualified_implementation_unchanged": true
   }
 }

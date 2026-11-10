@@ -73,6 +73,20 @@ PATCHES = {
          '            return Ok(stats);\n'
          '        }\n'
          '        let mut binding = json!('),
+        ('        let mut game = Brass::new(root.clone(), false)?;\n'
+         '        let actual = game.root()?;\n',
+         '        // The frozen importer refuses a legal mid-sale develop bonus that still owes beer,\n'
+         '        // so search cannot rebuild that root. Build it from the true state; the policy\n'
+         '        // then chooses, as it does for any unsearched decision.\n'
+         '        let unsearchable = crate::cpu_eval::unimportable_bonus(&state);\n'
+         '        let actual = if unsearchable {\n'
+         '            crate::cpu_eval::direct_root(&state, &view, &root.recall, &root.context, &ledger)?\n'
+         '        } else {\n'
+         '            let mut game = Brass::new(root.clone(), false)?;\n'
+         '            game.root()?\n'
+         '        };\n'),
+        ('        let choice = if let Some(owner) = &mut session {\n',
+         '        let choice = if let Some(owner) = session.as_mut().filter(|_| !unsearchable) {\n'),
         ('    let calibration = request["op"] == "calibrate";\n',
          '    crate::cpu_eval::teacher_install(&request, &expected, reward.insolvency.max_cost)?;\n'
          '    let calibration = request["op"] == "calibrate";\n'),

@@ -89,7 +89,9 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if mode=='on':
             config=enable(working,share_target,revise_stages=revise_stages);authorize(state,config)
             from brass_ai.recovery.training_revision_g1294 import configure as revise_training,due
+            from brass_ai.recovery import training_revision_g1307 as lr_floor
             if revise_stages and due(state):config=revise_training(config,state)
+            if revise_stages and lr_floor.due(state):config=lr_floor.configure(config)
         elif is_shadow(before):
             config=copy.deepcopy(before);config['teacher_phase']['term']['share_target']=share_target
             config['teacher_phase']['term']['shadow_iterations']=4
@@ -105,16 +107,21 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if 'schedule' in config['teacher_phase']['search_value']:
             prefix='-rust-teacher-on-stages-v2-share' if mode=='on' else '-rust-shadow-stages-v2-share'
         if is_revised(config):prefix=prefix.replace('-share','-no-insolvency-share')
-        # The revised recipe gets its own file; its runtime settings start from the previous one,
-        # so --inference keep still keeps CPU inference.
-        earlier=root/'configs/step5'/(run.name+prefix+tag+'.json')
+        # Each revised recipe gets its own file; its runtime settings start from the newest
+        # earlier one, so --inference keep still keeps CPU inference.
+        stages=[prefix]
         from brass_ai.recovery.training_revision_g1294 import applied as training_revised,summary as revision_summary
+        from brass_ai.recovery import training_revision_g1307 as lr_floor
         if training_revised(config):
             prefix=prefix.replace('-share','-entropy-raise-g'+str(revision_summary(config)['entropy']['start_generation'])+'-share')
+            stages.append(prefix)
+        if lr_floor.applied(config):
+            prefix=prefix.replace('-share','-lr-floor-4e-6-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
-        settings=from_config(existing if output.exists() or not earlier.exists() else read(earlier))
+        earlier=next((p for p in (root/'configs/step5'/(run.name+name+tag+'.json') for name in reversed(stages[:-1])) if p.exists()),None)
+        settings=from_config(existing if output.exists() or earlier is None else read(earlier))
         if inference is None:settings.pop('native_inference',None)
         elif inference!='keep':settings['native_inference']=inference
         if settings.get('native_inference') is not None:
@@ -189,6 +196,10 @@ def main(*,default_mode='shadow',default_stage_revision=False):
         if training_revised(options):
             report['training_revision']=revision_summary(options)
             print('Training revision: '+str(report['training_revision']),flush=True)
+        from brass_ai.recovery import training_revision_g1307 as lr_floor
+        if lr_floor.applied(options):
+            report['ppo_lr_floor']=lr_floor.summary(options)
+            print('PPO LR floor: '+str(report['ppo_lr_floor']),flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

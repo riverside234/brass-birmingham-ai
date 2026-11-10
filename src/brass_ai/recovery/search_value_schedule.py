@@ -46,7 +46,8 @@ def previous_recipe(config):
     from .search_value_config import validate as validate_options,defaults as original
     from .ppg_g210 import TEACHER_FLOOR_CONTRACT,EVERY_ITER_CONTRACT
     from .training_revision_g1294 import previous as before_revision
-    result=copy.deepcopy(before_revision(config))
+    from .training_revision_g1307 import previous as before_lr_floor
+    result=copy.deepcopy(before_revision(before_lr_floor(config)))
     options=result.get('teacher_phase',{}).get('search_value',{})
     if not enabled(options):return result
     validate_options(options)
