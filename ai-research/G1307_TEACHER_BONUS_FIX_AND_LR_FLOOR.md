@@ -52,3 +52,13 @@ python scripts/continue-rust-teacher.py --expected-generation 1307 --iterations 
 ```
 
 The CPU worker sources changed, so the prepare step is required. The crashed g1308 collection is archived losslessly by the continue script before the new recipe starts.
+
+## 6. Qualification follow-up: zero-blend probe (fixed)
+
+Results commit `4f55e30`, export `20261110T025619857547Z-20261110T024816487712Z-cpu-qualification-9ecbbf8a-3a445d48`, reports one failed check: `teacher.blend_weights`. The teacher stage finished in 44.6 s, accepted all 494 labels, completed every search quota without deadline hits, and matched PyTorch blended values within 1.29e-6. All eight other stages passed.
+
+The qualification helper only overrode saved search-value progress for nonzero probe weights. At g1307 the saved state is Stage B with `w=0.35`, so the requested zero-blend probe inherited it and the normal schedule advanced it to `0.4`. The actual weights were `[0.25, 0.4, 1.0]`, leaving the unblended path untested. The helper now explicitly uses Stage A with `w=0` in its copied state for that probe, including the overlap stage that shares the helper. Production state and scheduling are unchanged.
+
+Validation: the new planner regression failed before the fix and passes afterwards, covering fresh, Stage A/B/C and legacy flat states, with and without the schedule. The qualification test module ran 40 tests: 37 passed and three native-worker fixture tests were skipped. Planning from the actual g1307 export now yields eight tables at 0, four at 0.25 and four at 1, without changing the input state or recipe. The execution identity still matches `7b3e48df9b3b3667da1d120ee61dcd1b7f1825d8025faa3754b856aacb241b9d`.
+
+After syncing this qualification-script fix to the lab, rerun the qualification command above, then continue training only after it passes. The workers from the failed qualification are already prepared; this follow-up needs no rebuild and no `--fresh`. With the same checkpoint, build and settings, the retry reuses the passed regressions, parity, ordinary and rating stages, and reruns teacher plus the always-run environment, bundles, overlap and startup stages. Full qualification against the g1307 checkpoint must run on the lab; that checkpoint is not present in this local checkout.

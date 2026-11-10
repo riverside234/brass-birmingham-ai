@@ -1,4 +1,5 @@
 """The lab qualification's own checks, on fixtures. Its stages run on the lab."""
+import copy
 import importlib.util
 import json
 import os
@@ -145,6 +146,36 @@ class BlendError(unittest.TestCase):
     def test_a_missing_blend_is_detected(self):
         row, delta = self.row(1.)
         self.assertGreater(Q.blend_error(self.model, row, 0.), float(delta.abs().max())*.5)
+
+
+class TeacherJobs(unittest.TestCase):
+    def test_requested_blends_do_not_inherit_the_training_stage(self):
+        from brass_ai.recovery.search_value_config import defaults
+        config = json.loads((SOURCE_ROOT/'configs/step5/joint7-v11-2-g1290-trained-restart-rust-teacher-on-stages-v2-share025.json').read_text())
+        for scheduled in (True, False):
+            for saved in (None, dict(stage=dict(stage='A', w=0.)), dict(stage=dict(stage='B', w=.35)),
+                          dict(stage=dict(stage='C', w=1.)), dict(stage='B', w=.35)):
+                with self.subTest(scheduled=scheduled, saved=saved):
+                    recipe = copy.deepcopy(config)
+                    if not scheduled:
+                        recipe['teacher_phase']['search_value'] = dict(defaults(), stage='A')
+                    state = dict(iteration=1307, teacher_seed_cursor=48925454)
+                    if saved is not None:
+                        state['search_value'] = copy.deepcopy(saved)
+                    c = SimpleNamespace(config=recipe, readiness=dict(ready=True),
+                        snapshot=dict(state=state, model_id='a'*64, checkpoint=dict(sha256='b'*64)))
+                    before = copy.deepcopy(c)
+                    jobs = []
+                    for number, weight in enumerate(Q.BLENDS):
+                        count = 8 if weight == 0 else 4
+                        batch = Q.teacher_jobs(c, weight, count, 100000*number)
+                        self.assertEqual(len(batch), count)
+                        self.assertEqual({job['search_value']['w'] for job in batch}, {weight})
+                        self.assertTrue(all(job['split'] == 'train' and job['readiness'] == c.readiness for job in batch))
+                        jobs.extend(batch)
+                    self.assertEqual(len({job['expected']['job_id'] for job in jobs}), 16)
+                    self.assertEqual(c.snapshot, before.snapshot)
+                    self.assertEqual(c.config, before.config)
 
 
 class League(unittest.TestCase):

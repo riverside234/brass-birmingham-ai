@@ -473,15 +473,19 @@ def parity(c):
 
 
 def teacher_jobs(c, weight, count, offset):
-    """Production-shaped tables. Stage B's schedule adds .05 before the first use."""
+    """Production-shaped tables at the requested blend, regardless of saved progress."""
     from brass_ai.recovery.teacher_phase import plan_jobs
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
     state = copy.deepcopy(c.snapshot['state'])
     # Table identities carry the seed, not the blend, so each blend needs its own seeds.
     state['teacher_seed_cursor'] = state.get('teacher_seed_cursor', 0)+offset
     if weight:
+        # Stage B's schedule adds .05 before the first use.
         schedule = 'schedule' in c.config['teacher_phase']['search_value']
         state['search_value'] = dict(stage=dict(stage='B', w=round(weight-(.05 if schedule else 0.), 2)))
+    else:
+        # A zero-weight probe must not inherit the run's Stage B/C blend.
+        state['search_value'] = dict(stage=dict(stage='A', w=0.))
     jobs, _ = plan_jobs(c.config, state, model_id=c.snapshot['model_id'], export_hash=c.snapshot['checkpoint']['sha256'], epoch=1, ready=True,
                         native_source=source_fingerprint())
     jobs = [j for j in jobs if j['split'] == 'train'][:count]
