@@ -1,0 +1,5 @@
+{
+  "commit": "53b801e264a903caabf7244403827344028e6bb1",
+  "tracked_changes": "M  configs/step5/joint7-v11-2-g1290-trained-restart-rust-shadow32-no-branch-share025.json\nM  configs/step5/joint7-v11-2-g1290-trained-restart-rust-teacher-on-stages-v2-share025.json",
+  "scope": "Exporter checkout; checkpoint source identity remains in state.signature"
+}

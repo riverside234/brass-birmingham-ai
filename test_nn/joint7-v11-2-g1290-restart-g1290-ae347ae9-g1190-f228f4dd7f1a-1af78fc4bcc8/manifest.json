@@ -1,0 +1,51 @@
+{
+  "format": "migration-test-nn/1.0.0",
+  "created_utc": "2026-11-10T20:30:01.598916+00:00",
+  "source_run": "artifacts/step5/joint7-v11-2-g1290-restart-g1290",
+  "committed_generation": 1491,
+  "state_sha256": "1af78fc4bcc84c6d01cdd1574ed96ff7e80604de4ad51cfb4e61edf078ccb193",
+  "recorded_checkpoint": {
+    "path": "artifacts/step5/joint7-v11-2-g1290-restart-g1290/population/weights-d872ea925d6643ee3a3eeec99a52d16c6a78c2de1f757617f1aaaa47d175f864-aux-dd8dcbfaf5350001.pt",
+    "sha256": "f228f4dd7f1a913ea11e908cb2ccb53b76cd14ca302da9e2e5479c505d1294f1",
+    "model_id": "d872ea925d6643ee3a3eeec99a52d16c6a78c2de1f757617f1aaaa47d175f864",
+    "generation": 1190,
+    "auxiliary_heads": {
+      "contract": "saved-companion-heads/1.0.0",
+      "identity": "dd8dcbfaf5350001685d1e1642b38f2acd7d88deb715fb17885fbef5e2e4dbcf",
+      "generation": 1190,
+      "model_id": "d872ea925d6643ee3a3eeec99a52d16c6a78c2de1f757617f1aaaa47d175f864",
+      "head_sha256": "fea6822e2947d532268d88b2317afa1a9a28753214f317bef4203c809b44b882"
+    },
+    "weights_only": true
+  },
+  "checkpoint": {
+    "path": "checkpoint.pt",
+    "bytes": 25816373,
+    "sha256": "f228f4dd7f1a913ea11e908cb2ccb53b76cd14ca302da9e2e5479c505d1294f1"
+  },
+  "parts": [
+    {
+      "path": "checkpoint.pt.part0001",
+      "bytes": 25816373,
+      "sha256": "f228f4dd7f1a913ea11e908cb2ccb53b76cd14ca302da9e2e5479c505d1294f1"
+    }
+  ],
+  "metadata": [
+    {
+      "path": "state.json",
+      "bytes": 8926748,
+      "sha256": "1af78fc4bcc84c6d01cdd1574ed96ff7e80604de4ad51cfb4e61edf078ccb193"
+    },
+    {
+      "path": "config.json",
+      "bytes": 27451,
+      "sha256": "5f8be872362d0a1da548751b024c905cb8268ffd5a7fbd0cf6bc8f8fb2fd7cf6"
+    },
+    {
+      "path": "source.json",
+      "bytes": 353,
+      "sha256": "fcf25ecb21b5e66c80d3ab69061602f90a926f72ae389c25272b008958257719"
+    }
+  ],
+  "config_scope": "Source run at snapshot time; checkpoint.model_config and reward are authoritative for an older best/anchor. Not a resume bundle."
+}

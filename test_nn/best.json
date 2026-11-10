@@ -1,10 +1,10 @@
 {
   "format": "migration-test-nn-selection/1.0.0",
   "selection": "best",
-  "selection_reason": "qualified policy anchor (not a global best claim); read-only utility validation; weights unchanged",
-  "bundle": "joint7-v11-2-grouped-lr-critic-1b96e228-g1290-ed8edb039a12-d50f4bc95d51",
-  "generation": 1290,
-  "model_id": "73fd0aa12a7a6496414b03e106ae52367d865767922aed7b40ea88a7940891ff",
-  "checkpoint_sha256": "ed8edb039a1257d591cc0d2e2b87eb7a2d7aa411ce0f7710a2d7f8ad487dc3b0",
-  "manifest_sha256": "8f4ff167f834ffa350db13fa9fc27cd0c59dc9a698bc77c1e4475d9cfff8ceb8"
+  "selection_reason": "User-selected g1190; highest PL point estimate within g1150-g1280 in the specified g1491 export",
+  "bundle": "joint7-v11-2-g1290-restart-g1290-ae347ae9-g1190-f228f4dd7f1a-1af78fc4bcc8",
+  "generation": 1190,
+  "model_id": "d872ea925d6643ee3a3eeec99a52d16c6a78c2de1f757617f1aaaa47d175f864",
+  "checkpoint_sha256": "f228f4dd7f1a913ea11e908cb2ccb53b76cd14ca302da9e2e5479c505d1294f1",
+  "manifest_sha256": "31ec123c57be0e5abbec13e054a48885233ef840598dfea62b941593b9e4ec9a"
 }
