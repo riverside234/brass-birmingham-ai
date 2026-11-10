@@ -259,6 +259,23 @@ class Build(unittest.TestCase):
         self.assertEqual(before,{p:sha(p) for p in self.source.rglob('*') if p.is_file()})
         with self.assertRaisesRegex(ValueError,'already has training progress'):self.build()
 
+    def test_an_unfinished_attempt_can_start_over_with_another_share_target(self):
+        before={p:sha(p) for p in self.source.rglob('*') if p.is_file()}
+        with mock.patch('brass_ai.recovery.il_kl_probe.import_probe',side_effect=ValueError('stopped midway')):
+            with self.assertRaisesRegex(ValueError,'stopped midway'):self.build()
+        self.assertTrue((self.run/B.RECEIPT).exists() and any(p.name.startswith('weights-') for p in self.run.rglob('*.pt')))
+        summary=B.prepare(ROOT,self.source,self.snapshot,self.run,share_target=.4)
+        self.assertTrue(summary['complete'])
+        config=read(self.run/'state.json')['signature']['config']
+        self.assertEqual(config['teacher_phase']['term']['share_target'],.4)
+        self.assertEqual(before,{p:sha(p) for p in self.source.rglob('*') if p.is_file()})
+        # A finished preparation is never replaced.
+        with self.assertRaisesRegex(ValueError,'already has training progress'):self.build()
+
+    def test_a_marker_of_another_recipe_without_the_flag_is_not_cleared(self):
+        write_json(self.run/B.RECEIPT,dict(binding=dict(other=1),complete=True))
+        with self.assertRaisesRegex(ValueError,'another source or recipe'):self.build()
+
     def retire_archive(self,keep):
         """The source run compacted its ratings again: the archive this state names is gone."""
         archive=self.state['ratings']['archive'];source=ROOT/archive['path']

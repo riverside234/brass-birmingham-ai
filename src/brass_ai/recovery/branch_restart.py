@@ -95,6 +95,14 @@ def place(source,destination,expected):
     finally:temporary.unlink(missing_ok=True)
 
 
+def clear_partial(run):
+    """Remove an unfinished preparation: only links and copies made here (the source files stay)."""
+    for child in list(run.iterdir()):
+        if child.name=='.active-run.json':continue
+        if child.is_symlink() or child.is_file():child.unlink()
+        else:shutil.rmtree(safe(run,child))
+
+
 def exported(root,snapshot_receipt,relative,expected):
     """The same run-relative file inside the verified export, if it is there with these bytes."""
     where=Path(snapshot_receipt['path']).parent
@@ -222,7 +230,14 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
     identity=digest(binding)
     with run_lock(run):
         marker=safe(run,run/RECEIPT)
-        if marker.exists():require(read(marker)['binding']==binding,'The new run was prepared from another source or recipe')
+        if marker.exists():
+            previous=read(marker)
+            if previous['binding']!=binding:
+                # An attempt that stopped before it wrote state.json holds only copies and links of
+                # source files. Another recipe (for example another share target) starts it over.
+                require(previous.get('complete') is False,'The new run was prepared from another source or recipe')
+                clear_partial(run)
+                write_json(marker,dict(binding=binding,complete=False))
         else:
             require(all(p.name=='.active-run.json' for p in run.iterdir()),'The new run folder must be empty')
             write_json(marker,dict(binding=binding,complete=False))
