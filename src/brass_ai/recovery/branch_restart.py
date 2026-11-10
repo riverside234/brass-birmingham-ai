@@ -95,6 +95,13 @@ def place(source,destination,expected):
     finally:temporary.unlink(missing_ok=True)
 
 
+def exported(root,snapshot_receipt,relative,expected):
+    """The same run-relative file inside the verified export, if it is there with these bytes."""
+    where=Path(snapshot_receipt['path']).parent
+    path=(where if where.is_absolute() else root/where)/relative
+    return path if path.is_file() and sha(path)==expected else None
+
+
 def gae_state(config,generation,gate):
     """Fresh evidence windows; the committed lambda and per-table gates are kept."""
     from . import gae
@@ -231,10 +238,13 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
             original=project_path(root,old+receipt['path'][len(new):])
             target=safe(run,project_path(root,receipt['path']))
             if not original.is_file():
+                # Superseded files (a compacted rating archive, a retired slot) may still be in the export.
+                kept=exported(root,snapshot_receipt,receipt['path'][len(new):],receipt['sha256'])
+                if kept is not None:place(kept,target,receipt['sha256']);placed+=1;continue
                 if where.startswith('/quality_pool/members') and where.endswith('/probe'):missing_probes.append(receipt['path']);continue
                 if where.startswith(('/quality_pool/members','/population')):
                     missing_weights.add(Path(receipt['path']).name);continue
-                raise ValueError('The source run no longer holds '+str(original))
+                raise ValueError('The source run no longer holds '+str(original)+' and the export does not have it')
             place(original,target,receipt['sha256']);placed+=1
         pool=fresh['quality_pool'];dropped=[]
         if missing_weights:

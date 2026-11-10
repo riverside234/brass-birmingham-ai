@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "6f7214e0b6e0364aee1c812e26e047965103ec437aa7aebd83e7ee8f5f9c3e96",
+  "execution_implementation": "13b8eb31b5d32ff319844238fd9c5bb394d18934c3430eb7faee0af972b488fc",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -428,6 +428,11 @@
       "implementation": "7b3e48df9b3b3667da1d120ee61dcd1b7f1825d8025faa3754b856aacb241b9d",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "aa72bf795f5056ff52715529da1c3fb760e8b4e41db879cbc50ff1b447872ec6"
+    },
+    {
+      "implementation": "6f7214e0b6e0364aee1c812e26e047965103ec437aa7aebd83e7ee8f5f9c3e96",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "e6e581c2c7cc1b54ea7296c6a19f31cfe77095cf12f6a7b380e61c51bc3bfc5f"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",

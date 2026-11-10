@@ -59,6 +59,10 @@ python scripts/continue-rust-teacher.py --run artifacts/step5/joint7-v11-2-g1290
 
 The first command prints `dropped_members` and `regenerated_probes`. Expect g1045 and g1145 to be dropped if the source run's retention deleted their weights.
 
+**Share target.** Any value above 0 and at most 1 works, for example `--share-target 0.4`. Pass the same value to all three commands: the teacher beta measured during the four shadow iterations belongs to that share, and `continue-rust-teacher.py` refuses to switch on with a different one.
+
+**Superseded files.** The source run's retention deletes superseded files such as an older compacted rating archive (`ratings/history-<digest>.json`). When a file the g1290 state names is gone from the source run, the script takes it from the g1290 results export and checks its bytes against the state's receipt. It stops only if neither place has it.
+
 ## Verification (laptop)
 
 - 12 tests in `tests/Recovery/test_branch_restart.py`, including an end-to-end build of a small source run made from the exported g1290 state. The built run passes the real resume loader, PPO optimizer restore, exploration restore (entropy 0.001), the PPG phase (beta 0.25, lambda 0.95, historical gate kept), the teacher phase (empty beta, ready), the search head (Stage A, count 4 of 30, paused) and the backend state check.

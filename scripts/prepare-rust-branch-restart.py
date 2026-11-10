@@ -18,6 +18,13 @@ sys.path.insert(0,str(ROOT/'src'))
 
 def main():
     from brass_ai.recovery.branch_restart import prepare,STAGE_A
+    from brass_ai.recovery.teacher_gradient_qualification import valid_target
+
+    def share_target(text):
+        try:value=float(text)
+        except ValueError:raise argparse.ArgumentTypeError('share target must be a number')
+        if not valid_target(value):raise argparse.ArgumentTypeError('share target must be above 0 and at most 1')
+        return value
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root',type=Path,default=ROOT)
     p.add_argument('--source-run',default='artifacts/step5/joint7-v11-2-g1290-trained-restart')
@@ -25,7 +32,8 @@ def main():
         help='Results export of the restart generation (its state.json is verified against the export receipt)')
     p.add_argument('--run',default='artifacts/step5/joint7-v11-2-g1290-restart-g1290',help='New, empty run folder')
     p.add_argument('--weights',help='Optional: the retained weights file; it must be that generation\'s snapshot')
-    p.add_argument('--share-target',type=float,default=.1,help='Teacher gradient share used to measure the new beta')
+    p.add_argument('--share-target',type=share_target,default=.1,
+        help='Teacher gradient share, any value above 0 and at most 1 (for example 0.4). Pass the same value to continue-rust-shadow.py and continue-rust-teacher.py')
     p.add_argument('--stage-a-iterations',type=int,choices=(10,30),default=STAGE_A)
     p.add_argument('--device',default='cpu',help='Device for rebuilding any missing opponent probe caches')
     a=p.parse_args()

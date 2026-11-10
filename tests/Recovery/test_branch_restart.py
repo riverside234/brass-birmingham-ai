@@ -66,6 +66,21 @@ class Recipe(unittest.TestCase):
         self.assertFalse(C.signature_transition(dict(signature,config=ten),on))
         self.assertFalse(C.signature_transition(on,dict(signature,config=ten)))
 
+    def test_any_valid_share_target_works_in_all_three_commands(self):
+        signature=self.state['signature']
+        for target in (.4,.25,1.):
+            shadow=B.recipe(signature['config'],share_target=target)
+            self.assertEqual(shadow['teacher_phase']['term']['share_target'],target)
+            on=A.configure(shadow,target,revise_stages=True)
+            self.assertTrue(C.is_shadow(shadow) and A.is_on(on))
+            self.assertEqual(on['teacher_phase']['term']['share_target'],target)
+            self.assertTrue(C.signature_transition(dict(signature,config=shadow),dict(signature,config=on)))
+            # continue-rust-shadow.py may be given the share target after the restart was prepared with another one.
+            prepared=dict(signature,config=self.shadow)
+            self.assertTrue(C.signature_transition(prepared,dict(signature,config=shadow)))
+        for bad in (0,-.1,1.5):
+            with self.assertRaisesRegex(ValueError,'share target'):B.recipe(signature['config'],share_target=bad)
+
     def test_only_reviewed_stage_a_lengths(self):
         bad=copy.deepcopy(self.shadow);bad['teacher_phase']['search_value']['schedule']['stage_a_iterations']=20
         with self.assertRaises(ValueError):V.validate(bad['teacher_phase']['search_value'])
@@ -243,6 +258,30 @@ class Build(unittest.TestCase):
         self.build()
         self.assertEqual(before,{p:sha(p) for p in self.source.rglob('*') if p.is_file()})
         with self.assertRaisesRegex(ValueError,'already has training progress'):self.build()
+
+    def retire_archive(self,keep):
+        """The source run compacted its ratings again: the archive this state names is gone."""
+        archive=self.state['ratings']['archive'];source=ROOT/archive['path']
+        relative=archive['path'][len(self.source.relative_to(ROOT).as_posix())+1:]
+        if keep:
+            (self.snapshot/relative).parent.mkdir(parents=True,exist_ok=True)
+            (self.snapshot/relative).write_bytes(source.read_bytes())
+        source.unlink();return relative
+
+    def test_a_superseded_rating_archive_comes_from_the_export(self):
+        relative=self.retire_archive(True)
+        self.build()
+        placed=self.run/relative
+        self.assertEqual(sha(placed),self.state['ratings']['archive']['sha256'])
+        self.assertEqual(read(self.run/'state.json')['ratings']['archive']['path'],placed.relative_to(ROOT).as_posix())
+
+    def test_a_file_in_neither_place_is_refused(self):
+        self.retire_archive(False)
+        with self.assertRaisesRegex(ValueError,'no longer holds'):self.build()
+
+    def test_an_exported_copy_with_other_bytes_is_not_used(self):
+        relative=self.retire_archive(True);(self.snapshot/relative).write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError,'no longer holds'):self.build()
 
     def test_weights_from_another_generation_are_refused(self):
         with self.assertRaisesRegex(ValueError,'retained snapshot'):
