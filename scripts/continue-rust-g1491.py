@@ -71,7 +71,16 @@ def calibrated(state):
     if q is not None and q['passed']:
         return True, 0
     tail = [o for o in (q or {}).get('observations', []) if o['generation'] == state['iteration']-1]
-    return False, g1491.shadow_iterations(config)-len(tail)
+    # A changed reward first needs one value phase to re-fit the utility (teacher readiness);
+    # that iteration plans no teacher tables.
+    return False, g1491.shadow_iterations(config)-len(tail)+(0 if ready(state) else 1)
+
+
+def ready(state):
+    from brass_ai.learning.contracts import digest
+    from brass_ai.recovery.utility import reward_spec
+    receipt = state.get('teacher_phase', {}).get('readiness') or {}
+    return receipt.get('ready') is True and receipt.get('reward_id') == digest(reward_spec(state['signature']['config']))
 
 
 def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_required=False):
@@ -107,6 +116,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         require(attempts <= EXTRA_CALIBRATION, 'Beta calibration did not qualify; inspect teacher_phase.term in the '
                 f"latest report (full {t['train']}+{t['held_out']} tables, finite gradients) before continuing")
         count = min(needed if attempts == 0 else 1, end-generation)
+        if not ready(state):
+            print(f'Teacher readiness: the first shadow iteration re-fits the utility under the current reward; no teacher tables', flush=True)
         print(f'g1491 beta calibration: {count} shadow iteration(s) from g{generation}', flush=True)
         state = module.continuation(args, mode='shadow', expected=generation, iterations=count, revision='g1491')
         generation = state['iteration']; attempts += 1

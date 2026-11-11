@@ -20,6 +20,15 @@ committed stage (fitting pauses while its value buffer refills), carries the PPO
 multiplier of that generation's report, moves the learner's companion heads to the
 restart generation without fitting, and applies a rating compaction the source run
 already made (exactly as a later export records it) when it deleted those slot files.
+
+The g1190 seed restart (``rollback=dict(revision='g1190', learner_generation=1190)``)
+uses the same exported state with a much older retained snapshot of this lineage,
+trained before the teacher phase and the post-transfer reward. Its tensors are kept
+under the restart reward (placement .1, zero charge): the utility specification is
+migrated and its calibration cleared, so the first value phase re-fits it before
+any teacher table runs. It has no search head: a fresh one is adopted at Stage A on
+the first teaching iteration, under the restart stage schedule (Stage A 50 with the
+held-out early stop, Stage B 50, PPG beta floor .5 after Stage A).
 """
 import copy
 import os
@@ -35,6 +44,8 @@ from .retention import owned,safe,active,run_lock
 
 CONTRACT='rust-branch-restart/1.0.0'
 RECEIPT='branch-restart.json'
+SEED='g1190'
+SEED_MIGRATION='seed-restart-reward/1.0.0'
 STAGE_A=30
 PAUSED_ITERATIONS=8
 # Paths that are only records of the source run's own history.
@@ -244,16 +255,82 @@ def rollback_search_payload(saved,summary,generation,identity):
     return value
 
 
-def rollback_companion(saved,generation):
-    """The learner's own local-scoring heads and Adam, moved one generation with no fitting."""
+def rollback_companion(saved,generation,learner=None):
+    """The learner's own local-scoring heads and Adam, moved to the restart generation with no fitting."""
     from .local_scoring_auxiliary import bundle_id
     from . import local_scoring_warmup as warmup
+    learner=generation-1 if learner is None else learner
     result={k:v for k,v in saved.items() if k!='identity'}
-    require(saved['identity']==bundle_id(result) and saved['generation']==generation-1,
+    require(saved['identity']==bundle_id(result) and saved['generation']==learner<generation,
         'Companion heads are not the snapshot generation\'s own')
     result=dict(result,generation=generation,age=generation-saved['origin']['generation'])
-    if 'warmup' in result:result['warmup']=warmup.advance(saved['warmup'],saved['config'],generation,0,0)
+    if 'warmup' in result:
+        warmup.validate(saved['warmup'],saved['config'],learner)
+        # No fitting step in between: only the generation stamp moves.
+        result['warmup']=warmup.validate(dict(saved['warmup'],generation=generation),saved['config'],generation)
     return dict(result,identity=bundle_id(result))
+
+
+def seed_recipe(config,state,*,share_target):
+    """The g1490 restart recipe with placement .1 restored and the restart stage schedule."""
+    from brass_ai.learning.post_transfer_reward import restore_placement
+    from brass_ai.rust_backend.lab_shadow_config import is_shadow
+    from .config import validate_config
+    from .search_value_schedule import restart_schedule
+    result=restore_placement(rollback_recipe(config,state,share_target=share_target))
+    options=result['teacher_phase']['search_value']
+    require('schedule' in options,'The seed restart needs the residual stage schedule')
+    options['schedule']=dict(restart_schedule(),
+        validation_during_beta_qualification=options['schedule']['validation_during_beta_qualification'])
+    # The fresh search head is 256 wide (the earlier heads are 32).
+    options['head']['hidden']=256
+    validate_config(result)
+    require(is_shadow(result),'The seed recipe must pass the reviewed shadow projection')
+    return result
+
+
+def seed_snapshot(root,source,state,learner,weights=None):
+    """The retained snapshot of an earlier generation of this lineage, from an earlier recipe."""
+    entry=next((e for e in state['history'] if e['generation']==learner),None)
+    require(type(learner) is int and 0<learner<state['iteration']-1 and entry is not None,
+        "The seed generation is not in this run's lineage")
+    agent=next((a['checkpoint'] for a in state['ratings']['agents'].values() if a.get('kind')=='model'
+        and a['checkpoint']['model_id']==entry['model_id'] and a['checkpoint'].get('generation')==learner),None)
+    require(agent is not None,f'No retained snapshot of g{learner}')
+    path=safe(source,project_path(root,agent['path']))
+    if weights is not None:require(project_path(root,weights)==path,f'Weights are not the retained snapshot of g{learner}')
+    require(sha(path)==agent['sha256'],'Restart weights changed')
+    raw=torch.load(path,map_location='cpu',weights_only=True)
+    require(raw['model_id']==entry['model_id'] and raw['step']==learner and raw['optimizer'] is None,
+        f'Restart weights are not the committed checkpoint of g{learner}')
+    require(raw['training'].get('search_value') is None and raw['training'].get('search_value_head') is None,
+        f'g{learner} already has a search head; this restart adopts a fresh one')
+    return path,agent,raw
+
+
+def seed_model(path,config):
+    """The seed tensors under the restart reward: the utility specification moves, nothing else.
+
+    The utility residual keeps its weights; calibration is cleared, so the next value
+    phase re-fits it (and readiness) before any teacher table is planned.
+    """
+    from dataclasses import replace
+    from brass_ai.learning.model import ModelConfig
+    from brass_ai.learning.reward import specification
+    from brass_ai.learning.utility_model import utility_config
+    from brass_ai.learning.post_transfer_reward import BEFORE,OLD_COST,RESTORED,ZERO_COST
+    from brass_ai.learning.checkpoint import load_checkpoint
+    from .utility import reward_spec
+    model,_=load_checkpoint(path)
+    require(not hasattr(model,'search_value_head'),'The seed model already has a search head')
+    spec=reward_spec(config);before=copy.deepcopy(getattr(model.config,'utility',None))
+    require(before==specification(BEFORE,OLD_COST) and spec==specification(RESTORED,ZERO_COST),
+        'Unreviewed seed reward migration')
+    model.config=replace(model.config,utility=copy.deepcopy(spec));model.utility_calibration=None
+    require(model.config==utility_config(ModelConfig.preset(config['model_size']),spec),
+        'Seed model architecture differs from the recipe')
+    return model,dict(contract=SEED_MIGRATION,from_reward=before,to_reward=copy.deepcopy(spec),
+        preserved='All tensors, including the utility residual; utility calibration cleared and re-fit by the next value phase')
 
 
 def compacted_ratings(root,source,ratings,later,old,new,snapshot_receipt):
@@ -381,21 +458,30 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
     state,gate,snapshot_receipt,report=snapshot_state(root,source,snapshot)
     generation=state['iteration']
     old=source.relative_to(root).as_posix()+'/';new=run.relative_to(root).as_posix()+'/'
+    seed=None
     if rollback is None:
         weights_path,weights_receipt,raw=seed_weights(root,source,state,weights)
         config=recipe(state['signature']['config'],share_target=share_target,stage_a_iterations=stage_a_iterations)
         multiplier=None
     else:
-        require(set(rollback)<={'later'},'Unknown rollback restart option')
-        weights_path,weights_receipt,raw=rollback_weights(root,source,state,weights)
-        config=rollback_recipe(state['signature']['config'],state,share_target=share_target)
+        require(set(rollback)<={'later','revision','learner_generation'},'Unknown rollback restart option')
+        seed=rollback.get('revision')
+        require(seed in (None,SEED) and (seed is None)==('learner_generation' not in rollback),'Unknown rollback restart revision')
+        if seed is None:
+            weights_path,weights_receipt,raw=rollback_weights(root,source,state,weights)
+            config=rollback_recipe(state['signature']['config'],state,share_target=share_target)
+        else:
+            weights_path,weights_receipt,raw=seed_snapshot(root,source,state,rollback['learner_generation'],weights)
+            config=seed_recipe(state['signature']['config'],state,share_target=share_target)
         require(report is not None,'A rollback restart needs the snapshot generation\'s report in its export')
         multiplier=committed_multiplier(report,config)
+    learner=generation-1 if seed is None else rollback['learner_generation']
     binding=dict(contract=CONTRACT,source_run=old[:-1],destination_run=new[:-1],generation=generation,
         snapshot=snapshot_receipt,weights=weights_receipt,recipe_sha256=digest(config))
     if rollback is not None:
-        binding['rollback']=dict(learner_generation=generation-1,ppo_lr_multiplier=multiplier,
+        binding['rollback']=dict(learner_generation=learner,ppo_lr_multiplier=multiplier,
             later=None if rollback.get('later') is None else str(rollback['later']))
+        if seed is not None:binding['rollback']['revision']=seed
     identity=digest(binding)
     with run_lock(run):
         marker=safe(run,run/RECEIPT)
@@ -468,8 +554,10 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
             from .teacher_phase_config import buffer_identity
             # The revised recipe's own label identity, so nothing is retired on the first load.
             teacher['buffer']['identity']=buffer_identity(config)
-            search=rollback_search_payload(raw['training']['search_value'],state['search_value'],generation,identity)
-        fresh['search_value']=stamp(search)
+            # A seed without a search head adopts a fresh one at Stage A (no committed head state).
+            search=None if seed is not None else rollback_search_payload(raw['training']['search_value'],state['search_value'],generation,identity)
+        if search is None:fresh.pop('search_value',None)
+        else:fresh['search_value']=stamp(search)
         backend=fresh['native_backend'];backend.pop('teacher',None);backend['config_sha256']=digest(config)
         if rollback is not None:
             from brass_ai.rust_backend.lab_shadow_config import CONTRACT as SHADOW
@@ -485,30 +573,52 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
             vp.update(initial_checkpoint=initial,committed_generation=generation,
                 iterations=[r for r in vp['iterations'] if r['generation']<=generation])
             write_json(safe(run,run/HISTORY_PATH),vp)
-        with torch.random.fork_rng(devices=[]):
-            model,_=load_checkpoint(weights_path)
-            training=rewrite(raw['training'],old,new)
-            training.pop('machine_transfer',None)
-            training.update(fresh_run=new[:-1],signature=digest(fresh['signature']),
-                quality_pool_digest=quality_pool.state_digest(pool),teacher_phase=copy.deepcopy(teacher),
-                search_value=search,native_backend=copy.deepcopy(backend),native_backend_execution=execution(),
-                il_kl_limit=copy.deepcopy(fresh['il_kl_limit']),actor_value_phases=ppg_state(config,model,generation,gate))
-            if rollback is not None:
-                # State-level schedules come from the exported generation (checked above);
-                # the learner's own companion heads move to it without fitting.
-                training['exploration']=copy.deepcopy(fresh['exploration'])
-                if 'v4_share_gate' in fresh:training['v4_share_gate']=copy.deepcopy(fresh['v4_share_gate'])
-                from .local_scoring_auxiliary import KEY as COMPANION
-                if training.get(COMPANION) is not None:training[COMPANION]=rollback_companion(training[COMPANION],generation)
-            require(training.get('exploration')==fresh['exploration'] and
-                training.get('startup_initialization')==fresh.get('startup_initialization'),
-                'Restart weights disagree with the committed exploration/startup state')
-            checkpoint=dict(raw,optimizer=ppo_optimizer(config,model,multiplier),training=training)
-            if rollback is not None:checkpoint['step']=generation
-            del model
         output=safe(run,run/f'generation-{generation:04d}.pt');temporary=output.with_name(output.name+'.tmp')
+        migration=None
+        if seed is not None:
+            from .local_scoring_auxiliary import KEY as COMPANION
+            from brass_ai.learning.checkpoint import save_checkpoint
+            with torch.random.fork_rng(devices=[]):
+                model,migration=seed_model(weights_path,config)
+                saved=raw['training']
+                # Run-level receipts and schedules come from the exported state; the seed adds
+                # only its tensors, RNG and companion heads (moved to this generation, unfitted).
+                training=dict(mode=saved.get('mode','step5-population-ppo'),recipe=saved.get('recipe'),parent=saved.get('parent'),
+                    initialization=saved.get('initialization','random-lineage'),fresh_run=new[:-1],signature=digest(fresh['signature']),
+                    exploration=copy.deepcopy(fresh['exploration']),il_kl_limit=copy.deepcopy(fresh['il_kl_limit']),
+                    teacher_phase=copy.deepcopy(teacher),native_backend=copy.deepcopy(backend),native_backend_execution=execution(),
+                    actor_value_phases=ppg_state(config,model,generation,gate),quality_pool_digest=quality_pool.state_digest(pool))
+                for key in ('startup_initialization','auxiliary_initialization','v4_share_gate'):
+                    if key in fresh:training[key]=copy.deepcopy(fresh[key])
+                if saved.get(COMPANION) is not None:training[COMPANION]=rollback_companion(saved[COMPANION],generation,learner)
+                save_checkpoint(temporary,model,None,step=generation,training=training)
+                checkpoint=torch.load(temporary,map_location='cpu',weights_only=True)
+                checkpoint.update(optimizer=ppo_optimizer(config,model,multiplier),rng=raw['rng'],cuda_rng=raw.get('cuda_rng',[]))
+                del model
+        if seed is None:
+            with torch.random.fork_rng(devices=[]):
+                model,_=load_checkpoint(weights_path)
+                training=rewrite(raw['training'],old,new)
+                training.pop('machine_transfer',None)
+                training.update(fresh_run=new[:-1],signature=digest(fresh['signature']),
+                    quality_pool_digest=quality_pool.state_digest(pool),teacher_phase=copy.deepcopy(teacher),
+                    search_value=search,native_backend=copy.deepcopy(backend),native_backend_execution=execution(),
+                    il_kl_limit=copy.deepcopy(fresh['il_kl_limit']),actor_value_phases=ppg_state(config,model,generation,gate))
+                if rollback is not None:
+                    # State-level schedules come from the exported generation (checked above);
+                    # the learner's own companion heads move to it without fitting.
+                    training['exploration']=copy.deepcopy(fresh['exploration'])
+                    if 'v4_share_gate' in fresh:training['v4_share_gate']=copy.deepcopy(fresh['v4_share_gate'])
+                    from .local_scoring_auxiliary import KEY as COMPANION
+                    if training.get(COMPANION) is not None:training[COMPANION]=rollback_companion(training[COMPANION],generation)
+                require(training.get('exploration')==fresh['exploration'] and
+                    training.get('startup_initialization')==fresh.get('startup_initialization'),
+                    'Restart weights disagree with the committed exploration/startup state')
+                checkpoint=dict(raw,optimizer=ppo_optimizer(config,model,multiplier),training=training)
+                if rollback is not None:checkpoint['step']=generation
+                del model
         torch.save(checkpoint,temporary);temporary.replace(output)
-        entry=dict(path=output.relative_to(root).as_posix(),sha256=sha(output),model_id=raw['model_id'],generation=generation)
+        entry=dict(path=output.relative_to(root).as_posix(),sha256=sha(output),model_id=checkpoint['model_id'],generation=generation)
         fresh['history'][-1]=entry;fresh['resume']=[copy.deepcopy(entry)]
         summary=dict(binding=binding,complete=True,identity=identity,checkpoint=entry,files_placed=placed,
             dropped_members=dropped,regenerated_probes=regenerated,
@@ -516,9 +626,20 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
                 'search_value_buffer','source_transitions'],
             preserved=['weights','rng','generation','games','opponent_pool','ratings','rust_backend','entropy_anneal',
                 'gae_lambda_and_table_gates','search_head_and_stage','teacher_readiness','local_scoring_heads'],
-            schedule=dict(shadow_iterations=4,teacher_on_from_iteration=5,stage_a_iterations=stage_a_iterations,
+            schedule=None if search is None else dict(shadow_iterations=4,teacher_on_from_iteration=5,stage_a_iterations=stage_a_iterations,
                 stage_a_paused_iterations=PAUSED_ITERATIONS,stage_a_count_at_restart=search['stage']['stage_a_iterations']))
-        if rollback is not None:
+        if seed is not None:
+            from .training_revision_g1491 import shadow_iterations,summary as revision
+            stages=config['teacher_phase']['search_value']['schedule']
+            summary.update(learner=dict(generation=learner,seed_model_id=raw['model_id'],model_id=checkpoint['model_id'],weights=weights_receipt),
+                reward_migration=migration,compacted_rating_slots=compacted,ppo_lr_multiplier=multiplier,revision=revision(config),
+                schedule=dict(utility_refit_iterations=1,shadow_iterations=shadow_iterations(config),
+                    teacher_on_from_iteration=shadow_iterations(config)+2,search_head='fresh, adopted at Stage A on the first teaching iteration',
+                    **{k:stages[k] for k in ('stage_a_iterations','stage_a_fit','stage_b_iterations','stage_c_iterations','ppg_beta_floor_after_stage_a')}))
+            summary['reset']=summary['reset']+['search_head','utility_calibration','teacher_readiness']
+            summary['preserved']=[p for p in summary['preserved'] if p not in ('weights','search_head_and_stage','teacher_readiness')]+[
+                f'learner_weights_of_g{learner}','ppo_lr_multiplier']
+        elif rollback is not None:
             from .training_revision_g1491 import shadow_iterations,summary as revision
             summary.update(learner=dict(generation=generation-1,model_id=raw['model_id'],weights=weights_receipt),
                 compacted_rating_slots=compacted,ppo_lr_multiplier=multiplier,revision=revision(config),

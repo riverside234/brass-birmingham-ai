@@ -25,7 +25,7 @@ class SearchValuePhase:
         saved = saved or {}
         self.machine = StageMachine(saved=saved.get('stage'), startup=startup,options=options)
         if options['stage'] == 'off': self.machine.manual('off')
-        self.companion = (Companion(model, saved=saved.get('companion'))
+        self.companion = (Companion(model, saved=saved.get('companion'), hidden=self.options['head']['hidden'])
                           if (trainable and options['stage'] != 'off' and not defer_install) or hasattr(model,'search_value_head') else None)
         self.trainable=trainable
         self.buffer = ValueBuffer(directory, reward_id, receipts=saved.get('buffer', {}).get('receipts', ()),
@@ -38,7 +38,7 @@ class SearchValuePhase:
 
     def ensure_companion(self):
         if self.companion is None and self.trainable and self.options['stage']!='off':
-            self.companion=Companion(self.model)
+            self.companion=Companion(self.model,hidden=self.options['head']['hidden'])
 
     def admit(self, results, jobs, generation, *, post_spent=0.):
         import time
@@ -181,7 +181,12 @@ class SearchValuePhase:
         train=[] if paused else self._targets(buffered)
         prepared=time.perf_counter()
         validation = None
-        if train and scale>0 and not paused:
+        from .search_value_schedule import HELDOUT_EARLY_STOP
+        # The restart schedule also gates Stage A head fitting on eight held-out games
+        # (options were validated when this phase was built).
+        holdout_a=(scale==0 and self.options.get('schedule',{}).get('stage_a_fit')==HELDOUT_EARLY_STOP
+                   and self.machine.state.get('stage')=='A')
+        if train and (scale>0 or holdout_a) and not paused:
             from .search_value_retention import reserve_games
             train,validation,self.report['retention_holdout']=reserve_games(train,generation,self.companion.seed)
         if paused:self.report['update']=dict(steps=0,reason='Rebuilding eight fresh return-buffer ages; stage counter paused')
@@ -191,6 +196,9 @@ class SearchValuePhase:
                     self.report['update']=unconditional_pass(self.companion,train,scale=scale,heldout=validation,
                         intervals=self.options['trunk']['intervals'],**guarded)
                 else:self.report['update']=dict(steps=0,reason='No ordinary PPG probe; trunk update deferred')
+            elif holdout_a:
+                self.report['update']=self.companion.head_only_heldout(train,validation,generation=generation,
+                    intervals=self.options['trunk']['intervals'],interval_steps=self.options['trunk']['interval_steps'])
             else:self.report['update']=self.companion.head_only(train,generation=generation,steps=self.options['steps_per_iteration'])
         else:self.report['update']=dict(steps=0,reason='No admitted training value rows')
         updated=time.perf_counter()

@@ -608,8 +608,21 @@ class TrainingPhases:
                 if dcpg_config.active(self.options['value_phase']) else
                 ppg_phasic.rate_receipt(ppo_rate,self.state['generation']+1,'ppo-last-applied',ppo_steps)) if ppo_steps else None)
 
+    def floor_options(self):
+        """The value-phase options with the search-head schedule's beta floor, if one applies."""
+        floor=getattr(self,'beta_floor',None)
+        options=self.options['value_phase']
+        if floor is None or floor<=options['beta_clone_min']:return options
+        require(floor<=options['beta_clone_max'],'PPG beta floor above its maximum')
+        return dict(options,beta_clone_min=floor)
+
     def fit(self,model,*,preparation_pool=None):
         require(self.dataset is not None and self.probe_ids is not None,'Value phase must follow PPO')
+        self.beta_floor_raise=None
+        if getattr(self,'beta_floor',None) is not None:
+            floor=self.floor_options()['beta_clone_min']
+            # A raised floor applies to this phase (and the search head's cloning term) at once.
+            if self.beta<floor:self.beta_floor_raise=dict(before=self.beta,floor=floor);self.beta=floor
         from . import ppg_g210
         if ppg_g210.active(self.options['value_phase']):return ppg_g210.fit(self,model,preparation_pool)
         if self.rolling:
@@ -696,7 +709,11 @@ class TrainingPhases:
         # A clean iteration must not re-escalate on the same old cap hits.
         # Keep the rolling evidence on resume, but require a new trip to act.
         if restored:
-            self.beta,self.trips,value['beta_feedback']=ppg_g210.beta_after_phase(self.beta,self.trips,value,self.options['value_phase'])
+            options=self.floor_options()
+            self.beta,self.trips,value['beta_feedback']=ppg_g210.beta_after_phase(self.beta,self.trips,value,options)
+            if options is not self.options['value_phase']:
+                value['beta_floor']=dict(minimum=options['beta_clone_min'],raised=getattr(self,'beta_floor_raise',None),
+                    source='search-value schedule: head past Stage A')
         elif rolling:
             self.beta=value['beta_clone_final']
             from . import dcpg_config

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "d146e2da3e7105fd0e9b3f21ac5bcf051be965148b38275d2eb2f69a06a47547",
+  "execution_implementation": "be2c1088a10d6389e5faf043a9782b0e7f0a45b461f0dc9e55fb80a306e116f4",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -527,6 +527,11 @@
       "implementation": "22b8d87ca74544ab4bc3a4441e4cba40d65f08f3a57cac5347cfbbf9fd4db4be",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "126855a51cca104500fbc1756f6fb16ea7f9c7a47789caf2b819aa5d34eb1f1f"
+    },
+    {
+      "implementation": "d146e2da3e7105fd0e9b3f21ac5bcf051be965148b38275d2eb2f69a06a47547",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "1618d55ae833707229b97e11a60a2929bd7ad43d7240918e941959ef2dfa0c61"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -698,6 +703,13 @@
     "variant": "training-revision-g1491/1.0.0 g1490-branch-restart",
     "source_report": "ai-research/G1490_RESTART.md",
     "scope": "User-requested restart of the g1290 restart run from its g1490 weights in a new run folder. The full g1490 and g1491 checkpoints are gone, so the new run starts from the exact committed g1491 state (verified export, the last state before the g1491 revision) with the retained g1490 snapshot as the learner at generation 1491. Recipe: 32 teacher tables (+4 held out), long-search labels only, 72 teacher rows per PPO step, the four-iteration 4:3:2:1 buffer, two PPO epochs, one shadow iteration re-measuring the fixed beta with the PPO LR controller held, and the g1491 visit-count and cotton exploration. New PPO/PPG optimizers (the committed g1491 LR multiplier is carried), empty teacher labels and value buffer (Stage C fitting pauses eight iterations), the learner's companion heads moved one generation without fitting, and the rating compaction the source made at g1500 applied exactly as the g1500 export records it. The source run is read only. Every revised table, long-only included, checks model-logit parity once per table. No Rust source changed.",
+    "qualified_implementation_unchanged": true
+  },
+  "branch_restart_g1190": {
+    "contract": "rust-branch-restart/1.0.0",
+    "variant": "g1190 seed restart (training-revision-g1491 g1490-branch-restart recipe, restored-placement reward, restart stage schedule)",
+    "source_report": "ai-research/G1190_RESTART.md",
+    "scope": "User-requested restart of the g1290 restart run from its retained g1190 weights in a new run folder, from the exact committed g1491 state with the g1190 snapshot as the learner at generation 1491. Recipe: the g1490 restart recipe with reward placement .1 (zero insolvency charge, canal/final VP timing kept); the seed utility specification is migrated with all tensors kept and its calibration cleared, so the first value phase re-fits it before teacher tables run. g1190 has no search head: a fresh one is adopted at Stage A on the first teaching iteration under the restart schedule (Stage A 50 iterations fitting in held-out-gated 16-step intervals like Stage C, Stage B 50 with w rising .02, Stage C 10, PPG beta floor .5 once the head has left Stage A) and a 256-wide head (checkpoint marker search-value-correction/1.1.0 records the width). The search blend binding and the CPU teacher job check accept a 1/100 grid of w (was 1/20; every earlier weight stays valid), one exact CPU-overlay patch of src/teacher.rs. Other recipes, schedules and the 32-wide heads are unchanged.",
     "qualified_implementation_unchanged": true
   }
 }

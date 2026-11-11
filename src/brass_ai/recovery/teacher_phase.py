@@ -77,9 +77,10 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
         if not isinstance(progress, dict): progress = state.get('search_value', {})
         weight = progress.get('w', c['search_value']['blend']['w'])
         if 'schedule' in c['search_value'] and progress.get('stage')=='B':
-            # The first B collection uses .05; its committed counter then owns
-            # that weight. Twenty collections reach one without a zero step.
-            weight=min(1.,round(weight+.05,2))
+            # The first B collection uses one step (.05, or .02 over fifty); its committed
+            # counter then owns that weight. B collections reach one without a zero step.
+            from .search_value_schedule import blend_step
+            weight=min(1.,round(weight+blend_step(c['search_value']),2))
         if c['search_value']['blend']['w'] > 0:
             require(progress.get('stage') in ('B','head_to_head','C') and
                     progress.get('w') == c['search_value']['blend']['w'], 'Search blend requires committed stage progress')

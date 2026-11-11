@@ -73,10 +73,10 @@ class StageMachine:
         from brass_ai.learning.search_value import binding
         binding(self.state['w'])
         require(0 <= self.state['scale'] <= 1 and self.state['lam'] in (None,.5,.8,.95,1.), 'Invalid resumed stage parameters')
-        self.stage_a=10
+        self.stage_a=10;self.stage_b=20
         if options is not None and 'schedule' in options:
-            from .search_value_schedule import initialize,stage_a_iterations
-            initialize(self.state,options);self.stage_a=stage_a_iterations(options)
+            from .search_value_schedule import initialize,stage_a_iterations,stage_b_iterations
+            initialize(self.state,options);self.stage_a=stage_a_iterations(options);self.stage_b=stage_b_iterations(options)
 
     def choose_lambda(self, value):
         require(value in (.5,.8,.95,1.) and self.state['lam'] in (None,value), 'Lambda changes require reviewed buffer retirement')
@@ -92,7 +92,7 @@ class StageMachine:
     def advance(self, generation, gate, *, ordinary=None, h2h=None, annealing=False, pause=False):
         s = self.state
         from .search_value_schedule import CONTRACT as SCHEDULE,advance
-        if s.get('schedule')==SCHEDULE:return advance(s,generation,gate,pause=pause,stage_a=self.stage_a)
+        if s.get('schedule')==SCHEDULE:return advance(s,generation,gate,pause=pause,stage_a=self.stage_a,stage_b=self.stage_b)
         require(type(generation) is int and generation > s['generation'], 'Stage transition already committed/out of order')
         s['generation'] = generation
         if ordinary is not None:
@@ -156,8 +156,8 @@ def predict_rows(model, rows):
 
 
 class Companion:
-    def __init__(self, model, *, saved=None, seed=4504):
-        install(model, seed=seed)
+    def __init__(self, model, *, saved=None, seed=4504, hidden=None):
+        install(model, seed=seed, hidden=hidden)
         self.model, self.seed = model, seed
         self.optimizer = torch.optim.Adam(model.search_value_head.parameters(), lr=1e-4, weight_decay=1e-4)
         self.steps = 0
@@ -185,12 +185,9 @@ class Companion:
         require(all(s['exp_avg'].shape == s['exp_avg_sq'].shape == p.shape
                     for p,s in self.optimizer.state.items()), 'Search companion Adam moment shape differs')
 
-    def head_only(self, rows, *, generation, steps=32):
-        began=time.perf_counter()
-        require(rows and all(r['split'] == 'train' for r in rows) and 1 <= steps <= 64, 'Invalid head-only training data')
+    def _head_inputs(self, rows):
+        """Frozen-trunk head inputs, encoded once: no trunk work, candidates, collation or GAE."""
         model = self.model
-        # Encode once per pass, then run every head step on cached features.
-        # No repeated trunk work, policy candidates, replay collation or GAE.
         inputs, targets, mains, mappings = [], [], [], []
         with torch.no_grad():
             for start in range(0,len(rows),512):
@@ -202,13 +199,15 @@ class Companion:
                 mains.append(model.heads_from_encoded(encoded,mapping,remaining)[-1])
                 mappings.append(mapping)
                 targets.append(state.new_tensor([r['target'] for r in batch]))
-        x, base, mapping, target = map(torch.cat,(inputs,mains,mappings,targets))
-        encoded_at=time.perf_counter()
+        return tuple(map(torch.cat,(inputs,mains,mappings,targets)))
+
+    def _head_steps(self, cached, count, *, generation, steps):
+        model = self.model; x, base, mapping, target = cached
         rng = np.random.default_rng(int(digest([self.seed,generation,self.steps])[:16],16))
         losses = []
         model.zero_grad(set_to_none=True)
         for _ in range(steps):
-            ix = torch.as_tensor(rng.choice(len(rows),min(512,len(rows)),replace=False),device=x.device)
+            ix = torch.as_tensor(rng.choice(count,min(512,count),replace=False),device=x.device)
             self.optimizer.zero_grad(set_to_none=True)
             delta = model.search_value_head(x[ix]).gather(1,mapping[ix])
             loss = torch.nn.functional.mse_loss(base[ix]+delta,target[ix])
@@ -218,8 +217,57 @@ class Companion:
             self.optimizer.step(); self.steps += 1; losses.append(loss.detach())
         self.optimizer.zero_grad(set_to_none=True)
         # Preserve every observed loss without a device-to-host read per step.
-        losses=torch.stack(losses).float().cpu().tolist()
+        return torch.stack(losses).float().cpu().tolist()
+
+    def head_only(self, rows, *, generation, steps=32):
+        began=time.perf_counter()
+        require(rows and all(r['split'] == 'train' for r in rows) and 1 <= steps <= 64, 'Invalid head-only training data')
+        # Encode once per pass, then run every head step on cached features.
+        cached = self._head_inputs(rows)
+        encoded_at=time.perf_counter()
+        losses = self._head_steps(cached, len(rows), generation=generation, steps=steps)
         return dict(steps=steps, rows=len(rows), loss_before=losses[0], loss_after=losses[-1], trunk_gradient=0., policy_kl=0.,
+            timings=dict(input_and_frozen_encoder_seconds=encoded_at-began,head_update_seconds=time.perf_counter()-encoded_at,
+                total_seconds=time.perf_counter()-began))
+
+    def head_only_heldout(self, rows, heldout, *, generation, intervals, interval_steps):
+        """Stage A with the Stage C early stop: frozen-trunk head fitting in intervals.
+
+        Each interval is kept only if the loss on eight whole held-out buffered games
+        does not rise; a rise restores that interval's head weights and Adam and stops.
+        """
+        from .search_value_retention import HeldoutLoss
+        began=time.perf_counter()
+        require(rows and all(r['split'] == 'train' for r in rows) and 1 <= intervals and
+                1 <= interval_steps and intervals*interval_steps <= 64, 'Invalid held-out head-only training')
+        require({r['game_id'] for r in rows}.isdisjoint(r['game_id'] for r in heldout), 'Stage-A training/held-out game leakage')
+        held = HeldoutLoss(self.model, heldout)
+        current = initial = held()
+        cached = self._head_inputs(rows)
+        encoded_at=time.perf_counter()
+        reports, steps, losses = [], 0, []
+        for interval in range(intervals):
+            saved = (copy.deepcopy(self.model.search_value_head.state_dict()), copy.deepcopy(self.optimizer.state_dict()), self.steps)
+            try:
+                observed = self._head_steps(cached, len(rows), generation=generation, steps=interval_steps)
+                attempted = held()
+            except BaseException:
+                self.model.search_value_head.load_state_dict(saved[0]); self.optimizer.load_state_dict(saved[1]); self.steps = saved[2]
+                raise
+            increased = attempted > current
+            reports.append(dict(accepted=not increased, steps=interval_steps, loss_before=observed[0], loss_after=observed[-1],
+                heldout_loss_before=current, heldout_loss_attempted=attempted,
+                reason='heldout_loss_increased' if increased else 'heldout_loss_not_increased'))
+            if increased:
+                self.model.search_value_head.load_state_dict(saved[0]); self.optimizer.load_state_dict(saved[1]); self.steps = saved[2]
+                break
+            current = attempted; steps += interval_steps; losses.extend(observed)
+        self.model.zero_grad(set_to_none=True)
+        return dict(steps=steps, rows=len(rows), intervals=reports, validation_gates=True,
+            heldout_loss_before=initial, heldout_loss_after=current,
+            loss_before=losses[0] if losses else None, loss_after=losses[-1] if losses else None,
+            early_stop_reason=reports[-1]['reason'] if reports and not reports[-1]['accepted'] else None,
+            trunk_gradient=0., policy_kl=0.,
             timings=dict(input_and_frozen_encoder_seconds=encoded_at-began,head_update_seconds=time.perf_counter()-encoded_at,
                 total_seconds=time.perf_counter()-began))
 

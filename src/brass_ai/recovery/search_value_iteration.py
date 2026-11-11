@@ -83,6 +83,9 @@ class SearchValueIteration:
         self.ordinary, self.annealing = ordinary, annealing
         if phases is not None:
             phases.post_value_fit = self.post_fit if self.mode == 'on' else None
+            # A schedule may raise the PPG beta floor once the head has left Stage A.
+            from .search_value_schedule import beta_floor
+            phases.beta_floor = beta_floor(self.config['teacher_phase']['search_value'], self.phase.machine.state.get('stage'))
 
     def post_fit(self, *, model, optimizer, reference, clones, probe_ids, dataset,
                  heldout_ids, config, update, beta, report):

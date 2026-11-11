@@ -7,17 +7,24 @@ from torch import nn
 from .contracts import require
 
 CONTRACT = 'search-value-correction/1.0.0'
+# A head of another reviewed hidden width records it in the checkpoint marker.
+WIDE_CONTRACT = 'search-value-correction/1.1.0'
+WIDTHS = (32, 256)
 PROTOCOL = 'search-utility/1.0.0'
 
 
-def install(model, *, seed=4504):
+def install(model, *, seed=4504, hidden=None):
+    """The optional search head; ``hidden`` is its width (32 unless a recipe says 256)."""
     require(getattr(model.config, 'utility', None) is not None, 'Search value requires utility')
     if hasattr(model, 'search_value_head'):
+        require(hidden is None or width(model) == hidden, 'Search value head width differs')
         return model.search_value_head
+    hidden = 32 if hidden is None else hidden
+    require(hidden in WIDTHS, 'Unreviewed search value head width')
     # Adding this optional head must not consume ordinary training RNG.
     with torch.random.fork_rng(devices=[]):
         torch.random.default_generator.manual_seed(seed)
-        head = nn.Sequential(nn.Linear(model.config.hidden + 4 + 32, 32), nn.GELU(), nn.Linear(32, 4))
+        head = nn.Sequential(nn.Linear(model.config.hidden + 4 + 32, hidden), nn.GELU(), nn.Linear(hidden, 4))
         nn.init.zeros_(head[-1].weight)
         nn.init.zeros_(head[-1].bias)
     model.add_module('search_value_head', head.to(next(model.parameters()).device))
@@ -25,9 +32,28 @@ def install(model, *, seed=4504):
     return head
 
 
+def width(model):
+    return model.search_value_head[0].out_features
+
+
+def marker(model):
+    """The checkpoint marker: the original contract for width 32, else the width itself."""
+    hidden = width(model)
+    return CONTRACT if hidden == 32 else dict(contract=WIDE_CONTRACT, hidden=hidden)
+
+
+def restore(model, value):
+    """Re-create a saved head at its own width before its tensors load."""
+    if value == CONTRACT:
+        return install(model, hidden=32)
+    require(type(value) is dict and set(value) == {'contract', 'hidden'} and value['contract'] == WIDE_CONTRACT
+            and value['hidden'] in WIDTHS and value['hidden'] != 32, 'Unknown search value head')
+    return install(model, hidden=value['hidden'])
+
+
 def binding(weight):
     require(type(weight) in (int, float) and 0 <= weight <= 1 and
-            abs(weight * 20 - round(weight * 20)) < 1e-8, 'Invalid search blend')
+            abs(weight * 100 - round(weight * 100)) < 1e-8, 'Invalid search blend')  # .02 steps over fifty B collections
     return dict(protocol=PROTOCOL, value_source='main' if weight == 0 else 'corrected', w=float(weight))
 
 

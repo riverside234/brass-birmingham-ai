@@ -24,8 +24,8 @@ def save_checkpoint(path, model, optimizer=None, *, step=0, training=None):
     if getattr(model.config,'utility',None) is not None:
         payload['training']=dict(payload['training'],utility_calibration=model.utility_calibration)
     if hasattr(model, 'search_value_head'):
-        from .search_value import CONTRACT
-        payload['training'] = dict(payload['training'], search_value_head=CONTRACT)
+        from .search_value import marker
+        payload['training'] = dict(payload['training'], search_value_head=marker(model))
     temporary = path.with_name(path.name + '.tmp')
     try:
         torch.save(payload, temporary)
@@ -59,9 +59,8 @@ def load_checkpoint(path, *, device='cpu', _legacy_il_upgrade=False):
     require(type(raw['step']) is int and raw['step'] >= 0, 'Invalid training step')
     model=model_type(config)
     if raw['training'].get('search_value_head') is not None:
-        from .search_value import CONTRACT, install
-        require(raw['training']['search_value_head'] == CONTRACT, 'Unknown search value head')
-        install(model)
+        from .search_value import restore
+        restore(model, raw['training']['search_value_head'])
     require((getattr(model.config,'utility',None) is not None)==(raw['format']=='four-seat-checkpoint/2.0.0'),'Checkpoint utility version differs')
     model.utility_calibration=raw['training'].get('utility_calibration')
     model.load_state_dict(raw['state_dict'], strict=True)

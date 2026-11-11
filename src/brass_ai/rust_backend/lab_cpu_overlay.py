@@ -57,6 +57,10 @@ PATCHES = {
          '                "checkpoint" => {\n'),
     ),
     'src/teacher.rs': (
+        # The g1190 restart schedule's Stage B moves w in .02 steps (fifty collections):
+        # a 1/100 grid keeps every earlier 1/20 weight valid.
+        ('            && (w * 20. - (w * 20.).round()).abs() < 1e-8\n',
+         '            && (w * 100. - (w * 100.).round()).abs() < 1e-8\n'),
         ('        self.encoding_ns += start.elapsed().as_nanos() as u64;\n'
          '        let mut binding = json!(',
          '        self.encoding_ns += start.elapsed().as_nanos() as u64;\n'

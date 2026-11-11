@@ -135,6 +135,9 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 prefix=prefix.replace('-share','-cotton20-share');stages.append(prefix)
             if g1491.variant_of(config)==g1491.RESTART:
                 prefix=prefix.replace('-share','-g1490-restart-share');stages.append(prefix)
+        from brass_ai.learning.post_transfer_reward import restored
+        if restored(config):
+            prefix=prefix.replace('-share','-placement01-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -224,7 +227,9 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
              f'qualification={calibration} iterations; teacher gradients are diagnostic only.'),flush=True)
         if revised:print('Residual stages: A10 head-only; B20 blend warm-up; C10 trunk warm-up; KL cap .003; PPG beta floor .25.',flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
-        if is_revised(options):print('Transferred reward: win=1, placement=.05, VP=.001 (cap 180); insolvency charge=0.',flush=True)
+        if is_revised(options):
+            r=options['reward']
+            print(f"Transferred reward: win={r['win']:g}, placement={r['placement']:g}, VP={r['vp']:g} (cap {r['vp_cap']}); insolvency charge=0.",flush=True)
         from brass_ai.recovery.training_revision_g1294 import applied as training_revised,summary as revision_summary
         if training_revised(options):
             report['training_revision']=revision_summary(options)

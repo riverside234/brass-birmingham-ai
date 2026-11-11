@@ -80,8 +80,10 @@ def signature_transition(before,after):
     from brass_ai.recovery import training_revision_g1491 as g1491
     if not compatible(old,new) or not lr_floor_compatible(old,new) or not g1491.compatible(old,new):return False
     # The projection drops the schedule, so its Stage A length must not change here.
-    stage_a=lambda c:c.get('teacher_phase',{}).get('search_value',{}).get('schedule',{}).get('stage_a_iterations')
-    if old_revised and stage_a(old)!=stage_a(new):return False
+    # Nor may its Stage B length, Stage A fit or PPG floor (the g1190 restart schedule).
+    stages=lambda c:({k:v for k,v in c.get('teacher_phase',{}).get('search_value',{}).get('schedule',{}).items()
+                      if k!='validation_during_beta_qualification'},c.get('teacher_phase',{}).get('search_value',{}).get('head'))
+    if old_revised and stages(old)!=stages(new):return False
     try:old_compare,new_compare=previous_recipe(previous_reward(old)),previous_recipe(previous_reward(new))
     except (ValueError,KeyError,TypeError):return False
     if is_on(new):

@@ -727,6 +727,19 @@ class NativeWorkers(unittest.TestCase):
         accepted, rejected = verifier.take(result, job, self.model)
         self.assertEqual(len(accepted)+sum(rejected.values()), len(rows))
 
+    def test_a_two_hundredths_blend_from_the_fifty_step_stage_b_is_accepted(self):
+        budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)
+        job, result, verifier = self.run_all_seat(.02, budget)
+        self.assertEqual((job['search_value']['w'], job['search_value']['value_source']), (.02, 'corrected'))
+        rows = result['value_rows']
+        self.assertTrue(rows and all(r['search_value'] == job['search_value'] for r in rows))
+        for row in rows[:4]:
+            utility, delta = self.root_heads(row)
+            blended = utility+torch.tensor(.02, dtype=torch.float32)*delta
+            np.testing.assert_allclose(row['v'], blended[0].double().numpy(), rtol=2e-4, atol=2e-4)
+        accepted, rejected = verifier.take(result, job, self.model)
+        self.assertEqual(len(accepted)+sum(rejected.values()), len(result['rows']))
+
     def test_blended_search_differs_from_the_unblended_one(self):
         budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)
         _, zero, _ = self.run_all_seat(0., budget)

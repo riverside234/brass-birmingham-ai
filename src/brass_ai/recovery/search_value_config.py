@@ -52,10 +52,12 @@ def validate(c):
     expected = defaults()
     if 'schedule' in c:
         from .search_value_schedule import defaults as schedule_defaults,validate as schedule_validate
-        schedule_validate(c)
-        expected.update(schedule=schedule_defaults())
-        for key in ('validation_during_beta_qualification','stage_a_iterations'):
-            expected['schedule'][key]=c['schedule'][key]
+        # The schedule itself is exactly one of the reviewed ones (schedule_validate).
+        expected.update(schedule=copy.deepcopy(schedule_validate(c)))
+        from .search_value_schedule import restart_schedule
+        if set(c['schedule'])==set(restart_schedule()):
+            # The g1190 restart adopts a fresh, wider head with its schedule.
+            expected['head']['hidden']=256
         expected['buffer']['staleness']='none'
         expected['gate']=dict(mode='diagnostic-only',games=4,evaluation_target='final-utility-to-go')
         expected['head_to_head']['games']=0

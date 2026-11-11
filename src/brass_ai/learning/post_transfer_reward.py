@@ -14,10 +14,35 @@ OLD_COST=dict(event_cost=.0025,max_cost=.025)
 ZERO_COST=dict(event_cost=0.,max_cost=.025)
 
 
+# The g1190 branch restart keeps zero charge and the canal/final VP timing but restores
+# the earlier placement weight. It is adopted only by that restart, never in a run.
+RESTORED_PLACEMENT='restored-placement-reward/1.0.0'
+RESTORED=dict(AFTER,placement=.1)
+
+
 def eligible(config):return (config.get('reward')==BEFORE and config.get('insolvency')==OLD_COST) or is_revised(config)
 
 
-def is_revised(config):return config.get('reward')==AFTER and config.get('insolvency')==ZERO_COST
+def is_revised(config):
+    """A zero-charge, canal/final-timed reward: the post-transfer one or its restored-placement variant."""
+    return config.get('reward') in (AFTER,RESTORED) and config.get('insolvency')==ZERO_COST
+
+
+def restored(config):return config.get('reward')==RESTORED and config.get('insolvency')==ZERO_COST
+
+
+def restore_placement(config):
+    """The post-transfer recipe with placement .1; every search reward follows it."""
+    if restored(config):return copy.deepcopy(config)
+    require(config.get('reward')==AFTER and config.get('insolvency')==ZERO_COST,
+        'Restored placement starts from the post-transfer reward recipe')
+    result=copy.deepcopy(config);result['reward']=copy.deepcopy(RESTORED)
+    from .reward import specification as reward_specification
+    spec=reward_specification(RESTORED,ZERO_COST)
+    result['search']['reward']=copy.deepcopy(spec)
+    for name in ('search','fast_search'):
+        if name in result.get('teacher_phase',{}):result['teacher_phase'][name]['reward']=copy.deepcopy(spec)
+    return result
 
 
 def specification(revised):

@@ -6,6 +6,7 @@ from brass_ai.learning.contracts import digest,require
 CONTRACT='search-value-stage-schedule/2.0.0'
 # Stage A lasts 10 iterations, or 30 in the reviewed g1290 restart recipe.
 STAGE_A_ITERATIONS=(10,30)
+HELDOUT_EARLY_STOP='heldout-early-stop/1.0.0'
 
 
 def defaults():
@@ -14,11 +15,24 @@ def defaults():
         validation_during_beta_qualification=True)
 
 
+def restart_schedule():
+    """The g1190 branch restart: Stage A 50 head-only iterations, each fitting with the
+    Stage C held-out early stop; Stage B 50 (w rises .02 a collection); the PPG beta
+    floor is .5 once the head has left Stage A."""
+    return dict(defaults(),stage_a_iterations=50,stage_b_iterations=50,
+        stage_a_fit=HELDOUT_EARLY_STOP,ppg_beta_floor_after_stage_a=.5)
+
+
 def enabled(options):return 'schedule' in options
 
 
 def validate(options):
     schedule=options['schedule'];expected=defaults()
+    if type(schedule) is dict and set(schedule)==set(restart_schedule()):
+        require(type(schedule['validation_during_beta_qualification']) is bool,'Invalid beta-qualification validation switch')
+        require(digest(dict(schedule,validation_during_beta_qualification=True))==digest(restart_schedule()),
+            'Unreviewed search-value stage schedule')
+        return schedule
     require(type(schedule) is dict and set(schedule)==set(expected),'Invalid search-value schedule fields')
     require(type(schedule['validation_during_beta_qualification']) is bool,'Invalid beta-qualification validation switch')
     require(type(schedule['stage_a_iterations']) is int and schedule['stage_a_iterations'] in STAGE_A_ITERATIONS,
@@ -30,6 +44,27 @@ def validate(options):
 
 def stage_a_iterations(options):
     return validate(options)['stage_a_iterations'] if enabled(options) else defaults()['stage_a_iterations']
+
+
+def stage_b_iterations(options):
+    return validate(options)['stage_b_iterations'] if enabled(options) else defaults()['stage_b_iterations']
+
+
+def stage_a_holdout(options):
+    """Stage A fits in held-out-gated intervals (the Stage C early stop) instead of fixed steps."""
+    return enabled(options) and validate(options).get('stage_a_fit')==HELDOUT_EARLY_STOP
+
+
+def beta_floor(options,stage):
+    """The PPG beta floor this (already validated) schedule sets for the current head stage, or None."""
+    if not enabled(options):return None
+    floor=options['schedule'].get('ppg_beta_floor_after_stage_a')
+    return floor if floor is not None and stage in ('B','C') else None
+
+
+def blend_step(options):
+    """Stage B raises w by 1/stage_b_iterations per collection (.05 for twenty)."""
+    return round(1/stage_b_iterations(options),2)
 
 
 def revise(config):
@@ -62,7 +97,8 @@ def previous_recipe(config):
     validate_options(options)
     require(result['value_phase']['contract']==TEACHER_FLOOR_CONTRACT and
         result['value_phase']['beta_clone_min']==.25,'Revised residual stages require PPG floor .25')
-    options.pop('schedule');options['head_to_head']['games']=256;options['trunk']['kl']='shared-ppg-cap'
+    # The restart schedule's wider head (validated together with it) projects to the reviewed width.
+    options.pop('schedule');options['head']['hidden']=32;options['head_to_head']['games']=256;options['trunk']['kl']='shared-ppg-cap'
     options['buffer']['staleness']='label-buffer-rule';options['gate']=original()['gate']
     options['trunk']['ordinary_heldout_tolerance']=.013
     result['value_phase'].update(contract=EVERY_ITER_CONTRACT,beta_clone_min=.125)
@@ -89,22 +125,22 @@ def validation_plan(config,state):
 
 def initialize(state,options):
     """Adopt counters without relabelling old gated, untrained Stage-A time."""
-    a=stage_a_iterations(options)
+    a=stage_a_iterations(options);b=stage_b_iterations(options)
     if state.get('schedule')==CONTRACT:
         require(type(state.get('stage_a_iterations')) is int and 0<=state['stage_a_iterations']<=a and
-            type(state.get('stage_b_iterations')) is int and 0<=state['stage_b_iterations']<=20,
+            type(state.get('stage_b_iterations')) is int and 0<=state['stage_b_iterations']<=b,
             'Invalid committed residual stage counters')
         require(state['stage']!='head_to_head' and
             (state['stage']!='A' or state['stage_a_iterations']<a) and
             (state['stage'] not in ('B','C') or state['stage_a_iterations']==a) and
-            (state['stage']!='B' or state['stage_b_iterations']<20 and state['w']==round(state['stage_b_iterations']/20,2)) and
-            (state['stage']!='C' or state['stage_b_iterations']==20 and state['w']==1.),
+            (state['stage']!='B' or state['stage_b_iterations']<b and state['w']==round(state['stage_b_iterations']/b,2)) and
+            (state['stage']!='C' or state['stage_b_iterations']==b and state['w']==1.),
             'Residual stage counters/blend differ')
         return
     require('schedule' not in state,'Unknown committed residual schedule')
     if state['stage']=='head_to_head':state.update(stage='C',scale=0.)
     state.update(schedule=CONTRACT,stage_a_iterations=0 if state['stage']=='A' else a,
-        stage_b_iterations=round(state['w']*20) if state['stage']=='B' else 20 if state['stage']=='C' else 0,
+        stage_b_iterations=round(state['w']*b) if state['stage']=='B' else b if state['stage']=='C' else 0,
         baseline=None,h2h=None,full_scale_generation=None,g0_passed=True)
 
 
@@ -112,7 +148,7 @@ def trunk_scale(state):
     return min(1.,round(state['scale']+.1,2)) if state['stage']=='C' else 0.
 
 
-def advance(state,generation,diagnostic,*,pause=False,stage_a=10):
+def advance(state,generation,diagnostic,*,pause=False,stage_a=10,stage_b=20):
     require(type(generation) is int and generation>state['generation'],'Stage transition already committed/out of order')
     state['generation']=generation
     state['history']=(state['history']+[dict(generation=generation,diagnostic=copy.deepcopy(diagnostic))])[-40:]
@@ -122,8 +158,8 @@ def advance(state,generation,diagnostic,*,pause=False,stage_a=10):
         if state['stage_a_iterations']==stage_a:state['stage']='B'
     elif state['stage']=='B':
         state['stage_b_iterations']+=1
-        state['w']=round(state['stage_b_iterations']/20,2)
-        if state['stage_b_iterations']==20:state.update(stage='C',scale=0.)
+        state['w']=round(state['stage_b_iterations']/stage_b,2)
+        if state['stage_b_iterations']==stage_b:state.update(stage='C',scale=0.)
     elif state['stage']=='C':
         state['scale']=trunk_scale(state)
         if state['scale']==1 and state['full_scale_generation'] is None:state['full_scale_generation']=generation
