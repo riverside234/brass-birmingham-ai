@@ -159,13 +159,12 @@ def groups(history, generation):
 def display_groups(data, max_points=DEFAULT_MAX_POINTS):
     """Bound the overview using PL's adjacent buckets, pooling VP by seats.
 
-    First/latest available groups stay exact. A bucket containing missing
-    evidence remains a gap; the recent panel still shows the original groups.
+    First/latest available groups stay exact. Missing groups are omitted before
+    pooling; the recent panel still shows the original groups and their gaps.
     """
-    present = [i for i, row in enumerate(data) if row['mean_vp'] is not None]
-    if not present:
+    data = [row for row in data if row['mean_vp'] is not None]
+    if not data:
         return []
-    data = data[present[0]:present[-1]+1]
     buckets = display_points([r['last'] for r in data], [0.] * len(data), max_points)
     result = []; offset = 0
     for bucket in buckets:
@@ -175,10 +174,9 @@ def display_groups(data, max_points=DEFAULT_MAX_POINTS):
             continue
         seats = sum(r['seat_games'] for r in part)
         total = math.fsum(r['vp_sum'] for r in part)
-        complete = all(r['mean_vp'] is not None for r in part)
         result.append(dict(first=part[0]['first'], last=part[-1]['last'],
                            generation=bucket['generation'], seat_games=seats, vp_sum=total,
-                           mean_vp=total/seats if complete and seats else None))
+                           mean_vp=total/seats))
     return result
 
 
@@ -258,6 +256,13 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
             ax = panel([.075, .190, .460, .527], 'Full training history',
                        f'{shown_count} points / {len(valid)} complete groups · ' +
                        ('adjacent pooled averages' if averaged else f'maximum {max_points} points'), 0, 7)
+            # Only available groups occupy space; labels retain their real generations.
+            positions = list(range(len(shown)))
+            tick_positions = sorted({round(i*(len(shown)-1)/min(7, len(shown)-1))
+                                     for i in range(min(8, len(shown)))}) if len(shown)>1 else positions
+            ax.set_xlim(-.5, max(.5, len(shown)-.5))
+            ax.set_xticks(tick_positions, [str(shown[i]['last']) for i in tick_positions])
+            ax.set_xlabel('Generation at group end · missing VP groups omitted', fontsize=9, labelpad=12)
             detail = panel([.635, .190, .313, .527], 'Recent progress',
                            f'g{recent_start}–g{generation} · same groups · separate y-axis', recent_start, 4)
             for axes, part, name in ((ax, shown, 'history'),
@@ -268,42 +273,42 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
                     axes.text(.5, .5, 'No complete 10-iteration group available', transform=axes.transAxes,
                               ha='center', va='center', fontsize=9, color=muted)
                     continue
-                x = [r.get('generation', r['last']) for r in part]
+                x = positions if name == 'history' else [r['last'] for r in part]
                 y = [r['mean_vp'] if r['mean_vp'] is not None else math.nan for r in part]
                 line, = axes.plot(x, y, color=blue, linewidth=2., zorder=4)
                 line.set_gid('vp-' + name + '-line')
-                ordinary = [r for r in present if r != latest]
-                dots = axes.scatter([r.get('generation', r['last']) for r in ordinary],
-                                    [r['mean_vp'] for r in ordinary],
+                ordinary = [(xx,r) for xx,r in zip(x,part) if r['mean_vp'] is not None and r != latest]
+                dots = axes.scatter([xx for xx,r in ordinary], [r['mean_vp'] for xx,r in ordinary],
                                     s=23, facecolor='white', edgecolor=blue, linewidth=1.05, zorder=5)
                 dots.set_gid('vp-' + name + '-markers')
                 low = min(r['mean_vp'] for r in present); high = max(r['mean_vp'] for r in present)
                 span = max(2., high-low)
                 axes.set_ylim(low-span*.12, high+span*.16)
                 if latest in present:
-                    last = axes.scatter([latest['last']], [latest['mean_vp']], s=53, color=dark,
+                    last = axes.scatter([x[part.index(latest)]], [latest['mean_vp']], s=53, color=dark,
                                         edgecolor='white', linewidth=1.4, zorder=6)
                     last.set_gid('vp-' + name + '-latest-point')
             if latest and latest['last'] >= recent_start:
                 _endpoint_label(detail, latest['last'], latest['mean_vp'], dark, prefix='vp')
-            if recent_start > 0:
-                ax.axvspan(recent_start, generation, color=blue, alpha=.035, linewidth=0, zorder=0)
-                ax.axvline(recent_start, color=blue, alpha=.25, linewidth=.8, linestyle=(0, (3, 4)), zorder=1)
+            recent_positions = [i for i,r in enumerate(shown) if r['last'] >= recent_start]
+            if recent_start > 0 and recent_positions:
+                start = recent_positions[0]-.5
+                ax.axvspan(start, len(shown)-.5, color=blue, alpha=.035, linewidth=0, zorder=0)
+                ax.axvline(start, color=blue, alpha=.25, linewidth=.8, linestyle=(0, (3, 4)), zorder=1)
             fig.legend(handles=[Line2D([], [], color=blue, marker='o', markerfacecolor='white',
                        linewidth=1.8, markersize=4, label='Seat-weighted pooled mean VP')],
                        loc='center left', bbox_to_anchor=(.066, .095), frameon=False, fontsize=8.4, labelcolor=muted)
             text(.055, .055, 'Full history: adjacent 10-iteration groups pooled; first/latest exact. Recent panel: original groups. Zero-VP seats included.'
                  if averaged else 'Each point = total VP / learner-seat games across 10 committed iterations. Zero-VP seats are included.',
                  fontsize=8.1, color=muted)
-            text(.055, .033, 'History/v4 tables, branch games and evaluation games excluded. Windows with missing evidence are omitted; gaps remain.'
-                 if averaged else 'History/v4 tables, branch games and evaluation games are excluded. Missing or unfinished groups are not plotted.',
+            text(.055, .033, 'History/v4, branch and evaluation games excluded. Left: missing groups take no space. Right: original generation spacing.',
                  fontsize=8.1, color=muted)
             text(.945, .011, 'Training score trend · not a controlled playing-strength evaluation', fontsize=8, color=muted, ha='right')
             fig.savefig(output, format='svg', facecolor=paper, metadata=dict(Date=None,
                 Title='Brass Birmingham — self-play learner VP',
                 Description=f'Fixed ten-iteration groups through generation {generation}. '
                     f'Full history: {shown_count} displayed points (cap {max_points}); adjacent seat-weighted averages, first/latest exact. '
-                    'Recent detail and summary cards use original groups. ' + '; '.join(coverage)))
+                    'Full-history spacing omits missing groups. Recent detail and summary cards use original groups. ' + '; '.join(coverage)))
             output = Path(output)
             output.write_text('\n'.join(line.rstrip() for line in output.read_text(encoding='utf-8').splitlines())+'\n',
                               encoding='utf-8', newline='\n')

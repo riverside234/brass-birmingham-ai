@@ -1,7 +1,8 @@
 """Copy a self-play analysis bundle to results/ without importing the trainer.
 
 Run files are preserved. Exported retention history is whitespace-minified and
-gzip-compressed without changing any JSON tokens; other reports preserve original bytes.
+gzip-compressed without changing any JSON tokens; VP charts are redrawn from history,
+and other reports preserve original bytes.
 The manifest records both source and exported hashes for transformed history.
 Checkpoints, replay shards,
 feature caches and profiler traces are not part of this report-only export.
@@ -20,7 +21,8 @@ When the run's cumulative self-play VP history lacks generations that earlier
 exports of the same run (same initial checkpoint) still hold, the exported
 ratings/vp-history.json and latest progress_vp.svg are rebuilt from both and
 marked as derived in the manifest. The run's own files are never edited.
-The default run is the g1290 branch restart (artifacts/step5/joint7-v11-2-g1290-restart-g1290); pass --run for another.
+The latest VP chart is redrawn from valid cumulative VP history using the current renderer.
+The default run is the current g1190 restart (artifacts/step5/joint7-v11-2-g1190-restart-3); pass --run for another.
 A branch-restart run reports the fresh-start seed recorded by its source run (checked by SHA-256), and its first --continue
 export copies everything because earlier exports belong to the source run.
 The CLI publishes to the independent ai-training-results repository by default.
@@ -50,7 +52,7 @@ import results_git
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1290-restart-g1290'
+DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1190-restart-3'
 BRANCH_RESTART = 'rust-branch-restart/1.0.0'
 FORMAT = 'selfplay-report-export/1.4.0'
 PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0',
@@ -58,7 +60,8 @@ PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.
 COMPACT_JSON = 'json-whitespace-only/1.0.0'
 GZIP_JSON = 'gzip-json-whitespace-only/1.0.0'
 VP_MERGE = 'selfplay-vp-history-merged/1.0.0'
-DERIVED = (COMPACT_JSON, GZIP_JSON, VP_MERGE)
+VP_RENDER = 'selfplay-vp-chart-rendered/1.0.0'
+DERIVED = (COMPACT_JSON, GZIP_JSON, VP_MERGE, VP_RENDER)
 REPORT_NAMES = {'state.json', 'retention-history.json', 'report.json', 'spec.json',
                 'config.json', 'best.json', 'summary.json', 'comparison.json',
                 'validation-comparison.json', 'receipt.json', 'manifest.json',
@@ -451,8 +454,13 @@ def seed_report_source(root,run,state,seed,previous,warnings,bindings):
     let the normal missing-evidence manifest describe the absent provenance.
     """
     path=below(root,seed['manifest']);expected=seed['sha256']
-    origin=branch_source(root,run)
-    require(path in (run/'seed/manifest.json',origin/'seed/manifest.json'),
+    origins=[run]
+    while True:
+        origin=branch_source(root,origins[-1])
+        if origin==origins[-1]:break
+        require(origin not in origins,'Circular branch restart provenance')
+        origins.append(origin)
+    require(path in (origin/'seed/manifest.json' for origin in origins),
         'Fresh-start seed manifest changed or belongs to another run')
     if path.is_file():
         require(checksum(path.read_bytes())==expected,'Fresh-start seed manifest changed or belongs to another run')
@@ -485,8 +493,8 @@ def seed_report_source(root,run,state,seed,previous,warnings,bindings):
     # establishes the identity. Stable ordering keeps incremental reuse flat.
     candidates=set()
     indexes=[previous()]
-    # A restarted run reports the seed its source run recorded, so that run's exports can hold it.
-    if origin!=run:indexes.append(previous_files(root,origin,state['iteration'],warnings))
+    # Successive restarts can retain the original ancestor's seed receipt.
+    indexes.extend(previous_files(root,origin,state['iteration'],warnings) for origin in origins[1:])
     for index in indexes:
         for (_,name,h),directories in index.items():
             if name=='fresh-start.json' and h==expected:
@@ -821,24 +829,26 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         try:
             bundles = sorted({d for directories in previous().values() for d in directories
                               if (d / 'state.json').is_file()})
-            merged = merged_vp_history(root, state, json.loads(files[history_name][1].decode('utf-8-sig')),
-                                       bundles, warnings)
+            history = json.loads(files[history_name][1].decode('utf-8-sig'))
+            merged = merged_vp_history(root, state, history, bundles, warnings)
+            vp = vp_plot_module()
+            valid_history = (vp._initial(state) and history.get('format') == vp.FORMAT
+                             and history.get('initial_checkpoint') == vp._initial(state))
             chart = None
-            if merged is not None and latest_slot is not None:
+            if valid_history and latest_slot is not None:
                 chart = (below(root, Path(latest_slot['report']['path']).parent) / 'progress_vp.svg').relative_to(run).as_posix()
                 chart = chart if chart in files else None
             if merged is not None:
                 history, added, sources = merged
-                svg = vp_chart_bytes(history, latest_slot['generation'] if latest_slot is not None else history['committed_generation']) \
-                    if chart is not None else None
+            svg = vp_chart_bytes(history, latest_slot['generation']) if chart is not None else None
         except (ImportError, ValueError, OSError, KeyError, TypeError) as error:
             warnings.append(f'VP history was not rebuilt from earlier exports: {error}')
         else:
+            def derive(name, raw, reason, transform=VP_MERGE):
+                entry = files[name][0]
+                files[name] = (dict(entry, bytes=len(raw), sha256=checksum(raw), reason=reason, transform=transform,
+                                    source_bytes=entry['bytes'], source_sha256=entry['sha256']), raw)
             if merged is not None:
-                def derive(name, raw, reason):
-                    entry = files[name][0]
-                    files[name] = (dict(entry, bytes=len(raw), sha256=checksum(raw), reason=reason, transform=VP_MERGE,
-                                        source_bytes=entry['bytes'], source_sha256=entry['sha256']), raw)
                 derive(history_name, vp_history_bytes(history),
                        'Cumulative self-play VP totals completed from earlier exports of this run')
                 if svg is not None:
@@ -848,6 +858,8 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
                                 chart=chart)
                 warnings.append(f'Run ratings/vp-history.json lacked {len(added)} generations held by earlier exports; '
                                 f'the exported history and chart combine both (see vp_history_merge)')
+            elif svg is not None:
+                derive(chart, svg, 'Self-play learner VP curve redrawn with missing history groups omitted', VP_RENDER)
     copied, reused, dependencies = (incremental_files(root,run,generation,files,warnings,index=previous())
                                      if continue_export else (files, [], []))
     manifest = dict(format=FORMAT, created_utc=datetime.now(timezone.utc).isoformat(),
@@ -865,7 +877,7 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
         scope='Analysis reports only; not a resumable checkpoint backup. Missing/pruned evidence is not reconstructed. '
               'Retention history is gzip-compressed whitespace-minified JSON (.json.gz); load_json accepts both formats. '
               'Its source_bytes/source_sha256 describe the original '
-              'and bytes/sha256 describe the exported file. Other reports preserve original bytes. '
+              'and bytes/sha256 describe the exported file. VP history/chart transforms also record source hashes. Other reports preserve original bytes. '
               'Latest teacher collection/calibration reports are included; external console/failure logs are excluded. '
               'Incremental exports require the previous bundles named in reused_files; references point to original physical files.')
     output.parent.mkdir(parents=True, exist_ok=True)

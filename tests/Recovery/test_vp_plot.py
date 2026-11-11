@@ -125,7 +125,7 @@ class VPProgress(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Invalid self-play learner VP'):
             vp_plot.collect(self.run)
 
-    def test_missing_groups_break_lines_and_are_not_presented_as_zero(self):
+    def test_missing_groups_take_no_overview_space_and_still_break_recent_lines(self):
         self.state['iteration'] = 33; self.write('state.json', self.state)
         self.write('retention-history.json', self.retained([summary(i, 400.+i) for i in
                    [*range(10), *range(20, 33)]]))
@@ -138,14 +138,44 @@ class VPProgress(unittest.TestCase):
             return original(axes, x, y, *args, **kwargs)
         with patch.object(Axes, 'plot', capture):
             vp_plot.render(history, self.run/'progress_vp.svg')
-        self.assertEqual(calls[0][0], [10, 20, 30])
-        self.assertTrue(math.isnan(calls[0][1][1]))
+        self.assertEqual(calls[0][0], [0, 1])
+        self.assertTrue(all(math.isfinite(y) for y in calls[0][1]))
+        self.assertEqual(calls[1][0], [10, 20, 30])
+        self.assertTrue(math.isnan(calls[1][1][1]))
         text = ' '.join(ET.parse(self.run/'progress_vp.svg').getroot().itertext())
         self.assertIn('1 groups missing evidence', text)
         self.assertIn('3 iterations in unfinished group', text)
         self.assertIn('Previous adjacent group unavailable', text)
         self.assertEqual(history, before)
         self.assertEqual(plt.get_fignums(), [])
+
+    def test_late_and_sparse_history_fills_overview_with_real_generation_labels(self):
+        from matplotlib.figure import Figure
+        history=dict(committed_generation=1507,iterations=[dict(generation=g,seat_games=4,
+            vp_sum=0. if g<=1300 else 400.) for g in (*range(1291,1311),*range(1491,1501))])
+        captured=[];save=Figure.savefig
+        def capture(fig,*args,**kwargs):
+            ax=fig.axes[0]
+            line=next(line for line in ax.lines if line.get_gid()=='vp-history-line')
+            captured.append((list(line.get_xdata()),list(line.get_ydata()),ax.get_xlim(),
+                             [t.get_text() for t in ax.get_xticklabels()]))
+            return save(fig,*args,**kwargs)
+        with patch.object(Figure,'savefig',capture):vp_plot.render(history,self.run/'sparse.svg')
+        x,y,limits,labels=captured[0]
+        self.assertEqual(x,[0,1,2]);self.assertEqual(y,[0.,100.,100.])
+        self.assertEqual(limits,(-.5,2.5));self.assertEqual(labels,['1300','1310','1500'])
+        self.assertIn('missing VP groups omitted',(self.run/'sparse.svg').read_text(encoding='utf-8'))
+
+    def test_sparse_overview_pools_only_available_groups_with_exact_endpoints(self):
+        history=dict(committed_generation=2000,iterations=[dict(generation=g,seat_games=4+g%3,vp_sum=float(g))
+            for g in range(1,2001) if (g-1)//10%2==0])
+        data=vp_plot.groups(history,2000);valid=[r for r in data if r['mean_vp'] is not None]
+        shown=vp_plot.display_groups(data,30)
+        self.assertEqual(len(shown),30)
+        self.assertEqual((shown[0],shown[-1]),(valid[0],valid[-1]))
+        self.assertEqual(sum(r['seat_games'] for r in shown),sum(r['seat_games'] for r in valid))
+        self.assertEqual(math.fsum(r['vp_sum'] for r in shown),math.fsum(r['vp_sum'] for r in valid))
+        self.assertTrue(all(r['mean_vp']==r['vp_sum']/r['seat_games'] for r in shown))
 
     def test_cli_generates_both_charts_without_changing_source_evidence(self):
         report, _ = fixture()

@@ -293,10 +293,30 @@ class ExportTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'belongs to another run'):self.export(output='results/branch-other')
 
     def test_the_default_run_is_the_branch_restart(self):
-        self.assertEqual(reports.DEFAULT_RUN,'artifacts/step5/joint7-v11-2-g1290-restart-g1290')
+        self.assertEqual(reports.DEFAULT_RUN,'artifacts/step5/joint7-v11-2-g1190-restart-3')
+
+    def test_current_restart_follows_both_ancestors_for_the_original_seed(self):
+        original='artifacts/step5/joint7-v11-2-g1290-trained-restart'
+        parent='artifacts/step5/joint7-v11-2-g1290-restart-g1290'
+        self.run=reports.DEFAULT_RUN;self.state['evaluations']=[]
+        seed=self.put(original+'/seed/manifest.json',dict(seed_generation=1290))
+        self.state['signature']['config']['fresh_selfplay_seed']=dict(manifest=original+'/seed/manifest.json',
+            sha256=reports.checksum(seed.read_bytes()))
+        self.put(self.run+'/state.json',self.state)
+        for source,destination in ((original,parent),(parent,self.run)):
+            self.put(destination+'/branch-restart.json',dict(complete=True,binding=dict(
+                contract=reports.BRANCH_RESTART,source_run=source,destination_run=destination)))
+        completed=subprocess.run([sys.executable,str(ROOT/'scripts/export-training-reports.py'),'--root',str(self.root),
+            '--output','results/current-restart','--continue','--no-push'],capture_output=True,text=True)
+        self.assertEqual(completed.returncode,0,completed.stderr)
+        output=self.root/'results/current-restart'
+        self.assertEqual(reports.load_json(output/'export-manifest.json')['run'],self.run)
+        self.assertEqual((output/'fresh-start.json').read_bytes(),seed.read_bytes())
+        _,again=self.export(output='results/current-again',continue_export=True)
+        self.assertIn('fresh-start.json',{e['path'] for e in again['reused_files']})
 
     def test_trained_restart_default_cli_and_incremental_manual_panel_overrides(self):
-        self.run='artifacts/step5/joint7-v11-2-g1290-restart-g1290'
+        self.run=reports.DEFAULT_RUN
         receipt=dict(seed_generation=1290,history_through=1330)
         seed=self.put(self.run+'/seed/manifest.json',receipt)
         auth=dict(contract='trained-selfplay-startup/1.0.0',authority='user',generation=0)
@@ -1140,7 +1160,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual({'ratings/vp-history.json','ratings/slots/generation-000060/progress_vp.svg'}<=
                          {e['path'] for e in again['reused_files']},True)
 
-    def test_vp_history_that_is_complete_or_has_only_other_lineages_to_draw_on_keeps_exact_run_bytes(self):
+    def test_vp_history_keeps_exact_totals_but_redraws_the_exported_chart(self):
         self.earlier_vp_export()
         for name, rows, earlier in (('intact', self.vp_rows(range(1, 61)), None), ('other_lineage', self.vp_rows(range(52, 61)), 'b' * 64)):
             with self.subTest(name):
@@ -1149,13 +1169,19 @@ class ExportTests(unittest.TestCase):
                     shutil.rmtree(self.root / 'results/earlier-g50')
                     self.earlier_vp_export(initial=earlier)
                 self.vp_run(60, rows)
+                source_chart=self.root/self.run/'ratings/slots/generation-000060/progress_vp.svg'
+                source_bytes=source_chart.read_bytes()
                 with patch.object(reports, 'vp_chart_bytes', self.chart):
                     output, manifest = self.export(output='results/case-' + name)
                 self.assertIsNone(manifest['vp_history_merge'])
                 self.assertEqual((output / 'ratings/vp-history.json').read_bytes(), (self.root / self.run / 'ratings/vp-history.json').read_bytes())
                 self.assertNotIn('transform', next(e for e in manifest['files'] if e['path'] == 'ratings/vp-history.json'))
-                self.assertEqual((output / 'ratings/slots/generation-000060/progress_vp.svg').read_bytes(),
-                                 (self.root / self.run / 'ratings/slots/generation-000060/progress_vp.svg').read_bytes())
+                history=reports.load_json(output/'ratings/vp-history.json')
+                self.assertEqual((output / 'ratings/slots/generation-000060/progress_vp.svg').read_bytes(),self.chart(history,60))
+                chart=next(e for e in manifest['files'] if e['path'].endswith('progress_vp.svg'))
+                self.assertEqual(chart['transform'],reports.VP_RENDER)
+                self.assertEqual(chart['source_sha256'],reports.checksum(source_bytes))
+                self.assertEqual(source_chart.read_bytes(),source_bytes)
 
     def test_overlapping_earlier_rows_that_disagree_are_skipped_whole(self):
         self.earlier_vp_export(rows=self.vp_rows(range(1,51))+self.vp_rows([52],shift=5.),generation=52)

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "99b93b5de6ff97c41acca35d1cb22153904384cc71b040479081ecc42c5ef18c",
+  "execution_implementation": "7237d70208264c0717456b46830921defbc68a405f994940e13ac290ce04389a",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -391,6 +391,10 @@
     "src/brass_ai/recovery/ppg_auxiliary.py": {
       "before": "e0c5d101a49df77752cb943fc2f951faea16a65bb49fe9f642067e4f6e45255c",
       "after": "919451fad50530b35afa0c785226d6d0fb2d45fe0fa89d488783bfa942a1b3e2"
+    },
+    "src/brass_ai/recovery/vp_plot.py": {
+      "before": "a68e9c570ea90c9ccf29c1ce23584e26707ae50aed6073284f6875505ee24ae0",
+      "after": "a33d74de1c8a539c32deac5d42d1b44826d7ff5770e429f18a39f832ece4032b"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -546,6 +550,11 @@
       "implementation": "cf290003fbaa82480f1b2a77f8634cc00c667143b8192d520c80a0c2f171d870",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "057db47ddfc2813177696f750168f09631f4945651dd6b3a26eda6203ad8b379"
+    },
+    {
+      "implementation": "99b93b5de6ff97c41acca35d1cb22153904384cc71b040479081ecc42c5ef18c",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "84928c748991c829707c2edf1f2e77cb30b17cdaa513b35bf8f43c5868be362d"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -735,6 +744,10 @@
   },
   "utility_qualification_continuation": {
     "scope": "User-requested persistent skip flag allows teacher collection and beta qualification without utility readiness; measured full-table beta qualification remains required. Zero retained PPG updates preserve the existing utility calibration receipt. Teacher rows 256 and insolvency event cost .0025 / cap .025 are unchanged. No model or optimizer copies are added.",
+    "qualified_implementation_unchanged": true
+  },
+  "vp_chart_missing_groups": {
+    "scope": "Reporting only: the VP overview omits missing groups from its horizontal spacing and retains actual generation labels. Recent detail and original VP totals are unchanged.",
     "qualified_implementation_unchanged": true
   }
 }
