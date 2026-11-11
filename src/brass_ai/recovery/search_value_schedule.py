@@ -30,7 +30,8 @@ def validate(options):
     schedule=options['schedule'];expected=defaults()
     if type(schedule) is dict and set(schedule)==set(restart_schedule()):
         require(type(schedule['validation_during_beta_qualification']) is bool,'Invalid beta-qualification validation switch')
-        require(digest(dict(schedule,validation_during_beta_qualification=True))==digest(restart_schedule()),
+        require(type(schedule['stage_a_iterations']) is int and schedule['stage_a_iterations'] in (50,100) and
+            digest(dict(schedule,validation_during_beta_qualification=True,stage_a_iterations=50))==digest(restart_schedule()),
             'Unreviewed search-value stage schedule')
         return schedule
     require(type(schedule) is dict and set(schedule)==set(expected),'Invalid search-value schedule fields')
@@ -92,6 +93,8 @@ def previous_recipe(config):
     from .training_revision_g1307 import previous as before_lr_floor
     from .training_revision_g1491 import previous as before_g1491
     result=copy.deepcopy(before_revision(before_lr_floor(before_g1491(config))))
+    # Width is separately bound by the signed recipe and strict checkpoint loader.
+    result.pop('utility_hidden',None)
     options=result.get('teacher_phase',{}).get('search_value',{})
     if not enabled(options):return result
     validate_options(options)

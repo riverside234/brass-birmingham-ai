@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "7237d70208264c0717456b46830921defbc68a405f994940e13ac290ce04389a",
+  "execution_implementation": "522a5001e30a12c6451810565c776e0f51925ba8cb3966fac004926d31b2f80b",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -74,7 +74,7 @@
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
-      "after": "9fc814c19eb49b74d63f1e27dca423fa8272b2790716f89686464363a90a4242"
+      "after": "8a1b95b402c883779dd66a626fc4a6743662187a857d181b20ca3f429b2b8fe0"
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
@@ -146,7 +146,7 @@
     },
     "src/brass_ai/recovery/resume.py": {
       "before": "a65a697cb14ac1678be458c8d72f84227cba6d545041adfc27baec517a5fbdae",
-      "after": "9c4dba437ab921962d630c92b817329138f2d399763d633cf0c1742ffd518c96"
+      "after": "6e09b0b54809c160ffa97cc7af3846f5002d73c3ab1bfce11579c4beeb7b3c2d"
     },
     "src/brass_ai/recovery/retention.py": {
       "before": "793f94de15f8fa10a57cd6fd8db33e9a1798a098e8abd5d476f8e043a3de3536",
@@ -174,7 +174,7 @@
     },
     "src/brass_ai/recovery/search_value_schedule.py": {
       "before": null,
-      "after": "29223ffeb707c68eb75fd2b731ae6be5b5df00ae785f175823ac2245218a40e1"
+      "after": "118d56741176b3ecd9d89ec2c7c612fc09e45e3736f5ff56aa48f80b1335da79"
     },
     "src/brass_ai/recovery/search_value_training.py": {
       "before": "2d9d2834633f53ecab6193f9131c92404e592388bdbc67135eaebe3fd50996d9",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "58c809fd3f52718055a8a4fec72f9055ff52652394d6ce76d5fac00d60c6400e"
+      "after": "e5b8c89b193457ab58ceeacc0c755aa9f08ec6f6773535ad86644df206dc3599"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "29701b07b51a4bdecd78366763ef5428b23d6370bb416aaf84f630e7ff4f2f1f"
+      "after": "0d200b0fa05a9c01a3110ad4b45813b88c2201f59323d5a6e8fd95522c94e7e8"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -382,7 +382,7 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "7ca684fba58b04542d869eb2044352f9c186876271f6e6c143fe968d672eb254"
+      "after": "d46747233e5feba8691bdc0c519a5b2b3320c8468cb6367070485d4d2671ad2b"
     },
     "tests/RustBackendLab/test_cpu_qualification.py": {
       "before": "746a19f5f85f7026f1ef511603d1aa40a2d75dd3d28535bb75dd4df791f67b60",
@@ -395,6 +395,22 @@
     "src/brass_ai/recovery/vp_plot.py": {
       "before": "a68e9c570ea90c9ccf29c1ce23584e26707ae50aed6073284f6875505ee24ae0",
       "after": "a33d74de1c8a539c32deac5d42d1b44826d7ff5770e429f18a39f832ece4032b"
+    },
+    "src/brass_ai/learning/utility_model.py": {
+      "before": "801410dfc8d7bcc145213dcf65e3cfa33e06f5a44d9adf6197e91a1f51dd3818",
+      "after": "0fb918bfd5caada5d908ab4f0b5afc21ada5ee893f3a721daf2ff4c1b5790a84"
+    },
+    "src/brass_ai/learning/utility_width.py": {
+      "before": null,
+      "after": "a638a2e4d459d065cb4af67251708725c4618e36014a494b78ca93b85e5ad2f7"
+    },
+    "src/brass_ai/recovery/utility_width_upgrade.py": {
+      "before": null,
+      "after": "7b0e9a426421a3ee56e38868f5455231a02c233d2c15e7bd310c54249cb9e5f6"
+    },
+    "configs/learning/reward-source-equivalence.json": {
+      "before": "0f57ec742a69b11d5a0ec998fb19a54f1e1ccb80287fa4011b4fc3e6c9289a9f",
+      "after": "87f0e9bb2ddac0b8e77f9b9a465fc5d00e05ba6490175aee9067222878af5a9e"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -555,6 +571,11 @@
       "implementation": "99b93b5de6ff97c41acca35d1cb22153904384cc71b040479081ecc42c5ef18c",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "84928c748991c829707c2edf1f2e77cb30b17cdaa513b35bf8f43c5868be362d"
+    },
+    {
+      "implementation": "7237d70208264c0717456b46830921defbc68a405f994940e13ac290ce04389a",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "0f7d81b2b2afb99743be76f12a08a94c93dd7c07e969244ba0bc6e0b42485a82"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -749,5 +770,9 @@
   "vp_chart_missing_groups": {
     "scope": "Reporting only: the VP overview omits missing groups from its horizontal spacing and retains actual generation labels. Recent detail and original VP totals are unchanged.",
     "qualified_implementation_unchanged": true
+  },
+  "utility_width_upgrade": {
+    "contract": "utility-width-256-stage-a-100/1.0.0",
+    "scope": "Explicit checkpoint migration only: preserve old width-32 behavior and identities; widen the active utility residual, extend A50 to A100, retain schedules/Adam/RNG and remeasure beta without a utility-readiness wait."
   }
 }

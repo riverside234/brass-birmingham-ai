@@ -11,21 +11,30 @@ from .reward import validate
 @dataclass(frozen=True)
 class UtilityConfig(ModelConfig):
     utility: dict | None = None
+    utility_hidden: int = 32
 
     @classmethod
     def from_dict(cls,raw,*,allow_legacy=False):
         require(raw.get('architecture')==ARCHITECTURE or (allow_legacy and raw.get('architecture')==LEGACY_ARCHITECTURE),
                 'Architecture 11.2 required; explicitly upgrade completed v11.1 IL')
-        require(set(raw)==set(cls.__dataclass_fields__),'Invalid utility model config')
+        require(set(raw) in (set(cls.__dataclass_fields__),set(cls.__dataclass_fields__)-{'utility_hidden'}),
+                'Invalid utility model config')
         result=cls(**raw);result.validate();return result
+
+    def to_dict(self):
+        raw=super().to_dict()
+        # Keep every existing width-32 checkpoint's config and model ID intact.
+        if self.utility_hidden==32:raw.pop('utility_hidden')
+        return raw
 
     def validate(self):
         super().validate()
         require(self.architecture in (ARCHITECTURE,LEGACY_ARCHITECTURE),'Utility head requires the current versioned residual backbone')
         validate(self.utility)
+        require(type(self.utility_hidden) is int and self.utility_hidden in (32,256),'Invalid utility hidden width')
 
 
-def utility_config(config,spec):return UtilityConfig(**config.to_dict(),utility=spec)
+def utility_config(config,spec,*,hidden=32):return UtilityConfig(**config.to_dict(),utility=spec,utility_hidden=hidden)
 
 
 class UtilityNet(FourSeatNet):
@@ -35,7 +44,8 @@ class UtilityNet(FourSeatNet):
 
     def add_utility_head(self):
         extra=32 if self.config.architecture==ARCHITECTURE else 0
-        self.utility_head=nn.Sequential(nn.Linear(self.config.hidden+4+extra,32),nn.GELU(),nn.Linear(32,4))
+        width=self.config.utility_hidden
+        self.utility_head=nn.Sequential(nn.Linear(self.config.hidden+4+extra,width),nn.GELU(),nn.Linear(width,4))
         if extra:
             with torch.no_grad():self.utility_head[0].weight[:,-extra:].zero_()
         nn.init.zeros_(self.utility_head[-1].weight);nn.init.zeros_(self.utility_head[-1].bias)

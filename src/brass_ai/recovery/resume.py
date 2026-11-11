@@ -276,10 +276,11 @@ def load_resume(root, run, state, signature, *, device='cpu', reviewed=False, di
     from brass_ai.learning.utility_model import utility_config
     expected=ModelConfig.preset(signature['config']['model_size'])
     target_reward=reward_spec(signature['config'])
-    architecture_ok=model.config in (expected,utility_config(expected,target_reward))
+    width=signature['config'].get('utility_hidden',32)
+    architecture_ok=model.config in (expected,utility_config(expected,target_reward,hidden=width))
     upgrading=reviewed_reward_upgrade(getattr(model.config,'utility',None),target_reward)
     if upgrading:
-        require(model.config==utility_config(expected,model.config.utility),'Reward upgrade architecture differs')
+        require(model.config==utility_config(expected,model.config.utility,hidden=width),'Reward upgrade architecture differs')
         # The original reward must be bound either to the reviewed source we
         # are leaving or to an exact, pinned transition on this same checkpoint.
         known={digest(state['signature']):state['signature']}

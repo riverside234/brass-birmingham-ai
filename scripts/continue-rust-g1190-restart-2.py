@@ -16,6 +16,12 @@ long searches stay n=640, K=16. --iterations counts every iteration from
 --expected-generation, calibration included. After an interruption, rerun with
 --expected-generation set to the last committed generation: the command resumes
 whichever step is unfinished.
+
+--upgrade-utility-head applies a one-time same-run conversion at that committed
+generation: utility hidden width 32 -> 256, Stage A budget 50 -> 100 (completed
+iterations retained), then one fresh beta measurement without waiting for utility
+qualification. Interrupted uncommitted work is archived before replaying it.
+The learned utility/search weights, PPO/PPG moments, replay and RNG are retained.
 """
 import importlib.util
 from pathlib import Path

@@ -90,6 +90,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     module = shared()
     parser = module.parser(default_mode='on', default_stage_revision=True, workers=64, teacher_fast=teacher_fast, inference='cpu',
                            run=run, iterations=10, description=description)
+    parser.add_argument('--upgrade-utility-head',action='store_true',
+        help='Widen the g1190 run utility 32 to 256 once, extend Stage A from 50 to 100 and re-measure beta')
     if share_target_required:
         # No silent default: the target is the run's own, passed the same way every time.
         action = next(a for a in parser._actions if a.dest == 'share_target')
@@ -101,6 +103,9 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     generation = state['iteration']
     require(generation == args.expected_generation and args.iterations > 0,
             f"The run is at g{generation}; pass --expected-generation {generation}")
+    if getattr(args,'upgrade_utility_head',False):
+        from brass_ai.recovery.utility_width_upgrade import prepare
+        state=prepare(ROOT,run,expected_generation=generation)
     ensure_cpu(run,state)
     end = generation+args.iterations
     from brass_ai.recovery import training_revision_g1491 as g1491

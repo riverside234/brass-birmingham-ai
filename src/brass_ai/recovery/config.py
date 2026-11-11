@@ -657,6 +657,10 @@ def validate_config(config):
         'search_ready_games','search_every_games','search_games','distill_steps','distill_weight',
         'rehearsal_manifest','rehearsal_weight','rehearsal_until','profile_steps'}
     version=config.get('format')
+    if 'utility_hidden' in config:
+        fields.add('utility_hidden')
+        require(type(config['utility_hidden']) is int and config['utility_hidden'] in (32,256)
+            and 'reward' in config,'Invalid utility hidden width')
     if 'trained_startup' in config:
         from .trained_startup import validate as validate_startup
         fields.add('trained_startup');validate_startup(config)

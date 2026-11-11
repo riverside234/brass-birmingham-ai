@@ -241,7 +241,10 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         print('Branching=0%; teacher='+mode+'; '+cadence+
             (('qualified fixed beta; residual stage restored from checkpoint.' if revised else 'qualified fixed beta; search head Stage A (w=0, frozen trunk).') if mode=='on' else
              f'qualification={calibration} iterations; teacher gradients are diagnostic only.'),flush=True)
-        if revised:print('Residual stages: A10 head-only; B20 blend warm-up; C10 trunk warm-up; KL cap .003; PPG beta floor .25.',flush=True)
+        if revised:
+            schedule=report['stage_schedule'];a=schedule['stage_a_iterations'];b=schedule['stage_b_iterations'];c=schedule['stage_c_iterations']
+            floor=schedule.get('ppg_beta_floor_after_stage_a',options['value_phase']['beta_clone_min'])
+            print(f'Residual stages: A{a} head-only; B{b} blend warm-up; C{c} trunk warm-up; KL cap .003; PPG beta floor {floor:g} after A.',flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
         if is_revised(options):
             r=options['reward'];cost=options['insolvency']

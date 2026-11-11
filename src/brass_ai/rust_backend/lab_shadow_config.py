@@ -70,6 +70,8 @@ def is_active(config):
 def signature_transition(before,after):
     from .lab_replay_compat import QUALIFIED,execution
     old,new=before['config'],after['config']
+    # Width changes need a converted checkpoint, not an ordinary recipe switch.
+    if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False
     from brass_ai.learning.post_transfer_reward import previous as previous_reward
     from .lab_teacher_activation import is_on
     from brass_ai.recovery.search_value_schedule import previous_recipe
