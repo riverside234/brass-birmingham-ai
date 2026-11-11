@@ -92,8 +92,9 @@ def signature_transition(before,after):
             config_ok=expected==new_compare
     elif g1491.applied(new) and not g1491.applied(old):
         # The g1491 revision re-measures beta: the on recipe goes back to a two-iteration shadow.
+        # Its g1490 restart variant is adopted only by that branch restart, never in a run.
         config_ok=False
-        if is_on(old) and is_shadow(new):
+        if is_on(old) and is_shadow(new) and g1491.variant_of(new) is None:
             expected=copy.deepcopy(old_compare);expected['teacher_phase']['mode']='shadow'
             expected['teacher_phase']['term'].update(share_target=new['teacher_phase']['term']['share_target'],
                 shadow_iterations=g1491.SHADOW_ITERATIONS)

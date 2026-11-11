@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "22b8d87ca74544ab4bc3a4441e4cba40d65f08f3a57cac5347cfbbf9fd4db4be",
+  "execution_implementation": "d146e2da3e7105fd0e9b3f21ac5bcf051be965148b38275d2eb2f69a06a47547",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -522,6 +522,11 @@
       "implementation": "3c8a3fa7ac91c62c3ded484eb1a775c6849d3af7d4a8117582c717c2761b6e8e",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "060214ccaa3d5e9bae5d329c832547f56291a3888f50dde3ba60a3f5636d5a49"
+    },
+    {
+      "implementation": "22b8d87ca74544ab4bc3a4441e4cba40d65f08f3a57cac5347cfbbf9fd4db4be",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "126855a51cca104500fbc1756f6fb16ea7f9c7a47789caf2b819aa5d34eb1f1f"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -687,5 +692,12 @@
       "rust_unit_tests": 28,
       "scope": "Focused regressions only; no full games or benchmarks. Lab throughput pending."
     }
+  },
+  "branch_restart_g1490": {
+    "contract": "rust-branch-restart/1.0.0",
+    "variant": "training-revision-g1491/1.0.0 g1490-branch-restart",
+    "source_report": "ai-research/G1490_RESTART.md",
+    "scope": "User-requested restart of the g1290 restart run from its g1490 weights in a new run folder. The full g1490 and g1491 checkpoints are gone, so the new run starts from the exact committed g1491 state (verified export, the last state before the g1491 revision) with the retained g1490 snapshot as the learner at generation 1491. Recipe: 32 teacher tables (+4 held out), long-search labels only, 72 teacher rows per PPO step, the four-iteration 4:3:2:1 buffer, two PPO epochs, one shadow iteration re-measuring the fixed beta with the PPO LR controller held, and the g1491 visit-count and cotton exploration. New PPO/PPG optimizers (the committed g1491 LR multiplier is carried), empty teacher labels and value buffer (Stage C fitting pauses eight iterations), the learner's companion heads moved one generation without fitting, and the rating compaction the source made at g1500 applied exactly as the g1500 export records it. The source run is read only. Every revised table, long-only included, checks model-logit parity once per table. No Rust source changed.",
+    "qualified_implementation_unchanged": true
   }
 }

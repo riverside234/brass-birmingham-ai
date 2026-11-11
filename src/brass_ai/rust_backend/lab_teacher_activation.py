@@ -6,6 +6,7 @@ import statistics
 from brass_ai.learning.contracts import digest,require
 
 CONTRACT='brass-native-teacher-activation/1.0.0'
+WORDS={1:'one',2:'two',4:'four'}
 
 
 def is_on(config):
@@ -30,7 +31,7 @@ def configure(before,target=None,*,revise_stages=False):
     require(is_shadow(before) or is_on(before),'Teacher activation requires the reviewed shadow/on recipe')
     required=shadow_iterations(before)
     require(before['teacher_phase']['term']['shadow_iterations']==required,
-        'Finish '+{2:'two',4:'four'}[required]+' shadow measurements first')
+        'Finish '+WORDS[required]+' shadow measurements first')
     after=copy.deepcopy(before);after['teacher_phase']['mode']='on'
     if target is not None:after['teacher_phase']['term']['share_target']=target
     if revise_stages:
@@ -48,7 +49,7 @@ def qualification(state,config):
     options=config['teacher_phase']['term'];required=shadow_iterations(config)
     q=restore(state.get('teacher_phase',{}).get('weight',{}).get('gradient_qualification'),options['share_target'],required)
     require(q is not None and q['passed'] and q.get('required_iterations')==required,
-        'Teacher on-mode needs '+{2:'two',4:'four'}[required]+' qualified full shadow iterations')
+        'Teacher on-mode needs '+WORDS[required]+' qualified full shadow iterations')
     observations=q['observations'];history={e['generation']:e for e in state['history']}
     ratios=[]
     for o in observations:
@@ -64,7 +65,7 @@ def qualification(state,config):
         ratios.extend(raw)
     require(q['raw_median']==statistics.median(ratios) and
         q['qualified_generation']==observations[-1]['generation']+1<=state['iteration'],
-        'Teacher fixed beta is not bound to the measured '+{2:'two',4:'four'}[required]+'-iteration window')
+        'Teacher fixed beta is not bound to the measured '+WORDS[required]+'-iteration window')
     return q
 
 

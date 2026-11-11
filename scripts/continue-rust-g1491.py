@@ -71,13 +71,18 @@ def calibrated(state):
     if q is not None and q['passed']:
         return True, 0
     tail = [o for o in (q or {}).get('observations', []) if o['generation'] == state['iteration']-1]
-    return False, g1491.SHADOW_ITERATIONS-len(tail)
+    return False, g1491.shadow_iterations(config)-len(tail)
 
 
-def main():
+def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_required=False):
     module = shared()
-    args = module.parser(default_mode='on', default_stage_revision=True, workers=64, teacher_fast=128, inference='cpu',
-                         run=RUN, iterations=10, description=__doc__).parse_args()
+    parser = module.parser(default_mode='on', default_stage_revision=True, workers=64, teacher_fast=teacher_fast, inference='cpu',
+                           run=run, iterations=10, description=description)
+    if share_target_required:
+        # No silent default: the target is the run's own, passed the same way every time.
+        action = next(a for a in parser._actions if a.dest == 'share_target')
+        action.required, action.default = True, None
+    args = parser.parse_args()
     from brass_ai.learning.contracts import project_path, require
     run = project_path(ROOT, args.run)
     state = state_of(run)
@@ -98,8 +103,9 @@ def main():
     done, needed = calibrated(state)
     attempts = 0
     while not done and generation < end:
+        t = g1491.tables(state['signature']['config']) if g1491.applied(state['signature']['config']) else g1491.TABLES
         require(attempts <= EXTRA_CALIBRATION, 'Beta calibration did not qualify; inspect teacher_phase.term in the '
-                'latest report (full 48+4 tables, finite gradients) before continuing')
+                f"latest report (full {t['train']}+{t['held_out']} tables, finite gradients) before continuing")
         count = min(needed if attempts == 0 else 1, end-generation)
         print(f'g1491 beta calibration: {count} shadow iteration(s) from g{generation}', flush=True)
         state = module.continuation(args, mode='shadow', expected=generation, iterations=count, revision='g1491')

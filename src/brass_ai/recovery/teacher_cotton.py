@@ -51,14 +51,21 @@ def validate_receipt(receipt, job, rows):
     require(isinstance(receipt,dict) and receipt.get('contract')==CONTRACT, 'Missing cotton exploration receipt')
     used=receipt['targeted_by_era_seat'];built=receipt['builds_by_era_seat']
     require(len(used)==len(built)==2 and all(len(x)==4 for x in (*used,*built)), 'Cotton receipt shape')
-    observed=[[0]*4 for _ in range(2)]
+    # With long-search labels only (the g1490 restart), short searches still explore and
+    # spend allowance between labels: the labelled sequence may skip, never go back.
+    every=(job.get('teacher_revision') or {}).get('short_labels') is True
+    observed=[[0]*4 for _ in range(2)];labelled=0
     for row in rows:
         l=row['teacher'];e=l.get('cotton_exploration')
         if not e:continue
         era=0 if row['view']['context']['era']=='CanalEra' else 1;seat=l['seat']
-        require(e['used_before']==observed[era][seat], 'Cotton exploration allowance sequence differs')
-        observed[era][seat]+=int(e['targeted'])
-    require(used==observed and all(type(n) is int and 0<=n<=CAP for a in used for n in a),
+        require(e['used_before']==observed[era][seat] if every else e['used_before']>=observed[era][seat],
+                'Cotton exploration allowance sequence differs')
+        observed[era][seat]=e['used_before']+int(e['targeted']);labelled+=int(e['targeted'])
+    require((used==observed if every else
+             all(u>=o for us,os in zip(used,observed) for u,o in zip(us,os)) and
+             labelled==receipt['long']['targeted_builds']) and
+            all(type(n) is int and 0<=n<=CAP for a in used for n in a),
             'Cotton committed quota differs from labels')
     require(all(type(b) is int and b>=u for bs,us in zip(built,used) for b,u in zip(bs,us)),
             'Cotton actual build count differs')

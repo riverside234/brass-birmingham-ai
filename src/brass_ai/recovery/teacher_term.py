@@ -138,8 +138,9 @@ class TeacherTerm:
         self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.
         self.presentations = Counter(); self.used = set(); self.improvement_by_phase = {}
         from .training_revision_g1491 import KEY as REVISION
-        # g1491: L = a mean(L_long) + (1-a) mean(L_short); None keeps one long-only pool.
-        self.long_weight = config[REVISION]['labels']['long_weight'] if REVISION in config else None
+        # g1491: L = a mean(L_long) + (1-a) mean(L_short); None keeps one long-only pool
+        # (every earlier recipe, and the long-only g1490 restart variant).
+        self.long_weight = config[REVISION]['labels'].get('long_weight') if REVISION in config else None
         if self.mode != 'off':
             logits = policy_logits(model, [r for _, r in aged_rows])
             for age in sorted({a for a, _ in aged_rows}):

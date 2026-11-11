@@ -1,4 +1,4 @@
-"""Four full shadow iterations qualify a fixed shared-encoder teacher weight."""
+"""Full shadow iterations (four; two or one in the reviewed revisions) qualify a fixed shared-encoder teacher weight."""
 import copy
 import math
 import statistics
@@ -23,12 +23,13 @@ def fixed_beta(target,raw):return min(10.,max(.01,target/raw))
 
 def restore(receipt,target,iterations=4):
     if receipt is None:return None
-    require(type(iterations) is int and iterations in (2,4),'Invalid gradient qualification window')
+    # One iteration is only the g1490 branch restart's re-calibration window.
+    require(type(iterations) is int and iterations in (1,2,4),'Invalid gradient qualification window')
     require(receipt==seal(receipt) and receipt['contract']==CONTRACT and valid_target(receipt['target']),
         'Teacher gradient qualification changed')
     result=copy.deepcopy(receipt)
     previous=result.get('required_iterations',2)
-    require(type(previous) is int and previous in (2,4),'Invalid saved gradient qualification window')
+    require(type(previous) is int and previous in (1,2,4),'Invalid saved gradient qualification window')
     if result['passed']:
         require(len(result['observations'])==previous and result['raw_median']>0 and
             all(b['generation']==a['generation']+1 for a,b in zip(result['observations'],result['observations'][1:])) and

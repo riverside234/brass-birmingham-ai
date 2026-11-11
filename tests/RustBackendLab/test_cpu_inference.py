@@ -701,6 +701,32 @@ class NativeWorkers(unittest.TestCase):
         self.assertTrue(all('profile' not in r['teacher'] and 'explored' not in r['teacher'] for r in plain['rows']))
         self.assertNotIn('revision', plain['metrics']['cpu_inference'])
 
+    def test_a_g1490_restart_table_labels_long_searches_only_and_still_explores(self):
+        from brass_ai.recovery import training_revision_g1491 as R
+        from brass_ai.recovery.teacher_cotton import validate_receipt
+        from brass_ai.recovery.teacher_labels import check_turn, label_profile, validate_improved_policy
+        budget = dict(mode='count', full=64, full_k=16, fast=32, fast_k=8, c_scale=1.)
+        revision = R._job_block(R.block(variant=R.RESTART)['exploration'], short_labels=False)
+        job, result, verifier = self.run_all_seat(0., budget, revision)
+        self.assertEqual(R.validate_job(job), revision)
+        rows, metrics = result['rows'], result['metrics']
+        self.assertTrue(rows)
+        self.assertTrue(all(label_profile(r['teacher']) == 'full' for r in rows))
+        for row in rows:
+            self.assertIsNotNone(validate_improved_policy(row['teacher'], row['choices']))
+            check_turn(row['teacher'], row['view']['context']['round'], job)
+            self.assertIs(row['teacher'].get('explored'), True)
+        receipt = metrics['cpu_inference']['revision']
+        self.assertEqual((receipt['job'], receipt['short_labels']), (revision, 0))
+        # Short searches still explore in each seat's opening; they just leave no label.
+        self.assertGreater(receipt['sampled']['short'], 0)
+        self.assertGreater(receipt['decisions']['short'], receipt['sampled']['short'])
+        validate_receipt(receipt['cotton'], job, rows)
+        settled = verifier.settle(job['expected']['job_id'])
+        self.assertEqual(settled['rows'], len(rows))
+        accepted, rejected = verifier.take(result, job, self.model)
+        self.assertEqual(len(accepted)+sum(rejected.values()), len(rows))
+
     def test_blended_search_differs_from_the_unblended_one(self):
         budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)
         _, zero, _ = self.run_all_seat(0., budget)

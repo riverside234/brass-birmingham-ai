@@ -1,5 +1,7 @@
 # g1491: long+short teacher labels, 48 tables, one PPO epoch, visit-count exploration
 
+> Superseded on 2026-11-10 after g1500: training restarts from the g1490 weights in a new run with long-search labels only. See [G1490_RESTART.md](G1490_RESTART.md).
+
 Date: 2026-11-10. Run: `artifacts/step5/joint7-v11-2-g1290-restart-g1290`, committed at g1491 (export `results/joint7-v11-2-g1290-restart-g1290-g1491-20261110T191929753967Z`). At g1491 teaching is on with share target 0.4 and the fixed beta 0.0397 (qualified at g1294); the search head is in Stage C (w=1, trunk scale 1).
 
 ## What changes

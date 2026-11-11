@@ -11,6 +11,15 @@ starts fresh where only the lost checkpoint held the state:
 * empty teacher labels and a teacher beta measured again over four shadow iterations;
 * an empty search-head value buffer, with Stage A counts paused for the first eight
   iterations while it refills.
+
+A rollback restart (``rollback=...``) keeps the exported state of one generation
+but seeds the learner with the retained snapshot of the generation before it,
+when that later full checkpoint is gone too. It uses the g1490 restart variant of
+the g1491 revision (one shadow iteration re-measures beta), keeps the search head's
+committed stage (fitting pauses while its value buffer refills), carries the PPO LR
+multiplier of that generation's report, moves the learner's companion heads to the
+restart generation without fitting, and applies a rating compaction the source run
+already made (exactly as a later export records it) when it deleted those slot files.
 """
 import copy
 import os
@@ -54,6 +63,23 @@ def recipe(config,*,share_target,stage_a_iterations=STAGE_A):
     result['teacher_phase']['search_value']['schedule']['stage_a_iterations']=stage_a_iterations
     validate_config(result)
     require(is_shadow(result),'The restart recipe must pass the reviewed shadow projection')
+    return result
+
+
+def rollback_recipe(config,state,*,share_target):
+    """The committed teacher-on recipe with the g1490 restart variant of the g1491 revision."""
+    from brass_ai.rust_backend.lab_shadow_config import is_shadow
+    from .collector_runtime import recipe as without_runtime
+    from .config import validate_config
+    from . import training_revision_g1491 as g1491
+    from .teacher_gradient_qualification import valid_target
+    config=without_runtime(config)
+    require(valid_target(share_target),'Choose a share target above 0 and at most 1')
+    require(not g1491.applied(config),'A rollback restart starts from the recipe committed before the g1491 revision')
+    result=g1491.configure(config,state,variant=g1491.RESTART)
+    result['teacher_phase']['term']['share_target']=share_target
+    validate_config(result)
+    require(is_shadow(result),'The rollback recipe must pass the reviewed shadow projection')
     return result
 
 
@@ -140,15 +166,142 @@ def ppg_state(config,model,generation,gate):
         rolling_buffer=[],cache_origin=generation,adoption=None)
 
 
-def ppo_optimizer(config,model):
-    """A new AdamW exactly as a new run builds it, with its warmup and LR controller."""
+def ppo_optimizer(config,model,multiplier=None):
+    """A new AdamW exactly as a new run builds it, with its warmup and LR controller.
+
+    A rollback carries the committed controller multiplier; it applies once the new
+    warmup finishes. The measurement window and cooldown start empty.
+    """
     from brass_ai.learning.search_value import ordinary_parameters
     from .learning_rate import configure as warmup
-    from .lr_controller import configure as controller
+    from .lr_controller import configure as controller,KEY,validate_state
     optimizer=torch.optim.AdamW(ordinary_parameters(model),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     w=config['learning_rate_warmup'];warmup(optimizer,config['learning_rate'],w['selfplay_steps'],w['start_factor'],'selfplay')
     controller(optimizer,config['ppo_lr_controller'])
+    if multiplier is not None:
+        group=optimizer.param_groups[0];group[KEY]['multiplier']=multiplier;validate_state(group[KEY])
     return optimizer.state_dict()
+
+
+def committed_multiplier(report,config):
+    """The PPO LR multiplier the snapshot generation's own update left in force."""
+    c=report['actor']['lr_controller']
+    require(c['contract']==config['ppo_lr_controller']['contract'] and c['mode']=='apply' and
+        type(c['multiplier_after']) in (int,float),'Snapshot report has no PPO LR controller decision')
+    return float(c['multiplier_after'])
+
+
+def generation_fields(value):
+    """The exploration state without its two generation stamps."""
+    value=copy.deepcopy(value);value.pop('generation',None)
+    if isinstance(value.get('entropy_schedule'),dict):value['entropy_schedule'].pop('last_generation',None)
+    return value
+
+
+def rollback_weights(root,source,state,weights=None):
+    """The retained snapshot of the generation before the exported one, whose own checkpoint is gone."""
+    previous,last=state['history'][-2],state['history'][-1]
+    generation=state['iteration']
+    require(last['generation']==generation and previous['generation']==generation-1,
+        'A rollback restart seeds the learner from the generation just before the exported one')
+    agent=next((a['checkpoint'] for a in state['ratings']['agents'].values() if a.get('kind')=='model'
+        and a['checkpoint']['model_id']==previous['model_id'] and a['checkpoint'].get('generation')==previous['generation']),None)
+    require(agent is not None,f"No retained snapshot of g{previous['generation']}")
+    path=safe(source,project_path(root,agent['path']))
+    if weights is not None:require(project_path(root,weights)==path,f"Weights are not the retained snapshot of g{previous['generation']}")
+    require(sha(path)==agent['sha256'],'Restart weights changed')
+    raw=torch.load(path,map_location='cpu',weights_only=True)
+    training=raw['training']
+    require(raw['model_id']==previous['model_id'] and raw['step']==previous['generation'] and raw['optimizer'] is None
+        and training.get('signature')==digest(state['signature'])
+        and training.get('fresh_run')==source.relative_to(root).as_posix()
+        and 'search_value' in training and 'teacher_phase' in training,
+        f"Restart weights are not the committed checkpoint of g{previous['generation']}")
+    # One iteration later only the generation stamps of the finished anneal moved.
+    require(training.get('exploration',{}).get('generation')==previous['generation'] and
+        generation_fields(training['exploration'])==generation_fields(state['exploration']) and
+        training.get('startup_initialization')==state.get('startup_initialization') and
+        training.get('auxiliary_initialization')==state.get('auxiliary_initialization'),
+        'Restart weights disagree with the committed exploration/startup state')
+    require(not training.get('policy_anchor') and not training.get('domino'),
+        'A rollback restart does not carry policy-anchor or DOMiNO payloads')
+    return path,agent,raw
+
+
+def rollback_search_payload(saved,summary,generation,identity):
+    """The learner's search-head optimizer, the committed stage, and an empty value buffer.
+
+    Fitting (and the trunk pass in Stage C) pauses until eight fresh ages exist.
+    """
+    require(saved['generation']==generation-1 and summary['generation']==generation,
+        'Search value payloads are not one generation apart')
+    stage=copy.deepcopy(summary['stage'])
+    require(all(stage[k]==saved['stage'][k] for k in ('stage','w','scale')),
+        'The rollback keeps the committed search-head stage')
+    value=dict(saved,generation=generation,buffer=dict(saved['buffer'],receipts=[],retired=[]),label_ages=[])
+    value['stage']=dict(stage,buffer_rebuild=dict(origin_generation=generation+1,required_ages=8,
+        ready_generation=None,instruction_id=identity))
+    return value
+
+
+def rollback_companion(saved,generation):
+    """The learner's own local-scoring heads and Adam, moved one generation with no fitting."""
+    from .local_scoring_auxiliary import bundle_id
+    from . import local_scoring_warmup as warmup
+    result={k:v for k,v in saved.items() if k!='identity'}
+    require(saved['identity']==bundle_id(result) and saved['generation']==generation-1,
+        'Companion heads are not the snapshot generation\'s own')
+    result=dict(result,generation=generation,age=generation-saved['origin']['generation'])
+    if 'warmup' in result:result['warmup']=warmup.advance(saved['warmup'],saved['config'],generation,0,0)
+    return dict(result,identity=bundle_id(result))
+
+
+def compacted_ratings(root,source,ratings,later,old,new,snapshot_receipt):
+    """Rating slots the source run archived (and whose files it then deleted) after the export.
+
+    The later export's committed archive must be exactly this state's archive with its
+    oldest slots appended, as compact_history writes it. Returns the new rating state
+    and the archive file to place, or (ratings, None) when nothing is missing.
+    """
+    from .ratings import ARCHIVE_FORMAT
+    keys=('records','report','spec','panels','bootstrap')
+    def present(slot):
+        return all(project_path(root,old+slot[k]['path'][len(new):]).is_file() or
+            exported(root,snapshot_receipt,slot[k]['path'][len(new):],slot[k]['sha256']) is not None for k in keys)
+    gone=[s['generation'] for s in ratings['slots'] if not present(s)]
+    if not gone:return ratings,None
+    require(later is not None,f'Rating slots {gone} are gone from the source run; pass the later export that archived them')
+    later=project_path(root,later) if not Path(later).is_absolute() else Path(later)
+    manifest=read(later/'export-manifest.json');run=source.relative_to(root).as_posix()
+    require(manifest['run']==run,'Later export belongs to another run')
+    entry=next((f for f in manifest['files'] if f['path']=='state.json'),None)
+    require(entry is not None and sha(later/'state.json')==entry['sha256'],'Later export state differs from its receipt')
+    archive=read(later/'state.json')['ratings']['archive'];relative=archive['path'][len(run)+1:]
+    file=next((f for f in manifest['files'] if f['path']==relative),None)
+    require(archive['path'].startswith(run+'/') and file is not None and file['sha256']==archive['sha256']==sha(later/relative),
+        'Later export lacks its committed rating archive')
+    data=read(later/relative)
+    before=dict(format=ARCHIVE_FORMAT,slots=[],games=[])
+    if ratings.get('archive') is not None:
+        name=ratings['archive']['path'][len(new):]
+        kept=project_path(root,old+name)
+        kept=kept if kept.is_file() and sha(kept)==ratings['archive']['sha256'] else exported(root,snapshot_receipt,name,ratings['archive']['sha256'])
+        require(kept is not None,'The exported rating archive is missing')
+        before=read(kept)
+    added=data['slots'][len(before['slots']):]
+    count=len(added);slots=ratings['slots'][:count]
+    require(set(data)=={'format','slots','games'} and data['format']==ARCHIVE_FORMAT and
+        relative=='ratings/history-'+digest(data)+'.json' and
+        data['slots'][:len(before['slots'])]==before['slots'] and data['games'][:len(before['games'])]==before['games'] and
+        [a['generation'] for a in added]==[s['generation'] for s in slots] and set(gone)<=set(a['generation'] for a in added) and
+        all(a['original_sha256']=={k:s[k]['sha256'] for k in keys} and
+            a.get('directory')==Path(s['spec']['path'][len(new):]).parent.as_posix() for a,s in zip(added,slots)) and
+        {g['slot'] for g in data['games'][len(before['games']):]}=={s['generation'] for s in slots} and
+        all(s['report']!=ratings['latest_report'] for s in slots),
+        'The later rating archive is not this state\'s archive plus its oldest slots')
+    result=copy.deepcopy(ratings)
+    result.update(archive=dict(path=new+relative,sha256=archive['sha256']),slots=ratings['slots'][count:])
+    return result,(later/relative,archive['sha256'],[s['generation'] for s in slots])
 
 
 def search_payload(saved,generation,identity):
@@ -174,17 +327,17 @@ def snapshot_state(root,source,snapshot):
     state=read(snapshot/'state.json');generation=state['iteration']
     require(manifest['committed_generation']==generation,'Snapshot generation differs from its export')
     report=next((f for f in manifest['files'] if f['path']==f'iteration-{generation-1:04d}/report.json'),None)
-    gate=None
+    gate=None;data=None
     if report is not None:
         require(sha(snapshot/report['path'])==report['sha256'],'Snapshot report differs from its export receipt')
-        gate=read(snapshot/report['path'])['actor']['gae']['gate']
+        data=read(snapshot/report['path']);gate=data['actor']['gae']['gate']
     current=read(safe(source,source/'state.json'))
     require(current['signature']['compatibility']==compatibility()==state['signature']['compatibility'],
         'Source learning layout differs')
     require(current['iteration']>=generation and current['history'][:len(state['history'])]==state['history'],
         'Snapshot is not a committed generation of the source run')
     return state,gate,dict(path=(snapshot/'state.json').relative_to(root).as_posix() if snapshot.is_relative_to(root) else str(snapshot/'state.json'),
-        sha256=entry['sha256'],generation=generation,source_iteration=current['iteration'])
+        sha256=entry['sha256'],generation=generation,source_iteration=current['iteration']),data
 
 
 def seed_weights(root,source,state,weights=None):
@@ -207,8 +360,13 @@ def seed_weights(root,source,state,weights=None):
     return path,agent,raw
 
 
-def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iterations=STAGE_A,weights=None,device='cpu'):
-    """Build the new run; the source run and its files are never modified."""
+def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iterations=STAGE_A,weights=None,device='cpu',
+            rollback=None):
+    """Build the new run; the source run and its files are never modified.
+
+    ``rollback`` (a dict, optionally with ``later``: a later export of the source run)
+    seeds the learner from the generation before the exported one; see the module notes.
+    """
     from . import quality_pool,pfsp_pool
     from .search_value_iteration import stamp
     from .il_kl_probe import import_probe
@@ -220,13 +378,24 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
         'The new run must be a separate folder, outside the source run')
     require(not active(source),'Stop the source run before preparing the restart')
     require(not (run/'state.json').exists(),'The new run already has training progress')
-    state,gate,snapshot_receipt=snapshot_state(root,source,snapshot)
+    state,gate,snapshot_receipt,report=snapshot_state(root,source,snapshot)
     generation=state['iteration']
-    weights_path,weights_receipt,raw=seed_weights(root,source,state,weights)
     old=source.relative_to(root).as_posix()+'/';new=run.relative_to(root).as_posix()+'/'
-    config=recipe(state['signature']['config'],share_target=share_target,stage_a_iterations=stage_a_iterations)
+    if rollback is None:
+        weights_path,weights_receipt,raw=seed_weights(root,source,state,weights)
+        config=recipe(state['signature']['config'],share_target=share_target,stage_a_iterations=stage_a_iterations)
+        multiplier=None
+    else:
+        require(set(rollback)<={'later'},'Unknown rollback restart option')
+        weights_path,weights_receipt,raw=rollback_weights(root,source,state,weights)
+        config=rollback_recipe(state['signature']['config'],state,share_target=share_target)
+        require(report is not None,'A rollback restart needs the snapshot generation\'s report in its export')
+        multiplier=committed_multiplier(report,config)
     binding=dict(contract=CONTRACT,source_run=old[:-1],destination_run=new[:-1],generation=generation,
         snapshot=snapshot_receipt,weights=weights_receipt,recipe_sha256=digest(config))
+    if rollback is not None:
+        binding['rollback']=dict(learner_generation=generation-1,ppo_lr_multiplier=multiplier,
+            later=None if rollback.get('later') is None else str(rollback['later']))
     identity=digest(binding)
     with run_lock(run):
         marker=safe(run,run/RECEIPT)
@@ -246,10 +415,16 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
         fresh['signature']=dict(state['signature'],config=config)
         for key in ('source_transitions',):fresh[key]=[]
         for key in ('machine_transfer','native_backend_switch'):fresh.pop(key,None)
+        compacted=[]
+        if rollback is not None:
+            fresh['ratings'],archive=compacted_ratings(root,source,fresh['ratings'],rollback.get('later'),old,new,snapshot_receipt)
+            if archive is not None:
+                place(archive[0],safe(run,project_path(root,fresh['ratings']['archive']['path'])),archive[1]);compacted=archive[2]
         # Copy every file the committed state still refers to; record what is gone.
         missing_weights=set();missing_probes=[];placed=0
         for where,receipt in receipts(fresh,new):
             if where.startswith(('/il_kl_limit',)+RECORD_PREFIXES):continue
+            if compacted and where=='/ratings/archive':placed+=1;continue  # placed from the later export
             original=project_path(root,old+receipt['path'][len(new):])
             target=safe(run,project_path(root,receipt['path']))
             if not original.is_file():
@@ -287,9 +462,21 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
         # Fresh teacher labels and beta; the readiness receipt stays.
         teacher=fresh['teacher_phase']
         teacher.update(weight={},buffer=dict(teacher['buffer'],receipts=[],retired=[]))
-        search=search_payload(raw['training']['search_value'],generation,identity)
+        if rollback is None:
+            search=search_payload(raw['training']['search_value'],generation,identity)
+        else:
+            from .teacher_phase_config import buffer_identity
+            # The revised recipe's own label identity, so nothing is retired on the first load.
+            teacher['buffer']['identity']=buffer_identity(config)
+            search=rollback_search_payload(raw['training']['search_value'],state['search_value'],generation,identity)
         fresh['search_value']=stamp(search)
         backend=fresh['native_backend'];backend.pop('teacher',None);backend['config_sha256']=digest(config)
+        if rollback is not None:
+            from brass_ai.rust_backend.lab_shadow_config import CONTRACT as SHADOW
+            from .training_revision_g1491 import tables
+            require(backend.get('shadow',{}).get('contract')==SHADOW,'The source run has no reviewed shadow adoption')
+            # The same qualified teacher build; the receipt records the revised table counts.
+            backend['shadow']=dict(backend['shadow'],tables=tables(config),generation=generation)
         # Rating history is reporting evidence; keep only what precedes the restart.
         history_file=source/HISTORY_PATH
         if history_file.is_file():
@@ -306,10 +493,18 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
                 quality_pool_digest=quality_pool.state_digest(pool),teacher_phase=copy.deepcopy(teacher),
                 search_value=search,native_backend=copy.deepcopy(backend),native_backend_execution=execution(),
                 il_kl_limit=copy.deepcopy(fresh['il_kl_limit']),actor_value_phases=ppg_state(config,model,generation,gate))
+            if rollback is not None:
+                # State-level schedules come from the exported generation (checked above);
+                # the learner's own companion heads move to it without fitting.
+                training['exploration']=copy.deepcopy(fresh['exploration'])
+                if 'v4_share_gate' in fresh:training['v4_share_gate']=copy.deepcopy(fresh['v4_share_gate'])
+                from .local_scoring_auxiliary import KEY as COMPANION
+                if training.get(COMPANION) is not None:training[COMPANION]=rollback_companion(training[COMPANION],generation)
             require(training.get('exploration')==fresh['exploration'] and
                 training.get('startup_initialization')==fresh.get('startup_initialization'),
                 'Restart weights disagree with the committed exploration/startup state')
-            checkpoint=dict(raw,optimizer=ppo_optimizer(config,model),training=training)
+            checkpoint=dict(raw,optimizer=ppo_optimizer(config,model,multiplier),training=training)
+            if rollback is not None:checkpoint['step']=generation
             del model
         output=safe(run,run/f'generation-{generation:04d}.pt');temporary=output.with_name(output.name+'.tmp')
         torch.save(checkpoint,temporary);temporary.replace(output)
@@ -323,6 +518,13 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
                 'gae_lambda_and_table_gates','search_head_and_stage','teacher_readiness','local_scoring_heads'],
             schedule=dict(shadow_iterations=4,teacher_on_from_iteration=5,stage_a_iterations=stage_a_iterations,
                 stage_a_paused_iterations=PAUSED_ITERATIONS,stage_a_count_at_restart=search['stage']['stage_a_iterations']))
+        if rollback is not None:
+            from .training_revision_g1491 import shadow_iterations,summary as revision
+            summary.update(learner=dict(generation=generation-1,model_id=raw['model_id'],weights=weights_receipt),
+                compacted_rating_slots=compacted,ppo_lr_multiplier=multiplier,revision=revision(config),
+                schedule=dict(shadow_iterations=shadow_iterations(config),teacher_on_from_iteration=shadow_iterations(config)+1,
+                    search_head_stage=search['stage']['stage'],search_head_paused_iterations=PAUSED_ITERATIONS))
+            summary['preserved']=[p for p in summary['preserved'] if p!='weights']+['learner_weights_of_previous_generation','ppo_lr_multiplier']
         write_json(safe(run,run/'state.json'),fresh)
         write_json(marker,summary)
     return summary

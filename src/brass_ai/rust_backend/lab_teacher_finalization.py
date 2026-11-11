@@ -65,6 +65,8 @@ class TurnVerifier:
         if self.search_limits is not None:search_ns = self.search_limits[profile]
         # Only a g1491 job labels its short searches; those rows say so themselves.
         short_labels = (job.get('teacher_revision') or {}).get('short_labels') is True and not self.diagnostic
+        # Every revised table (long-only g1490 restart included) checks logits once per table.
+        revised = job.get('teacher_revision') is not None and not self.diagnostic
         require(not fast or (job.get('seating') == 'all-seat-search' and (short_labels or not meta['rows'])),
                 'Fast searches cannot label')
         require(all((row.get('teacher', {}).get('profile') == 'fast') == fast for row in meta['rows']),
@@ -111,7 +113,7 @@ class TurnVerifier:
             accepted,rejected = prepare_rows(frozen, expected=job['expected'], history=self.history,
                                              admitted_sources=self.sources, encoder=self.encoders.value)
             prepared = time.monotonic() if sampled else None
-            if fast or short_labels:
+            if fast or revised:
                 # A g1491 table labels every turn, four times as many as before, and its
                 # long turns reach the shared lock together at the phase boundaries
                 # (0.5 s median, 8 s worst wait at g1490). Their model-logit parity runs
@@ -138,7 +140,7 @@ class TurnVerifier:
         check()
         record['raw'].extend(meta['rows'])
         record['accepted'].extend(accepted); record['rejected'].update(rejected)
-        batched = fast or short_labels
+        batched = fast or revised
         if batched: record['deferred'].extend(accepted)
         record['last'] = meta['index']
         if sampled:

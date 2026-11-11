@@ -133,6 +133,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 # A prepared, older g1491 config may already exist at this boundary.
                 # Keep it as a recovery recipe; never overwrite it with new behavior.
                 prefix=prefix.replace('-share','-cotton20-share');stages.append(prefix)
+            if g1491.variant_of(config)==g1491.RESTART:
+                prefix=prefix.replace('-share','-g1490-restart-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
