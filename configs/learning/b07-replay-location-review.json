@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "be2c1088a10d6389e5faf043a9782b0e7f0a45b461f0dc9e55fb80a306e116f4",
+  "execution_implementation": "cf290003fbaa82480f1b2a77f8634cc00c667143b8192d520c80a0c2f171d870",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -532,6 +532,11 @@
       "implementation": "d146e2da3e7105fd0e9b3f21ac5bcf051be965148b38275d2eb2f69a06a47547",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "1618d55ae833707229b97e11a60a2929bd7ad43d7240918e941959ef2dfa0c61"
+    },
+    {
+      "implementation": "be2c1088a10d6389e5faf043a9782b0e7f0a45b461f0dc9e55fb80a306e116f4",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "b24bd12b6ea9f0ce2aef450d43e2519fbfc911f3647b8c1db950f13cd8b45642"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -710,6 +715,13 @@
     "variant": "g1190 seed restart (training-revision-g1491 g1490-branch-restart recipe, restored-placement reward, restart stage schedule)",
     "source_report": "ai-research/G1190_RESTART.md",
     "scope": "User-requested restart of the g1290 restart run from its retained g1190 weights in a new run folder, from the exact committed g1491 state with the g1190 snapshot as the learner at generation 1491. Recipe: the g1490 restart recipe with reward placement .1 (zero insolvency charge, canal/final VP timing kept); the seed utility specification is migrated with all tensors kept and its calibration cleared, so the first value phase re-fits it before teacher tables run. g1190 has no search head: a fresh one is adopted at Stage A on the first teaching iteration under the restart schedule (Stage A 50 iterations fitting in held-out-gated 16-step intervals like Stage C, Stage B 50 with w rising .02, Stage C 10, PPG beta floor .5 once the head has left Stage A) and a 256-wide head (checkpoint marker search-value-correction/1.1.0 records the width). The search blend binding and the CPU teacher job check accept a 1/100 grid of w (was 1/20; every earlier weight stays valid), one exact CPU-overlay patch of src/teacher.rs. Other recipes, schedules and the 32-wide heads are unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "branch_restart_g1190_charged": {
+    "contract": "rust-branch-restart/1.0.0",
+    "variant": "second g1190 seed restart (g1190 restart with the insolvency charge kept and 256 teacher rows per PPO step)",
+    "source_report": "ai-research/G1190_RESTART_2.md",
+    "scope": "User-requested second restart from the same exact committed g1491 state and retained g1190 snapshot, in a new run folder. Two changes against the first g1190 restart: the reward keeps the insolvency charge (event cost .0025, cap .025; placement .1, win 1, VP .001 cap 180 and the canal/final VP timing unchanged) instead of removing it, so the seed utility specification moves to that reward (all tensors kept, calibration cleared), the committed entropy clock records the charge as applied (its plan already ends at .0025) and the timed zero-insolvency teacher core, which accepts any non-negative event cost, serves the teacher games; and the teacher samples 256 rows per PPO step (reviewed variant g1190-branch-restart-256-rows of training-revision-g1491, otherwise the g1490 restart values). Neither restart can be adopted inside a run.",
     "qualified_implementation_unchanged": true
   }
 }

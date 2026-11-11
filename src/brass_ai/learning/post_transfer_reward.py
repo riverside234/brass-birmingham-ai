@@ -24,11 +24,30 @@ def eligible(config):return (config.get('reward')==BEFORE and config.get('insolv
 
 
 def is_revised(config):
-    """A zero-charge, canal/final-timed reward: the post-transfer one or its restored-placement variant."""
-    return config.get('reward') in (AFTER,RESTORED) and config.get('insolvency')==ZERO_COST
+    """A canal/final-timed reward: the zero-charge post-transfer one, or a restored-placement variant.
+
+    The restored placement is reviewed with the charge at zero or kept at the old
+    charge (``charged``); the timed teacher core serves both.
+    """
+    return (config.get('reward') in (AFTER,RESTORED) and config.get('insolvency')==ZERO_COST) or charged(config)
 
 
-def restored(config):return config.get('reward')==RESTORED and config.get('insolvency')==ZERO_COST
+def restored(config):return config.get('reward')==RESTORED and config.get('insolvency') in (ZERO_COST,OLD_COST)
+
+
+def charged(config):
+    """The restored-placement, timed reward with the insolvency charge kept at .0025 (cap .025)."""
+    return config.get('reward')==RESTORED and config.get('insolvency')==OLD_COST
+
+
+def _spend(config,reward,cost):
+    result=copy.deepcopy(config);result['reward']=copy.deepcopy(reward);result['insolvency']=copy.deepcopy(cost)
+    from .reward import specification as reward_specification
+    spec=reward_specification(reward,cost)
+    result['search']['reward']=copy.deepcopy(spec)
+    for name in ('search','fast_search'):
+        if name in result.get('teacher_phase',{}):result['teacher_phase'][name]['reward']=copy.deepcopy(spec)
+    return result
 
 
 def restore_placement(config):
@@ -36,13 +55,15 @@ def restore_placement(config):
     if restored(config):return copy.deepcopy(config)
     require(config.get('reward')==AFTER and config.get('insolvency')==ZERO_COST,
         'Restored placement starts from the post-transfer reward recipe')
-    result=copy.deepcopy(config);result['reward']=copy.deepcopy(RESTORED)
-    from .reward import specification as reward_specification
-    spec=reward_specification(RESTORED,ZERO_COST)
-    result['search']['reward']=copy.deepcopy(spec)
-    for name in ('search','fast_search'):
-        if name in result.get('teacher_phase',{}):result['teacher_phase'][name]['reward']=copy.deepcopy(spec)
-    return result
+    return _spend(config,RESTORED,ZERO_COST)
+
+
+def keep_charge(config):
+    """The restored-placement recipe with the old insolvency charge (.0025, cap .025) instead of none."""
+    if charged(config):return copy.deepcopy(config)
+    require(config.get('reward')==RESTORED and config.get('insolvency')==ZERO_COST,
+        'The kept charge starts from the restored-placement, zero-charge recipe')
+    return _spend(config,RESTORED,OLD_COST)
 
 
 def specification(revised):

@@ -14,7 +14,8 @@ holds. Teaching resumes from the third iteration through the reviewed on-switch.
 The ``g1490-branch-restart`` variant is the same exploration in a new run that
 restarts from the g1490 weights: long-search labels only, 32 tables, 72 rows per
 PPO step, the four-iteration 4:3:2:1 buffer, two PPO epochs and a single shadow
-iteration that re-measures beta. It is adopted only by that branch restart.
+iteration that re-measures beta. It is adopted only by that branch restart. The ``g1190-branch-restart-256-rows``
+variant is the same with 256 teacher rows per PPO step.
 """
 import copy
 
@@ -37,6 +38,9 @@ LONG_WEIGHT = .6
 EXPLORATION = dict(contract='root-visit-count-sampling/1.0.0', temperature=1., opening_actions_per_era=7,
                    long_search='always')
 RESTART = 'g1490-branch-restart'
+# The same restart with 256 teacher rows per PPO step (the g1190 restart's second attempt).
+WIDE_RESTART = 'g1190-branch-restart-256-rows'
+RESTARTS = (RESTART, WIDE_RESTART)
 # Exact values of each reviewed variant; None is the in-run g1491 adoption.
 VARIANTS = {
     None: dict(tables=TABLES, buffer=BUFFER, rows_per_step=ROWS_PER_STEP, ppo_epochs=PPO_EPOCHS,
@@ -44,6 +48,7 @@ VARIANTS = {
     RESTART: dict(tables=dict(train=32, held_out=4), buffer=PREVIOUS_BUFFER, rows_per_step=72,
                   ppo_epochs=PREVIOUS_PPO_EPOCHS, shadow_iterations=1, short_labels=False),
 }
+VARIANTS[WIDE_RESTART] = dict(VARIANTS[RESTART], rows_per_step=256)
 
 
 def block(*, cotton=True, variant=None):
@@ -105,7 +110,7 @@ def project_phase(phase):
     result['tables'] = dict(PREVIOUS_TABLES)
     result['buffer'] = copy.deepcopy(PREVIOUS_BUFFER)
     result['term']['rows_per_step'] = PREVIOUS_ROWS_PER_STEP
-    if phase[KEY].get('variant') == RESTART:
+    if phase[KEY].get('variant') in RESTARTS:
         # The reviewed projection knows two- and four-iteration windows. This variant
         # always has exactly one (validate), so the mapping stays one-to-one.
         result['term']['shadow_iterations'] = 2

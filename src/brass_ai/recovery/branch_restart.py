@@ -45,6 +45,9 @@ from .retention import owned,safe,active,run_lock
 CONTRACT='rust-branch-restart/1.0.0'
 RECEIPT='branch-restart.json'
 SEED='g1190'
+# The second attempt from the same g1491 state: insolvency charge kept (.0025, cap .025) and 256 teacher rows.
+SEED_CHARGED='g1190-charged-256'
+SEEDS=(SEED,SEED_CHARGED)
 SEED_MIGRATION='seed-restart-reward/1.0.0'
 STAGE_A=30
 PAUSED_ITERATIONS=8
@@ -77,7 +80,7 @@ def recipe(config,*,share_target,stage_a_iterations=STAGE_A):
     return result
 
 
-def rollback_recipe(config,state,*,share_target):
+def rollback_recipe(config,state,*,share_target,variant=None):
     """The committed teacher-on recipe with the g1490 restart variant of the g1491 revision."""
     from brass_ai.rust_backend.lab_shadow_config import is_shadow
     from .collector_runtime import recipe as without_runtime
@@ -87,7 +90,7 @@ def rollback_recipe(config,state,*,share_target):
     config=without_runtime(config)
     require(valid_target(share_target),'Choose a share target above 0 and at most 1')
     require(not g1491.applied(config),'A rollback restart starts from the recipe committed before the g1491 revision')
-    result=g1491.configure(config,state,variant=g1491.RESTART)
+    result=g1491.configure(config,state,variant=variant or g1491.RESTART)
     result['teacher_phase']['term']['share_target']=share_target
     validate_config(result)
     require(is_shadow(result),'The rollback recipe must pass the reviewed shadow projection')
@@ -271,13 +274,21 @@ def rollback_companion(saved,generation,learner=None):
     return dict(result,identity=bundle_id(result))
 
 
-def seed_recipe(config,state,*,share_target):
-    """The g1490 restart recipe with placement .1 restored and the restart stage schedule."""
-    from brass_ai.learning.post_transfer_reward import restore_placement
+def seed_recipe(config,state,*,share_target,revision=SEED):
+    """The g1490 restart recipe with placement .1 restored and the restart stage schedule.
+
+    ``SEED_CHARGED`` also keeps the insolvency charge (.0025, cap .025) and samples 256 teacher rows per step.
+    """
+    from brass_ai.learning.post_transfer_reward import keep_charge,restore_placement
     from brass_ai.rust_backend.lab_shadow_config import is_shadow
     from .config import validate_config
     from .search_value_schedule import restart_schedule
-    result=restore_placement(rollback_recipe(config,state,share_target=share_target))
+    from . import training_revision_g1491 as g1491
+    require(revision in SEEDS,'Unknown seed restart revision')
+    charged=revision==SEED_CHARGED
+    result=restore_placement(rollback_recipe(config,state,share_target=share_target,
+        variant=g1491.WIDE_RESTART if charged else None))
+    if charged:result=keep_charge(result)
     options=result['teacher_phase']['search_value']
     require('schedule' in options,'The seed restart needs the residual stage schedule')
     options['schedule']=dict(restart_schedule(),
@@ -324,7 +335,9 @@ def seed_model(path,config):
     model,_=load_checkpoint(path)
     require(not hasattr(model,'search_value_head'),'The seed model already has a search head')
     spec=reward_spec(config);before=copy.deepcopy(getattr(model.config,'utility',None))
-    require(before==specification(BEFORE,OLD_COST) and spec==specification(RESTORED,ZERO_COST),
+    # The recipe's own charge: zero (first attempt) or the old .0025 / .025 (charged attempt).
+    require(before==specification(BEFORE,OLD_COST) and config['insolvency'] in (ZERO_COST,OLD_COST) and
+        spec==specification(RESTORED,config['insolvency']),
         'Unreviewed seed reward migration')
     model.config=replace(model.config,utility=copy.deepcopy(spec));model.utility_calibration=None
     require(model.config==utility_config(ModelConfig.preset(config['model_size']),spec),
@@ -466,13 +479,13 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
     else:
         require(set(rollback)<={'later','revision','learner_generation'},'Unknown rollback restart option')
         seed=rollback.get('revision')
-        require(seed in (None,SEED) and (seed is None)==('learner_generation' not in rollback),'Unknown rollback restart revision')
+        require(seed in (None,*SEEDS) and (seed is None)==('learner_generation' not in rollback),'Unknown rollback restart revision')
         if seed is None:
             weights_path,weights_receipt,raw=rollback_weights(root,source,state,weights)
             config=rollback_recipe(state['signature']['config'],state,share_target=share_target)
         else:
             weights_path,weights_receipt,raw=seed_snapshot(root,source,state,rollback['learner_generation'],weights)
-            config=seed_recipe(state['signature']['config'],state,share_target=share_target)
+            config=seed_recipe(state['signature']['config'],state,share_target=share_target,revision=seed)
         require(report is not None,'A rollback restart needs the snapshot generation\'s report in its export')
         multiplier=committed_multiplier(report,config)
     learner=generation-1 if seed is None else rollback['learner_generation']
@@ -501,6 +514,14 @@ def prepare(root,source_run,snapshot,run_path,*,share_target=.1,stage_a_iteratio
         fresh['signature']=dict(state['signature'],config=config)
         for key in ('source_transitions',):fresh[key]=[]
         for key in ('machine_transfer','native_backend_switch'):fresh.pop(key,None)
+        if seed==SEED_CHARGED:
+            # The committed entropy clock holds the applied charge (none); the kept charge is the plan's last step.
+            from brass_ai.learning.post_transfer_reward import OLD_COST,ZERO_COST
+            schedule=fresh['exploration']['entropy_schedule']
+            require(schedule['insolvency']==ZERO_COST and schedule['config']['insolvency_steps'][-1]['insolvency']==OLD_COST
+                and schedule['progress']==schedule['config']['ramp_iterations'],
+                'The kept charge needs the completed entropy plan with its last step at .0025')
+            schedule['insolvency']=copy.deepcopy(OLD_COST)
         compacted=[]
         if rollback is not None:
             fresh['ratings'],archive=compacted_ratings(root,source,fresh['ratings'],rollback.get('later'),old,new,snapshot_receipt)

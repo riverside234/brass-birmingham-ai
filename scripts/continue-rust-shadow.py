@@ -133,11 +133,15 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 # A prepared, older g1491 config may already exist at this boundary.
                 # Keep it as a recovery recipe; never overwrite it with new behavior.
                 prefix=prefix.replace('-share','-cotton20-share');stages.append(prefix)
-            if g1491.variant_of(config)==g1491.RESTART:
+            if g1491.variant_of(config) in g1491.RESTARTS:
                 prefix=prefix.replace('-share','-g1490-restart-share');stages.append(prefix)
-        from brass_ai.learning.post_transfer_reward import restored
+            if g1491.variant_of(config)==g1491.WIDE_RESTART:
+                prefix=prefix.replace('-share','-rows256-share');stages.append(prefix)
+        from brass_ai.learning.post_transfer_reward import charged,restored
         if restored(config):
             prefix=prefix.replace('-share','-placement01-share');stages.append(prefix)
+        if charged(config):
+            prefix=prefix.replace('-share','-insolvency-kept-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -228,8 +232,9 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if revised:print('Residual stages: A10 head-only; B20 blend warm-up; C10 trunk warm-up; KL cap .003; PPG beta floor .25.',flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
         if is_revised(options):
-            r=options['reward']
-            print(f"Transferred reward: win={r['win']:g}, placement={r['placement']:g}, VP={r['vp']:g} (cap {r['vp_cap']}); insolvency charge=0.",flush=True)
+            r=options['reward'];cost=options['insolvency']
+            print(f"Transferred reward: win={r['win']:g}, placement={r['placement']:g}, VP={r['vp']:g} (cap {r['vp_cap']}); "
+                  f"insolvency event cost={cost['event_cost']:g}, max cost={cost['max_cost']:g}.",flush=True)
         from brass_ai.recovery.training_revision_g1294 import applied as training_revised,summary as revision_summary
         if training_revised(options):
             report['training_revision']=revision_summary(options)

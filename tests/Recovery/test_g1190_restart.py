@@ -85,6 +85,81 @@ class Recipe(unittest.TestCase):
         self.assertEqual(plan_jobs(self.after,state,model_id='m'*64,export_hash='a'*64,epoch=1491,ready=False)[0],[])
 
 
+class Charged(unittest.TestCase):
+    """The second restart: the first one with the insolvency charge kept and 256 teacher rows."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.state,cls.before=committed()
+        cls.first=B.seed_recipe(cls.state['signature']['config'],cls.state,share_target=.75)
+        cls.after=B.seed_recipe(cls.state['signature']['config'],cls.state,share_target=.75,revision=B.SEED_CHARGED)
+
+    def signature(self,config):
+        return dict(self.state['signature'],config=config)
+
+    def test_it_is_the_first_restart_with_the_charge_and_256_rows(self):
+        validate_config(self.after)
+        self.assertEqual({k for k in self.after if self.after[k]!=self.first[k]},{'insolvency','search','teacher_phase'})
+        self.assertEqual(self.after['reward'],dict(win=1.,placement=.1,vp=.001,vp_cap=180,vp_timing=P.VP_TIMING))
+        self.assertEqual(self.after['insolvency'],dict(event_cost=.0025,max_cost=.025))
+        spec=specification(P.RESTORED,P.OLD_COST)
+        self.assertEqual(reward_spec(self.after),spec)
+        self.assertEqual((spec['version'],spec['placement'],spec['insolvency']),('brass-combined-return/3.0.0',.1,P.OLD_COST))
+        old,new=self.first['teacher_phase'],self.after['teacher_phase']
+        self.assertEqual({k for k in new if new[k]!=old[k]},{'search','fast_search',R.KEY,'term'})
+        self.assertEqual((new['search']['reward'],new['fast_search']['reward']),(spec,spec))
+        self.assertEqual({k for k in new['term'] if new['term'][k]!=old['term'][k]},{'rows_per_step'})
+        self.assertEqual((old['term']['rows_per_step'],new['term']['rows_per_step']),(72,256))
+        self.assertEqual({k:new[k] for k in ('tables','buffer','search_value')},{k:old[k] for k in ('tables','buffer','search_value')})
+        self.assertEqual(new['search_value']['schedule'],V.restart_schedule())
+        self.assertEqual(new[R.KEY]['variant'],R.WIDE_RESTART)
+        self.assertEqual(self.after['update']['epochs'],2)
+        self.assertTrue(P.is_revised(self.after) and P.charged(self.after) and P.restored(self.after) and not P.charged(self.first))
+
+    def test_it_projects_to_the_reviewed_shadow_recipe(self):
+        self.assertTrue(C.is_shadow(self.after))
+        self.assertFalse(A.is_on(self.after))
+        previous=P.previous(self.after)
+        self.assertEqual((previous['reward'],previous['insolvency']),(P.BEFORE,P.OLD_COST))
+        from brass_ai.recovery import entropy_schedule
+        entropy_schedule.validate(self.after)
+
+    def test_the_charge_and_row_count_are_exact(self):
+        for cost in (P.ZERO_COST,dict(event_cost=.005,max_cost=.025),dict(event_cost=.0025,max_cost=.05)):
+            bad=copy.deepcopy(self.after);bad['insolvency']=cost
+            with self.subTest(cost=cost),self.assertRaises(ValueError):validate_config(bad)
+        for rows in (72,2048,255):
+            bad=copy.deepcopy(self.after);bad['teacher_phase']['term']['rows_per_step']=rows
+            with self.subTest(rows=rows),self.assertRaises(ValueError):validate_config(bad)
+        bad=copy.deepcopy(self.first);bad['teacher_phase']['term']['rows_per_step']=256
+        with self.assertRaises(ValueError):validate_config(bad)
+        with self.assertRaisesRegex(ValueError,'starts from the restored-placement'):P.keep_charge(self.state['signature']['config'])
+        self.assertEqual(P.keep_charge(self.after),self.after)
+        with self.assertRaisesRegex(ValueError,'Unknown seed restart revision'):
+            B.seed_recipe(self.state['signature']['config'],self.state,share_target=.75,revision='g1190-other')
+
+    def test_jobs_search_with_the_kept_charge(self):
+        state=dict(self.state,signature=self.signature(self.after))
+        jobs,_=plan_jobs(self.after,state,model_id='m'*64,export_hash='a'*64,epoch=1491,ready=True)
+        self.assertEqual(sorted(j['split'] for j in jobs).count('train'),32)
+        self.assertEqual(len(jobs),36)
+        self.assertTrue(all(j['search']['reward']['insolvency']==P.OLD_COST for j in jobs))
+        self.assertTrue(all(j['teacher_revision']['short_labels'] is False for j in jobs))
+
+    def test_calibration_then_teaching_on_and_it_is_never_adopted_inside_a_run(self):
+        on=A.configure(self.after,.75,revise_stages=True)
+        self.assertTrue(A.is_on(on) and P.charged(on))
+        self.assertEqual(on['teacher_phase']['term']['rows_per_step'],256)
+        self.assertTrue(C.signature_transition(self.signature(self.after),self.signature(on)))
+        self.assertFalse(C.signature_transition(self.state['signature'],self.signature(self.after)))
+        # Neither restart can turn into the other, nor change rows, inside a run.
+        self.assertFalse(C.signature_transition(self.signature(self.first),self.signature(self.after)))
+        self.assertFalse(C.signature_transition(self.signature(self.after),self.signature(self.first)))
+        # The row count is the variant's own: any other value fails the recipe's validation.
+        slow=copy.deepcopy(on);slow['teacher_phase']['term']['rows_per_step']=72
+        with self.assertRaises(ValueError):validate_config(slow)
+
+
 class Transitions(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -321,14 +396,21 @@ class Build(unittest.TestCase):
         patcher=mock.patch('brass_ai.recovery.il_kl_probe.import_probe',return_value=(probe,self.receipt))
         patcher.start();self.addCleanup(patcher.stop)
 
-    def build(self,**kw):
-        options=dict(share_target=.75,weights=self.weights,rollback=dict(later=self.later,revision=B.SEED,learner_generation=1190))
+    def build(self,revision=B.SEED,**kw):
+        options=dict(share_target=.75,weights=self.weights,rollback=dict(later=self.later,revision=revision,learner_generation=1190))
         options.update(kw)
         return B.prepare(ROOT,self.source,self.snapshot,self.run,**options)
 
     def test_the_new_run_starts_from_g1491_with_the_g1190_learner(self):
+        self.check(B.SEED)
+
+    def test_the_second_restart_keeps_the_charge_and_samples_256_rows(self):
+        self.check(B.SEED_CHARGED)
+
+    def check(self,revision):
+        charged=revision==B.SEED_CHARGED
         before={p:sha(p) for p in self.source.rglob('*') if p.is_file()}
-        summary=self.build()
+        summary=self.build(revision)
         self.assertEqual(before,{p:sha(p) for p in self.source.rglob('*') if p.is_file()})
         seed=model_id(self.model)
         state=read(self.run/'state.json');config=state['signature']['config']
@@ -345,6 +427,11 @@ class Build(unittest.TestCase):
         self.assertEqual((state['history'][-1]['generation'],state['history'][-1]['model_id']),(1491,summary['learner']['model_id']))
         self.assertNotIn('search_value',state)
         self.assertTrue(P.restored(config))
+        self.assertEqual((config['insolvency'],P.charged(config)),(P.OLD_COST if charged else P.ZERO_COST,charged))
+        self.assertEqual(config['teacher_phase']['term']['rows_per_step'],256 if charged else 72)
+        self.assertEqual(spec['insolvency'],P.OLD_COST if charged else P.ZERO_COST)
+        # The committed entropy clock holds the applied charge, so the run adopts it without a reward step.
+        self.assertEqual(state['exploration']['entropy_schedule']['insolvency'],config['insolvency'])
         self.assertEqual(state['native_backend']['shadow']['tables'],dict(train=32,held_out=4))
         self.assertEqual([s['generation'] for s in state['ratings']['slots']],list(range(1410,1500,10)))
         quality_pool.validate_state(state['quality_pool'],config['opponent_pool'],1491)
@@ -399,7 +486,7 @@ class Build(unittest.TestCase):
         spec_=importlib.util.spec_from_file_location('continue_g1491',ROOT/'scripts/continue-rust-g1491.py')
         m=importlib.util.module_from_spec(spec_);spec_.loader.exec_module(m)
         self.assertEqual(m.calibrated(state),(False,2))
-        with self.assertRaisesRegex(ValueError,'already has training progress'):self.build()
+        with self.assertRaisesRegex(ValueError,'already has training progress'):self.build(revision)
 
     def test_only_the_g1190_snapshot_seeds_the_learner(self):
         with self.assertRaisesRegex(ValueError,'retained snapshot of g1190'):
