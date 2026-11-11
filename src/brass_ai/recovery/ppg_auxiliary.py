@@ -232,12 +232,12 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         start=time.perf_counter();result=reference.probes(model)
         report['policy_guard_seconds']+=time.perf_counter()-start;report['policy_guard_checks']+=1;return result
     if not run_phase:
-        model.utility_calibration=None
-        report.update(diagnostics(model,current,heldout_ids,config,update),seconds=time.perf_counter()-began)
+        report.update(diagnostics(model,current,heldout_ids,config,update),seconds=time.perf_counter()-began,
+            calibration_receipt=model.utility_calibration)
         return report
     if ppg_config.linked(config) and ppo_peak is None:
-        model.utility_calibration=None
         report.update(early_stop_reason='no_ppo_steps_for_linked_rate',learning_rate=0.,
+            calibration_receipt=model.utility_calibration,
             **diagnostics(model,current,heldout_ids,config,update),seconds=time.perf_counter()-began)
         return report
     peak=memory(current.device)
@@ -262,7 +262,8 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
                     not any(reference.ages[i]==0 for i in reference.probe_ids)):
                 report['early_stop_reason']='no_policy_reference'
         if report['early_stop_reason']:
-            model.utility_calibration=None;report.update(diagnostics(model,current,heldout_ids,config,update))
+            report.update(diagnostics(model,current,heldout_ids,config,update),
+                calibration_receipt=model.utility_calibration)
             report.update(seconds=time.perf_counter()-began,memory=peak);return report
         before_losses=measured_losses(ds,held);best_games=by_game(ds,{i:before_losses[i] for i in validation})
         report['heldout_before']=value_phase.metrics(model,current,heldout_ids,update,evidence=True)
@@ -459,11 +460,12 @@ def fit(model,optimizer,buffer,current,train_ids,heldout_ids,config,update,*,bet
         require(safe_probe(final_probe),'Retained PPG checkpoint exceeds KL guard')
         after_losses=measured_losses(ds,held);used=set(best_used)
         calibration_after=value_phase.metrics(model,current,train_ids,update) if used else calibration_before
-        model.utility_calibration=(dict(version=config['contract'],reward_id=digest(model.config.utility),
-            ready=calibration_after['utility_mse']<=calibration_before['utility_mse']+1e-8,
-            decisions=len(train_ids),games=calibration_after['games'],steps=report['optimizer_steps'],
-            before=dict(mse=calibration_before['utility_mse']),after=dict(mse=calibration_after['utility_mse']),
-            scope='Current ordinary/branch critic-train MC targets; whole-game holdouts excluded; final retained weights') if used else None)
+        if report['optimizer_steps']:
+            model.utility_calibration=dict(version=config['contract'],reward_id=digest(model.config.utility),
+                ready=calibration_after['utility_mse']<=calibration_before['utility_mse']+1e-8,
+                decisions=len(train_ids),games=calibration_after['games'],steps=report['optimizer_steps'],
+                before=dict(mse=calibration_before['utility_mse']),after=dict(mse=calibration_after['utility_mse']),
+                scope='Current ordinary/branch critic-train MC targets; whole-game holdouts excluded; final retained weights')
         report.update(heldout_loss_by_age_after=age_metrics(ds,after_losses,ages),probe_kl=final_probe['overall'],
             best_epoch_position=report['best_budget_step']/steps_per_epoch if steps_per_epoch else 0.,
             beta_clone_final=beta,

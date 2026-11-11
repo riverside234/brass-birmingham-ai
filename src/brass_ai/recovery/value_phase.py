@@ -344,11 +344,10 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     elif not value_train_ids or not heldout_ids:report['early_stop_reason']='insufficient_critic_split'
     elif not actor_ids or not probe_ids:report['early_stop_reason']='no_policy_reference'
     if report['early_stop_reason']:
-        # PPO has moved the shared trunk. Neither a skipped value fit nor
-        # read-only holdout diagnostics can certify its old calibration receipt.
-        model.utility_calibration=None
+        # No retained PPG update: carry forward the existing qualification.
         report.update(heldout_after=metrics(model,gate_dataset,gate_ids,update,evidence=True),
-            descriptor_gain=dict(learner_ev_gain=None),role_usage={role:dict(distinct_used=0,presentations=0) for role in ('learner','snapshot')})
+            descriptor_gain=dict(learner_ev_gain=None),role_usage={role:dict(distinct_used=0,presentations=0) for role in ('learner','snapshot')},
+            calibration_receipt=model.utility_calibration)
         if separate_gate:
             pooled=metrics(model,validation_dataset,heldout_ids,update,evidence=True)
             report.update(acceptance_heldout_before=pooled,acceptance_heldout_after=copy.deepcopy(pooled),
@@ -363,7 +362,6 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             report.update(heldout_unknown=unknown,
                 descriptor_gain=dict(learner_ev_gain=true_ev-unknown_ev
                     if true_ev is not None and unknown_ev is not None else None),
-                calibration_receipt=None,
                 scope='PPG disabled; current post-PPO whole-game critic holdout diagnostics only; no value optimizer steps or previous rows')
         report['seconds']=time.perf_counter()-began;report['timings']=timings;return report
     started=time.perf_counter()
@@ -554,7 +552,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             finally:model.load_state_dict(accepted_weights)
         else:
             train_before=dict(rows=len(value_train_ids),games=None,loss=None,utility_mse=None,explained_variance=None,
-                measured=False,reason='No retained PPG updates; no readiness is issued, so full-training diagnostics are omitted')
+                measured=False,reason='No retained PPG updates; existing readiness is preserved, so full-training diagnostics are omitted')
     train_after=measure('train_after_seconds',model,value_dataset,value_train_ids,update,preparation=preparation) if report['optimizer_steps'] else copy.deepcopy(train_before)
     if report['optimizer_steps']:
         ready=train_after['utility_mse']<=train_before['utility_mse']+1e-8
@@ -562,10 +560,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             decisions=len(value_train_ids),games=train_after['games'],steps=report['optimizer_steps'],
             before=dict(mse=train_before['utility_mse']),after=dict(mse=train_after['utility_mse']),
             scope='Final accepted value-phase weights; ordinary critic-train games only; heldout games excluded')
-    else:
-        # PPO already moved the trunk. A skipped/rejected value fit cannot
-        # reissue its old pre-PPO receipt as evidence about these weights.
-        model.utility_calibration=None
+    # With zero retained updates, leave the existing qualification unchanged.
     gate_after=measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else current
     started=time.perf_counter()
     report.update(train_before=train_before,train_after=train_after,heldout_before=gate_before,heldout_after=gate_after,

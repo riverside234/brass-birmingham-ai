@@ -264,6 +264,9 @@ class Replay(unittest.TestCase):
         for g in range(1,9):
             stage_only(model,p,g)
             if g<8:write_json(self.run/'state.json',dict(iteration=g));p.buffer.committed(g)
+        from brass_ai.learning.contracts import digest
+        receipt=dict(ready=True,reward_id=digest(model.config.utility),steps=7)
+        model.utility_calibration=receipt
         origin=copy.deepcopy(model.state_dict());adam=copy.deepcopy(p.optimizer.state_dict());ppo_adam=copy.deepcopy(opt.state_dict())
         real=ppg_auxiliary.Reference.probes;calls=[]
         def cap(ref,net):
@@ -277,6 +280,7 @@ class Replay(unittest.TestCase):
         self.assertTrue(report['kl_guard_tripped']);self.assertEqual(report['optimizer_steps'],0)
         self.assertTrue(_same_payload(model.state_dict(),origin));self.assertTrue(_same_payload(p.optimizer.state_dict(),adam))
         self.assertTrue(_same_payload(opt.state_dict(),ppo_adam));self.assertEqual(report['attempted_steps'],1)
+        self.assertEqual(model.utility_calibration,receipt);self.assertEqual(report['calibration_receipt'],receipt)
 
     def test_best_interval_and_patience_restore_matching_Adam(self):
         model,opt,cfg=setup();p=TrainingPhases(model,cfg,root=SOURCE_ROOT,run=self.run)

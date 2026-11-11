@@ -37,6 +37,9 @@ def validate(config):
     from .utility import reward_spec
     from .config import teacher_value_config
     c = config['teacher_phase']; expected = defaults(reward_spec(config))
+    if 'skip_utility_qualification' in c:
+        require(type(c['skip_utility_qualification']) is bool, 'Invalid skip_utility_qualification')
+        expected['skip_utility_qualification'] = c['skip_utility_qualification']
     if c.get('contract') == 'teacher-phase/2.0.0':
         from .search_value_config import validate as value_validate, fast_profile
         from . import training_revision_g1491 as g1491
@@ -111,6 +114,15 @@ def toggle_compatible(before, after):
     expected['teacher_phase']['mode'] = after['teacher_phase']['mode']
     expected['teacher_phase']['term']['share_target'] = after['teacher_phase']['term']['share_target']
     return expected == after
+
+
+def without_utility_qualification(config):
+    """Project only the optional collection-readiness switch for recipe comparisons."""
+    phase = config.get('teacher_phase', {})
+    skip = phase.get('skip_utility_qualification', False)
+    require(type(skip) is bool, 'Invalid skip_utility_qualification')
+    if 'skip_utility_qualification' not in phase:return config
+    return dict(config, teacher_phase={k:v for k,v in phase.items() if k!='skip_utility_qualification'})
 
 
 def mode_only_signature(before, after):

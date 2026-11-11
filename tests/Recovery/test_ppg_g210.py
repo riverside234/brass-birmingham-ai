@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import torch
 from brass_ai.bank import read,sha
-from brass_ai.learning.contracts import SOURCE_ROOT
+from brass_ai.learning.contracts import SOURCE_ROOT,digest
 from brass_ai.recovery import ppg_g210 as G,value_phase as V,gae,ppg_config,updates
 from brass_ai.recovery.actor_value import TrainingPhases,KEY
 from brass_ai.recovery.config import validate_config
@@ -78,9 +78,40 @@ class Restored(unittest.TestCase):
         m,opt,c=config()
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             p=TrainingPhases(m,c,root=SOURCE_ROOT,run=Path(tmp));prepare(m,p,1,rate=None,steps=0)
+            receipt=dict(ready=True,reward_id=digest(m.config.utility),steps=7)
+            m.utility_calibration=receipt
             before=copy.deepcopy((m.state_dict(),opt.state_dict(),p.optimizer.state_dict(),torch.get_rng_state()))
             r=p.fit(m);self.assertEqual(r['early_stop_reason'],'no_applied_ppo_rate');self.assertEqual(r['optimizer_steps'],0)
             self.assertTrue(_same_payload(before,(m.state_dict(),opt.state_dict(),p.optimizer.state_dict(),torch.get_rng_state())))
+            self.assertEqual(m.utility_calibration,receipt);self.assertEqual(r['calibration_receipt'],receipt)
+
+    def test_zero_retained_updates_preserve_qualification_and_checkpoint(self):
+        from brass_ai.learning.checkpoint import save_checkpoint,load_checkpoint
+        from brass_ai.recovery.teacher_phase import readiness
+        for qualified in (True,False,None):
+            with self.subTest(qualified=qualified),tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+                m,opt,c=config();c['value_phase']=dict(G.KL_STOP_DEFAULT,batch_size=4,clone_rows=64,clone_batch_size=8)
+                p=TrainingPhases(m,c,root=SOURCE_ROOT,run=Path(tmp));prepare(m,p,1)
+                receipt=None if qualified is None else dict(ready=qualified,reward_id=digest(m.config.utility),steps=7)
+                m.utility_calibration=receipt
+                before={k:v.clone() for k,v in m.state_dict().items()};metric=V.metrics
+                def metrics(net,ds,ids,update,**kw):
+                    result=metric(net,ds,ids,update,**kw)
+                    if not kw.get('unknown'):
+                        count=max((int(s['step']) for s in p.optimizer.state.values()),default=0)
+                        result['loss']=1. if count==0 else 2.
+                    return result
+                with patch.object(V,'metrics',metrics),patch.object(V.RawPolicyReference,'measure',return_value=0.):r=p.fit(m)
+                self.assertEqual((r['optimizer_steps'],r['attempted_steps']),(0,16))
+                self.assertEqual(r['early_stop_reason'],'heldout_loss_increased')
+                self.assertEqual(before.keys(),m.state_dict().keys())
+                self.assertTrue(all(torch.equal(v,m.state_dict()[k]) for k,v in before.items()))
+                self.assertEqual(m.utility_calibration,receipt);self.assertEqual(r['calibration_receipt'],receipt)
+                self.assertIs(m.utility_calibration,receipt)
+                checkpoint=Path(tmp)/'kept.pt';save_checkpoint(checkpoint,m,opt,step=1)
+                loaded,_=load_checkpoint(checkpoint)
+                self.assertEqual(loaded.utility_calibration,receipt)
+                self.assertEqual(readiness(None,loaded.utility_calibration,digest(m.config.utility))[1],qualified is True)
 
     def test_adoption_resets_beta_once_preserves_all_adams_rng_and_gate_state(self):
         m,opt,old=prior_config()

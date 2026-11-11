@@ -61,7 +61,8 @@ def inference_choice(args):
     return block
 
 
-def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None):
+def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
+            skip_utility_qualification=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,from_config,recipe
@@ -86,6 +87,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         moved=instruction(root,run)
         pending_reward=bool(moved and moved.get('reward_revision')==REVISION)
         working=revise_reward(before) if pending_reward else before
+        if skip_utility_qualification and 'teacher_phase' in working:
+            working=dict(working,teacher_phase=dict(working['teacher_phase'],skip_utility_qualification=True))
         from brass_ai.recovery import training_revision_g1491 as g1491
         require(revision in (None,'g1491'),'Unknown training revision')
         if mode=='shadow' and (revision=='g1491' or g1491.applied(before)):
@@ -99,9 +102,10 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             if revise_stages and due(state):config=revise_training(config,state)
             if revise_stages and lr_floor.due(state):config=lr_floor.configure(config)
         elif is_shadow(before):
-            config=copy.deepcopy(before);config['teacher_phase']['term']['share_target']=share_target
-            config['teacher_phase']['term']['shadow_iterations']=4
+            config=dict(working,teacher_phase=dict(working['teacher_phase'],
+                term=dict(working['teacher_phase']['term'],share_target=share_target,shadow_iterations=4)))
         else:config=configure(before,share_target)
+        if skip_utility_qualification:config['teacher_phase']['skip_utility_qualification']=True
         if revise_stages and mode=='shadow':
             from brass_ai.recovery.search_value_schedule import revise
             config=revise(config)
@@ -142,6 +146,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share','-placement01-share');stages.append(prefix)
         if charged(config):
             prefix=prefix.replace('-share','-insolvency-kept-share');stages.append(prefix)
+        if config['teacher_phase'].get('skip_utility_qualification',False):
+            prefix=prefix.replace('-share','-skip-utility-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -174,6 +180,8 @@ def parser(*,default_mode='shadow',default_stage_revision=False,workers=64,teach
         help='Unconditional A10/B20/C10 stages, sparse validation and PPG beta floor .25')
     p.add_argument('--iterations',type=int,default=iterations or (1 if default_mode=='on' else 4))
     p.add_argument('--share-target',type=share_target_arg,default=.25,help='Teacher gradient share, any value above 0 and at most 1')
+    p.add_argument('--skip-utility-qualification',action='store_true',
+        help='Persistently allow teacher collection and beta qualification without waiting for utility readiness')
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
     p.add_argument('--inference',choices=('keep','cpu','gpu'),default=inference,
         help='cpu: in-worker ONNX Runtime for search, ordinary and rating lanes; gpu: original service; keep: last recorded choice')
@@ -217,9 +225,13 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if choice!='keep':kwargs['inference']=choice
         if revise_stages:kwargs['revise_stages']=True
         if revision is not None:kwargs['revision']=revision
+        if getattr(args,'skip_utility_qualification',False):kwargs['skip_utility_qualification']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
+        if options['teacher_phase'].get('skip_utility_qualification',False):
+            report['utility_qualification']='skipped'
+            print('Utility qualification skipped; teacher collection does not wait for utility readiness.',flush=True)
         tables=g1491.tables(options);calibration=options['teacher_phase']['term']['shadow_iterations']
         report.update(tables=tables,qualification_iterations=g1491.shadow_iterations(options))
         revised='schedule' in options['teacher_phase']['search_value']

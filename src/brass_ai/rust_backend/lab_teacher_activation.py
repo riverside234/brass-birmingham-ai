@@ -84,7 +84,9 @@ def authorize(state,config):
     if not is_on(state['signature']['config']):
         from brass_ai.recovery.utility import reward_spec
         ready=state.get('teacher_phase',{}).get('readiness')
-        require(ready is not None and ready['ready'] is True and ready['reward_id']==digest(reward_spec(config)),
+        require(config['teacher_phase'].get('skip_utility_qualification',False) or
+            (ready is not None and ready['ready'] is True and ready.get('utility_qualification')!='skipped'
+             and ready['reward_id']==digest(reward_spec(config))),
             'Teacher activation requires measured current-reward utility readiness')
         from brass_ai.recovery.training_revision_g1491 import applied
         # The g1491 re-calibration resumes teaching; the search head keeps its committed stage.

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "cf290003fbaa82480f1b2a77f8634cc00c667143b8192d520c80a0c2f171d870",
+  "execution_implementation": "99b93b5de6ff97c41acca35d1cb22153904384cc71b040479081ecc42c5ef18c",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -190,11 +190,11 @@
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
-      "after": "ae3ce1871bd09411530d014080784440b34e151d4f871daea0dbcf89ca16b7ed"
+      "after": "d16dd345b23f6f63e45ed3b218b281be96f2eb41cce48bc716cca117a17df865"
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
-      "after": "ea053e4a954b2c07c806a0e61f3ba2fe1a59f20c8d4f88acca851f29a8821dea"
+      "after": "170426d399d241cbb371222b7266b437cb64a2d744c91868833842a5df580f49"
     },
     "src/brass_ai/recovery/teacher_term.py": {
       "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
@@ -226,7 +226,7 @@
     },
     "src/brass_ai/recovery/value_phase.py": {
       "before": "66844598c56ff0175af8b0997b5ae869de4ae69331b11f5082c07162f4647fae",
-      "after": "8b447af3103ec7381bd4699014c8816de4b4143569e8a1962b1f461018df6582"
+      "after": "9ee7695cbbc11ba77a82d5c6ef1f19dfc169388ab6fc5d16e8b7b160356fc2e1"
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "2479e7381290e14ac70dfe41c994372b7a2cc6ad9a692e86e12471c906db6e6c"
+      "after": "58c809fd3f52718055a8a4fec72f9055ff52652394d6ce76d5fac00d60c6400e"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -302,7 +302,7 @@
     },
     "src/brass_ai/rust_backend/lab_teacher_activation.py": {
       "before": null,
-      "after": "4b946cffa0d507713d01b43461315258f53ef07703e9faad01d4323329c7bae5"
+      "after": "057fa8f6629618717591fafba59a33e902343170ced7c5d6aa39055c30cad5c3"
     },
     "src/brass_ai/rust_backend/lab_teacher_finalization.py": {
       "before": "1719b9dc55148b22bc4cab0e4ce2630f0e4ffd0003f776ed1d0de72b50a6d5a8",
@@ -387,6 +387,10 @@
     "tests/RustBackendLab/test_cpu_qualification.py": {
       "before": "746a19f5f85f7026f1ef511603d1aa40a2d75dd3d28535bb75dd4df791f67b60",
       "after": "77bf91b2372e5be2ddda0db7ef54fbb98cc14a39391c210e6096dcb1037c355c"
+    },
+    "src/brass_ai/recovery/ppg_auxiliary.py": {
+      "before": "e0c5d101a49df77752cb943fc2f951faea16a65bb49fe9f642067e4f6e45255c",
+      "after": "919451fad50530b35afa0c785226d6d0fb2d45fe0fa89d488783bfa942a1b3e2"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -537,6 +541,11 @@
       "implementation": "be2c1088a10d6389e5faf043a9782b0e7f0a45b461f0dc9e55fb80a306e116f4",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "b24bd12b6ea9f0ce2aef450d43e2519fbfc911f3647b8c1db950f13cd8b45642"
+    },
+    {
+      "implementation": "cf290003fbaa82480f1b2a77f8634cc00c667143b8192d520c80a0c2f171d870",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "057db47ddfc2813177696f750168f09631f4945651dd6b3a26eda6203ad8b379"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -722,6 +731,10 @@
     "variant": "second g1190 seed restart (g1190 restart with the insolvency charge kept and 256 teacher rows per PPO step)",
     "source_report": "ai-research/G1190_RESTART_2.md",
     "scope": "User-requested second restart from the same exact committed g1491 state and retained g1190 snapshot, in a new run folder. Two changes against the first g1190 restart: the reward keeps the insolvency charge (event cost .0025, cap .025; placement .1, win 1, VP .001 cap 180 and the canal/final VP timing unchanged) instead of removing it, so the seed utility specification moves to that reward (all tensors kept, calibration cleared), the committed entropy clock records the charge as applied (its plan already ends at .0025) and the timed zero-insolvency teacher core, which accepts any non-negative event cost, serves the teacher games; and the teacher samples 256 rows per PPO step (reviewed variant g1190-branch-restart-256-rows of training-revision-g1491, otherwise the g1490 restart values). Neither restart can be adopted inside a run.",
+    "qualified_implementation_unchanged": true
+  },
+  "utility_qualification_continuation": {
+    "scope": "User-requested persistent skip flag allows teacher collection and beta qualification without utility readiness; measured full-table beta qualification remains required. Zero retained PPG updates preserve the existing utility calibration receipt. Teacher rows 256 and insolvency event cost .0025 / cap .025 are unchanged. No model or optimizer copies are added.",
     "qualified_implementation_unchanged": true
   }
 }

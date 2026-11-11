@@ -59,7 +59,7 @@ def interrupted(run, generation):
                 list(run.glob(f'generation-{generation+1:04d}.pt*')))
 
 
-def calibrated(state):
+def calibrated(state, *, skip_utility_qualification=False):
     from brass_ai.rust_backend.lab_shadow_config import is_shadow
     from brass_ai.recovery import training_revision_g1491 as g1491
     config = state['signature']['config']
@@ -73,14 +73,17 @@ def calibrated(state):
     tail = [o for o in (q or {}).get('observations', []) if o['generation'] == state['iteration']-1]
     # A changed reward first needs one value phase to re-fit the utility (teacher readiness);
     # that iteration plans no teacher tables.
-    return False, g1491.shadow_iterations(config)-len(tail)+(0 if ready(state) else 1)
+    return False, g1491.shadow_iterations(config)-len(tail)+(0 if ready(state,skip_utility_qualification=skip_utility_qualification) else 1)
 
 
-def ready(state):
+def ready(state, *, skip_utility_qualification=False):
     from brass_ai.learning.contracts import digest
     from brass_ai.recovery.utility import reward_spec
+    config = state['signature']['config']
+    if skip_utility_qualification or config.get('teacher_phase',{}).get('skip_utility_qualification',False):return True
     receipt = state.get('teacher_phase', {}).get('readiness') or {}
-    return receipt.get('ready') is True and receipt.get('reward_id') == digest(reward_spec(state['signature']['config']))
+    return (receipt.get('ready') is True and receipt.get('utility_qualification') != 'skipped'
+            and receipt.get('reward_id') == digest(reward_spec(config)))
 
 
 def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_required=False):
@@ -109,19 +112,19 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.teacher_fast = PREVIOUS_TEACHER_FAST
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
-    done, needed = calibrated(state)
+    done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)
     attempts = 0
     while not done and generation < end:
         t = g1491.tables(state['signature']['config']) if g1491.applied(state['signature']['config']) else g1491.TABLES
         require(attempts <= EXTRA_CALIBRATION, 'Beta calibration did not qualify; inspect teacher_phase.term in the '
                 f"latest report (full {t['train']}+{t['held_out']} tables, finite gradients) before continuing")
         count = min(needed if attempts == 0 else 1, end-generation)
-        if not ready(state):
+        if not ready(state,skip_utility_qualification=args.skip_utility_qualification):
             print(f'Teacher readiness: the first shadow iteration re-fits the utility under the current reward; no teacher tables', flush=True)
         print(f'g1491 beta calibration: {count} shadow iteration(s) from g{generation}', flush=True)
         state = module.continuation(args, mode='shadow', expected=generation, iterations=count, revision='g1491')
         generation = state['iteration']; attempts += 1
-        done, needed = calibrated(state)
+        done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)
     if generation < end:
         require(done, 'Beta calibration is unfinished')
         print(f'Teacher on from g{generation} with the calibrated fixed beta', flush=True)

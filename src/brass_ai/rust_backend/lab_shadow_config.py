@@ -28,7 +28,8 @@ def is_shadow(config):
     from brass_ai.recovery.collector_runtime import recipe
     from brass_ai.recovery.search_value_schedule import previous_recipe
     from brass_ai.learning.post_transfer_reward import previous as previous_reward
-    try:config=previous_recipe(previous_reward(recipe(config)))
+    from brass_ai.recovery.teacher_phase_config import without_utility_qualification
+    try:config=previous_recipe(previous_reward(without_utility_qualification(recipe(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
     if phase is None:return False
@@ -84,7 +85,8 @@ def signature_transition(before,after):
     stages=lambda c:({k:v for k,v in c.get('teacher_phase',{}).get('search_value',{}).get('schedule',{}).items()
                       if k!='validation_during_beta_qualification'},c.get('teacher_phase',{}).get('search_value',{}).get('head'))
     if old_revised and stages(old)!=stages(new):return False
-    try:old_compare,new_compare=previous_recipe(previous_reward(old)),previous_recipe(previous_reward(new))
+    from brass_ai.recovery.teacher_phase_config import without_utility_qualification
+    try:old_compare,new_compare=(previous_recipe(previous_reward(without_utility_qualification(c))) for c in (old,new))
     except (ValueError,KeyError,TypeError):return False
     if is_on(new):
         config_ok=False

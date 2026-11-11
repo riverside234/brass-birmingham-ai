@@ -31,12 +31,17 @@ def initial_cursor(config):
     return int(digest(dict(contract=CONTRACT, stream='teacher-setup', seed=config['seed']))[:8], 16) % 1_000_000_000
 
 
-def readiness(previous, current, reward_id):
+def readiness(previous, current, reward_id, *, skip=False):
     """Null means no new fit; explicit not-ready always supersedes an old fit."""
-    receipt = copy.deepcopy(current if current is not None else previous)
+    if isinstance(previous, dict) and previous.get('utility_qualification') == 'skipped':
+        previous = previous.get('utility_calibration')
+    receipt = current if current is not None else previous
     if receipt is not None:
         require(isinstance(receipt, dict) and type(receipt.get('ready')) is bool
                 and isinstance(receipt.get('reward_id'), str), 'Invalid teacher readiness receipt')
+    if skip:
+        # Ready to collect by explicit choice, not a claim of a successful utility fit.
+        return dict(ready=True, reward_id=reward_id, utility_qualification='skipped', utility_calibration=receipt), True
     ready = bool(receipt and receipt['reward_id'] == reward_id and receipt['ready'])
     return receipt, ready
 
@@ -51,7 +56,7 @@ def reserved_rounds(setup_seed, sampling_seed, seat):
 def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_source=SOURCE):
     """Frozen separate teacher stream; the ordinary plan/cursor is never touched."""
     c = validate(config); cursor = state.get('teacher_seed_cursor', initial_cursor(config))
-    if c['mode'] == 'off' or not ready: return [], cursor
+    if c['mode'] == 'off' or not (ready or c.get('skip_utility_qualification', False)): return [], cursor
     jobs = []; generation = state['iteration']; reward_id = digest(c['search']['reward'])
     validation=validation_plan(config,state)
     for split, partition, count in (('train', 'train', c['tables']['train']), ('heldout', 'validation', c['tables']['held_out'])):
@@ -131,7 +136,8 @@ class TeacherPhase:
         if cache and cache.get('identity') != self.buffer.identity:
             self.weight = {}  # Static producer/profile changes retire beta with its labels.
         self.cursor = state.get('teacher_seed_cursor', initial_cursor(config))
-        self.receipt, self.ready = readiness(saved.get('readiness'), getattr(model, 'utility_calibration', None), self.reward_id)
+        self.receipt, self.ready = readiness(saved.get('readiness'), getattr(model, 'utility_calibration', None), self.reward_id,
+                                            skip=self.options.get('skip_utility_qualification', False))
         self.metrics = {}; self.admission_seconds = 0.; self.pre = None; self.post = None
         self.search_value = None
         if 'search_value' in self.options:
@@ -140,7 +146,8 @@ class TeacherPhase:
 
     def begin(self, state, model, *, export_hash=None, epoch=None, native_source=SOURCE):
         self.state = state; self.generation = state['iteration']
-        self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id)
+        self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id,
+                                            skip=self.options.get('skip_utility_qualification', False))
         self.jobs = []; self.heldout = []; self.term = None; self.metrics = {}; self.pre = self.post = None
         self.admission_seconds = 0.
         self.buffer.window(self.generation)
@@ -242,7 +249,8 @@ class TeacherPhase:
     def finish(self, model, update):
         if self.term is not None: self.weight = self.term.finish()
         self.post = heldout_measure(model, self.heldout)
-        self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id)
+        self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id,
+                                            skip=self.options.get('skip_utility_qualification', False))
         before = self.pre or heldout_measure(model, [])
         changes = {p: self.post[p]['kl'] - before[p]['kl'] if self.post[p]['kl'] is not None and before[p]['kl'] is not None else None for p in before}
         return dict(contract=CONTRACT, mode=self.options['mode'], ready=self.ready, collection=self.metrics,

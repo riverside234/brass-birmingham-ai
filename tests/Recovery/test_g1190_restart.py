@@ -332,6 +332,69 @@ class Floor(unittest.TestCase):
             self.assertEqual(phases.beta_floor,floor)
 
 
+class SeedUtility(unittest.TestCase):
+    """Restart keeps the learned utility correction and its full-game coordinate."""
+
+    @classmethod
+    def setUpClass(cls):torch.set_num_threads(2)
+
+    def test_charged_restart_keeps_nonzero_utility_head_predictions_exactly(self):
+        from brass_ai.learning.model import ModelConfig
+        from brass_ai.learning.utility_model import UtilityNet,utility_config
+        from brass_ai.learning.checkpoint import save_checkpoint,load_checkpoint
+        state,before=committed()
+        config=dict(B.seed_recipe(before,state,share_target=.05,revision=B.SEED_CHARGED),model_size='small')
+        old=specification(P.BEFORE,P.OLD_COST);new=reward_spec(config)
+        self.assertEqual({k for k in old if old[k]!=new[k]},{'version'})
+        torch.manual_seed(1190)
+        seed=UtilityNet(utility_config(ModelConfig.preset('small'),old))
+        with torch.no_grad():
+            for parameter in seed.utility_head.parameters():parameter.uniform_(-.1,.1)
+        context=torch.randn(4,seed.config.hidden)
+        mapping=torch.tensor([[0,1,2,3],[3,0,1,2],[2,3,0,1],[1,2,3,0]])
+        heads=(torch.softmax(torch.randn(4,4),-1),torch.tensor([[1.,2.,3.,4.]]*4),
+               torch.tensor([[220.,170.,80.,0.]]*4))
+        remaining=torch.tensor([[.025,.01,.0025,0.]]*4);embeddings=torch.randn(4,4,32)
+        def predict(model):
+            with torch.inference_mode():return model.predict_utility(context,mapping,heads,remaining,embeddings)
+        expected=predict(seed)
+        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as tmp:
+            path=Path(tmp)/'seed1190.pt';save_checkpoint(path,seed,None,step=1190)
+            restarted,_=B.seed_model(path,config)
+            for name,tensor in seed.state_dict().items():self.assertTrue(torch.equal(tensor,restarted.state_dict()[name]),name)
+            torch.testing.assert_close(predict(restarted),expected,rtol=0,atol=0)
+            checkpoint=Path(tmp)/'generation-1491.pt';save_checkpoint(checkpoint,restarted,None,step=1491)
+            loaded,raw=load_checkpoint(checkpoint)
+            self.assertEqual(raw['step'],1491)
+            torch.testing.assert_close(predict(loaded),expected,rtol=0,atol=0)
+
+    def test_charged_restart_targets_match_g1190_in_both_eras_and_at_the_cost_cap(self):
+        from brass_ai.learning.reward import replay_returns,terminal_utility,CostLedger
+        from test_insolvency_recovery import row
+        from test_era_vp_reward import EraVP
+        old=specification(P.BEFORE,P.OLD_COST);new=specification(P.RESTORED,P.OLD_COST)
+        records=[]
+        for era in ('CanalEra','RailEra'):
+            for round_ in range(1,8):
+                for record in (row(0,round=round_,era=era),row(0,round=round_,era=era,phase='debt',kind='liquidate',debts={0:5})):
+                    for player in record['view']['players']:player['vp']=0 if era=='CanalEra' else 50-10*player['seat']
+                    records.append(record)
+        result=EraVP().result()
+        before,old_summary=replay_returns(records,result,old)
+        after,new_summary=replay_returns(records,result,new)
+        self.assertEqual(old_summary['cost'],new_summary['cost'])
+        self.assertAlmostEqual(new_summary['cost'][0],.025)
+        self.assertEqual(old_summary['utility'],new_summary['utility'])
+        np.testing.assert_array_equal(terminal_utility(result,old),terminal_utility(result,new))
+        for a,b in zip(before,after):
+            self.assertEqual(a['remaining'],b['remaining'])
+            np.testing.assert_array_equal(a['utility'],b['anchored_utility'])
+            np.testing.assert_allclose(np.asarray(b['utility'])+b['vp_paid'],a['utility'],rtol=0,atol=1e-15)
+        ledger=CostLedger(new);ledger.charge(0);self.assertEqual(ledger.spent[0],.0025)
+        for _ in range(20):ledger.charge(0)
+        self.assertEqual(ledger.spent[0],.025)
+
+
 class Build(unittest.TestCase):
     """A small real run tree built from the exported g1491 state with a g1190-style seed, then loaded back."""
 

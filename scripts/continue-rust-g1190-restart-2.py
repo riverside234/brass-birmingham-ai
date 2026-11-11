@@ -4,9 +4,10 @@
 Like continue-rust-g1190-restart.py, with 256 teacher rows per PPO step and the
 insolvency charge kept (.0025, cap .025) in the reward:
 
-1. Shadow iterations: the first re-fits the utility under the restart reward (no
-   teacher tables until it is ready), the next re-measures the fixed teacher beta on
-   long-search labels. No teacher gradient is applied and the PPO LR holds.
+1. With --skip-utility-qualification, start the one-iteration beta qualification
+   immediately, without waiting for a utility fit. This choice persists across
+   iterations and resumes. No teacher gradient is applied and the PPO LR holds.
+   Without the flag, utility readiness is required before teacher collection.
 2. Teaching switches on through the reviewed transition; the fresh search head
    starts Stage A (50 iterations), then Stage B (50) and Stage C (10).
 
