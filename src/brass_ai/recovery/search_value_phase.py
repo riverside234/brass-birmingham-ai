@@ -9,7 +9,8 @@ import numpy as np
 
 from brass_ai.learning.contracts import digest, require
 from .search_value_config import validate
-from .search_value_rows import ValueBuffer, complete_game, copy_row
+from .search_value_rows import ValueBuffer, complete_game
+from .search_value_schedule import HELDOUT_ITERATIONS, dedicated_holdout
 from .search_value_training import Companion, StageMachine, clustered_gate, predict_rows, guarded_pass
 
 
@@ -29,7 +30,8 @@ class SearchValuePhase:
                           if (trainable and options['stage'] != 'off' and not defer_install) or hasattr(model,'search_value_head') else None)
         self.trainable=trainable
         self.buffer = ValueBuffer(directory, reward_id, receipts=saved.get('buffer', {}).get('receipts', ()),
-                                  retired=saved.get('buffer', {}).get('retired', ()),pending_files=pending_files,pending_directory=pending_directory)
+                                  retired=saved.get('buffer', {}).get('retired', ()),pending_files=pending_files,pending_directory=pending_directory,
+                                  heldout_iterations=HELDOUT_ITERATIONS if dedicated_holdout(options) else 8)
         # Revised return fitting uses validated numeric value rows directly.
         # Policy staleness still belongs to TeacherTerm; duplicating its full
         # label views here both starved the head and inflated checkpoints.
@@ -104,18 +106,19 @@ class SearchValuePhase:
     def _targets(self, rows):
         lam = self.machine.state['lam'] or 1.
         groups = defaultdict(list)
-        for row in rows: groups[row['game_id']].append(copy_row(row))
+        for row in rows: groups[row['game_id']].append(row)
         result = []
         for game in groups.values():
             game.sort(key=lambda r:r['index'])
             following = np.asarray(game[-1]['terminal_utility'])
+            targets = []
             for i in reversed(range(len(game))):
                 next_u = np.asarray(game[i+1]['u'] if i+1 < len(game) else game[i]['terminal_utility'])
                 cost = next_u - game[i]['u']
                 boot = np.asarray(game[i+1]['r'] if i+1 < len(game) else game[i]['terminal_utility'])
                 following = -cost + (1-lam)*boot + lam*following
-                game[i].update(target=following.tolist(),target_lambda=lam)
-            result.extend(game)
+                targets.append(dict(game[i], target=following.tolist(), target_lambda=lam))
+            result.extend(reversed(targets))
         return result
 
     def after_ppg(self, generation, *, mode, ordinary=None, h2h=None, annealing=False, guarded=None):
@@ -176,20 +179,25 @@ class SearchValuePhase:
             paused=ages!=list(range(generation-7,generation+1))
             if not paused:rebuild['ready_generation']=generation
             self.report['buffer_rebuild']=dict(rebuild,fresh_ages=len(ages),paused=paused)
-        # Rebuilding phases admit/verify shards but need no copied targets or
-        # encoder preparation until auxiliary fitting can actually resume.
-        train=[] if paused else self._targets(buffered)
-        prepared=time.perf_counter()
         validation = None
-        from .search_value_schedule import HELDOUT_EARLY_STOP
-        # The restart schedule also gates Stage A head fitting on eight held-out games
-        # (options were validated when this phase was built).
-        holdout_a=(scale==0 and self.options.get('schedule',{}).get('stage_a_fit')==HELDOUT_EARLY_STOP
-                   and self.machine.state.get('stage')=='A')
-        if train and (scale>0 or holdout_a) and not paused:
+        dedicated = dedicated_holdout(self.options)
+        heldout = self.buffer.rows(generation, 'heldout') if dedicated else None
+        from .search_value_schedule import stage_a_holdout
+        holdout_a = self.machine.state['stage']=='A' and stage_a_holdout(self.options)
+        gated = scale > 0 or holdout_a
+        waiting = False
+        if gated and dedicated:
+            from .search_value_retention import recent_holdout
+            validation, self.report['retention_holdout'] = recent_holdout(heldout, generation)
+            waiting = not validation
+        # A gated pass cannot run until its independent validation panel is complete.
+        train = [] if paused or waiting else self._targets(buffered)
+        if train and gated and not dedicated:
             from .search_value_retention import reserve_games
             train,validation,self.report['retention_holdout']=reserve_games(train,generation,self.companion.seed)
+        prepared=time.perf_counter()
         if paused:self.report['update']=dict(steps=0,reason='Rebuilding eight fresh return-buffer ages; stage counter paused')
+        elif waiting:self.report['update']=dict(steps=0,reason='Need 16 dedicated held-out games in the last 20 collections; stage counter paused')
         elif train:
             if scale>0:
                 if guarded is not None:
@@ -203,10 +211,11 @@ class SearchValuePhase:
         else:self.report['update']=dict(steps=0,reason='No admitted training value rows')
         updated=time.perf_counter()
         # Never reuse an older validation as this iteration's observation.
-        heldout=[r for r in self.buffer.rows(generation,'heldout') if r['generation']==generation]
-        main,delta=predict_rows(self.model,heldout) if heldout else ([],[])
-        diagnostic=diagnostics(heldout,np.asarray(main),np.asarray(delta))
-        self.report.update(validation=diagnostic,stage=self.machine.advance(generation,diagnostic,pause=paused),
+        if heldout is None:heldout=self.buffer.rows(generation,'heldout')
+        current=[r for r in heldout if r['generation']==generation]
+        main,delta=predict_rows(self.model,current) if current else ([],[])
+        diagnostic=diagnostics(current,np.asarray(main),np.asarray(delta))
+        self.report.update(validation=diagnostic,stage=self.machine.advance(generation,diagnostic,pause=paused or waiting),
             updated=bool(self.report['update'].get('steps')),training_scale=scale,
             delta=dict(mean=float(np.abs(delta).mean()) if len(delta) else None,
                 p90=float(np.quantile(np.abs(delta),.9)) if len(delta) else None))

@@ -924,7 +924,7 @@ def main():
                 c.config = snapshot['state']['signature']['config']
                 c.revision, c.teacher_config = teacher_recipe(c.config, snapshot['state'], args.revision)
                 budget = dict(mode='count', full=args.teacher_full, full_k=16, fast=args.teacher_fast or (128 if c.revision else 96),
-                              fast_k=args.teacher_fast_k, c_scale=1.)
+                              fast_k=args.teacher_fast_k, c_scale=R.DEFAULT_C_SCALE)
                 c.gpu_build = resolve_ordinary(ROOT, check_build(backend['build']))
                 c.cpu_value = resolve(ROOT, teacher_core=teacher_build(snapshot['state'])['core_source'])
                 c.fixtures = Path(c.gpu_build['b01']['path']).parent/'inputs/fixtures.json'

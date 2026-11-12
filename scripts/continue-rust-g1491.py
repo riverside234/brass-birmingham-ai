@@ -90,8 +90,11 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     module = shared()
     parser = module.parser(default_mode='on', default_stage_revision=True, workers=64, teacher_fast=teacher_fast, inference='cpu',
                            run=run, iterations=10, description=description)
-    parser.add_argument('--upgrade-utility-head',action='store_true',
+    migrations = parser.add_mutually_exclusive_group()
+    migrations.add_argument('--upgrade-utility-head',action='store_true',
         help='Widen the g1190 run utility 32 to 256 once, extend Stage A from 50 to 100 and re-measure beta')
+    migrations.add_argument('--refresh-search-head', action='store_true',
+        help='Replace the g1190 search head with width 32 and re-measure beta with the teacher on')
     if share_target_required:
         # No silent default: the target is the run's own, passed the same way every time.
         action = next(a for a in parser._actions if a.dest == 'share_target')
@@ -106,6 +109,9 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     if getattr(args,'upgrade_utility_head',False):
         from brass_ai.recovery.utility_width_upgrade import prepare
         state=prepare(ROOT,run,expected_generation=generation)
+    if args.refresh_search_head:
+        from brass_ai.recovery.search_head_refresh import prepare
+        state=prepare(ROOT,run,expected_generation=generation,adaptive_beta=args.adaptive_teacher_beta)
     ensure_cpu(run,state)
     end = generation+args.iterations
     from brass_ai.recovery import training_revision_g1491 as g1491
@@ -132,7 +138,14 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)
     if generation < end:
         require(done, 'Beta calibration is unfinished')
-        print(f'Teacher on from g{generation} with the calibrated fixed beta', flush=True)
+        from brass_ai.recovery import adaptive_teacher_beta as adaptive
+        if adaptive.pending(state.get('teacher_phase', {}).get('weight', {})):
+            detail = 're-measuring beta with the teacher on'
+        elif args.adaptive_teacher_beta or adaptive.KEY in state['signature']['config']['teacher_phase']:
+            detail = 'using adaptive beta'
+        else:
+            detail = 'using the calibrated fixed beta'
+        print(f'Teacher on from g{generation}, {detail}', flush=True)
         module.continuation(args, mode='on', expected=generation, iterations=end-generation, revise_stages=True)
 
 

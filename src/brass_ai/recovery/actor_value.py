@@ -713,7 +713,7 @@ class TrainingPhases:
             self.beta,self.trips,value['beta_feedback']=ppg_g210.beta_after_phase(self.beta,self.trips,value,options)
             if options is not self.options['value_phase']:
                 value['beta_floor']=dict(minimum=options['beta_clone_min'],raised=getattr(self,'beta_floor_raise',None),
-                    source='search-value schedule: head past Stage A')
+                    source='search-value schedule')
         elif rolling:
             self.beta=value['beta_clone_final']
             from . import dcpg_config

@@ -57,8 +57,11 @@ def collection_signature(signature):
     """Diagnostic window/gradient mode do not change frozen collection or RNG."""
     if not is_active(signature['config']):return signature
     result=copy.deepcopy(signature)
-    result['config']['teacher_phase']['mode']='shadow'
-    result['config']['teacher_phase']['term']['shadow_iterations']=2
+    phase=result['config']['teacher_phase']
+    phase['mode']='shadow'
+    phase['term']['shadow_iterations']=2
+    from brass_ai.recovery.adaptive_teacher_beta import KEY as ADAPTIVE_BETA
+    phase.pop(ADAPTIVE_BETA,None)
     return result
 
 

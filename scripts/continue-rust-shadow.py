@@ -62,7 +62,7 @@ def inference_choice(args):
 
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
-            skip_utility_qualification=False):
+            skip_utility_qualification=False,adaptive_teacher_beta=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,from_config,recipe
@@ -106,6 +106,9 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 term=dict(working['teacher_phase']['term'],share_target=share_target,shadow_iterations=4)))
         else:config=configure(before,share_target)
         if skip_utility_qualification:config['teacher_phase']['skip_utility_qualification']=True
+        from brass_ai.recovery import adaptive_teacher_beta as adaptive
+        if adaptive_teacher_beta and mode=='on':
+            config['teacher_phase'][adaptive.KEY] = adaptive.settings()
         if revise_stages and mode=='shadow':
             from brass_ai.recovery.search_value_schedule import revise
             config=revise(config)
@@ -139,7 +142,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 prefix=prefix.replace('-share','-cotton20-share');stages.append(prefix)
             if g1491.variant_of(config) in g1491.RESTARTS:
                 prefix=prefix.replace('-share','-g1490-restart-share');stages.append(prefix)
-            if g1491.variant_of(config)==g1491.WIDE_RESTART:
+            if g1491.variant_of(config) in (g1491.WIDE_RESTART, g1491.SEARCH_REFRESH):
+                # Look up the prior wide-run CPU config before choosing the new filename below.
                 prefix=prefix.replace('-share','-rows256-share');stages.append(prefix)
         from brass_ai.learning.post_transfer_reward import charged,restored
         if restored(config):
@@ -148,6 +152,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share','-insolvency-kept-share');stages.append(prefix)
         if config['teacher_phase'].get('skip_utility_qualification',False):
             prefix=prefix.replace('-share','-skip-utility-share');stages.append(prefix)
+        from brass_ai.recovery.search_value_schedule import dedicated_holdout
+        if dedicated_holdout(config['teacher_phase']['search_value']):
+            prefix='-rust-search32-share';stages.append(prefix)
+        if adaptive.KEY in config['teacher_phase']:
+            prefix=prefix.replace('-share','-adaptive-beta-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -172,6 +181,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
 
 def parser(*,default_mode='shadow',default_stage_revision=False,workers=64,teacher_fast=96,inference='keep',
            run='artifacts/step5/joint7-v11-2-g1290-trained-restart',iterations=None,description=__doc__):
+    from brass_ai.recovery.collector_runtime import C_SCALES, DEFAULT_C_SCALE
+
     p=argparse.ArgumentParser(description=description)
     p.add_argument('--run',default=run)
     p.add_argument('--expected-generation',type=int,required=True)
@@ -182,6 +193,8 @@ def parser(*,default_mode='shadow',default_stage_revision=False,workers=64,teach
     p.add_argument('--share-target',type=share_target_arg,default=.25,help='Teacher gradient share, any value above 0 and at most 1')
     p.add_argument('--skip-utility-qualification',action='store_true',
         help='Persistently allow teacher collection and beta qualification without waiting for utility readiness')
+    p.add_argument('--adaptive-teacher-beta',action='store_true',
+        help='Persistently adapt teacher-on beta toward the gradient share target from the accepted beta')
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
     p.add_argument('--inference',choices=('keep','cpu','gpu'),default=inference,
         help='cpu: in-worker ONNX Runtime for search, ordinary and rating lanes; gpu: original service; keep: last recorded choice')
@@ -191,7 +204,8 @@ def parser(*,default_mode='shadow',default_stage_revision=False,workers=64,teach
     p.add_argument('--teacher-fast',type=int,default=teacher_fast,help='Trajectories per quick teacher search')
     p.add_argument('--teacher-fast-k',type=int,choices=(2,4,8,16),default=8,help='Considered actions per quick teacher search')
     p.add_argument('--no-pinning',action='store_true',help='Leave CPU lane placement to the operating system')
-    p.add_argument('--c-scale',type=float,choices=(.1,1.),default=1.,help='Gumbel c_scale (the search constant c2) for count-budget teacher searches')
+    p.add_argument('--c-scale',type=float,choices=C_SCALES,default=DEFAULT_C_SCALE,
+        help='Gumbel c_scale (the search constant c2) for count-budget teacher searches (default: %(default)s)')
     p.add_argument('--no-overlap',action='store_true',help='Run teacher tables before ordinary games instead of beside them')
     p.add_argument('--readers',type=int,default=24,help='Replay reader processes on the CPU path')
     return p
@@ -226,6 +240,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if revise_stages:kwargs['revise_stages']=True
         if revision is not None:kwargs['revision']=revision
         if getattr(args,'skip_utility_qualification',False):kwargs['skip_utility_qualification']=True
+        if getattr(args,'adaptive_teacher_beta',False):kwargs['adaptive_teacher_beta']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -236,15 +251,18 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         report.update(tables=tables,qualification_iterations=g1491.shadow_iterations(options))
         revised='schedule' in options['teacher_phase']['search_value']
         report['stage_schedule']=options['teacher_phase']['search_value'].get('schedule')
-        cadence=(f"tables={tables['train']} + {tables['held_out']} held-out every tenth iteration; qualification override="+
+        cadence=(f"tables={tables['train']} + {tables['held_out']} held-out every {report['stage_schedule']['validation_interval']} iterations; qualification override="+
             str(report['stage_schedule']['validation_during_beta_qualification'])+'; ') if revised else f"tables={tables['train']}+{tables['held_out']}; "
+        from brass_ai.recovery import adaptive_teacher_beta as adaptive
+        beta_mode = 'adaptive beta' if adaptive.KEY in options['teacher_phase'] else 'qualified fixed beta'
         print('Branching=0%; teacher='+mode+'; '+cadence+
-            (('qualified fixed beta; residual stage restored from checkpoint.' if revised else 'qualified fixed beta; search head Stage A (w=0, frozen trunk).') if mode=='on' else
+            ((beta_mode+'; residual stage restored from checkpoint.' if revised else beta_mode+'; search head Stage A (w=0, frozen trunk).') if mode=='on' else
              f'qualification={calibration} iterations; teacher gradients are diagnostic only.'),flush=True)
         if revised:
             schedule=report['stage_schedule'];a=schedule['stage_a_iterations'];b=schedule['stage_b_iterations'];c=schedule['stage_c_iterations']
-            floor=schedule.get('ppg_beta_floor_after_stage_a',options['value_phase']['beta_clone_min'])
-            print(f'Residual stages: A{a} head-only; B{b} blend warm-up; C{c} trunk warm-up; KL cap .003; PPG beta floor {floor:g} after A.',flush=True)
+            floor_stage = 'B' if 'ppg_beta_floor_after_stage_b' in schedule else 'A'
+            floor=schedule.get(f'ppg_beta_floor_after_stage_{floor_stage.lower()}',options['value_phase']['beta_clone_min'])
+            print(f'Residual stages: A{a} head-only; B{b} blend warm-up; C{c} trunk warm-up; KL cap .003; PPG beta floor {floor:g} after {floor_stage}.',flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
         if is_revised(options):
             r=options['reward'];cost=options['insolvency']
@@ -270,13 +288,22 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
             run_training(argv,out/'training.log')
         state=read(project_path(ROOT,args.run)/'state.json')
         require(state['iteration']==expected+iterations,'Requested training boundary did not commit')
-        qualification=state.get('teacher_phase',{}).get('weight',{}).get('gradient_qualification')
+        weight=state.get('teacher_phase',{}).get('weight',{})
+        qualification=weight.get('gradient_qualification')
+        measuring=adaptive.pending(weight)
         report.update(training_passed=True,generation=state['iteration'],checkpoint=state['history'][-1],
-            gradient_qualification=qualification,passed=bool(qualification and qualification['passed']),
+            gradient_qualification=qualification,passed=bool(qualification and qualification['passed'] and not measuring),
             teacher_mode=state['signature']['config']['teacher_phase']['mode'],search_value=state.get('search_value'))
+        for key in (adaptive.KEY, adaptive.REMEASUREMENT):
+            if key in weight:report[key]=weight[key]
         require(report['teacher_mode']==mode,'Continuation teacher mode changed unexpectedly')
-        print('Teacher '+mode+': '+('qualified fixed beta='+str(qualification['beta']) if report['passed'] else
-            'qualification Pending; inspect readiness, table coverage and finite gradient measurements.'),flush=True)
+        if measuring:
+            status='beta re-measurement pending; inspect table coverage and gradient measurements.'
+        elif report['passed']:
+            status=f'{beta_mode}={weight.get("beta", qualification["beta"])}'
+        else:
+            status='qualification pending; inspect readiness, table coverage and gradient measurements.'
+        print('Teacher '+mode+': '+status,flush=True)
         return state
     except BaseException as error:
         report.update(error=str(error),traceback=traceback.format_exc());raise

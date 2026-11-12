@@ -1,11 +1,12 @@
 """A reproducible game-level holdout for the Stage-C value update only."""
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import numpy as np
 import torch
 
 from brass_ai.learning.contracts import digest, require
 from brass_ai.learning.search_value import correction
+from .search_value_schedule import HELDOUT_GAMES, HELDOUT_ITERATIONS
 
 
 def reserve_games(rows, generation, seed):
@@ -39,11 +40,33 @@ def reserve_games(rows, generation, seed):
         games_digest=digest(selected), generations=sorted({r['generation'] for r in validation}), train_rows=len(train))
 
 
+def recent_holdout(rows, generation):
+    """Latest 16 complete dedicated games in the trailing 20 collections."""
+    groups = defaultdict(list)
+    for row in rows:
+        require(row['split'] == 'heldout' and 0 <= generation - row['generation'] < HELDOUT_ITERATIONS,
+                'Early stop requires dedicated held-out games in the current window')
+        groups[row['game_id']].append(row)
+    for game in groups.values():
+        require(len(game) == 64 and {r['index'] for r in game} == set(range(1, 65)) and
+                len({r['generation'] for r in game}) == 1, 'Incomplete/duplicate held-out search game')
+    ready = len(groups) >= HELDOUT_GAMES
+    latest = sorted(groups, key=lambda game: (groups[game][0]['generation'], game))[-HELDOUT_GAMES:]
+    # Score on the realized utility-to-go. Older held-out games may have been
+    # collected with the retired head, so their root predictions are not targets.
+    validation = [dict(r, target=r['u']) for game in latest for r in groups[game]] if ready else []
+    return validation, dict(contract='dedicated-search-heldout/1', ready=ready, requested_games=HELDOUT_GAMES,
+        available_games=len(groups), window_iterations=HELDOUT_ITERATIONS, games=latest if ready else [],
+        rows=len(validation), generations=sorted({r['generation'] for r in validation}),
+        evaluation_target='final-utility-to-go')
+
+
 class HeldoutLoss:
-    """Pack the fixed 512 validation positions once; recompute predictions."""
+    """Pack validation positions once and recompute predictions per interval."""
     def __init__(self, model, rows):
-        require(len(rows) == 512 and all(r['split'] == 'heldout' for r in rows)
-                and len({r['game_id'] for r in rows}) == 8, 'Stage C needs eight complete held-out games')
+        games = Counter(r['game_id'] for r in rows)
+        require(len(games) in (8, HELDOUT_GAMES) and all(n == 64 for n in games.values()) and
+                all(r['split'] == 'heldout' for r in rows), 'Search early stop needs complete held-out games')
         device = next(model.parameters()).device
         self.model = model
         self.inputs = tuple(torch.as_tensor(np.asarray([r[key] for r in rows]), dtype=dtype, device=device)
@@ -53,11 +76,15 @@ class HeldoutLoss:
 
     def __call__(self):
         state, mapping, remaining = self.inputs
+        count = len(self.targets)
+        losses = []
         with torch.no_grad():
-            encoded = self.model.encode_state(state)
-            main = self.model.heads_from_encoded(encoded, mapping, remaining)[-1]
-            delta = correction(self.model, encoded, mapping, remaining)
-            loss = torch.nn.functional.mse_loss(main+delta, self.targets)
-        value = float(loss)
+            for start in range(0, count, 512):
+                batch = slice(start, start + 512)
+                encoded = self.model.encode_state(state[batch])
+                main = self.model.heads_from_encoded(encoded, mapping[batch], remaining[batch])[-1]
+                delta = correction(self.model, encoded, mapping[batch], remaining[batch])
+                losses.append(torch.nn.functional.mse_loss(main + delta, self.targets[batch]))
+        value = float(losses[0] if len(losses) == 1 else torch.stack(losses).mean())
         require(np.isfinite(value), 'Nonfinite Stage-C held-out loss')
         return value

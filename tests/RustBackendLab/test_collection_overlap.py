@@ -311,8 +311,8 @@ class Tables(unittest.TestCase):
 
 
 class CScale(unittest.TestCase):
-    def test_the_block_defaults_to_one_and_records_only_supported_values(self):
-        self.assertEqual(R.cpu_block()['teacher_budget']['c_scale'], 1.)
+    def test_the_block_defaults_to_point_one_and_records_only_supported_values(self):
+        self.assertEqual(R.cpu_block()['teacher_budget']['c_scale'], .1)
         budget = dict(mode='count', full=64, fast=8)
         for value in (.1, 1.):
             R.validate_cpu(dict(R.cpu_block(), teacher_budget=dict(budget, full_k=16, fast_k=4, c_scale=value)))
@@ -332,7 +332,7 @@ class CScale(unittest.TestCase):
     def test_the_new_block_overlaps_and_uses_more_readers(self):
         with R.scope(dict(R.DEFAULTS, native_inference=R.cpu_block())):
             self.assertTrue(R.overlap_collection())
-            self.assertEqual(R.teacher_c_scale(), 1.)
+            self.assertEqual(R.teacher_c_scale(), .1)
             self.assertEqual(R.reader_workers(16), 24)
 
     def test_the_gpu_path_keeps_the_historical_constant_and_sequence(self):

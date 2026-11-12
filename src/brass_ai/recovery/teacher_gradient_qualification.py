@@ -21,6 +21,14 @@ def seal(receipt):
 def fixed_beta(target,raw):return min(10.,max(.01,target/raw))
 
 
+def full_tables(term):
+    context = getattr(term, 'qualification_context', {})
+    phase_rows = context.get('labels_by_phase', {})
+    tables = term.config['tables']
+    return (context.get('tables') == {'train': tables['train'], 'heldout': tables['held_out']} and
+            all(phase_rows.get(p, 0) > 0 for p in ('canal_early', 'canal_late', 'rail_early', 'rail_late')))
+
+
 def restore(receipt,target,iterations=4):
     if receipt is None:return None
     # One iteration is only the g1490 branch restart's re-calibration window.
@@ -69,12 +77,7 @@ def finish(term,state):
         valid=[s for s in term.steps if s.get('raw_share') is not None and s['raw_share']>0 and
             all(math.isfinite(s.get(k,float('nan'))) for k in ('raw_share','cosine','actor_norm','teacher_norm')) and
             s['actor_norm']>0]
-        phase_rows=context.get('labels_by_phase',{})
-        # term.config is the teacher phase; a full iteration ran all of its tables.
-        tables=term.config['tables']
-        full=(context.get('tables')=={'train':tables['train'],'heldout':tables['held_out']} and
-            all(phase_rows.get(p,0)>0 for p in ('canal_early','canal_late','rail_early','rail_late')))
-        if valid and full:
+        if valid and full_tables(term):
             observation=dict(generation=term.generation,steps=len(term.steps),valid_steps=len(valid),
                 raw_shares=[s['raw_share'] for s in valid],cosines=[s['cosine'] for s in valid],
                 actor_norms=[s['actor_norm'] for s in valid],teacher_norms=[s['teacher_norm'] for s in valid],

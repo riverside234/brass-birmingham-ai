@@ -77,6 +77,9 @@ class StageMachine:
         if options is not None and 'schedule' in options:
             from .search_value_schedule import initialize,stage_a_iterations,stage_b_iterations
             initialize(self.state,options);self.stage_a=stage_a_iterations(options);self.stage_b=stage_b_iterations(options)
+            configured_lambda = options.get('target', {}).get('lambda')
+            if configured_lambda is not None:
+                self.choose_lambda(configured_lambda)
 
     def choose_lambda(self, value):
         require(value in (.5,.8,.95,1.) and self.state['lam'] in (None,value), 'Lambda changes require reviewed buffer retirement')
@@ -233,7 +236,7 @@ class Companion:
     def head_only_heldout(self, rows, heldout, *, generation, intervals, interval_steps):
         """Stage A with the Stage C early stop: frozen-trunk head fitting in intervals.
 
-        Each interval is kept only if the loss on eight whole held-out buffered games
+        Each interval is kept only if the loss on the whole held-out games
         does not rise; a rise restores that interval's head weights and Adam and stops.
         """
         from .search_value_retention import HeldoutLoss

@@ -12,16 +12,32 @@ use serde::Serialize;
 use serde_json::{json, Value};
 
 pub const CONTRACT: &str = "teacher-cotton-exploration/1.0.0";
+const DEVELOP_CONTRACT: &str = "teacher-cotton-exploration/2.0.0";
 pub const PROBABILITY: f64 = 0.2;
 pub const CAP: u8 = 3;
 
-pub fn settings() -> Value {
-    json!({"contract":CONTRACT,"probability":PROBABILITY,"max_per_seat_era":CAP,
+pub fn settings(develop: bool) -> Value {
+    let (contract, probability) = if develop {
+        (DEVELOP_CONTRACT, 0.25)
+    } else {
+        (CONTRACT, PROBABILITY)
+    };
+    json!({"contract":contract,"probability":probability,"max_per_seat_era":CAP,
         "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":"train"})
 }
 pub fn cotton(c: &Choice) -> bool {
     c.kind == Kind::Build && c.industry == Some(Industry::CottonMill)
 }
+fn develop_cotton(c: &Choice) -> bool {
+    c.kind == Kind::Develop && c.industry == Some(Industry::CottonMill)
+}
+fn targeted(c: &Choice, develop: bool) -> bool {
+    cotton(c) || develop && develop_cotton(c)
+}
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
 fn era(e: Era) -> usize {
     usize::from(e == Era::RailEra)
 }
@@ -58,11 +74,18 @@ pub struct Counts {
     pub triggers: u64,
     pub targeted_builds: u64,
     pub actual_builds: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub targeted_develops: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub actual_develops: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub continuation_targets: u64,
     pub base_cotton_probability_sum: f64,
     pub mixed_cotton_probability_sum: f64,
 }
 #[derive(Clone, Debug)]
 pub struct Selection {
+    contract: &'static str,
     pub targeted: bool,
     pub probability: f64,
     pub used_before: u8,
@@ -73,7 +96,7 @@ pub struct Selection {
 }
 impl Selection {
     pub fn label(&self) -> Value {
-        json!({"contract":CONTRACT,"targeted":self.targeted,"probability":self.probability,
+        json!({"contract":self.contract,"targeted":self.targeted,"probability":self.probability,
             "used_before":self.used_before,"cotton_visits":self.cotton_visits,"total_visits":self.total_visits,
             "covered_locations":self.covered_locations})
     }
@@ -83,13 +106,20 @@ pub struct State {
     pub counts: [Counts; 2],
     pub used: [[u8; 4]; 2],
     pub built: [[u32; 4]; 2],
+    developed: [[u32; 4]; 2],
+    pub develop: bool,
     current: Option<Binding>,
     committed: Option<Binding>,
     eligible: bool,
     profile: usize,
     pub selection: Option<Selection>,
+    continuation_choice: Option<String>,
 }
 impl State {
+    fn allowed_phase(&self, phase: Phase) -> bool {
+        phase == Phase::Action || self.develop && phase == Phase::Continuation
+    }
+
     /// Repeated preparation of one revision is idempotent. No allowance is
     /// spent here: a cancelled search or rejected action cannot consume it.
     pub fn prepare(
@@ -99,14 +129,15 @@ impl State {
         fast: bool,
         window: bool,
     ) -> usize {
-        if view.context.phase != Phase::Action {
+        let phase = view.context.phase;
+        if !self.allowed_phase(phase) {
             self.selection = None;
             self.eligible = false;
             return 0;
         }
         let binding = Binding::of(&view.context);
         if self.current == Some(binding) {
-            return if self.eligible {
+            return if self.eligible && phase == Phase::Action {
                 if fast {
                     1
                 } else {
@@ -118,11 +149,27 @@ impl State {
         }
         self.current = Some(binding);
         self.selection = None;
+        self.continuation_choice = None;
         self.eligible = false;
         self.profile = usize::from(fast);
+        let pause = || {
+            view.slots.iter().any(|s| {
+                s.tile.as_ref().is_some_and(|t| {
+                    t.seat == view.seat && t.industry == Industry::CottonMill && !t.flipped
+                })
+            })
+        };
+        if phase == Phase::Continuation {
+            self.eligible = window
+                && self.used[binding.era][binding.seat] < CAP
+                && choices.len() > 1
+                && choices.iter().any(develop_cotton)
+                && !pause();
+            return 0;
+        }
         let c = &mut self.counts[self.profile];
         c.action_decisions += 1;
-        if choices.len() < 2 || !choices.iter().any(cotton) {
+        if choices.len() < 2 || !choices.iter().any(|c| targeted(c, self.develop)) {
             return 0;
         }
         c.legal_decisions += 1;
@@ -134,11 +181,7 @@ impl State {
             c.blocked_cap += 1;
             return 0;
         }
-        if view.slots.iter().any(|s| {
-            s.tile.as_ref().is_some_and(|t| {
-                t.seat == view.seat && t.industry == Industry::CottonMill && !t.flipped
-            })
-        }) {
+        if pause() {
             c.blocked_unflipped += 1;
             return 0;
         }
@@ -157,8 +200,34 @@ impl State {
         }
     }
 
+    fn trigger(&self, seed: u64, decision: u64) -> bool {
+        let inverse = if self.develop { 4 } else { 5 };
+        u128::from(super::cpu_eval::mix(
+            seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a01),
+        )) * inverse
+            < (1u128 << 64)
+    }
+
+    /// The second removal is a legal continuation choice within the same action.
+    /// Use the cached plan as the base and spend no additional search budget.
+    pub fn sample_continuation(
+        &mut self,
+        planned: String,
+        choices: &[Choice],
+        seed: u64,
+        decision: u64,
+    ) -> String {
+        if self.eligible && self.trigger(seed, decision) {
+            if let Some(choice) = choices.iter().find(|c| develop_cotton(c)) {
+                self.continuation_choice = Some(choice.id.clone());
+                return choice.id.clone();
+            }
+        }
+        planned
+    }
+
     /// Called after search, and AFTER candidate coverage. The mixture's exact
-    /// behavior probability is .8*N(a)/N + .2*I_cotton(a)*N(a)/N_cotton.
+    /// behavior probability mixes the root visits with visits to targeted cotton choices.
     /// Separate keyed streams leave search and the existing baseline draw intact.
     pub fn sample(
         &mut self,
@@ -179,13 +248,16 @@ impl State {
         let mut cotton_total = 0;
         let mut locations = Vec::with_capacity(2);
         for (choice, n) in choices.iter().zip(counts) {
-            if *n > 0 && cotton(choice) {
+            if *n > 0 && targeted(choice, self.develop) {
                 cotton_total += n;
-                if !locations.contains(&choice.target.as_deref()) {
-                    locations.push(choice.target.as_deref());
+                let location = (choice.kind, choice.target.as_deref());
+                if !locations.contains(&location) {
+                    locations.push(location);
                 }
             }
         }
+        let trigger = self.trigger(seed, decision);
+        let mixture = if self.develop { 0.25 } else { PROBABILITY };
         let c = &mut self.counts[self.profile];
         if cotton_total == 0 {
             c.no_cotton_visits += 1;
@@ -197,18 +269,14 @@ impl State {
         c.total_visits += total;
         let base_p = cotton_total as f64 / total as f64;
         c.base_cotton_probability_sum += base_p;
-        c.mixed_cotton_probability_sum += (1. - PROBABILITY) * base_p + PROBABILITY;
-        let trigger = (u128::from(super::cpu_eval::mix(
-            seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a01),
-        )) * 5)
-            < (1u128 << 64);
+        c.mixed_cotton_probability_sum += (1. - mixture) * base_p + mixture;
         let mut selected = base;
         if trigger {
             let z = super::cpu_eval::mix(seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a02));
             let draw = ((u128::from(z) * u128::from(cotton_total)) >> 64) as u64;
             let mut sum = 0;
             for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
-                if cotton(choice) {
+                if targeted(choice, self.develop) {
                     sum += n;
                     if draw < sum {
                         selected = i;
@@ -219,13 +287,18 @@ impl State {
             c.triggers += 1;
         }
         let binding = self.current.ok_or("cotton choice without preparation")?;
-        let probability = (1. - PROBABILITY) * counts[selected] as f64 / total as f64
-            + if cotton(&choices[selected]) {
-                PROBABILITY * counts[selected] as f64 / cotton_total as f64
+        let probability = (1. - mixture) * counts[selected] as f64 / total as f64
+            + if targeted(&choices[selected], self.develop) {
+                mixture * counts[selected] as f64 / cotton_total as f64
             } else {
                 0.
             };
         self.selection = Some(Selection {
+            contract: if self.develop {
+                DEVELOP_CONTRACT
+            } else {
+                CONTRACT
+            },
             targeted: trigger,
             probability,
             used_before: self.used[binding.era][binding.seat],
@@ -245,7 +318,7 @@ impl State {
         choice: &Choice,
         after_revision: u32,
     ) -> Result<()> {
-        if view.context.phase != Phase::Action {
+        if !self.allowed_phase(view.context.phase) {
             return Ok(());
         }
         let binding = Binding::of(&view.context);
@@ -256,30 +329,54 @@ impl State {
             after_revision > binding.revision && self.current == Some(binding),
             "stale cotton commit",
         )?;
+        let mut trigger = self.continuation_choice.is_some();
+        if let Some(selected) = &self.continuation_choice {
+            check(*selected == choice.id, "cotton continuation choice differs")?;
+        }
         if let Some(selection) = &self.selection {
             check(
                 selection.choice == choice.id,
                 "cotton committed choice differs",
             )?;
-            if selection.targeted {
-                check(
-                    cotton(choice) && self.used[binding.era][binding.seat] < CAP,
-                    "cotton allowance exceeded",
-                )?;
-                self.used[binding.era][binding.seat] += 1;
+            trigger = selection.targeted;
+        }
+        if trigger {
+            check(
+                targeted(choice, self.develop) && self.used[binding.era][binding.seat] < CAP,
+                "cotton allowance exceeded",
+            )?;
+            self.used[binding.era][binding.seat] += 1;
+            if cotton(choice) {
                 self.counts[self.profile].targeted_builds += 1;
+            } else {
+                self.counts[self.profile].targeted_develops += 1;
+                self.counts[self.profile].continuation_targets +=
+                    u64::from(self.continuation_choice.is_some());
             }
         }
         if cotton(choice) {
             self.built[binding.era][binding.seat] += 1;
             self.counts[self.profile].actual_builds += 1;
         }
+        if self.develop && develop_cotton(choice) {
+            self.developed[binding.era][binding.seat] += 1;
+            self.counts[self.profile].actual_develops += 1;
+        }
         self.committed = Some(binding);
         Ok(())
     }
     pub fn receipt(&self) -> Value {
-        json!({"contract":CONTRACT,"long":self.counts[0],"short":self.counts[1],
-            "targeted_by_era_seat":self.used,"builds_by_era_seat":self.built})
+        let contract = if self.develop {
+            DEVELOP_CONTRACT
+        } else {
+            CONTRACT
+        };
+        let mut receipt = json!({"contract":contract,"long":self.counts[0],"short":self.counts[1],
+            "targeted_by_era_seat":self.used,"builds_by_era_seat":self.built});
+        if self.develop {
+            receipt["develops_by_era_seat"] = json!(self.developed);
+        }
+        receipt
     }
 }
 
@@ -409,5 +506,43 @@ mod tests {
         assert_eq!(s.used, State::default().used);
         s.no_evidence();
         assert_eq!(s.counts[0].no_evidence, 1);
+    }
+
+    #[test]
+    fn twenty_five_percent_mix_can_develop_twice_in_one_action() {
+        let mut v = view();
+        let mut choices = choices();
+        choices[1].kind = Kind::Develop;
+        choices[1].target = None;
+        choices.truncate(2);
+        let mut s = State {
+            develop: true,
+            ..State::default()
+        };
+        assert_eq!(s.prepare(&v, &choices, false, true), 2);
+        let triggers = (0..10_000).filter(|d| s.trigger(7, *d)).count();
+        assert!((2300..2700).contains(&triggers));
+        let decision = (0..100).find(|d| s.trigger(7, *d)).unwrap();
+        assert_eq!(
+            s.sample(0, &choices, &[90, 10], 100, 7, decision).unwrap(),
+            1
+        );
+        let label = s.selection.as_ref().unwrap().label();
+        assert_eq!(label["contract"], DEVELOP_CONTRACT);
+        assert!((label["probability"].as_f64().unwrap() - 0.325).abs() < 1e-14);
+        s.commit(&v, &choices[1], v.context.revision + 1).unwrap();
+
+        v.context.phase = Phase::Continuation;
+        v.context.revision += 1;
+        choices[0].kind = Kind::Finish;
+        assert_eq!(s.prepare(&v, &choices, false, true), 0); // no new search coverage
+        let picked = s.sample_continuation(choices[0].id.clone(), &choices, 7, decision);
+        assert_eq!(picked, choices[1].id);
+        s.commit(&v, &choices[1], v.context.revision + 1).unwrap();
+        let seat = v.context.actor as usize;
+        assert_eq!(s.used[0][seat], 2);
+        assert_eq!(s.counts[0].targeted_develops, 2);
+        assert_eq!(s.counts[0].continuation_targets, 1);
+        assert_eq!(s.receipt()["develops_by_era_seat"][0][seat], 2);
     }
 }

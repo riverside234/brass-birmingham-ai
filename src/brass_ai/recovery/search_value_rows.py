@@ -103,9 +103,11 @@ class ValueBuffer:
     Retired shards stay on disk until the existing retention workflow commits.
     No ordinary replay reader sees these paths or records.
     """
-    def __init__(self, directory, reward_id, *, receipts=(), retired=(), pending_files=(), pending_directory=None):
+    def __init__(self, directory, reward_id, *, receipts=(), retired=(), pending_files=(), pending_directory=None,
+                 heldout_iterations=8):
         self.directory = Path(directory).resolve()
         self.reward_id = reward_id
+        self.windows = dict(train=8, heldout=heldout_iterations)
         self.receipts = copy.deepcopy(list(receipts))
         self.retired = copy.deepcopy(list(retired))
         self.cache = {}
@@ -174,14 +176,15 @@ class ValueBuffer:
         # Caller supplies the *same* per-age label KL decision, not a second
         # expensive policy evaluation of every 8-age value tensor.
         require(split in ('train', 'heldout'), 'Invalid value split')
-        keep = [r for r in self.receipts if r['reward_id'] == self.reward_id and 0 <= generation-r['generation'] < 8]
+        keep = [r for r in self.receipts if r['reward_id'] == self.reward_id and
+                0 <= generation-r['generation'] < self.windows[r['split']]]
         for r in self.receipts:
             if r not in keep:
                 if r not in self.retired: self.retired.append(r)
                 self.cache.pop(r['sha256'], None)
         self.receipts = keep
         return [row for r in self.receipts if r['reward_id'] == self.reward_id and r['split'] == split
-                and 0 <= generation-r['generation'] < 8 and (split == 'heldout' or generation-r['generation'] not in stale_ages)
+                and (split == 'heldout' or generation-r['generation'] not in stale_ages)
                 for row in self._read(r)]
 
     def payload(self):

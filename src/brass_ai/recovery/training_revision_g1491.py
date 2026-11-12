@@ -40,7 +40,8 @@ EXPLORATION = dict(contract='root-visit-count-sampling/1.0.0', temperature=1., o
 RESTART = 'g1490-branch-restart'
 # The same restart with 256 teacher rows per PPO step (the g1190 restart's second attempt).
 WIDE_RESTART = 'g1190-branch-restart-256-rows'
-RESTARTS = (RESTART, WIDE_RESTART)
+SEARCH_REFRESH = 'g1190-search-head-refresh-96-rows'
+RESTARTS = (RESTART, WIDE_RESTART, SEARCH_REFRESH)
 # Exact values of each reviewed variant; None is the in-run g1491 adoption.
 VARIANTS = {
     None: dict(tables=TABLES, buffer=BUFFER, rows_per_step=ROWS_PER_STEP, ppo_epochs=PPO_EPOCHS,
@@ -49,6 +50,7 @@ VARIANTS = {
                   ppo_epochs=PREVIOUS_PPO_EPOCHS, shadow_iterations=1, short_labels=False),
 }
 VARIANTS[WIDE_RESTART] = dict(VARIANTS[RESTART], rows_per_step=256)
+VARIANTS[SEARCH_REFRESH] = dict(VARIANTS[RESTART], rows_per_step=96)
 
 
 def block(*, cotton=True, variant=None):
@@ -57,7 +59,7 @@ def block(*, cotton=True, variant=None):
     exploration=copy.deepcopy(EXPLORATION)
     if cotton:
         from .teacher_cotton import settings
-        exploration['cotton']=settings()
+        exploration['cotton']=settings(develop=variant==SEARCH_REFRESH)
     labels = (dict(searches='long-and-short', long_weight=LONG_WEIGHT, short_weight=1-LONG_WEIGHT) if variant is None
               else dict(searches='long-only'))
     result = dict(contract=CONTRACT, labels=labels, exploration=exploration,
@@ -210,7 +212,8 @@ def validate_job(job):
     revision = job.get('teacher_revision')
     split = job.get('split')
     allowed=(_job_block(EXPLORATION), _job_block(block()['exploration'],split=split),
-             _job_block(block(variant=RESTART)['exploration'],split=split,short_labels=False))
+             _job_block(block(variant=RESTART)['exploration'],split=split,short_labels=False),
+             _job_block(block(variant=SEARCH_REFRESH)['exploration'],split=split,short_labels=False))
     require(revision is None or (digest(revision) in tuple(digest(b) for b in allowed) and
             job.get('seating') == 'all-seat-search' and not job.get('h2h') and not job.get('shadow_probe')),
             'Unreviewed g1491 teacher job revision')
@@ -225,8 +228,9 @@ def holds_ppo_lr(config):
 def summary(config):
     c = config['teacher_phase']
     labels = c[KEY]['labels']
-    return dict(contract=CONTRACT, variant=variant_of(config), mode=c['mode'], tables=tables(config),
+    variant = variant_of(config)
+    return dict(contract=CONTRACT, variant=variant, mode=c['mode'], tables=tables(config),
         buffer=copy.deepcopy(c['buffer']), teacher_rows_per_step=c['term']['rows_per_step'],
         labels=labels['searches'], long_weight=long_weight(config), short_weight=labels.get('short_weight'),
         ppo_epochs=config['update']['epochs'], beta_calibration_iterations=c['term']['shadow_iterations'],
-        exploration=copy.deepcopy(c[KEY]['exploration']), ppo_lr_during_calibration='hold')
+        exploration=copy.deepcopy(c[KEY]['exploration']), ppo_lr_during_calibration='normal' if variant==SEARCH_REFRESH else 'hold')

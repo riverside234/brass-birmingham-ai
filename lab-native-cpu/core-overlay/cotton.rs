@@ -8,13 +8,15 @@ use crate::state::{
 pub struct Coverage {
     pub context: ViewContext,
     pub limit: usize,
+    pub develop: bool,
 }
 
-fn cotton(choice: &Choice) -> bool {
-    choice.kind == Kind::Build && choice.industry == Some(Industry::CottonMill)
+fn cotton(choice: &Choice, develop: bool) -> bool {
+    choice.industry == Some(Industry::CottonMill)
+        && (choice.kind == Kind::Build || develop && choice.kind == Kind::Develop)
 }
 
-/// Reserve up to two distinct building locations within the existing K slots.
+/// Reserve up to two distinct cotton choices within the existing K slots.
 /// Two linear scans select the highest-prior representatives; no feature work,
 /// extra RNG draws, extra trajectories or sorting of the full legal set.
 pub fn candidates(
@@ -23,6 +25,7 @@ pub fn candidates(
     choices: &[Choice],
     selected: &[usize],
     limit: usize,
+    develop: bool,
 ) -> Result<Vec<usize>> {
     check(
         logits.len() == choices.len()
@@ -37,21 +40,31 @@ pub fn candidates(
     let mut required = Vec::with_capacity(3);
     // Retain an ordinary comparator, even if the original top K was all cotton.
     let ordinary = (0..choices.len())
-        .filter(|i| !cotton(&choices[*i]))
+        .filter(|i| !cotton(&choices[*i], develop))
         .max_by(|a, b| {
             (logits[*a] + gumbels[*a])
                 .total_cmp(&(logits[*b] + gumbels[*b]))
                 .then(b.cmp(a))
         });
-    for _ in 0..limit.min(selected.len() - usize::from(ordinary.is_some())) {
+    let slots = limit.min(selected.len() - usize::from(ordinary.is_some()));
+    for slot in 0..slots {
+        // With room for two candidates, include development when available and
+        // retain a separate build location instead of another discard for develop.
+        let prefer_develop = develop && slot == 0 && slots == 2;
         let best = (0..choices.len())
             .filter(|i| {
-                cotton(&choices[*i])
-                    && !required
-                        .iter()
-                        .any(|j: &usize| choices[*j].target == choices[*i].target)
+                cotton(&choices[*i], develop)
+                    && !required.iter().any(|j: &usize| {
+                        choices[*j].kind == choices[*i].kind
+                            && choices[*j].target == choices[*i].target
+                    })
             })
-            .max_by(|a, b| logits[*a].total_cmp(&logits[*b]).then(b.cmp(a)));
+            .max_by(|a, b| {
+                (prefer_develop && choices[*a].kind == Kind::Develop)
+                    .cmp(&(prefer_develop && choices[*b].kind == Kind::Develop))
+                    .then_with(|| logits[*a].total_cmp(&logits[*b]))
+                    .then(b.cmp(a))
+            });
         if let Some(i) = best {
             required.push(i);
         } else {
@@ -114,11 +127,14 @@ mod tests {
         let l = vec![5., 4., -8., -9., -10.];
         let g = vec![0.; 5];
         assert_eq!(
-            candidates(&l, &g, &c, &[0, 1, 2, 3], 2).unwrap(),
+            candidates(&l, &g, &c, &[0, 1, 2, 3], 2, false).unwrap(),
             vec![0, 1, 2, 4]
         );
-        assert_eq!(candidates(&l, &g, &c, &[0, 1], 2).unwrap(), vec![0, 2]);
-        assert_eq!(candidates(&l, &g, &c, &[0], 2).unwrap(), vec![0]);
+        assert_eq!(
+            candidates(&l, &g, &c, &[0, 1], 2, false).unwrap(),
+            vec![0, 2]
+        );
+        assert_eq!(candidates(&l, &g, &c, &[0], 2, false).unwrap(), vec![0]);
         assert_eq!(l, vec![5., 4., -8., -9., -10.]);
     }
     #[test]
@@ -129,9 +145,34 @@ mod tests {
             choice("c", "C", true),
         ];
         assert_eq!(
-            candidates(&[0., 9., 8.], &[0.; 3], &c, &[1, 2], 1).unwrap(),
+            candidates(&[0., 9., 8.], &[0.; 3], &c, &[1, 2], 1, false).unwrap(),
             vec![0, 1]
         );
-        assert_eq!(candidates(&[0.], &[0.], &c[..1], &[0], 1).unwrap(), vec![0]);
+        assert_eq!(
+            candidates(&[0.], &[0.], &c[..1], &[0], 1, false).unwrap(),
+            vec![0]
+        );
+    }
+
+    #[test]
+    fn reserves_a_cotton_develop_and_build_inside_the_same_k() {
+        let mut develop = choice("develop", "", true);
+        develop.kind = Kind::Develop;
+        develop.target = None;
+        let c = vec![
+            choice("a", "A", false),
+            choice("b", "B", true),
+            choice("c", "C", true),
+            develop,
+        ];
+        let logits = [0., -1., -2., -5.];
+        assert_eq!(
+            candidates(&logits, &[0.; 4], &c, &[0, 1, 2], 2, true).unwrap(),
+            vec![0, 1, 3]
+        );
+        assert_eq!(
+            candidates(&logits, &[0.; 4], &c, &[0, 1, 2], 2, false).unwrap(),
+            vec![0, 1, 2]
+        );
     }
 }

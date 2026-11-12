@@ -22,6 +22,11 @@ generation: utility hidden width 32 -> 256, Stage A budget 50 -> 100 (completed
 iterations retained), then one fresh beta measurement without waiting for utility
 qualification. Interrupted uncommitted work is archived before replaying it.
 The learned utility/search weights, PPO/PPG moments, replay and RNG are retained.
+
+--refresh-search-head replaces the 256-wide search head once with a fresh 32-wide
+head at the committed generation. It restarts Stage A with w=0 and lambda=.8,
+resets PPG beta to .25 and re-measures teacher beta with 96 teacher rows per PPO step while teaching stays on.
+--adaptive-teacher-beta enables ongoing adjustment from the accepted beta.
 """
 import importlib.util
 from pathlib import Path

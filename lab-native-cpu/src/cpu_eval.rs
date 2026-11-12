@@ -486,6 +486,7 @@ pub struct Revision {
     opening_actions: u32,
     long_search: bool,
     cotton: bool,
+    cotton_develop: bool,
 }
 
 /// Per-table exploration state; index 0 counts long searches, 1 short ones.
@@ -503,6 +504,12 @@ pub struct Exploration {
 }
 
 impl Exploration {
+    fn for_revision(revision: &Revision) -> Self {
+        let mut state = Self::default();
+        state.cotton.develop = revision.cotton_develop;
+        state
+    }
+
     /// The seat's 1-based action index in its era; repeated decisions of one action keep it.
     fn action(&mut self, seat: usize, era: Era, round: u8, actions_remaining: u8) -> u32 {
         let key = (era, round, actions_remaining);
@@ -537,7 +544,8 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         "unreviewed teacher revision",
     )?;
     let cotton = e.get("cotton").is_some();
-    check(!cotton || (e["cotton"] == crate::cpu_cotton::settings() && job["split"] == "train"
+    let cotton_develop = cotton && e["cotton"] == crate::cpu_cotton::settings(true);
+    check(!cotton || ((cotton_develop || e["cotton"] == crate::cpu_cotton::settings(false)) && job["split"] == "train"
         && job["h2h"] != true && job["shadow_probe"] != true), "unreviewed cotton exploration")?;
     Ok(Some(Revision {
         job: block.clone(),
@@ -545,6 +553,7 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         opening_actions: opening as u32,
         long_search: e["long_search"] == true,
         cotton,
+        cotton_develop,
     }))
 }
 
@@ -589,6 +598,9 @@ pub fn teacher_explore(
             return Ok((planned, false));
         };
         let c = &view.context;
+        if c.phase == Phase::Continuation && revision.cotton_develop {
+            return Ok((state.cotton.sample_continuation(planned, &actual.key.choices, seed, decision), false));
+        }
         if c.phase != Phase::Action {
             return Ok((planned, false));
         }
@@ -622,14 +634,18 @@ pub fn teacher_explore(
 
 /// Pure admission before the search; the matching core root alone gets coverage.
 /// A cached continuation keeps its existing evidence and never launches extra work.
-pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fast: bool) -> usize {
+pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fast: bool) -> (usize, bool) {
     REVISION.with(|cell| {
         let mut guard=cell.borrow_mut();
-        let Some((revision,state))=guard.as_mut().filter(|(r,_)| r.cotton) else {return 0;};
+        let Some((revision,state))=guard.as_mut().filter(|(r,_)| r.cotton) else {return (0, false);};
         let c=&view.context;
-        let window=c.phase==Phase::Action &&
-            (state.action(actual.actor,c.era,c.round,c.actions_remaining)<=revision.opening_actions || (!fast && revision.long_search));
-        state.cotton.prepare(view,&actual.key.choices,fast,window)
+        let index = match c.phase {
+            Phase::Action => state.action(actual.actor,c.era,c.round,c.actions_remaining),
+            Phase::Continuation if revision.cotton_develop => state.count[actual.actor],
+            _ => 0,
+        };
+        let window = index > 0 && (index <= revision.opening_actions || !fast && revision.long_search);
+        (state.cotton.prepare(view,&actual.key.choices,fast,window), revision.cotton_develop)
     })
 }
 
@@ -723,7 +739,10 @@ pub fn teacher_install(request: &Value, expected: &Value, max_cost: f64) -> Resu
             forward_ns: 0,
         })
     });
-    REVISION.with(|cell| *cell.borrow_mut() = revision.map(|r| (r, Exploration::default())));
+    REVISION.with(|cell| *cell.borrow_mut() = revision.map(|r| {
+        let state = Exploration::for_revision(&r);
+        (r, state)
+    }));
     Ok(())
 }
 
@@ -1328,7 +1347,10 @@ mod tests {
 
     fn install_revision(job: Option<Value>) {
         let parsed = job.map(|j| revision(&j).unwrap().unwrap());
-        REVISION.with(|cell| *cell.borrow_mut() = parsed.map(|r| (r, Exploration::default())));
+        REVISION.with(|cell| *cell.borrow_mut() = parsed.map(|r| {
+            let state = Exploration::for_revision(&r);
+            (r, state)
+        }));
     }
 
     fn initial() -> NativeState {
@@ -1454,7 +1476,7 @@ mod tests {
     fn cotton_is_training_only_and_the_old_revision_keeps_its_receipt() {
         let mut job=revision_job(7,true);
         job["split"]=json!("train");
-        job["teacher_revision"]["exploration"]["cotton"]=crate::cpu_cotton::settings();
+        job["teacher_revision"]["exploration"]["cotton"]=crate::cpu_cotton::settings(false);
         assert!(revision(&job).unwrap().unwrap().cotton);
         for split in ["heldout","validation"] {
             let mut bad=job.clone();bad["split"]=json!(split);assert!(revision(&bad).is_err());
@@ -1483,20 +1505,20 @@ mod tests {
         }
         for (coverage,stale) in [(0,false),(2,false),(2,true)] {
             let mut job=revision_job(7,true);
-            job["split"]=json!("train");job["teacher_revision"]["exploration"]["cotton"]=crate::cpu_cotton::settings();
+            job["split"]=json!("train");job["teacher_revision"]["exploration"]["cotton"]=crate::cpu_cotton::settings(false);
             install_revision(Some(job));
             let clock=MonotonicClock::new(Arc::new(AtomicBool::new(false)));
             let state=initial();let (input,_)=root(&state);
             let info=Brass::new(input.clone(),false).unwrap().root().unwrap();
             let view=input.view.clone();
-            assert_eq!(teacher_cotton_prepare(&view,&info,false),2);
+            assert_eq!(teacher_cotton_prepare(&view,&info,false),(2,false));
             let identity=Identity {game_instance:"cotton".into(),generation:1,export_sha256:"a".repeat(64)};
             let mut settings=Settings::default();settings.search=Config {k:4,simulations:16,seed:7,..Config::default()};
             let mut owner=Session::new(identity.clone(),&input,settings,SearchBudget {started_ns:0,work_deadline_ns:10_000_000_000,
                 deadline_ns:11_000_000_000,reserve_ns:1_000_000_000}).unwrap();
             owner.enable_teacher_exports().unwrap();
             let mut context=input.view.context.clone();if stale {context.revision+=1;}
-            owner.set_teacher_cotton(&context,coverage).unwrap();
+            owner.set_teacher_cotton(&context,coverage,false).unwrap();
             let out=crate::teacher::decide_turn(&mut owner,&identity,1,input,Mode::Count,&clock,&mut LowCotton).unwrap();
             let e=owner.take_teacher_export().unwrap();
             assert_eq!(out.completed,16);assert_eq!(e.stats.count.iter().sum::<u64>(),16);

@@ -63,7 +63,7 @@ class Configuration(unittest.TestCase):
     def test_default_block_uses_fixed_count_budgets(self):
         block = R.cpu_block()
         R.validate_cpu(block)
-        self.assertEqual(block['teacher_budget'], dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=1.))
+        self.assertEqual(block['teacher_budget'], dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=.1))
         self.assertEqual({block[k] for k in ('ordinary', 'teacher', 'rating')}, {'cpu-ort'})
 
     def test_python_and_native_safety_caps_stay_equal(self):
@@ -100,13 +100,15 @@ class Configuration(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('continue_rust_shadow_fixture', path)
         launcher = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(launcher)
-        options = dict(workers=64, teacher_budget='count', teacher_full=640, teacher_fast=96, teacher_fast_k=8, no_pinning=False,
-                       c_scale=1., no_overlap=False, readers=24)
-        block = launcher.inference_choice(SimpleNamespace(inference='cpu', **options))
+        parser = launcher.parser(inference='cpu')
+        options = ['--expected-generation', '1730']
+        block = launcher.inference_choice(parser.parse_args(options))
         self.assertEqual(block, R.cpu_block())
-        self.assertIsNone(launcher.inference_choice(SimpleNamespace(inference='gpu', **options)))
-        self.assertEqual(launcher.inference_choice(SimpleNamespace(inference='keep', **options)), 'keep')
-        timed = launcher.inference_choice(SimpleNamespace(inference='cpu', **dict(options, teacher_budget='timed')))
+        unit_scale = launcher.inference_choice(parser.parse_args([*options, '--c-scale', '1']))
+        self.assertEqual(unit_scale['teacher_budget']['c_scale'], 1.)
+        self.assertIsNone(launcher.inference_choice(parser.parse_args([*options, '--inference', 'gpu'])))
+        self.assertEqual(launcher.inference_choice(parser.parse_args([*options, '--inference', 'keep'])), 'keep')
+        timed = launcher.inference_choice(parser.parse_args([*options, '--teacher-budget', 'timed']))
         self.assertEqual(timed['teacher_budget'], dict(mode='timed'))
 
     def test_removing_the_block_returns_the_exact_gpu_settings(self):

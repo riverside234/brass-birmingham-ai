@@ -43,7 +43,11 @@ def validate(config):
     if c.get('contract') == 'teacher-phase/2.0.0':
         from .search_value_config import validate as value_validate, fast_profile
         from . import training_revision_g1491 as g1491
+        from . import adaptive_teacher_beta as adaptive
         extra = {'startup', 'seating', 'fast_search', 'search_value'}
+        if adaptive.KEY in c:
+            require(digest(c[adaptive.KEY]) == digest(adaptive.settings()), 'Invalid adaptive teacher beta settings')
+            extra.add(adaptive.KEY)
         if g1491.KEY in c:
             # Validate the reviewed revision, then the unchanged rest of the phase.
             g1491.validate(config); extra = extra | {g1491.KEY}

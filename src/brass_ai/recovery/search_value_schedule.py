@@ -7,6 +7,9 @@ CONTRACT='search-value-stage-schedule/2.0.0'
 # Stage A lasts 10 iterations, or 30 in the reviewed g1290 restart recipe.
 STAGE_A_ITERATIONS=(10,30)
 HELDOUT_EARLY_STOP='heldout-early-stop/1.0.0'
+DEDICATED_EARLY_STOP='dedicated-heldout-early-stop/1.0.0'
+HELDOUT_ITERATIONS=20
+HELDOUT_GAMES=16
 
 
 def defaults():
@@ -23,11 +26,26 @@ def restart_schedule():
         stage_a_fit=HELDOUT_EARLY_STOP,ppg_beta_floor_after_stage_a=.5)
 
 
+def refreshed_schedule(stage_a):
+    return dict(defaults(),stage_a_iterations=stage_a,stage_b_iterations=50,validation_interval=5,
+        stage_a_fit=DEDICATED_EARLY_STOP,ppg_beta_floor_after_stage_b=.5)
+
+
+def dedicated_holdout(options):
+    return options.get('schedule', {}).get('stage_a_fit') == DEDICATED_EARLY_STOP
+
+
 def enabled(options):return 'schedule' in options
 
 
 def validate(options):
     schedule=options['schedule'];expected=defaults()
+    if dedicated_holdout(options):
+        require(type(schedule['validation_during_beta_qualification']) is bool and
+            type(schedule['stage_a_iterations']) is int and schedule['stage_a_iterations'] in (50,100) and
+            dict(schedule,validation_during_beta_qualification=True)==refreshed_schedule(schedule['stage_a_iterations']),
+            'Invalid refreshed search-value schedule')
+        return schedule
     if type(schedule) is dict and set(schedule)==set(restart_schedule()):
         require(type(schedule['validation_during_beta_qualification']) is bool,'Invalid beta-qualification validation switch')
         require(type(schedule['stage_a_iterations']) is int and schedule['stage_a_iterations'] in (50,100) and
@@ -52,13 +70,15 @@ def stage_b_iterations(options):
 
 
 def stage_a_holdout(options):
-    """Stage A fits in held-out-gated intervals (the Stage C early stop) instead of fixed steps."""
-    return enabled(options) and validate(options).get('stage_a_fit')==HELDOUT_EARLY_STOP
+    """Stage A fits in intervals checked by the Stage C early stop."""
+    return enabled(options) and validate(options).get('stage_a_fit') in (HELDOUT_EARLY_STOP, DEDICATED_EARLY_STOP)
 
 
 def beta_floor(options,stage):
     """The PPG beta floor this (already validated) schedule sets for the current head stage, or None."""
     if not enabled(options):return None
+    if dedicated_holdout(options):
+        return options['schedule']['ppg_beta_floor_after_stage_b'] if stage=='C' else .25
     floor=options['schedule'].get('ppg_beta_floor_after_stage_a')
     return floor if floor is not None and stage in ('B','C') else None
 
@@ -93,6 +113,8 @@ def previous_recipe(config):
     from .training_revision_g1307 import previous as before_lr_floor
     from .training_revision_g1491 import previous as before_g1491
     result=copy.deepcopy(before_revision(before_lr_floor(before_g1491(config))))
+    from .adaptive_teacher_beta import KEY as ADAPTIVE_BETA
+    result.get('teacher_phase',{}).pop(ADAPTIVE_BETA,None)
     # Width is separately bound by the signed recipe and strict checkpoint loader.
     result.pop('utility_hidden',None)
     options=result.get('teacher_phase',{}).get('search_value',{})
@@ -101,6 +123,7 @@ def previous_recipe(config):
     require(result['value_phase']['contract']==TEACHER_FLOOR_CONTRACT and
         result['value_phase']['beta_clone_min']==.25,'Revised residual stages require PPG floor .25')
     # The restart schedule's wider head (validated together with it) projects to the reviewed width.
+    if dedicated_holdout(options):options['target']['lambda']=None
     options.pop('schedule');options['head']['hidden']=32;options['head_to_head']['games']=256;options['trunk']['kl']='shared-ppg-cap'
     options['buffer']['staleness']='label-buffer-rule';options['gate']=original()['gate']
     options['trunk']['ordinary_heldout_tolerance']=.013
@@ -113,17 +136,21 @@ def validation_plan(config,state):
     if not enabled(options):return dict(due=True,games=4,reason='legacy-every-iteration')
     schedule=validate(options)
     from .teacher_gradient_qualification import restore
+    from .adaptive_teacher_beta import pending
     from .teacher_phase import committed_weight
     phase=config['teacher_phase'];term=phase['term']
-    q=restore(committed_weight(config,state).get('gradient_qualification'),
+    weight=committed_weight(config,state)
+    q=restore(weight.get('gradient_qualification'),
         term['share_target'],term['shadow_iterations'])
     qualifying=phase['mode']=='shadow' and not (q and q['passed'])
+    remeasuring=phase['mode']=='on' and pending(weight)
     forced=qualifying and schedule['validation_during_beta_qualification']
     periodic=(state['iteration']+1)%schedule['validation_interval']==0
-    due=forced or periodic
+    due=remeasuring or forced or periodic
     return dict(due=due,games=4 if due else 0,qualifying=qualifying,
         forced_by_beta_qualification=forced,interval=schedule['validation_interval'],
-        reason='beta-qualification' if forced else 'periodic' if due else 'not-scheduled')
+        **({'forced_by_beta_remeasurement': True} if remeasuring else {}),
+        reason='beta-remeasurement' if remeasuring else 'beta-qualification' if forced else 'periodic' if due else 'not-scheduled')
 
 
 def initialize(state,options):

@@ -43,16 +43,16 @@ def archive_pending(run,directory,state):
     """Journal then rename, so a Ctrl-C anywhere in this migration is retryable."""
     path=directory/'pending.json';current=pending(run,state['iteration'])
     previous=read(path) if path.exists() else dict(checkpoint=state['history'][-1],paths=[])
-    require(previous['checkpoint']==state['history'][-1],'Utility migration archive belongs to another checkpoint')
+    require(previous['checkpoint']==state['history'][-1],'Migration archive belongs to another checkpoint')
     paths=sorted(set(previous['paths'])|set(current))
     write_json(path,dict(checkpoint=previous['checkpoint'],paths=paths))
     for relative in paths:
         source=safe(run,run/relative);destination=safe(run,directory/'pending'/relative)
         if source.exists():
-            require(not destination.exists(),'Utility migration archive would overwrite pending work')
+            require(not destination.exists(),'Migration archive would overwrite pending work')
             destination.parent.mkdir(parents=True,exist_ok=True)
             source.rename(destination)
-        else:require(destination.exists(),'Utility migration pending archive is incomplete')
+        else:require(destination.exists(),'Migration pending archive is incomplete')
     return paths
 
 

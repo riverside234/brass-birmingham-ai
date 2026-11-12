@@ -33,8 +33,10 @@ def check_turn(label, row_round, job):
     """Long labels belong to the reserved turns; short labels only to the other turns of a g1491 job."""
     reserved = row_round == job['reservations'][str(label['seat'])][label['phase']]
     if label.get('cotton_exploration') is not None:
-        from .teacher_cotton import enabled
-        require(job.get('split')=='train' and enabled(job), 'Cotton exploration outside the training recipe')
+        from .teacher_cotton import job_settings
+        cotton = job_settings(job)
+        require(job.get('split')=='train' and cotton is not None and
+                label['cotton_exploration']['contract']==cotton['contract'], 'Cotton exploration outside the training recipe')
     if label_profile(label) == 'fast':
         require((job.get('teacher_revision') or {}).get('short_labels') is True,
                 'Short-search labels need the g1491 teacher revision')

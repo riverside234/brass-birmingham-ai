@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set the Gumbel c_scale (search constant c2) to 1.0 in every installed NN policy.
+"""Set the Gumbel c_scale (search constant c2) to 0.1 in every installed NN policy.
 
 Builds a new candidate of the BrassNative packages over the exact installed
 release, then qualifies it on real workers: each policy must load, pass its
@@ -19,13 +19,13 @@ import sys
 import threading
 
 ROOT = Path(__file__).resolve().parents[1]
-STUDY = ROOT/'artifacts/nn-c-scale/20261109'
-OUT = STUDY/'release-1.4.54'
-BASE_VERSION = '1.4.53-rust-local'
-VERSION = '1.4.54-rust-local'
-PACKAGES = ('alpha-g890', 'beta-g1290', 'il-v11-2')
+STUDY = ROOT/'artifacts/nn-c-scale/20261111'
+OUT = STUDY/'release-1.4.56'
+BASE_VERSION = '1.4.55-rust-local'
+VERSION = '1.4.56-rust-local'
+PACKAGES = ('alpha-g890', 'beta-g1290', 'beta2-g1190', 'il-v11-2')
 POLICIES = ('policy.json', 'policy-k8.json', 'policy-k32.json', 'policy-t15.json', 'policy-k8-t15.json', 'policy-k32-t15.json')
-C_SCALE = 1.0
+C_SCALE = 0.1
 PROTOCOL = 'brass-local-native/1.0.0'
 FORMAT = 'brass-nn-c-scale-release/1.0.0'
 
@@ -49,10 +49,9 @@ def pins(directory):
 
 def set_c_scale(path):
     """Edit the one number, so every other byte of the policy stays as qualified."""
-    text = path.read_text(encoding='utf-8')
-    updated, count = re.subn(r'("c2":\s*)0\.1\b', lambda m: m.group(1)+'1.0', text)
-    assert count == 1, f'{path}: expected one c2 of 0.1, found {count}'
-    path.write_text(updated, encoding='utf-8')
+    updated, count = re.subn(rb'("c2":\s*)1\.0(?=\s*[,}])', rb'\g<1>0.1', path.read_bytes())
+    assert count == 1, f'{path}: expected one c2 of 1.0, found {count}'
+    path.write_bytes(updated)
     value = read(path)
     assert value['config']['c2'] == C_SCALE and value['config']['c1'] == 50.
     return value
@@ -153,7 +152,7 @@ def qualify():
         for name in POLICIES:
             old_policy, new_policy = ROOT/'BrassNative'/package/name, OUT/'BrassNative'/package/name
             old_value, new_value = read(old_policy), read(new_policy)
-            assert old_value['config']['c2'] == .1 and new_value['config']['c2'] == C_SCALE
+            assert old_value['config']['c2'] == 1. and new_value['config']['c2'] == C_SCALE
             old_value['config']['c2'] = C_SCALE
             assert old_value == new_value, f'{package}/{name}: only c2 may differ'
             before, after = worker_readiness(old_policy), worker_readiness(new_policy)

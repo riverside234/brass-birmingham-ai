@@ -61,6 +61,27 @@ class Labels(unittest.TestCase):
         label,choices=self.example(targeted=True,choice='a')
         with self.assertRaises(ValueError):L.validate_improved_policy(label,choices)
 
+    def test_develop_mixture_and_second_removal_share_the_table_quota(self):
+        label, choices = self.example()
+        choices[1] = dict(id='c', kind='develop', industry='CottonMill')
+        label['cotton_exploration'].update(contract=C.DEVELOP_CONTRACT, probability=.325)
+        L.validate_improved_policy(label, choices)
+        label['seat'] = 0
+        row = dict(teacher=label, view=dict(context=dict(era='CanalEra')))
+        long = dict(triggers=1, targeted_builds=0, actual_builds=0, targeted_develops=2, actual_develops=2,
+                    continuation_targets=1, covered_decisions=1, eligible_decisions=1, legal_decisions=1,
+                    action_decisions=1, no_evidence=0, no_cotton_visits=0)
+        receipt = dict(contract=C.DEVELOP_CONTRACT, long=long, short={k: 0 for k in long},
+                       targeted_by_era_seat=[[2,0,0,0],[0]*4], develops_by_era_seat=[[2,0,0,0],[0]*4],
+                       builds_by_era_seat=[[0]*4,[0]*4])
+        recipe = R.block(variant=R.SEARCH_REFRESH)
+        job = dict(split='train', seating='all-seat-search', teacher_revision=R._job_block(recipe['exploration'], short_labels=False))
+        R.validate_job(job)
+        C.validate_receipt(receipt, job, [row])
+        long['continuation_targets'] = 0
+        with self.assertRaises(ValueError):
+            C.validate_receipt(receipt, job, [row])
+
     def test_table_cap_sequence_and_committed_counts(self):
         label,_=self.example()
         def row(used):

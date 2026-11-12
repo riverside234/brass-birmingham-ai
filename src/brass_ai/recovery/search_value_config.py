@@ -51,7 +51,7 @@ def max_steps_options(config):
 def validate(c):
     expected = defaults()
     if 'schedule' in c:
-        from .search_value_schedule import defaults as schedule_defaults,validate as schedule_validate
+        from .search_value_schedule import dedicated_holdout, validate as schedule_validate
         # The schedule itself is exactly one of the reviewed ones (schedule_validate).
         expected.update(schedule=copy.deepcopy(schedule_validate(c)))
         from .search_value_schedule import restart_schedule
@@ -72,6 +72,8 @@ def validate(c):
     fixed['blend']['w'] = 0.
     fixed['trunk']['scale'] = 0.
     fixed['target']['lambda'] = None
+    if 'schedule' in c and dedicated_holdout(c):
+        require(c['target']['lambda'] == .8, 'The refreshed search-value head uses lambda .8')
     require(digest(fixed) == digest(expected), 'Unreviewed search value recipe')
     require(c['stage'] in ('off', 'A', 'B', 'head_to_head', 'C'), 'Invalid search value stage')
     binding(c['blend']['w'])

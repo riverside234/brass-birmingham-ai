@@ -15,11 +15,9 @@ OPTIONAL = ('native_inference',)
 RUNTIME_KEYS = frozenset(DEFAULTS) | frozenset(OPTIONAL)
 MODES = ('production_fast', 'strict', 'profile')
 CPU_CONTRACT = 'brass-lab-cpu-inference/1.0.0'
-# Quick searches label nothing, so only their K may differ from the job's 4.
-TEACHER_BUDGET = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=1.)
-# The historical Gumbel constant, used by every search without a c_scale field.
 DEFAULT_C_SCALE = .1
 C_SCALES = (DEFAULT_C_SCALE, 1.)
+TEACHER_BUDGET = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=DEFAULT_C_SCALE)
 _current = None
 
 

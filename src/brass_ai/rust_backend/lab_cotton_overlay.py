@@ -15,25 +15,25 @@ PATCHES = {
         ('            retain_descendants: false,', '            cotton: None,\n            retain_descendants: false,'),
         ('    pub fn budget(&self) -> Budget {',
          '    /// Root-only teacher exploration; no extra searches or invalidation of cached plans.\n'
-         '    pub fn set_teacher_cotton(&mut self, context: &crate::state::observation::ViewContext, limit: usize) -> Result<()> {\n'
+         '    pub fn set_teacher_cotton(&mut self, context: &crate::state::observation::ViewContext, limit: usize, develop: bool) -> Result<()> {\n'
          '        check(limit <= 2, "cotton coverage limit")?;\n'
-         '        self.cotton = (limit > 0).then(|| cotton::Coverage { context: context.clone(), limit });\n'
+         '        self.cotton = (limit > 0).then(|| cotton::Coverage { context: context.clone(), limit, develop });\n'
          '        Ok(())\n'
          '    }\n'
          '    pub fn budget(&self) -> Budget {'),
         ('            let (mut tree, root) = if let Some(ready) = self.promoted.take() {',
          '            if let Some(c) = &self.cotton {\n'
          '                if info.key.information.observation.view.as_ref().is_some_and(|v| v.context == c.context) {\n'
-         '                    rounds.tournament.cover_cotton(&stats.logits, &info.key.choices, c.limit)?;\n'
+         '                    rounds.tournament.cover_cotton(&stats.logits, &info.key.choices, c.limit, c.develop)?;\n'
          '                }\n'
          '            }\n'
          '            let (mut tree, root) = if let Some(ready) = self.promoted.take() {'),
     ),
     'brass-ai-core/src/search/halving.rs': (
         ('    pub fn next_edge(&mut self) -> Result<Option<usize>> {',
-         '    pub fn cover_cotton(&mut self, logits: &[f64], choices: &[crate::state::dto::Choice], limit: usize) -> Result<()> {\n'
+         '    pub fn cover_cotton(&mut self, logits: &[f64], choices: &[crate::state::dto::Choice], limit: usize, develop: bool) -> Result<()> {\n'
          '        check(self.completed == 0 && self.issued.is_empty(), "late cotton coverage")?;\n'
-         '        self.survivors = super::session::cotton::candidates(logits, &self.gumbels, choices, &self.survivors, limit)?;\n'
+         '        self.survivors = super::session::cotton::candidates(logits, &self.gumbels, choices, &self.survivors, limit, develop)?;\n'
          '        Ok(())\n'
          '    }\n'
          '    pub fn next_edge(&mut self) -> Result<Option<usize>> {'),

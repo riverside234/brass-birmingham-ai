@@ -1013,6 +1013,16 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if qualification:
                         teacher_line+=(f' grad_qualification={"passed" if qualification["passed"] else "pending"}'
                             f' fixed_beta={tt.get("fixed_beta")} target={qualification["target"]}')
+                    if 'adaptive_beta' in tt:
+                        beta = tt['adaptive_beta']
+                        teacher_line += (f' beta_next={beta["beta_next"]:.6g} actor_norm={beta["actor_norm_mean"]}'
+                                         f' teacher_raw_norm={beta["raw_teacher_norm_mean"]} ema_share={beta["ema_share"]}')
+                    if 'beta_remeasurement' in tt:
+                        measurement = tt['beta_remeasurement']
+                        if 'measured_generation' not in measurement:
+                            teacher_line += ' beta_remeasurement=pending'
+                        elif measurement['measured_generation'] == iteration:
+                            teacher_line += f' beta_remeasurement=accepted:{measurement["beta"]:.6g}'
                 from .ppo_kl_control import sampled_console
                 print(f'Recovery generation {iteration+1}: {done} games, {update["optimizer_steps"]} PPO steps; '
                       f'collect={report["timings"]["collection_seconds"]:.1f}s prepare={collected-load_began:.1f}s '

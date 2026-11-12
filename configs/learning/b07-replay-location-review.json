@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "522a5001e30a12c6451810565c776e0f51925ba8cb3966fac004926d31b2f80b",
+  "execution_implementation": "295df127da4dbca6e8beb406091dc4636687547ca22cf14fd8d2cf2458c22a8c",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -50,7 +50,7 @@
     },
     "src/brass_ai/recovery/actor_value.py": {
       "before": "48ada7549fc564fc67d75486c469dff751bc442ab714fd2b92ede431a27b4cf7",
-      "after": "0d460a2fa1a0c1f831b7be2e4d60427bd69ec2f4285d0092b762165569e6a4da"
+      "after": "8163eb0dfb1b868d9bc12f8a09c7ac1a6bba860e073beb5614cb8edaf73a58a2"
     },
     "src/brass_ai/recovery/admitted_inputs.py": {
       "before": "47aec3397f698def017fec3653d15c757fc317279227470f30d1e5077afad750",
@@ -70,7 +70,7 @@
     },
     "src/brass_ai/recovery/collector_runtime.py": {
       "before": null,
-      "after": "dff9cd2afaabeeb9ac983e6f576ffd499028deae8bf83e1edda6c6fbc64ffbc8"
+      "after": "7af42e4b594004f50b864f777f150d641d7be125ed9ed843ab81ffd3252f3a52"
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "011fbff0e9ce7667b5ffa1bf7c8eeecbde47a9a85c4958ea5ded986fedb4fb33"
+      "after": "378aca8062407d9f6ce7ef5e8b0d709e59b5e2804490df50bed205da4ac1d2dd"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -154,7 +154,7 @@
     },
     "src/brass_ai/recovery/search_value_config.py": {
       "before": "02ffa1057fc4c9f8f095875682865f2fcd47741aa6e92616aedf9bc290ef1dc7",
-      "after": "ab01088e7f550e4cb8f7e36df523da233b642128824a03118db81a6759ae716a"
+      "after": "db06dc4d47d2b756b1c0cdf6dca3182d0d96422cc6afe2d705c29c0c1a3d61b6"
     },
     "src/brass_ai/recovery/search_value_iteration.py": {
       "before": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae",
@@ -162,31 +162,31 @@
     },
     "src/brass_ai/recovery/search_value_phase.py": {
       "before": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2",
-      "after": "8fa73188088b542f2da281f0c7d390531a53f5bf76da4827f5abeb40bbd400ed"
+      "after": "70f0a31e7be0fd9e2ffc44b24e4ef622eda3ede02530c865f710390f9d3ea8f4"
     },
     "src/brass_ai/recovery/search_value_retention.py": {
       "before": null,
-      "after": "162ce3d8cd9470977d68323eb8f81661ef72c7adffebbdded9b926b47c571e9c"
+      "after": "2479f5630ff070e771eb92074af096f5541fb1b82e7566c3dc30d549a017952e"
     },
     "src/brass_ai/recovery/search_value_rows.py": {
       "before": "f2b3fe9c9465f6103b9d6509dfa30a50e6ff255f8c18a76cd03fa11c03a5c3ce",
-      "after": "906767fa41215651787442eea93ddfe9b32351b6e14cfe3b5da4f02a550919fe"
+      "after": "3b2728b7bf5a36104125d8d6e62a9508f68c4a1592321715d0e94d700f971b39"
     },
     "src/brass_ai/recovery/search_value_schedule.py": {
       "before": null,
-      "after": "118d56741176b3ecd9d89ec2c7c612fc09e45e3736f5ff56aa48f80b1335da79"
+      "after": "89919eaa67c471a31561711a2446cd9f5df7b8756586f08d9cea6593b0c163a2"
     },
     "src/brass_ai/recovery/search_value_training.py": {
       "before": "2d9d2834633f53ecab6193f9131c92404e592388bdbc67135eaebe3fd50996d9",
-      "after": "bdfd0656160bd16e1644a87cd9db9f8dd60e7bbeffed40349dafbc403ac29813"
+      "after": "83ca7d852ea3435848ec4fc1305bb5c5f126a93868f3a272239dcd77556679c5"
     },
     "src/brass_ai/recovery/teacher_gradient_qualification.py": {
       "before": null,
-      "after": "e0d5ed575407bd9da67c263e4a7d3473afbb5df4c6e80fb9f9a4b4656d0f9a2d"
+      "after": "65d17a67eb60288dfbcb8ce5d7906bbfd5261464ca91f010e2b33b2d2e432514"
     },
     "src/brass_ai/recovery/teacher_labels.py": {
       "before": "d599ed03d3f3267cddd1c362204ed133f738a7a7c86b7a97b96353857b3536b9",
-      "after": "12083277ff244e1b9cf1ce7f7b5d670e33f2829018074a6b390df805ba89edb7"
+      "after": "ebb7c2f55cd3309cfd7651153eec8851a49d2930b13405f8c70a4c0390a182bf"
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
@@ -194,11 +194,11 @@
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
-      "after": "170426d399d241cbb371222b7266b437cb64a2d744c91868833842a5df580f49"
+      "after": "f785ffe8470604ff75bc42d294447fddccc1fab890ec8943d4e00d6baf7b8c35"
     },
     "src/brass_ai/recovery/teacher_term.py": {
       "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
-      "after": "344ed61a69c3eeaec055b40a00dade2d4955e89c8f76d46fdec8ef2375ce32a7"
+      "after": "27ca836ab7dcf9a79bbd52766beb63c8ace1b86889ad7ed95ee23bcc39f606d5"
     },
     "src/brass_ai/recovery/teacher_value.py": {
       "before": "b77180209a7f14bc3df6e49e119f524a7b339f8212558c572fb04dd3bf6aadff",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "e5b8c89b193457ab58ceeacc0c755aa9f08ec6f6773535ad86644df206dc3599"
+      "after": "4a559840cfa757d9bf3ce611ceb39099bc14f8246ef2df11a75658b65755755c"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -330,11 +330,11 @@
     },
     "lab-native-cpu/src/cpu_eval.rs": {
       "before": "ff4366c142c884fbd07d543c495be0a655eeb848499558a635345c18f5ea1b20",
-      "after": "26e6591c633d1c0961babfe48fdcaa7ca8991ffccc59c508ad0a728962fa9c39"
+      "after": "f325005e54ecb7ccd881b3758ed2a4080424f8e60864ecc5080ce2b99a86eedc"
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "0d200b0fa05a9c01a3110ad4b45813b88c2201f59323d5a6e8fd95522c94e7e8"
+      "after": "eee6a3a3edceea42bafa830e3c2a8dc566fb63ea0f0bcffda0d29d3c097378cc"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -342,15 +342,15 @@
     },
     "scripts/qualify-rust-cpu-inference.py": {
       "before": "8637dea571eaf0351830870dd7c1904ff03d7ee95c4c55c24cdab9151bee044e",
-      "after": "10cd187746a4a034296a5b3036b068d7e3c27a70bb1f60b14b6732f61636f2cb"
+      "after": "d924eb8bed779100f4ab0903b38c2a3a95a38fa5f3e7986af75add1311198de1"
     },
     "src/brass_ai/recovery/training_revision_g1491.py": {
       "before": "5c6caf54055c00bc4ef2c06a33bfc651b1f82d37dcb9351bb71f997920fb832e",
-      "after": "aa9acf215068cd8c583ab65d3f03612177f744ce4007279162e190bb3a8640da"
+      "after": "a555f4fe75abcd30af9b6c4e8da006a18880c8b4f9465063a81afc7005530113"
     },
     "src/brass_ai/rust_backend/lab_cpu_overlay.py": {
       "before": "e7fa0229a185321c91a6dfbb9c513ae50800ac201544e9e0c12812fff204ef21",
-      "after": "6436cc73319cc41be1a8726e526bd75a0c998d275a7b3d585f43c21c7da2991e"
+      "after": "59c672413d6313a2c95b057a94a48418a30f9f492a808991b781a78c6e0e468a"
     },
     "src/brass_ai/rust_backend/lab_cpu_runtime.py": {
       "before": "71895897093679de776ad5a98a245f6dfca69a8ea7a0035ec7a310f0adb343c4",
@@ -362,19 +362,19 @@
     },
     "lab-native-cpu/core-overlay/cotton.rs": {
       "before": null,
-      "after": "a48112011b1e2b4c49e38c117947909493ef58d326a656a84fc1553a63aca74d"
+      "after": "b75617d1c4904016eaf787f9ad634a283fd1f32c0aa37b745ccfe77050adf0a1"
     },
     "lab-native-cpu/src/cpu_cotton.rs": {
       "before": null,
-      "after": "5fdb258f7453454f80a478c703379d94abaad77e5ebbefd51db688ce7226b1ce"
+      "after": "bfae3e87cef3ccf6c8a8b04cbb0951b9e14cc5169eb7e1ac2c0e799ad0be6b37"
     },
     "src/brass_ai/recovery/teacher_cotton.py": {
       "before": null,
-      "after": "d2952466357a4c00f654c751a72f8626718f86bde30c8ddea63a7f1b92d202b1"
+      "after": "6ec43e67aa31213b5c634c94c6022cf6faa4560f5ebbd69c494cf65c6cad3a27"
     },
     "src/brass_ai/rust_backend/lab_cotton_overlay.py": {
       "before": null,
-      "after": "22a07bb95bc72c576e2be12c700b2f9da969d819142fddab71ed36c7d46e0de4"
+      "after": "78373c0d4870b823c05a60fa09ffcc2ee32fa389d4a1d04d6b9514ab96547e80"
     },
     "tests/Recovery/test_teacher_cotton.py": {
       "before": null,
@@ -382,11 +382,19 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "d46747233e5feba8691bdc0c519a5b2b3320c8468cb6367070485d4d2671ad2b"
+      "after": "8e9d279949bfa7928a5e88daeb7b705fbd4b4e6d3eaba8c1ebb480af53ff291f"
+    },
+    "tests/RustBackendLab/test_collection_overlap.py": {
+      "before": null,
+      "after": "cf8977c48deed4aed90a2cbc48740fcc48fdfb240fd21bf02e758f8f9a2d88e1"
+    },
+    "tests/RustBackendLab/test_cpu_inference.py": {
+      "before": null,
+      "after": "89b6ae5f564fcea0f7b071a53f696d14971cee463d16f1540ffddee1bf8947ac"
     },
     "tests/RustBackendLab/test_cpu_qualification.py": {
       "before": "746a19f5f85f7026f1ef511603d1aa40a2d75dd3d28535bb75dd4df791f67b60",
-      "after": "77bf91b2372e5be2ddda0db7ef54fbb98cc14a39391c210e6096dcb1037c355c"
+      "after": "ce13575c3122a7d880262c64d8182897b16a47f0e3aac47bfbffb3bcdf5cd857"
     },
     "src/brass_ai/recovery/ppg_auxiliary.py": {
       "before": "e0c5d101a49df77752cb943fc2f951faea16a65bb49fe9f642067e4f6e45255c",
@@ -406,11 +414,23 @@
     },
     "src/brass_ai/recovery/utility_width_upgrade.py": {
       "before": null,
-      "after": "7b0e9a426421a3ee56e38868f5455231a02c233d2c15e7bd310c54249cb9e5f6"
+      "after": "6f8f4eca7a7bd1bbbd6c7ae3b29e5c75f6358ce0b243003e78a8ef9735da36ce"
     },
     "configs/learning/reward-source-equivalence.json": {
       "before": "0f57ec742a69b11d5a0ec998fb19a54f1e1ccb80287fa4011b4fc3e6c9289a9f",
       "after": "87f0e9bb2ddac0b8e77f9b9a465fc5d00e05ba6490175aee9067222878af5a9e"
+    },
+    "scripts/continue-rust-g1190-restart-2.py": {
+      "before": null,
+      "after": "eaadd613d65a2c63d4448049e5ccde9950846aeb1c324da3c1f22e05c326baf0"
+    },
+    "src/brass_ai/recovery/adaptive_teacher_beta.py": {
+      "before": null,
+      "after": "bc3b1f794cc83b05ea0e2888d95ddc67c7e8b55b60ba782b534abf16e209f457"
+    },
+    "src/brass_ai/recovery/search_head_refresh.py": {
+      "before": null,
+      "after": "ec3d17d22bcf9a398907e88df981d42d8b08c4e8c70948904d1106df1d049eee"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -576,6 +596,16 @@
       "implementation": "7237d70208264c0717456b46830921defbc68a405f994940e13ac290ce04389a",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "0f7d81b2b2afb99743be76f12a08a94c93dd7c07e969244ba0bc6e0b42485a82"
+    },
+    {
+      "implementation": "522a5001e30a12c6451810565c776e0f51925ba8cb3966fac004926d31b2f80b",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "c2c546a258a819ca67a904292de7baa9e261459492d4bb8c88076f9f9d789ca9"
+    },
+    {
+      "implementation": "ef6e6bfd6919f6a2bf9051fae8965578bf246f31f4cea800d9094bba3f49c52e",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "b41676d196a658798b6e9dfd1201fe0de581cdf55d1709b3722b22ae4b85e480"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -774,5 +804,9 @@
   "utility_width_upgrade": {
     "contract": "utility-width-256-stage-a-100/1.0.0",
     "scope": "Explicit checkpoint migration only: preserve old width-32 behavior and identities; widen the active utility residual, extend A50 to A100, retain schedules/Adam/RNG and remeasure beta without a utility-readiness wait."
+  },
+  "search_head_refresh": {
+    "scope": "Opt-in g1190 continuation: replace the search head at the committed boundary, reset Stage A and PPG beta, remeasure teacher beta with teaching on, then adapt it using sampled gradient norms from 96 teacher rows per PPO step. Fit lambda .8 with dedicated 16-game early stopping and collect four held-outs every five iterations. CPU teacher cotton builds and both development choices use the 25% exploration recipe. CPU teacher count searches default to c_scale 0.1.",
+    "qualified_implementation_unchanged": true
   }
 }

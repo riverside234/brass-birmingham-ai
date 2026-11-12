@@ -1,6 +1,6 @@
 param(
  [ValidateSet('Install','Rollback','Recover')][string]$Action='Install',
- [string]$BuildDirectory='artifacts/nn-c-scale/20261109/release-1.4.54',
+ [string]$BuildDirectory='artifacts/nn-c-scale/20261111/release-1.4.56',
  [string]$GameRoot=(Split-Path -Parent $PSScriptRoot),
  [switch]$TestInterrupt
 )
@@ -10,7 +10,8 @@ $repo=Split-Path -Parent $PSScriptRoot
 $game=(Resolve-Path -LiteralPath $GameRoot).Path
 $record=Join-Path $game 'artifacts/patch-installation.json'
 $intent=Join-Path $game 'artifacts/nn-c-scale.pending.json'
-$baseVersion='1.4.53-rust-local';$version='1.4.54-rust-local'
+$baseVersion='1.4.55-rust-local';$version='1.4.56-rust-local'
+$operation='nn-c-scale-1.4.56'
 function Inside([string]$Path,[string]$Parent){
  $p=[IO.Path]::GetFullPath($Path)
  if(-not $p.StartsWith([IO.Path]::GetFullPath($Parent).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'NN c_scale path escapes boundary.'}
@@ -24,7 +25,7 @@ function Verify($Entries,[string]$Directory,[switch]$Exact){
 function Restore([string]$Backup){
  $Backup=Inside $Backup (Join-Path $game 'artifacts/patch-recovery')
  $r=Read-BrassJson (Join-Path $Backup 'recovery.json')
- if(-not $r -or $r.gameRoot -ne $game -or $r.operation -ne 'nn-c-scale-1.4.54'){throw 'Recovery identity mismatch.'}
+ if(-not $r -or $r.gameRoot -ne $game -or $r.operation -ne $operation){throw 'Recovery identity mismatch.'}
  if((Get-FileHash -LiteralPath (Join-Path $Backup 'patch-installation.json')).Hash -ne $r.receiptSha256){throw 'Recovery receipt changed.'}
  foreach($f in $r.files){
   $target=Inside (Join-Path $game ('BrassNative/'+$f.path)) $game
@@ -52,14 +53,14 @@ if($Action -eq 'Recover'){
 if(Test-Path -LiteralPath $intent){throw 'Recover the interrupted NN c_scale installation first.'}
 if($Action -eq 'Rollback'){
  if(-not $prior.nnCScaleRecovery -or $prior.version -ne $version){throw 'No NN c_scale rollback receipt.'}
- Restore $prior.nnCScaleRecovery;Write-Output 'Restored exact previous c_scale 0.1 policies and receipt.';return
+ Restore $prior.nnCScaleRecovery;Write-Output "Restored $baseVersion policies and receipt.";return
 }
 $build=Inside ([IO.Path]::GetFullPath((Join-Path $repo $BuildDirectory))) (Join-Path $repo 'artifacts')
 $m=Read-BrassJson (Join-Path $build 'build-manifest.json')
 $q=Read-BrassJson (Join-Path $build 'qualification.json')
 if(-not $q.passed -or $q.format -ne 'brass-nn-c-scale-release/1.0.0' -or $q.build_manifest_sha256 -ne (Get-FileHash -LiteralPath (Join-Path $build 'build-manifest.json')).Hash -or
  $m.version -ne $version -or $m.baseVersion -ne $baseVersion -or $prior.version -ne $baseVersion -or -not $prior.localReleaseQualified -or
- $prior.stockSha256 -ne $m.stockSha256 -or $m.search_method -ne 'search_v1' -or $m.v205_enabled -or $m.c2 -ne 1){throw 'Qualified c_scale candidate and installed 1.4.53 base required.'}
+ $prior.stockSha256 -ne $m.stockSha256 -or $m.search_method -ne 'search_v1' -or $m.v205_enabled -or $m.c2 -ne 0.1 -or $q.c2 -ne $m.c2){throw "Qualified c_scale candidate and installed $baseVersion base required."}
 if($game -eq $repo -and (Get-FileHash -LiteralPath $record).Hash -ne $m.installed_baseline_receipt_sha256){throw 'Installed base receipt changed.'}
 Verify $q.files (Join-Path $build 'BrassNative') -Exact
 Verify $m.baseNative (Join-Path $game 'BrassNative') -Exact
@@ -69,7 +70,7 @@ foreach($p in $m.nativeFiles){
  if($old[0].sha256 -ne $p.sha256 -and $p.path -notin $m.changedNative){throw ('Unexpected native change: '+$p.path)}
 }
 $changed=@($m.nativeFiles|Where-Object {$n=$_;$o=@($m.baseNative|Where-Object path -eq $n.path)[0];$o.sha256 -ne $n.sha256})
-if(@($changed).Count -ne 21){throw 'Expected only the 18 policies and 3 build lists to change.'}
+if(@($changed).Count -ne 28){throw 'Expected 24 policies and 4 build lists to change.'}
 $backup=Inside (Join-Path $game ('artifacts/patch-recovery/nn-c-scale-'+[Guid]::NewGuid().ToString('N'))) $game
 [void](New-Item -ItemType Directory -Path $backup)
 $files=@()
@@ -81,8 +82,8 @@ foreach($c in $changed){
  $files+=@{path=$c.path;priorSha256=(Get-FileHash -LiteralPath $target).Hash;candidateSha256=$c.sha256}
 }
 Copy-Item -LiteralPath $record -Destination (Join-Path $backup 'patch-installation.json')
-Write-BrassJsonAtomic (Join-Path $backup 'recovery.json') ([ordered]@{gameRoot=$game;operation='nn-c-scale-1.4.54';files=$files;priorNative=$m.baseNative;receiptSha256=(Get-FileHash -LiteralPath $record).Hash})
-Write-BrassJsonAtomic $intent ([ordered]@{gameRoot=$game;backup=$backup;operation='nn-c-scale-1.4.54'})
+Write-BrassJsonAtomic (Join-Path $backup 'recovery.json') ([ordered]@{gameRoot=$game;operation=$operation;files=$files;priorNative=$m.baseNative;receiptSha256=(Get-FileHash -LiteralPath $record).Hash})
+Write-BrassJsonAtomic $intent ([ordered]@{gameRoot=$game;backup=$backup;operation=$operation})
 try{
  foreach($f in $files){Copy-BrassAtomic (Join-Path $build ('BrassNative/'+$f.path)) (Join-Path $game ('BrassNative/'+$f.path))}
  if($TestInterrupt){throw 'TEST INTERRUPT: NN c_scale files published'}
@@ -97,4 +98,4 @@ try{
  if(-not $TestInterrupt){try{Restore $backup;Remove-Item -LiteralPath $intent}catch{Write-Warning ('Recovery pending: '+$_.Exception.Message)}}
  throw $failure
 }
-Write-Output ('Installed 1.4.54: NN search c_scale 1.0 in all policies. Rollback: '+$backup)
+Write-Output "Installed $version with NN search c_scale $($m.c2) in all policies. Rollback stored in $backup"

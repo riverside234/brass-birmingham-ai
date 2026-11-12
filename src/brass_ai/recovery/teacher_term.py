@@ -134,6 +134,17 @@ class TeacherTerm:
                 self.calibrated = True
         elif self.calibrated and target != old_target:
             self.beta = float(np.clip(self.beta * target / old_target, *config['term']['beta_bounds']))
+        from . import adaptive_teacher_beta as adaptive
+        self.remeasurement = self.state.get(adaptive.REMEASUREMENT) if self.mode == 'on' else None
+        self.remeasure_pending = adaptive.pending(self.state) and self.mode == 'on'
+        self.adaptive_enabled = self.mode == 'on' and adaptive.KEY in config
+        self.adaptive = None
+        self.beta_report = {}
+        if self.mode == 'on':
+            self.beta = adaptive.accepted(self.beta, self.remeasurement, target)
+            if self.adaptive_enabled:
+                self.adaptive = adaptive.restore(self.state.get(adaptive.KEY), self.beta, self.beta_basis())
+                self.beta = self.adaptive['beta']
         self.beta_used = 1. if self.mode == 'shadow' else self.beta
         self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.
         self.presentations = Counter(); self.used = set(); self.improvement_by_phase = {}
@@ -179,6 +190,10 @@ class TeacherTerm:
 
     @property
     def active(self): return self.mode != 'off' and bool(self.rows)
+
+    def beta_basis(self):
+        return [self.config['term']['share_target'], (self.qualification or {}).get('sha256'),
+                (self.remeasurement or {}).get('measured_generation')]
 
     def apply(self, model, actor, step):
         if not self.active: return
@@ -235,6 +250,8 @@ class TeacherTerm:
             share=raw_share * self.beta_used if raw_share is not None else None,
             cosine=d / (a * t) if measured and a * t > 0 else None, actor_norm=a if measured else None, teacher_norm=t * self.beta_used,
             **(mix or {})))
+        if measured and (self.adaptive_enabled or self.remeasure_pending):
+            self.steps[-1]['raw_teacher_norm'] = t
         for i in indices: self.presentations[i] += 1; self.used.add(i)
         self.seconds += time.perf_counter() - began
 
@@ -253,9 +270,39 @@ class TeacherTerm:
             share_target=self.config['term']['share_target'], shadow_shares=self.shadow, outside_streak=self.outside)
         from .teacher_gradient_qualification import finish as qualify_gradient
         qualify_gradient(self,self.state)
+        if self.mode == 'on' and (self.adaptive_enabled or self.remeasurement is not None):
+            self.finish_beta()
         return copy.deepcopy(self.state)
 
+    def finish_beta(self):
+        from . import adaptive_teacher_beta as adaptive
+        target = self.config['term']['share_target']
+        pairs = adaptive.paired_norms(self.steps)
+        actor = sum(a for a, _ in pairs) / len(pairs) if pairs else None
+        teacher = sum(t for _, t in pairs) / len(pairs) if pairs else None
+        if self.remeasure_pending:
+            self.remeasurement = adaptive.remeasure(self, pairs, self.remeasurement)
+        self.beta = adaptive.accepted(self.beta, self.remeasurement, target)
+        if self.remeasurement is not None:
+            self.state[adaptive.REMEASUREMENT] = self.remeasurement
+            self.beta_report[adaptive.REMEASUREMENT] = self.remeasurement
+        if self.adaptive_enabled:
+            # A new measurement changes the basis and starts an empty EMA.
+            controller = adaptive.restore(self.adaptive, self.beta, self.beta_basis())
+            if not self.remeasure_pending:
+                controller = adaptive.advance(controller, actor, teacher, target)
+            self.state[adaptive.KEY] = self.adaptive = controller
+            self.beta = controller['beta']
+            self.beta_report[adaptive.KEY] = dict(beta_used=self.beta_used, beta_next=self.beta,
+                paired_steps=len(pairs), actor_norm_mean=actor, raw_teacher_norm_mean=teacher,
+                actor_ema=controller['actor_ema'], raw_teacher_ema=controller['teacher_ema'],
+                updates=controller['updates'], ema_share=self.beta_used * controller['teacher_ema'] / controller['actor_ema']
+                if controller['updates'] else None)
+        self.state['beta'] = self.beta
+
     def report(self):
+        from .adaptive_teacher_beta import accepted
+
         def counts(key):
             return dict(Counter({str(k): sum(n for i, n in self.presentations.items() if key(i) == k)
                                  for k in {key(i) for i in self.presentations}}))
@@ -265,13 +312,16 @@ class TeacherTerm:
             mix = dict(long_weight=self.long_weight, rows_by_profile=dict(Counter(self.profiles)),
                 presentations_by_profile=counts(lambda i: self.profiles[i]),
                 distinct_by_profile=dict(Counter(self.profiles[i] for i in self.used)),
-                long_loss=losses('long_loss'), short_loss=losses('short_loss'),
-                rows_per_step=self.config['term']['rows_per_step'])
+                long_loss=losses('long_loss'), short_loss=losses('short_loss'))
+        qualified = self.qualification and self.qualification['passed']
+        fixed = self.qualification['beta'] if qualified else None
+        fixed = accepted(fixed, self.remeasurement, self.config['term']['share_target'])
         return dict(mode=self.mode, beta=self.beta_used, beta_next=self.beta, steps=len(self.steps), rows=len(self.rows), **mix,
-            fixed_beta=self.qualification['beta'] if self.qualification and self.qualification['passed'] else None,
+            rows_per_step=self.config['term']['rows_per_step'], **self.beta_report,
+            fixed_beta=fixed,
             gradient_qualification=copy.deepcopy(self.qualification),
-            projected_fixed_share=summary([s['raw_share']*self.beta for s in self.steps if s['raw_share'] is not None])
-                if self.qualification and self.qualification['passed'] else None,
+            projected_fixed_share=summary([s['raw_share']*fixed for s in self.steps if s['raw_share'] is not None])
+                if fixed is not None else None,
             share=summary([s['share'] for s in self.steps]), raw_share=summary([s['raw_share'] for s in self.steps]),
             cosine=summary([s['cosine'] for s in self.steps]), staleness=self.staleness,
             improvement_by_phase=self.improvement_by_phase, presentations=sum(self.presentations.values()),
