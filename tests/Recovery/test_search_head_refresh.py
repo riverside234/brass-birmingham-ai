@@ -88,6 +88,22 @@ class Beta(unittest.TestCase):
         self.assertEqual(update(resumed), update(term(1732, adjusted)))
         self.assertEqual(term(1732, adjusted).finish()[beta.KEY], adjusted[beta.KEY])
 
+        changed_phase = dict(config, term=dict(config['term'], share_target=.08))
+        changed = term(1740, dict(adjusted, outside_streak=3), changed_phase)
+        self.assertEqual(changed.beta_used, adjusted['beta'])
+        self.assertFalse(changed.remeasure_pending)
+        missing = changed.finish()
+        self.assertEqual(missing['outside_streak'], 0)
+        self.assertEqual(missing[beta.REMEASUREMENT], measured[beta.REMEASUREMENT])
+        self.assertEqual(missing['gradient_qualification']['observations'], q['observations'])
+        self.assertEqual(missing[beta.KEY], dict(adjusted[beta.KEY], basis=[
+            .08, missing['gradient_qualification']['sha256'], 1730]))
+        changed_resume = term(1741, json.loads(json.dumps(missing)), changed_phase)
+        self.assertEqual(changed_resume.beta_used, adjusted['beta'])
+        self.assertEqual(update(changed_resume)[beta.KEY], beta.advance(missing[beta.KEY], 3., 7., .08))
+        self.assertEqual(changed_resume.report()[beta.KEY]['share_target'], .08)
+        self.assertEqual(term(1741, missing).beta_used, adjusted['beta'])
+
         fixed = term(1731, weight, {k: v for k, v in config.items() if k != beta.KEY})
         self.assertEqual(update(fixed)['beta'], q['beta'])
         self.assertNotIn(beta.KEY, fixed.report())
@@ -252,3 +268,17 @@ class SearchRefresh(unittest.TestCase):
             script.main(share_target_required=True)
         self.assertEqual(train.call_args.kwargs, dict(mode='on', expected=1730, iterations=50, revise_stages=True))
         train.assert_called_once()
+
+        # A normal continuation can supply a new target on an already adaptive run.
+        weight = {beta.REMEASUREMENT: dict(requested_generation=1730, measured_generation=1730)}
+        resumed = dict(after, iteration=1740, teacher_phase=dict(weight=weight))
+        args = ['continue', '--expected-generation', '1740', '--iterations', '10', '--share-target', '.08',
+                '--skip-utility-qualification', '--c-scale', '0.1']
+        with mock.patch('sys.argv', args), mock.patch.object(script, 'shared', return_value=shared), \
+             mock.patch.object(script, 'state_of', return_value=resumed), mock.patch.object(script, 'ensure_cpu'), \
+             mock.patch.object(refresh, 'prepare') as migrate, mock.patch.object(shared, 'continuation') as train:
+            script.main(share_target_required=True)
+        migrate.assert_not_called()
+        train.assert_called_once()
+        self.assertEqual(train.call_args.kwargs, dict(mode='on', expected=1740, iterations=10, revise_stages=True))
+        self.assertEqual(train.call_args.args[0].share_target, .08)

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "f419c9989d10cea1eeb6ddacf3046b48a21d3ee780ff0d1f365347dc80a42b18",
+  "execution_implementation": "1a98c12c39b5144dde92178c89179e5ab112b032b821bc4ffded34be7bd4c855",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -198,7 +198,7 @@
     },
     "src/brass_ai/recovery/teacher_term.py": {
       "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
-      "after": "27ca836ab7dcf9a79bbd52766beb63c8ace1b86889ad7ed95ee23bcc39f606d5"
+      "after": "b1f7b417448ac11b4691597d9e86786f6f2809da29c41d48005fd2742e6d02ea"
     },
     "src/brass_ai/recovery/teacher_value.py": {
       "before": "b77180209a7f14bc3df6e49e119f524a7b339f8212558c572fb04dd3bf6aadff",
@@ -422,11 +422,11 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "eaadd613d65a2c63d4448049e5ccde9950846aeb1c324da3c1f22e05c326baf0"
+      "after": "a360b353c1c32ef0ad57cc97e8c6018fa6f3c121d059be6a48e5b429357fd3e4"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
-      "after": "bc3b1f794cc83b05ea0e2888d95ddc67c7e8b55b60ba782b534abf16e209f457"
+      "after": "3fa0a6a395b0a8d885f482c7d98a21934611561da26cf89114cf8cf648e814ed"
     },
     "src/brass_ai/recovery/search_head_refresh.py": {
       "before": null,
@@ -462,7 +462,7 @@
     },
     "tests/Recovery/test_search_head_refresh.py": {
       "before": null,
-      "after": "8088b2db3264ea0cba006a244d65bb070013fe9d2efaa022a0b1a94a5f8f176b"
+      "after": "6db7ff0f3d2f861b88668f4a42eee98f03ce5b805f6aa74a8862f99a0e6a41a4"
     },
     "tests/Recovery/test_strength_rating.py": {
       "before": "5a2ae1020f8827244c8908eaa7af257b812b55e0385f39111b588f5a5a1855f7",
@@ -647,6 +647,11 @@
       "implementation": "295df127da4dbca6e8beb406091dc4636687547ca22cf14fd8d2cf2458c22a8c",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "5fecf4a8331501dfb258f84e214dac0054a0d26681e52c78fa71cc480a61376b"
+    },
+    {
+      "implementation": "f419c9989d10cea1eeb6ddacf3046b48a21d3ee780ff0d1f365347dc80a42b18",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "41622d4584df007119f74f2732be18baa27674c60770b598cc4ea05ffccd9ce6"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -852,6 +857,10 @@
   },
   "g1290_pl_baseline": {
     "scope": "The g1190 search-head refresh adopts the original trained-start g1290 as the PL zero. Eight reference setups use the pinned seed and 24 use the ladder. Scores and setup-bootstrap draws are centered on g1290 using the common fit. Earlier slots retain their evidence and continue to contribute to the fit.",
+    "qualified_implementation_unchanged": true
+  },
+  "adaptive_teacher_retarget": {
+    "scope": "A teacher-on share-target change reuses the measured ratios and carries the adaptive beta, gradient EMAs and update count. A separately accepted beta remeasurement still starts a new controller basis.",
     "qualified_implementation_unchanged": true
   }
 }

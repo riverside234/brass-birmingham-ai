@@ -29,14 +29,15 @@ def positive(value):
     return type(value) in (int, float) and math.isfinite(value) and value > 0
 
 
-def restore(saved, beta, basis):
-    if saved is None or saved['basis'] != basis:
+def restore(saved, beta, basis, *, prior_basis=None):
+    if saved is None or (saved['basis'] != basis and
+                         (prior_basis is None or saved['basis'] != prior_basis)):
         return initial(beta, basis)
     require(set(saved) == set(initial(beta, basis)) and positive(saved['beta']) and .01 <= saved['beta'] <= 10
             and type(saved['updates']) is int and saved['updates'] >= 0 and (
                 positive(saved['actor_ema']) and positive(saved['teacher_ema']) if saved['updates'] else
                 saved['actor_ema'] is None and saved['teacher_ema'] is None), 'Invalid adaptive teacher beta state')
-    return saved
+    return saved if saved['basis'] == basis else dict(saved, basis=basis)
 
 
 def paired_norms(steps):

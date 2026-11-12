@@ -27,6 +27,8 @@ The learned utility/search weights, PPO/PPG moments, replay and RNG are retained
 head at the committed generation. It restarts Stage A with w=0 and lambda=.8,
 resets PPG beta to .25 and re-measures teacher beta with 96 teacher rows per PPO step while teaching stays on.
 --adaptive-teacher-beta enables ongoing adjustment from the accepted beta.
+Set --share-target at a committed iteration boundary. Adaptive beta carries
+its current weight and running gradient norms into the new target.
 """
 import importlib.util
 from pathlib import Path

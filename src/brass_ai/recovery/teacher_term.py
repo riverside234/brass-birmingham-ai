@@ -117,7 +117,8 @@ class TeacherTerm:
         self.state = copy.deepcopy(state or {})
         self.beta = self.state.get('beta', 1.); self.calibrated = self.state.get('calibrated', False)
         from .teacher_gradient_qualification import restore
-        self.qualification=restore(self.state.get('gradient_qualification'),config['term']['share_target'],config['term']['shadow_iterations'])
+        saved_qualification = self.state.get('gradient_qualification')
+        self.qualification=restore(saved_qualification,config['term']['share_target'],config['term']['shadow_iterations'])
         self.shadow = self.state.get('shadow_shares', []); self.outside = self.state.get('outside_streak', 0)
         require(np.isfinite(self.beta) and .01 <= self.beta <= 10, 'Invalid teacher beta state')
         target = config['term']['share_target']; old_target = self.state.get('share_target', target)
@@ -143,7 +144,14 @@ class TeacherTerm:
         if self.mode == 'on':
             self.beta = adaptive.accepted(self.beta, self.remeasurement, target)
             if self.adaptive_enabled:
-                self.adaptive = adaptive.restore(self.state.get(adaptive.KEY), self.beta, self.beta_basis())
+                basis = self.beta_basis()
+                prior_basis = None
+                if target != old_target:
+                    # Retargeting reseals the same gradient observations. Their
+                    # committed basis still owns the running beta and norms.
+                    prior_basis = [old_target, (saved_qualification or {}).get('sha256'), basis[2]]
+                    self.outside = 0
+                self.adaptive = adaptive.restore(self.state.get(adaptive.KEY), self.beta, basis, prior_basis=prior_basis)
                 self.beta = self.adaptive['beta']
         self.beta_used = 1. if self.mode == 'shadow' else self.beta
         self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.
@@ -293,7 +301,7 @@ class TeacherTerm:
                 controller = adaptive.advance(controller, actor, teacher, target)
             self.state[adaptive.KEY] = self.adaptive = controller
             self.beta = controller['beta']
-            self.beta_report[adaptive.KEY] = dict(beta_used=self.beta_used, beta_next=self.beta,
+            self.beta_report[adaptive.KEY] = dict(share_target=target, beta_used=self.beta_used, beta_next=self.beta,
                 paired_steps=len(pairs), actor_norm_mean=actor, raw_teacher_norm_mean=teacher,
                 actor_ema=controller['actor_ema'], raw_teacher_ema=controller['teacher_ema'],
                 updates=controller['updates'], ema_share=self.beta_used * controller['teacher_ema'] / controller['actor_ema']
