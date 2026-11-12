@@ -2,9 +2,13 @@
 //! unchanged. Each owner wraps its own evaluator before any search/cache use.
 use brass_ai_core::evaluation::Evaluation;
 use brass_ai_inference::{manifest::Manifest, BatchOutput, Control, Evaluator, Input, Result};
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
 
-pub(crate) fn validate(temperature: f32) -> Result<()> {
-    if temperature == 1.0 || temperature == 1.5 {
+pub(crate) fn validate(temperature: f64) -> Result<()> {
+    if [1.0, 1.3, 1.5].contains(&temperature) {
         Ok(())
     } else {
         Err(brass_ai_inference::invalid(
@@ -27,12 +31,11 @@ fn apply(row: &mut Evaluation, temperature: f32) -> Result<()> {
 
 pub(crate) struct Tempered<E> {
     inner: E,
-    temperature: f32,
+    temperature: Arc<AtomicU32>,
 }
 impl<E: Evaluator> Tempered<E> {
-    pub(crate) fn new(inner: E, temperature: f32) -> Result<Self> {
-        validate(temperature)?;
-        Ok(Self { inner, temperature })
+    pub(crate) fn new(inner: E, temperature: Arc<AtomicU32>) -> Self {
+        Self { inner, temperature }
     }
 }
 impl<E: Evaluator> Evaluator for Tempered<E> {
@@ -41,11 +44,12 @@ impl<E: Evaluator> Evaluator for Tempered<E> {
     }
     fn evaluate(&mut self, inputs: &[Input<'_>], control: &Control) -> Result<BatchOutput> {
         let mut output = self.inner.evaluate(inputs, control)?;
-        if self.temperature != 1.0 {
+        let temperature = f32::from_bits(self.temperature.load(Ordering::Relaxed));
+        if temperature != 1.0 {
             let start = std::time::Instant::now();
             control.check()?;
             for row in &mut output.evaluations {
-                apply(row, self.temperature)?;
+                apply(row, temperature)?;
             }
             output.stats.postprocess_ns += brass_ai_inference::nanos(start);
             control.check()?;
@@ -116,6 +120,17 @@ mod tests {
         }
     }
     #[test]
+    fn temperature_one_point_three_softens_policy_between_one_and_one_point_five() {
+        validate(1.3).unwrap();
+        let mut r = row(vec![3., 1.5, 0.]);
+        let peak_at_one = r.probabilities[0];
+        apply(&mut r, 1.3).unwrap();
+        assert_eq!(r.logits, vec![3. / 1.3, 1.5 / 1.3, 0.]);
+        let mut hotter = row(vec![3., 1.5, 0.]);
+        apply(&mut hotter, 1.5).unwrap();
+        assert!(hotter.probabilities[0] < r.probabilities[0] && r.probabilities[0] < peak_at_one);
+    }
+    #[test]
     fn singleton_ties_and_extreme_logits_remain_finite() {
         for logits in [vec![12.], vec![0., 0.], vec![f32::MAX, -f32::MAX]] {
             let mut r = row(logits);
@@ -126,7 +141,7 @@ mod tests {
     }
     #[test]
     fn unsupported_or_nonfinite_temperatures_are_rejected() {
-        for temperature in [0., -1., 1.1, 2., f32::NAN, f32::INFINITY] {
+        for temperature in [0., -1., 1.1, 2., f64::NAN, f64::INFINITY] {
             assert!(validate(temperature).is_err());
         }
         let mut r = row(vec![0., 1.]);

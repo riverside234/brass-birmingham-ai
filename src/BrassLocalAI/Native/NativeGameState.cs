@@ -41,6 +41,15 @@ namespace BrassLegacyAI.Native
         { return SearchK(MixedGameState.IsMixed(state)?LocalGameState.Assignment(state,color):state); }
         public static double Temperature(JObject state,int color)
         { return Temperature(MixedGameState.IsMixed(state)?LocalGameState.Assignment(state,color):state); }
+        public static double SearchTemperature(JObject state,int color,JObject context)
+        {
+            // The standard four-player Canal opening gives every seat one
+            // action in round one and two in round two. The full second turn
+            // fits inside the opening even when the worker plans both actions.
+            int round=(int)context["round"];
+            return (string)context["phase"]=="action" && (string)context["era"]=="CanalEra" && (round==1 || round==2)
+                ? Temperature(state,color) : 1.0;
+        }
         public static bool Supported(GameMetadata metadata) {return metadata!=null && (int)metadata.GameStartConfiguration.NumberOfPlayers==4 && !metadata.GameStartConfiguration.IsIntroductoryGame;}
         static string AssignmentHash(JObject s) {
             var bound=new JObject{["format"]=s["format"],["runtime"]=s["runtime"],["family"]=s["family"],

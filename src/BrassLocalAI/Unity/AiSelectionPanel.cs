@@ -214,19 +214,22 @@ namespace BrassLegacyAI
                 float searchHelpX = 153 + 111 * SearchKButtons.Length;
                 Text(window, "NN search help", "Search + up to 1s delivery", bodyX + searchHelpX, 204, bodyWidth - searchHelpX, 46, 18, true).color = LightUi.Muted;
                 UpdateSearchK();
-                Text(window, "NN temperature caption", "Temperature", bodyX, 262, 137, 46, 20);
-                TemperatureButtons = new Button[2];
+                Text(window, "NN opening caption", "Opening", bodyX, 262, 137, 23, 20);
+                Text(window, "NN opening temperature caption", "temperature", bodyX, 285, 137, 23, 17).color = LightUi.Muted;
+                TemperatureButtons = new Button[Native.NativePackage.OpeningTemperatureChoices.Count];
                 for (int i = 0; i < TemperatureButtons.Length; i++) {
-                    double temperature = i == 0 ? 1.0 : 1.5;
-                    var button = TemperatureButtons[i] = Button(window, "NN temperature " + temperature.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture),
-                        temperature.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture), bodyX + 142 + i * 167, 262, 155, 46, 21, () => {
+                    double temperature = Native.NativePackage.OpeningTemperatureChoices[i];
+                    string label = temperature.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+                    var button = TemperatureButtons[i] = Button(window, "NN opening temperature " + label,
+                        label, bodyX + 142 + i * 111, 262, 103, 46, 21, () => {
                             DraftTemperature = temperature; UpdateTemperature(); UpdateSelection();
                         });
-                    var mark = AiWidgets.Rect(button.transform, "Selected mark", P(136, 17), S(11, 11));
+                    var mark = AiWidgets.Rect(button.transform, "Selected mark", P(84, 17), S(11, 11));
                     mark.gameObject.AddComponent<AiSelectionMark>().raycastTarget = false;
                     button.GetComponentInChildren<TextMeshProUGUI>().rectTransform.offsetMax = new Vector2(-20 * unit, -2 * unit);
                 }
-                Text(window, "NN temperature help", "Every NN move · all time budgets", bodyX + 486, 262, bodyWidth - 486, 46, 18, true).color = LightUi.Muted;
+                float openingHelpX = 153 + 111 * TemperatureButtons.Length;
+                Text(window, "NN opening temperature help", "First 3 moves for this seat · then 1.0", bodyX + openingHelpX, 262, bodyWidth - openingHelpX, 46, 18, true).color = LightUi.Muted;
                 UpdateTemperature();
             }
             var box = AiWidgets.Rect(window, "Find AI", P(bodyX, 204 + searchOffset), S(bodyWidth - 88, 44)); box.gameObject.AddComponent<AiControlSurface>();
@@ -340,7 +343,7 @@ namespace BrassLegacyAI
         void UpdateTemperature()
         {
             for (int i = 0; i < TemperatureButtons.Length; i++) {
-                bool chosen = DraftTemperature == (i == 0 ? 1.0 : 1.5);
+                bool chosen = DraftTemperature == Native.NativePackage.OpeningTemperatureChoices[i];
                 var surface = TemperatureButtons[i].GetComponent<AiControlSurface>(); surface.Selected = chosen; surface.SetVerticesDirty();
                 TemperatureButtons[i].transform.Find("Selected mark").gameObject.SetActive(chosen);
             }
@@ -359,7 +362,7 @@ namespace BrassLegacyAI
                 "Gamma is not available yet. Choose an available AI for this seat." :
                 "Selection: " + (Family==AiFamily.AlphaTest?"NN":Family.ToString()) + " · " + (selected.EntryId == "random" ? "Random" : catalogs[Family].First(e => e.Choice.Equals(selected)).Name) +
                 " · " + DifficultyCatalog.Label(DraftDifficulty) + " · up to " + DifficultyCatalog.Milliseconds(DraftDifficulty) / 1000 + "s" +
-                (Family == AiFamily.AlphaTest ? " · K = " + DraftSearchK + " · T = " + DraftTemperature.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) : "");
+                (Family == AiFamily.AlphaTest ? " · K = " + DraftSearchK + " · Opening " + DraftTemperature.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) : "");
             ApplyButton.interactable = CanApply(); var surface = ApplyButton.GetComponent<AiControlSurface>();
             surface.Available = ApplyButton.interactable; surface.Selected = ApplyButton.interactable; surface.SetVerticesDirty();
         }

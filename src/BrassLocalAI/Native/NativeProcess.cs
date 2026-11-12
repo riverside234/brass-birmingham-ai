@@ -192,7 +192,11 @@ namespace BrassLegacyAI.Native
         Task Execute(CancellationToken cancellation)
         {
             // ExecuteAsync is invoked on the scheduler's pool task.
-            cancellation.ThrowIfCancellationRequested();worker=NativeProcess.Shared(searchK,temperature,model);cancellation.ThrowIfCancellationRequested();
+            cancellation.ThrowIfCancellationRequested();worker=NativeProcess.Shared(searchK,1.0,model);cancellation.ThrowIfCancellationRequested();
+            if(temperature!=1.0) {
+                if((bool?)worker.Readiness["request_policy_temperature"]!=true)throw new IOException("Native worker lacks opening temperature support");
+                request["policy_temperature"]=temperature;
+            }
             if(!clock.IsRunning)clock.Start();
             request["remaining_ms"]=Math.Max(0,allowance-(long)Math.Ceiling(clock.Elapsed.TotalMilliseconds));
             request["ticket"]["source_sha256"]=worker.Package.Source;

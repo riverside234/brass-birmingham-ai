@@ -126,6 +126,10 @@ public sealed partial class LocalAiUnityDriver : MonoBehaviour
         router.ShowView<ICreateOfflineGameView>();
         yield return null;
         CheckFirstDisplay("first open"); Capture("local-ai-cold-menu.png");
+        if(Environment.GetEnvironmentVariable("BRASS_OPENING_TEMPERATURE_TEST")!=null) {
+            var opening=(IEnumerator)GetType().GetMethod("OpeningTemperatureCases",ReflectionAccess.Flags).Invoke(this,null);
+            while(opening.MoveNext())yield return opening.Current;yield break;
+        }
         if(Environment.GetEnvironmentVariable("BRASS_MIXED_CASE")!=null) {
             var mixed=(IEnumerator)GetType().GetMethod("MixedAiCases",ReflectionAccess.Flags).Invoke(this,null);
             while(mixed.MoveNext())yield return mixed.Current;yield break;

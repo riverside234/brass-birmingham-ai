@@ -24,6 +24,10 @@ use std::{
     collections::BTreeMap,
     io,
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -96,9 +100,9 @@ pub struct Package {
     #[serde(default)]
     pub method: search::session::focus::Method,
     #[serde(default = "default_temperature")]
-    pub policy_temperature: f32,
+    pub policy_temperature: f64,
 }
-fn default_temperature() -> f32 {
+fn default_temperature() -> f64 {
     1.0
 }
 impl Package {
@@ -179,6 +183,8 @@ pub enum Operation {
         allowance_ms: u64,
         remaining_ms: u64,
         input_json: String,
+        #[serde(default)]
+        policy_temperature: Option<f64>,
     },
     Cancel {
         target: u64,
@@ -262,8 +268,9 @@ struct Active {
     ticket: Ticket,
     deadline: Instant,
     requested_k: usize,
+    temperature: f64,
 }
-fn compact(d: Decision, ticket: Ticket, requested_k: usize, temperature: f32) -> Value {
+fn compact(d: Decision, ticket: Ticket, requested_k: usize, temperature: f64) -> Value {
     let mut value = json!({"ticket":ticket,"backend":BACKEND,"model_id":MODEL,"export_sha256":EXPORT,
         "actions":d.result.action_ids,"provenance":d.result.provenance,
         "completed":d.lanes.iter().map(|l| l.outcome.completed).sum::<u64>(),
@@ -305,12 +312,14 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let package_path = PathBuf::from(&args[0]);
     let (package, model_path) = Package::load(&package_path, &args[1].to_string_lossy())?;
     let digest = package.model_manifest_sha256.clone();
-    let temperature = package.policy_temperature;
+    let package_temperature = package.policy_temperature;
+    let evaluation_temperature = Arc::new(AtomicU32::new((package_temperature as f32).to_bits()));
+    let owner_temperature = evaluation_temperature.clone();
     let mut pair = Pair::new(move |_| {
-        crate::local_temperature::Tempered::new(
+        Ok(crate::local_temperature::Tempered::new(
             CpuEvaluator::load(Bundle::load(&model_path, &digest)?)?,
-            temperature,
-        )
+            owner_temperature.clone(),
+        ))
     })?;
     // Exercise real features, both owners and the pinned export before exposing
     // readiness. This public fixture has no trusted full-state material.
@@ -363,7 +372,8 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "host_delivery_reserve_policy":"search-plus-delivery/1.0.0",
         "delivery_grace_ms":DELIVERY_GRACE_MS,
         "host_delivery_reserve_ns_by_k":{"8":DELIVERY_GRACE_NS,"16":DELIVERY_GRACE_NS,"32":DELIVERY_GRACE_NS},
-        "policy_temperature":temperature,"temperature_scope":"all_nn_policy_evaluations",
+        "policy_temperature":package_temperature,"temperature_scope":"all_nn_policy_evaluations",
+        "request_policy_temperature":true,
         "industry_focuses":INDUSTRY_FOCUSES,
         "measured_readiness":{"warmup_passed":true,"native_nn_positions":warmup.lanes.iter().map(|l| l.neural.positions).sum::<usize>()},
         "max_frame_bytes":brass_ai_core::framing::MAX_FRAME_BYTES}),
@@ -381,7 +391,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
         })?;
     let mut active: Option<Active> = None;
-    let mut binding: Option<(Identity, TurnKey, u64)> = None;
+    let mut binding: Option<(Identity, TurnKey, u64, f64)> = None;
     let mut last_id = 0;
     let mut shutdown = None;
     loop {
@@ -401,7 +411,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     );
                     match result {
                         Ok(Some(d)) if Instant::now() < a.deadline => {
-                            emit(a.id, "ok", compact(d, a.ticket, a.requested_k, temperature))?
+                            emit(a.id, "ok", compact(d, a.ticket, a.requested_k, a.temperature))?
                         }
                         Ok(_) => emit(a.id, "error", json!({"error":"expired","retired":true}))?,
                         Err(e) => emit(
@@ -478,8 +488,11 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 allowance_ms,
                 remaining_ms,
                 input_json,
+                policy_temperature,
             } => {
                 search::check(active.is_none(), "pair busy")?;
+                let temperature = policy_temperature.unwrap_or(package_temperature);
+                crate::local_temperature::validate(temperature)?;
                 search::check(
                     manifest::hash(input_json.as_bytes()) == ticket.root_sha256,
                     "detached root fingerprint",
@@ -501,15 +514,12 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 let turn = TurnKey::from_context(&input.view.context, ticket.actor as usize);
                 let config = package.search_config(allowance_ms)?;
                 let requested_k = config.k;
-                if let Some((bound_identity, bound_turn, bound_allowance)) = &binding {
-                    search::check(
-                        bound_identity != &identity
-                            || bound_turn != &turn
-                            || *bound_allowance == allowance_ms,
-                        "turn allowance changed",
-                    )?;
-                }
-                if binding.as_ref() != Some(&(identity.clone(), turn.clone(), allowance_ms)) {
+                if let Some((_, _, bound_allowance, bound_temperature)) = binding.as_ref().filter(
+                    |(bound_identity, bound_turn, ..)| bound_identity == &identity && bound_turn == &turn,
+                ) {
+                    search::check(*bound_allowance == allowance_ms, "turn allowance changed")?;
+                    search::check(*bound_temperature == temperature, "turn policy temperature changed")?;
+                } else {
                     pair.admit(
                         identity.clone(),
                         &input,
@@ -521,7 +531,10 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     // search. Retrying cannot repeat this fresh admission.
                     pair.configure_host_delivery(DELIVERY_GRACE_NS)?;
                     pair.method(package.method)?;
-                    binding = Some((identity, turn, allowance_ms));
+                    // Admission resets both search sessions. Set the shared
+                    // temperature before dispatch, after earlier work retires.
+                    evaluation_temperature.store((temperature as f32).to_bits(), Ordering::Relaxed);
+                    binding = Some((identity, turn, allowance_ms, temperature));
                 }
                 let deadline = received + Duration::from_millis(remaining_ms);
                 let remaining = deadline
@@ -558,6 +571,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     ticket,
                     deadline,
                     requested_k,
+                    temperature,
                 });
                 Ok(())
             }

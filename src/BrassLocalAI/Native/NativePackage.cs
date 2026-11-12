@@ -22,9 +22,10 @@ namespace BrassLegacyAI.Native
         public readonly int SearchK;
         public readonly double Temperature;
         public static readonly IReadOnlyList<int> SearchKChoices = Array.AsReadOnly(new[]{8,16});
+        public static readonly IReadOnlyList<double> OpeningTemperatureChoices = Array.AsReadOnly(new[]{1.0,1.3,1.5});
         // Older saves may pin K32, although new tables no longer offer it.
         public static bool ValidSearchK(int searchK) { return SearchKChoices.Contains(searchK) || searchK==32; }
-        public static bool ValidTemperature(double temperature) { return temperature==1.0 || temperature==1.5; }
+        public static bool ValidTemperature(double temperature) { return OpeningTemperatureChoices.Contains(temperature); }
         public readonly JObject Policy, ModelManifest;
         public static string GameRoot { get { return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(typeof(NativePackage).Assembly.Location), "../..")); } }
         public static string Location { get { return Path.Combine(GameRoot, "BrassNative", "alpha-g890"); } }
@@ -37,7 +38,9 @@ namespace BrassLegacyAI.Native
         {
             if(!ValidSearchK(searchK))throw new InvalidDataException("Unsupported NN search K");
             SearchK=searchK;
-            if(!ValidTemperature(temperature))throw new InvalidDataException("Unsupported NN temperature");
+            // The archived T1.5 policies are still readable. Live jobs use
+            // the T1.0 package with an opening override on the request.
+            if(temperature!=1.0 && temperature!=1.5)throw new InvalidDataException("Unsupported package temperature");
             Temperature=temperature;
             Directory=Path.GetFullPath(directory);
             ModelSpec=NativeModel.FromDirectory(Directory);

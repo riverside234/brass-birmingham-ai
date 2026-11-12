@@ -204,7 +204,8 @@ namespace BrassLegacyAI
             budget=nativeTurn.BindDeadline((int)budget);
             planningRequests++;
             nativeAction=0;
-            nativeBackend=NativeJob.WithDeadline(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state,actor),NativeGameState.Temperature(state,actor));
+            double temperature=NativeGameState.SearchTemperature(state,actor,(JObject)input["view"]["context"]);
+            nativeBackend=NativeJob.WithDeadline(NativeInput.Request(input,instance,app.Metadata.GameId,startedGeneration+1,nativeAllowance),clock,(int)budget,NativeGameState.SearchK(state,actor),temperature);
             if(debtOwner==null && NativeValidation.Enabled)
                 nativeBackend.PrepareFirstActionValidation(Host.Capture(app,events).ObserveToken(actor),composition,validationLifetime,startedGeneration,planningRequests);
             nativeExecution=AiExecutionScheduler.Submit(nativeBackend);resources.Observe(nativeExecution);

@@ -36,7 +36,11 @@ public sealed partial class LocalAiUnityDriver
             bool native=NativeModel.ValidChoice(key);panel.SelectPage(native?PlayerSelectionPage.AlphaTest:PlayerSelectionPage.V4);
             panel.Tiles.Single(b=>b.name==key).onClick.Invoke();
             panel.DifficultyButtons[difficulty].onClick.Invoke();
-            if(native){panel.SearchKButtons[k==8?0:1].onClick.Invoke();panel.TemperatureButtons[temperature==1.0?0:1].onClick.Invoke();}
+            if(native){
+                panel.SearchKButtons[k==8?0:1].onClick.Invoke();
+                string label=temperature.ToString("0.0",System.Globalization.CultureInfo.InvariantCulture);
+                panel.TemperatureButtons.Single(b=>b.GetComponentInChildren<TMPro.TextMeshProUGUI>().text==label).onClick.Invoke();
+            }
         }
         Check(panel.ApplyButton.interactable,"per-seat selection available: "+key);panel.ApplyButton.onClick.Invoke();
     }

@@ -29,12 +29,12 @@ namespace BrassLegacyAI.Native
             "657fe1901ab35d144e5d86e16b42e795d281946829c87bcb8e0245927b70a263",
             "il-v11-2","part1-local-il-test","user-2026-11-02",Array.AsReadOnly(new[]{"neutral"}),
             "il-v11-2-neutral/1.0.0", "Imitation-learning model · Neutral context. Search values combine its win, placement and VP predictions.");
-        public static readonly NativeModel Beta2 = new NativeModel("beta-2","beta-2","brass-gumbel-is-mcts/beta2-g1190-v1",
+        public static readonly NativeModel Beta2 = new NativeModel("beta-2","Beta-Plus","brass-gumbel-is-mcts/beta2-g1190-v1",
             "d872ea925d6643ee3a3eeec99a52d16c6a78c2de1f757617f1aaaa47d175f864",
             "39a536967350d02ffcaa1b9aea6a3239777bae03783fabb58d4ae38e45bb73f9",
             "f228f4dd7f1a913ea11e908cb2ccb53b76cd14ca302da9e2e5479c505d1294f1",
             "beta2-g1190","part1-local-beta2-test","user-2026-11-10",Array.AsReadOnly(new[]{"neutral"}),
-            "beta2-g1190-neutral/1.0.0", "Selected neural network g1190. Neutral context.",
+            "beta2-g1190-neutral/1.0.0", "Re-start g1190 · Neutral context.",
             "49711b4abaa95940928db567fa76ab654a5d60c417e1b5eca8dbb44ffb5327c1",.0025,.025);
         // Add future packaged models here; the roster, lookup and seat router share this registry.
         public static readonly IReadOnlyList<NativeModel> All = Array.AsReadOnly(new[]{Alpha,Beta,IL,Beta2});
