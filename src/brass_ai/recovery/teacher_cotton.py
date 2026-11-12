@@ -5,15 +5,18 @@ from brass_ai.learning.contracts import require
 
 CONTRACT='teacher-cotton-exploration/1.0.0'
 DEVELOP_CONTRACT='teacher-cotton-exploration/2.0.0'
+MIXED_CONTRACT='teacher-cotton-exploration/3.0.0'
 PROBABILITY=.2
 DEVELOP_PROBABILITY=.25
+MIXED_PROBABILITY=.3
 CAP=3
+PROBABILITIES={CONTRACT:PROBABILITY, DEVELOP_CONTRACT:DEVELOP_PROBABILITY, MIXED_CONTRACT:MIXED_PROBABILITY}
 
 
-def settings(*, develop=False):
-    return dict(contract=DEVELOP_CONTRACT if develop else CONTRACT,
-        probability=DEVELOP_PROBABILITY if develop else PROBABILITY,max_per_seat_era=CAP,
-        long_candidates=2,short_candidates=1,pause_unflipped=True,scope='train')
+def settings(*, develop=False, mixed=False):
+    contract = MIXED_CONTRACT if mixed else (DEVELOP_CONTRACT if develop else CONTRACT)
+    return dict(contract=contract, probability=PROBABILITIES[contract], max_per_seat_era=CAP,
+        long_candidates=2, short_candidates=1, pause_unflipped=True, scope='train-and-heldout' if mixed else 'train')
 
 
 def job_settings(job):
@@ -29,13 +32,13 @@ def validate_label(label, choices):
     e=label.get('cotton_exploration')
     if e is None:return
     require(isinstance(e,dict) and set(e)=={'contract','targeted','probability','used_before',
-        'cotton_visits','total_visits','covered_locations'} and e['contract'] in (CONTRACT, DEVELOP_CONTRACT),
+        'cotton_visits','total_visits','covered_locations'} and type(e['contract']) is str and e['contract'] in PROBABILITIES,
         'Invalid cotton exploration metadata')
     require(label.get('explored') is True and type(e['targeted']) is bool and
         type(e['used_before']) is int and 0<=e['used_before']<CAP,'Invalid cotton exploration allowance')
     total=sum(label['counts']);cotton=0;locations=set();played=None
-    develop = e['contract'] == DEVELOP_CONTRACT
-    mixture = DEVELOP_PROBABILITY if develop else PROBABILITY
+    develop = e['contract'] != CONTRACT
+    mixture = PROBABILITIES[e['contract']]
     for c,n in zip(choices,label['counts']):
         is_cotton=c.get('industry')=='CottonMill' and (c['kind']=='build' or develop and c['kind']=='develop')
         if n and is_cotton:cotton+=n;locations.add((c['kind'], c.get('target')))
@@ -60,7 +63,7 @@ def validate_receipt(receipt, job, rows):
     contract = job_settings(job)['contract']
     require(isinstance(receipt,dict) and receipt.get('contract')==contract, 'Missing cotton exploration receipt')
     used=receipt['targeted_by_era_seat'];built=receipt['builds_by_era_seat']
-    developed=receipt['develops_by_era_seat'] if contract==DEVELOP_CONTRACT else [[0]*4 for _ in range(2)]
+    developed=receipt['develops_by_era_seat'] if contract!=CONTRACT else [[0]*4 for _ in range(2)]
     require(len(used)==len(built)==len(developed)==2 and all(len(x)==4 for x in (*used,*built,*developed)), 'Cotton receipt shape')
     # With long-search labels only (the g1490 restart), short searches still explore and
     # spend allowance between labels: the labelled sequence may skip, never go back.
@@ -98,12 +101,13 @@ def validate_receipt(receipt, job, rows):
 
 def aggregate(metrics):
     """O(tables) reduction once per iteration, not per action or optimizer step."""
-    receipts=[m.get('cpu_inference',{}).get('revision',{}).get('cotton') for m in metrics]
+    receipts=[(m.get('cpu_inference') or {}).get('revision',{}).get('cotton') for m in metrics]
     receipts=[r for r in receipts if r is not None]
     if not receipts:return None
     contract = receipts[0]['contract']
     require(all(r['contract']==contract for r in receipts), 'Mixed cotton exploration settings')
-    result=dict(contract=contract,tables=len(receipts),settings=settings(develop=contract==DEVELOP_CONTRACT))
+    result=dict(contract=contract, tables=len(receipts),
+                settings=settings(develop=contract==DEVELOP_CONTRACT, mixed=contract==MIXED_CONTRACT))
     for profile in ('long','short'):
         counts=Counter()
         for r in receipts:counts.update(r[profile])
@@ -113,6 +117,6 @@ def aggregate(metrics):
     result['trigger_rate']=totals['triggers']/totals['covered_decisions'] if totals['covered_decisions'] else None
     result['coverage_rate']=totals['covered_decisions']/totals['eligible_decisions'] if totals['eligible_decisions'] else None
     result['natural_builds']=totals['actual_builds']-totals['targeted_builds']
-    if contract == DEVELOP_CONTRACT:
+    if contract != CONTRACT:
         result['natural_develops']=totals['actual_develops']-totals['targeted_develops']
     return result

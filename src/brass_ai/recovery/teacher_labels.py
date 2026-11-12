@@ -10,7 +10,9 @@ import numpy as np
 
 from brass_ai.learning.contracts import digest, require
 from .collector_runtime import C_SCALES, FULL_K
+from .teacher_cotton import job_settings
 from .teacher_phase_config import ALGORITHM, SESSION, LABEL_SOURCE
+from .training_revision_g1491 import TEACHER_SEARCH_HEAD_WEIGHT
 
 PHASES = ('canal_early', 'canal_late', 'rail_early', 'rail_late')
 KINDS = ('root', 'continuation', 'replanned_root')
@@ -31,13 +33,16 @@ def label_profile(label):
 def check_turn(label, row_round, job):
     """Long labels belong to the reserved turns; short labels only to the other turns of a g1491 job."""
     reserved = row_round == job['reservations'][str(label['seat'])][label['phase']]
+    revision = job.get('teacher_revision') or {}
+    if TEACHER_SEARCH_HEAD_WEIGHT in revision:
+        require(label.get('search_value') == job['search_value'], 'Teacher label search-head weight differs')
     if label.get('cotton_exploration') is not None:
-        from .teacher_cotton import job_settings
         cotton = job_settings(job)
-        require(job.get('split')=='train' and cotton is not None and
+        split = job.get('split')
+        require(cotton is not None and (split=='train' or split=='heldout' and cotton.get('scope')=='train-and-heldout') and
                 label['cotton_exploration']['contract']==cotton['contract'], 'Cotton exploration outside the training recipe')
     if label_profile(label) == 'fast':
-        require((job.get('teacher_revision') or {}).get('short_labels') is True,
+        require(revision.get('short_labels') is True,
                 'Short-search labels need the g1491 teacher revision')
         require(not reserved, 'Short-search label on a reserved long-search turn')
     else:

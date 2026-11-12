@@ -559,29 +559,29 @@ def parity(c):
 
 def teacher_jobs(c, weight, count, offset):
     """Production-shaped tables at the requested blend, regardless of saved progress."""
+    from brass_ai.learning.contracts import require
+    from brass_ai.learning.search_value import binding
+    from brass_ai.recovery import training_revision_g1491 as g1491
     from brass_ai.recovery.teacher_phase import plan_jobs
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
     config = getattr(c, 'teacher_config', c.config)
-    state = copy.deepcopy(c.snapshot['state'])
-    # Table identities carry the seed, not the blend, so each blend needs its own seeds.
+    state = dict(c.snapshot['state'])
     state['teacher_seed_cursor'] = state.get('teacher_seed_cursor', 0)+offset
-    if weight:
-        # Stage B's schedule adds .05 before the first use.
-        schedule = 'schedule' in config['teacher_phase']['search_value']
-        state['search_value'] = dict(stage=dict(stage='B', w=round(weight-(.05 if schedule else 0.), 2)))
-    else:
-        # A zero-weight probe must not inherit the run's Stage B/C blend.
-        state['search_value'] = dict(stage=dict(stage='A', w=0.))
+    if g1491.teacher_search_head_weight(config) is not None:
+        require(weight in (0, 1), 'Mixed teacher games need weight 0 or 1')
+        config = g1491.configure_teacher_games(config, int(weight))
     jobs, _ = plan_jobs(config, state, model_id=c.snapshot['model_id'], export_hash=c.snapshot['checkpoint']['sha256'], epoch=1, ready=True,
                         native_source=source_fingerprint())
     jobs = [j for j in jobs if j['split'] == 'train'][:count]
     for job in jobs:
+        job['search_value'] = binding(weight)
         job['readiness'] = c.readiness
     return jobs
 
 
 def teacher(c):
     from brass_ai.recovery import collector_runtime as R
+    from brass_ai.recovery import training_revision_g1491 as g1491
     from brass_ai.recovery.teacher_phase import readiness
     from brass_ai.learning.contracts import digest, require
     from brass_ai.rust_backend.lab_cpu_runtime import core_allocation, teacher_plan
@@ -600,9 +600,11 @@ def teacher(c):
     # A g1491 iteration runs 48 tables at once, so its qualification does too (36+6+6 over the three blends):
     # the verification and lock contention that stretched g1490's tables from 43 s of search to 76 s grows with the table count.
     counts = TABLES_PER_BLEND_REVISED if getattr(c, 'revision', None) else TABLES_PER_BLEND
-    for number, weight in enumerate(BLENDS):
+    blends = (0., 1.) if g1491.teacher_search_head_weight(getattr(c, 'teacher_config', c.config)) is not None else BLENDS
+    for number, weight in enumerate(blends):
         jobs += teacher_jobs(c, weight, counts[weight], 100000*number)
-    expect(checks, 'blend_weights', sorted({j['search_value']['w'] for j in jobs}) == sorted(BLENDS), sorted({j['search_value']['w'] for j in jobs}))
+    actual_blends = sorted({j['search_value']['w'] for j in jobs})
+    expect(checks, 'blend_weights', actual_blends == list(blends), actual_blends)
     bootstrap = [build['bootstrap']['binary']['path']]
     if os.name != 'nt':
         bootstrap.insert(0, c.args.mono)

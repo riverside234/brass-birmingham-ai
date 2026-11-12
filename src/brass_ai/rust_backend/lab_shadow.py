@@ -268,6 +268,13 @@ class ShadowCollector:
                     return admit_teacher_rows(result['rows'],job=job,model=model,history=state['history'])
             phase.admit_collection(results,model,verifier=MixedVerifier())
         if cpu_metrics is not None:phase.metrics['cpu_inference']=cpu_metrics
+        if actions := phase.metrics.get('teacher_actions'):
+            totals=actions['total']
+            print(f"Teacher games (w={actions['search_head_weight']}, {totals['tables']} tables) "
+                  f"builds={totals['builds']}, develop actions={totals['development_actions']}, "
+                  f"network actions={totals['network_actions']}, cotton builds/develops="
+                  f"{totals['cotton_builds']}/{totals['cotton_develops']}, pottery builds/develops="
+                  f"{totals['pottery_builds']}/{totals['pottery_develops']}", flush=True)
         mono=sorted(r['metrics']['mono_bootstrap_seconds'] for r in live if 'mono_bootstrap_seconds' in r['metrics'])
         if mono:
             phase.metrics['mono_bootstrap_seconds']=dict(tables=len(mono),min=mono[0],p50=mono[len(mono)//2],max=mono[-1],total=sum(mono))

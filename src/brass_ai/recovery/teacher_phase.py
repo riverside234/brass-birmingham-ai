@@ -2,7 +2,7 @@
 import copy
 import random
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 
 from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.league import seeds_for
@@ -11,6 +11,7 @@ from .teacher_buffer import TeacherBuffer
 from .teacher_labels import PHASES
 from .teacher_term import TeacherTerm, heldout_measure, summary
 from .search_value_schedule import validation_plan
+from .training_revision_g1491 import job_block, teacher_search_head_weight
 
 KEY = 'teacher_phase'
 
@@ -59,21 +60,29 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
     if c['mode'] == 'off' or not (ready or c.get('skip_utility_qualification', False)): return [], cursor
     jobs = []; generation = state['iteration']; reward_id = digest(c['search']['reward'])
     validation=validation_plan(config,state)
+    profile = buffer_identity(config)
+    teacher_weight = teacher_search_head_weight(config)
     for split, partition, count in (('train', 'train', c['tables']['train']), ('heldout', 'validation', c['tables']['held_out'])):
         seeds, cursor = seeds_for(cursor, count, partition=partition)
         # Reserve the same independent seed stream, but create no held-out jobs
         # or search/inference work on intervening iterations.
         if split=='heldout' and not validation['due']:continue
-        for seed in seeds:
+        for index, seed in enumerate(seeds):
             identity = dict(contract=CONTRACT, generation=generation, split=split, seed=seed, model_id=model_id,
-                            profile=buffer_identity(config))
+                            profile=profile)
             job_id = digest(identity); sampling = int(job_id[:8], 16)
+            # Alternate within each split. Keep setup and sampling streams stable when switching the blend.
+            revision = job_block(config, split=split, cotton_table=(index + generation) % 2 == 0)
+            if teacher_weight is not None:
+                job_id = digest(dict(identity, teacher_revision=revision))
             jobs.append(dict(kind='teacher_phase', split=split, seed=seed, sampling_seed=sampling,
                 expected=dict(job_id=job_id, game_id='teacher/' + job_id, generation=generation, model_id=model_id,
                     export_hash=export_hash, reward_id=reward_id, source_fingerprint=native_source, epoch=epoch),
                 reservations={str(seat): reserved_rounds(seed, sampling, seat) for seat in range(4)},
                 search=copy.deepcopy(c['search']), unsearched=copy.deepcopy(c['unsearched']),
                 seats=[model_id] * 4, schedule=SCHEDULE, ordinary_training=False))
+            if revision is not None:
+                jobs[-1]['teacher_revision'] = revision
     if c.get('seating') == 'all-seat-search':
         from brass_ai.learning.search_value import binding
         progress = state.get('search_value', {}).get('stage', state.get('search_value', {}))
@@ -89,17 +98,14 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
         if c['search_value']['blend']['w'] > 0:
             require(progress.get('stage') in ('B','head_to_head','C') and
                     progress.get('w') == c['search_value']['blend']['w'], 'Search blend requires committed stage progress')
+        value = binding(teacher_weight if teacher_weight is not None else
+                        (0. if c['search_value']['stage']=='off' else weight))
         for job in jobs:
             job.update(seating=c['seating'], fast_search=copy.deepcopy(c['fast_search']),
-                       search_value=binding(0. if c['search_value']['stage']=='off' else weight))
+                       search_value=dict(value))
         if c['startup'] == 'shadow-until-search-informative' and not progress.get('g0_passed', False):
             jobs = [j for j in jobs if j['split'] == 'heldout']
             for job in jobs: job['shadow_probe'] = True
-    from .training_revision_g1491 import job_block
-    revision = job_block(config)
-    if revision is not None:
-        # Short-search labels and root visit-count exploration (CPU teacher only).
-        for job in jobs: job['teacher_revision'] = job_block(config, split=job['split'])
     return jobs, cursor
 
 
@@ -107,6 +113,32 @@ def collection_order(teacher_jobs, ordinary_jobs):
     require(all(j['kind'] == 'teacher_phase' and j['ordinary_training'] is False for j in teacher_jobs),
             'Unidentified teacher collection job')
     return [*teacher_jobs, *ordinary_jobs]
+
+
+def action_summary(table_metrics, jobs, weight):
+    """Reduce the eight fixed era/seat counters from each completed teacher table."""
+    total, tables = Counter(), []
+    by_split = defaultdict(lambda: dict(total=Counter(), cotton_exploration=Counter(), standard_exploration=Counter()))
+    for metrics, job in zip(table_metrics, jobs, strict=True):
+        revision = metrics['cpu_inference']['revision']
+        require(revision['job'] == job['teacher_revision'], 'Teacher action report job differs')
+        cells = revision['actions']['by_era_seat']
+        require(len(cells) == 2 and all(len(era) == 4 for era in cells), 'Teacher action report shape differs')
+        counts = Counter()
+        for era in cells:
+            for seat in era:
+                counts.update(seat)
+        split = job['split']
+        cotton = 'cotton' in revision['job']['exploration']
+        tables.append(dict(seed=job['seed'], split=split, cotton_exploration=cotton, **counts))
+        counts['tables'] = 1
+        total.update(counts)
+        split_counts = by_split[split]
+        split_counts['total'].update(counts)
+        split_counts['cotton_exploration' if cotton else 'standard_exploration'].update(counts)
+    return dict(search_head_weight=weight, total=dict(total), per_table=tables,
+                by_split={split: {name: dict(counts) for name, counts in groups.items()}
+                          for split, groups in by_split.items()})
 
 
 class TeacherPhase:
@@ -175,8 +207,10 @@ class TeacherPhase:
             from .teacher_labels import check_turn
             for r in rows: check_turn(r.label, r.row['view']['context']['round'], job)
             splits[job['split']].extend(rows); rejected.update(dropped); labels.extend(r.label for r in rows)
-            table_metrics.append(copy.deepcopy(result.get('metrics', {})))
+            table_metrics.append(dict(result.get('metrics', {})))
             post_spent[job['expected']['job_id']]=time.perf_counter()-table_began+result.get('metrics',{}).get('shadow_cache_seconds',0.)
+        weight = teacher_search_head_weight(self.config)
+        actions = action_summary(table_metrics, self.jobs, weight) if self.jobs and weight is not None else None
         if self.jobs:
             for split, rows in splits.items():
                 if not rows:continue
@@ -218,6 +252,7 @@ class TeacherPhase:
         from .teacher_cotton import aggregate
         cotton=aggregate(table_metrics)
         if cotton is not None:self.metrics['cotton_exploration']=cotton
+        if actions is not None:self.metrics['teacher_actions']=actions
         reached=self.metrics['reached_reserved_turns']
         self.metrics['root_label_yield']=self.metrics['root_labels']/reached if reached else None
         self.metrics['root_label_yield_pass']=bool(reached and self.metrics['root_label_yield']>=.95)

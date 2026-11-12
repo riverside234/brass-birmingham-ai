@@ -139,11 +139,11 @@ def buffer_identity(config):
     """Learning-rate, exploration, entropy, mode and PPG changes retain labels."""
     from brass_ai.learning.contracts import compatibility
     from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
-    from .training_revision_g1491 import KEY as REVISION
+    from .training_revision_g1491 import KEY as REVISION, label_revision
     c = validate(config)
     extra = (dict(seating=c['seating'], fast_search=c['fast_search']) if 'seating' in c else {})
     # Short-search labels are a new label set: older labels and their beta retire.
-    if REVISION in c: extra['revision'] = c[REVISION]
+    if REVISION in c: extra['revision'] = label_revision(c[REVISION])
     return digest(dict(learning=compatibility(), architecture=config['architecture'],
         model_size=config['model_size'], backend=PROFILE, native_teacher=source_fingerprint(),
         search=c['search'], labels=c['labels'], schedule=c['schedule'], **extra))

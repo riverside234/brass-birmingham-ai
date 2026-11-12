@@ -181,7 +181,7 @@ PATCHES = {
          '        } else if actual.actions.len() == 1 {\n'),
         ('        state = ordinary_after(&state, &choice, &rail, &mut recorder)?;\n',
          '        state = ordinary_after(&state, &choice, &rail, &mut recorder)?;\n'
-         '        crate::cpu_eval::teacher_cotton_commit(&view, selected, state.context().revision)?;\n'),
+         '        crate::cpu_eval::teacher_action_commit(&view, selected, state.context().revision)?;\n'),
         ('"input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources},',
          '"input_bytes":peer.bytes,"elapsed_ns":clock.now_ns(),"root_value_sources":root_value_sources,\n'
          '            "cpu_inference":crate::cpu_eval::teacher_receipt()},'),

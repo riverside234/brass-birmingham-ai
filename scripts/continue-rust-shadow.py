@@ -65,7 +65,7 @@ def inference_choice(args):
 
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
-            skip_utility_qualification=False,adaptive_teacher_beta=False):
+            skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -115,6 +115,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if revise_stages and mode=='shadow':
             from brass_ai.recovery.search_value_schedule import revise
             config=revise(config)
+        if teacher_search_head_weight is not None:
+            config=g1491.configure_teacher_games(config,teacher_search_head_weight)
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -163,6 +165,12 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         profile=g1491.count_search(config)
         if profile is not None:
             prefix=prefix.replace('-share','-teacher-k8-c015-share');stages.append(prefix)
+        weight=g1491.teacher_search_head_weight(config)
+        if weight is not None:
+            previous_weight=g1491.teacher_search_head_weight(before)
+            if previous_weight is not None and previous_weight != weight:
+                stages.append(prefix.replace('-share',f'-cotton30-w{previous_weight}-share'))
+            prefix=prefix.replace('-share',f'-cotton30-w{weight}-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -251,6 +259,8 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if revision is not None:kwargs['revision']=revision
         if getattr(args,'skip_utility_qualification',False):kwargs['skip_utility_qualification']=True
         if getattr(args,'adaptive_teacher_beta',False):kwargs['adaptive_teacher_beta']=True
+        teacher_weight=getattr(args,'teacher_search_head_weight',None)
+        if teacher_weight is not None:kwargs['teacher_search_head_weight']=teacher_weight
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)

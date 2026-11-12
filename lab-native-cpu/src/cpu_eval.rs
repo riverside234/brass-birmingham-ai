@@ -7,7 +7,7 @@
 //!
 //! This file only exists in the detached CPU build. The qualified GPU binaries
 //! are built from `lab-native/` and are never compiled with it.
-use crate::{check, Result};
+use crate::{check, cpu_cotton::Mode as CottonMode, Result};
 use brass_ai_core::features::{FeatureTensors, ACTION_DIM, STATE_DIM};
 use brass_ai_core::search::math::{Parameters, Statistics};
 use brass_ai_core::search::session::clock::Budget as SearchBudget;
@@ -15,6 +15,7 @@ use brass_ai_core::{
     features::FeatureContext,
     search::{brass::Key, reward::Ledger, Info},
     state::{
+        dto::{Choice, Industry, Kind},
         observation::{InformationState, Observation, ObservationEnvelope, Recall},
         NativeState,
     },
@@ -485,6 +486,7 @@ thread_local! {
 
 const REVISION_CONTRACT: &str = "training-revision-g1491/1.0.0";
 const EXPLORATION_CONTRACT: &str = "root-visit-count-sampling/1.0.0";
+const TEACHER_SEARCH_HEAD_WEIGHT: &str = "teacher_search_head_weight";
 
 /// `job["teacher_revision"]`: label short searches too, and sample the played
 /// action from the root visit counts (temperature 1) for each seat's first
@@ -495,8 +497,44 @@ pub struct Revision {
     short_labels: bool,
     opening_actions: u32,
     long_search: bool,
-    cotton: bool,
-    cotton_develop: bool,
+    cotton: Option<CottonMode>,
+    report_actions: bool,
+}
+
+#[derive(Default, Debug, serde::Serialize)]
+struct ActionCounts {
+    builds: u32,
+    development_actions: u32,
+    developed_tiles: u32,
+    network_actions: u32,
+    links_laid: u32,
+    cotton_builds: u32,
+    cotton_develops: u32,
+    pottery_builds: u32,
+    pottery_develops: u32,
+}
+
+impl ActionCounts {
+    fn record(&mut self, choice: &Choice, first: bool) {
+        match choice.kind {
+            Kind::Build => {
+                self.builds += 1;
+                self.cotton_builds += u32::from(choice.industry == Some(Industry::CottonMill));
+                self.pottery_builds += u32::from(choice.industry == Some(Industry::Pottery));
+            }
+            Kind::Develop => {
+                self.development_actions += u32::from(first);
+                self.developed_tiles += 1;
+                self.cotton_develops += u32::from(choice.industry == Some(Industry::CottonMill));
+                self.pottery_develops += u32::from(choice.industry == Some(Industry::Pottery));
+            }
+            Kind::Network => {
+                self.network_actions += u32::from(first);
+                self.links_laid += 1;
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Per-table exploration state; index 0 counts long searches, 1 short ones.
@@ -511,12 +549,13 @@ pub struct Exploration {
     changed: [u64; 2],
     short_labels: u64,
     cotton: crate::cpu_cotton::State,
+    actions: [[ActionCounts; 4]; 2],
 }
 
 impl Exploration {
     fn for_revision(revision: &Revision) -> Self {
         let mut state = Self::default();
-        state.cotton.develop = revision.cotton_develop;
+        state.cotton.mode = revision.cotton.unwrap_or_default();
         state
     }
 
@@ -541,9 +580,11 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
     }
     let e = &block["exploration"];
     let opening = e["opening_actions_per_era"].as_u64().unwrap_or(u64::MAX);
+    let weight = block.get(TEACHER_SEARCH_HEAD_WEIGHT);
+    let ordinary_table = job["h2h"] != true && job["shadow_probe"] != true;
     check(
         block["contract"] == REVISION_CONTRACT
-            && block.as_object().is_some_and(|o| o.len() == 3)
+            && block.as_object().is_some_and(|o| o.len() == 3 + usize::from(weight.is_some()))
             && block["short_labels"].is_boolean()
             && e.as_object().is_some_and(|o| o.len() == if e.get("cotton").is_some() {5} else {4})
             && e["contract"] == EXPLORATION_CONTRACT
@@ -553,17 +594,32 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
             && job["seating"] == "all-seat-search",
         "unreviewed teacher revision",
     )?;
-    let cotton = e.get("cotton").is_some();
-    let cotton_develop = cotton && e["cotton"] == crate::cpu_cotton::settings(true);
-    check(!cotton || ((cotton_develop || e["cotton"] == crate::cpu_cotton::settings(false)) && job["split"] == "train"
-        && job["h2h"] != true && job["shadow_probe"] != true), "unreviewed cotton exploration")?;
+    if let Some(weight) = weight {
+        check(matches!(weight.as_u64(), Some(0 | 1)) && weight.as_f64() == job["search_value"]["w"].as_f64()
+            && ordinary_table && (job["split"] == "train" || job["split"] == "heldout")
+            && block["short_labels"] == false && opening == 7 && e["long_search"] == true,
+            "teacher job search-head weight differs")?;
+    }
+    let cotton = match e.get("cotton") {
+        None => None,
+        Some(settings) if weight.is_some() && settings == &CottonMode::Mixed.settings() => Some(CottonMode::Mixed),
+        Some(settings) if weight.is_none() && ordinary_table && job["split"] == "train" => {
+            if settings == &CottonMode::Builds.settings() {
+                Some(CottonMode::Builds)
+            } else {
+                check(settings == &CottonMode::Develop.settings(), "unreviewed cotton exploration")?;
+                Some(CottonMode::Develop)
+            }
+        }
+        Some(_) => return Err("unreviewed cotton exploration".into()),
+    };
     Ok(Some(Revision {
         job: block.clone(),
         short_labels: block["short_labels"] == true,
         opening_actions: opening as u32,
         long_search: e["long_search"] == true,
         cotton,
-        cotton_develop,
+        report_actions: weight.is_some(),
     }))
 }
 
@@ -608,7 +664,7 @@ pub fn teacher_explore(
             return Ok((planned, false));
         };
         let c = &view.context;
-        if c.phase == Phase::Continuation && revision.cotton_develop {
+        if c.phase == Phase::Continuation && revision.cotton.is_some_and(CottonMode::develop) {
             return Ok((state.cotton.sample_continuation(planned, &actual.key.choices, seed, decision), false));
         }
         if c.phase != Phase::Action {
@@ -620,17 +676,17 @@ pub fn teacher_explore(
         state.decisions[profile] += 1;
         let eligible = index <= revision.opening_actions || (!fast && revision.long_search);
         let Some(counts) = counts.filter(|_| eligible && actual.actions.len() > 1) else {
-            if revision.cotton { state.cotton.no_evidence(); }
+            if revision.cotton.is_some() { state.cotton.no_evidence(); }
             return Ok((planned, false));
         };
         check(counts.len() == actual.actions.len(), "root visit counts differ from the legal actions")?;
         let total: u64 = counts.iter().sum();
         if total == 0 {
-            if revision.cotton { state.cotton.no_evidence(); }
+            if revision.cotton.is_some() { state.cotton.no_evidence(); }
             return Ok((planned, false));
         }
         let base = visit_sample(counts, total, seed, decision)?;
-        let index = if revision.cotton {
+        let index = if revision.cotton.is_some() {
             state.cotton.sample(base, &actual.key.choices, counts, total, seed, decision)?
         } else { base };
         let choice = actual.actions[index].clone();
@@ -647,23 +703,31 @@ pub fn teacher_explore(
 pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fast: bool) -> (usize, bool) {
     REVISION.with(|cell| {
         let mut guard=cell.borrow_mut();
-        let Some((revision,state))=guard.as_mut().filter(|(r,_)| r.cotton) else {return (0, false);};
+        let Some((revision,state))=guard.as_mut() else {return (0, false);};
+        let Some(cotton) = revision.cotton else {return (0, false);};
         let c=&view.context;
         let index = match c.phase {
             Phase::Action => state.action(actual.actor,c.era,c.round,c.actions_remaining),
-            Phase::Continuation if revision.cotton_develop => state.count[actual.actor],
+            Phase::Continuation if cotton.develop() => state.count[actual.actor],
             _ => 0,
         };
         let window = index > 0 && (index <= revision.opening_actions || !fast && revision.long_search);
-        (state.cotton.prepare(view,&actual.key.choices,fast,window), revision.cotton_develop)
+        (state.cotton.prepare(view,&actual.key.choices,fast,window), cotton.develop())
     })
 }
 
-pub fn teacher_cotton_commit(view: &Observation, choice: &brass_ai_core::state::dto::Choice, after_revision: u32) -> Result<()> {
+/// Called only for the move actually applied to the table, after a successful step.
+pub fn teacher_action_commit(view: &Observation, choice: &Choice, after_revision: u32) -> Result<()> {
     REVISION.with(|cell| {
         let mut guard=cell.borrow_mut();
-        if let Some((_,state))=guard.as_mut().filter(|(r,_)| r.cotton) {
-            state.cotton.commit(view,choice,after_revision)?;
+        if let Some((revision,state))=guard.as_mut() {
+            if revision.cotton.is_some() {
+                state.cotton.commit(view,choice,after_revision)?;
+            }
+            if revision.report_actions && matches!(view.context.phase, Phase::Action | Phase::Continuation) {
+                let era = usize::from(view.context.era == Era::RailEra);
+                state.actions[era][view.seat as usize].record(choice, view.context.phase == Phase::Action);
+            }
         }
         Ok(())
     })
@@ -694,7 +758,7 @@ pub fn teacher_mark_label(row: &mut Value, fast: bool, explored: bool) -> Result
         if explored {
             teacher["explored"] = json!(true);
         }
-        if revision.cotton {
+        if revision.cotton.is_some() {
             if let Some(selection)=&state.cotton.selection {
                 check(teacher["played_action"] == selection.choice, "cotton label choice differs")?;
                 teacher["cotton_exploration"] = selection.label();
@@ -711,7 +775,8 @@ fn revision_receipt() -> Option<Value> {
                 "decisions":{"long":s.decisions[0],"short":s.decisions[1]},
                 "sampled":{"long":s.sampled[0],"short":s.sampled[1]},
                 "changed":{"long":s.changed[0],"short":s.changed[1]}});
-            if r.cotton { value["cotton"]=s.cotton.receipt(); }
+            if r.cotton.is_some() { value["cotton"]=s.cotton.receipt(); }
+            if r.report_actions { value["actions"] = json!({"by_era_seat":s.actions}); }
             value
         })
     })
@@ -1504,8 +1569,8 @@ mod tests {
     fn cotton_is_training_only_and_the_old_revision_keeps_its_receipt() {
         let mut job=revision_job(7,true);
         job["split"]=json!("train");
-        job["teacher_revision"]["exploration"]["cotton"]=crate::cpu_cotton::settings(false);
-        assert!(revision(&job).unwrap().unwrap().cotton);
+        job["teacher_revision"]["exploration"]["cotton"]=CottonMode::Builds.settings();
+        assert_eq!(revision(&job).unwrap().unwrap().cotton, Some(CottonMode::Builds));
         for split in ["heldout","validation"] {
             let mut bad=job.clone();bad["split"]=json!(split);assert!(revision(&bad).is_err());
         }
@@ -1516,6 +1581,48 @@ mod tests {
         install_revision(Some(job));
         assert_eq!(revision_receipt().unwrap()["cotton"]["targeted_by_era_seat"],json!([[0,0,0,0],[0,0,0,0]]));
         install_revision(None);
+    }
+
+    #[test]
+    fn mixed_tables_bind_the_blend_and_report_played_actions() {
+        let mut job = revision_job(7, true);
+        job["split"] = json!("heldout");
+        job["search_value"]["w"] = json!(0.0);
+        job["teacher_revision"]["short_labels"] = json!(false);
+        job["teacher_revision"][TEACHER_SEARCH_HEAD_WEIGHT] = json!(0);
+        job["teacher_revision"]["exploration"]["cotton"] = CottonMode::Mixed.settings();
+        assert_eq!(revision(&job).unwrap().unwrap().cotton, Some(CottonMode::Mixed));
+        job["search_value"]["w"] = json!(1.0);
+        assert!(revision(&job).is_err());
+        job["teacher_revision"][TEACHER_SEARCH_HEAD_WEIGHT] = json!(1);
+        job["teacher_revision"]["exploration"].as_object_mut().unwrap().remove("cotton");
+        install_revision(Some(job));
+
+        let state = initial();
+        let mut view = state.observation(Seat::try_from(state.context().actor as u8).unwrap()).unwrap();
+        let mut choice = Choice {
+            id: "move".into(), kind: Kind::Build, industry: Some(Industry::Pottery),
+            card: None, target: None, merchant: None, cards: None,
+        };
+        for (phase, kind, industry) in [
+            (Phase::Action, Kind::Build, Some(Industry::Pottery)),
+            (Phase::Action, Kind::Develop, Some(Industry::CottonMill)),
+            (Phase::Continuation, Kind::Develop, Some(Industry::Pottery)),
+            (Phase::Action, Kind::Network, None),
+            (Phase::Continuation, Kind::Network, None),
+        ] {
+            view.context.phase = phase;
+            choice.kind = kind;
+            choice.industry = industry;
+            teacher_action_commit(&view, &choice, view.context.revision + 1).unwrap();
+            view.context.revision += 1;
+        }
+        let receipt = revision_receipt().unwrap();
+        assert!(receipt.get("cotton").is_none());
+        assert_eq!(receipt["actions"]["by_era_seat"][0][view.seat as usize], json!({
+            "builds":1,"development_actions":1,"developed_tiles":2,"network_actions":1,"links_laid":2,
+            "cotton_builds":0,"cotton_develops":1,"pottery_builds":1,"pottery_develops":1
+        }));
     }
 
     /// A real short native root with a low cotton prior: coverage spends exactly
@@ -1533,7 +1640,7 @@ mod tests {
         }
         for (coverage,stale) in [(0,false),(2,false),(2,true)] {
             let mut job=revision_job(7,true);
-            job["split"]=json!("train");job["teacher_revision"]["exploration"]["cotton"]=crate::cpu_cotton::settings(false);
+            job["split"]=json!("train");job["teacher_revision"]["exploration"]["cotton"]=CottonMode::Builds.settings();
             install_revision(Some(job));
             let clock=MonotonicClock::new(Arc::new(AtomicBool::new(false)));
             let state=initial();let (input,_)=root(&state);
@@ -1568,7 +1675,7 @@ mod tests {
                 assert_eq!(row["teacher"]["cotton_exploration"]["used_before"],0);
                 let selected=info.key.choices.iter().find(|c|c.id==played).unwrap();
                 let next=state.after_choice(view.context.revision,&played).unwrap();
-                teacher_cotton_commit(&view,selected,next.context().revision).unwrap();
+                teacher_action_commit(&view,selected,next.context().revision).unwrap();
                 assert_eq!(revision_receipt().unwrap()["cotton"]["long"]["targeted_builds"],1);
             }
             install_revision(None);

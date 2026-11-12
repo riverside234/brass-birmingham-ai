@@ -97,6 +97,9 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         help='Replace the g1190 search head with width 32 and re-measure beta with the teacher on')
     migrations.add_argument('--retune-teacher-search', action='store_true',
         help='Use long K=8 with C_scale=0.15 and short C_scale=0.5, re-measure beta with teaching on and refill the search buffers')
+    parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
+        help='Use this weight in all retuned g1190 teacher games and enable the half-and-half 30%% cotton mix. '
+             'The setting persists across resumes.')
     if share_target_required:
         # No silent default: the target is the run's own, passed the same way every time.
         action = next(a for a in parser._actions if a.dest == 'share_target')
@@ -113,6 +116,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     if args.retune_teacher_search:
         profile = g1491.RETUNED_SEARCH
     args.teacher_count_search = profile
+    if args.teacher_search_head_weight is not None:
+        require(profile is not None, 'Teacher game settings require the retuned g1190 recipe')
     if profile is not None:
         require(args.inference != 'gpu' and args.teacher_budget == 'count' and
                 args.c_scale in (None, profile['c_scale']), 'Use the committed CPU teacher count-search profile')

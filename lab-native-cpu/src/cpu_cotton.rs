@@ -13,18 +13,53 @@ use serde_json::{json, Value};
 
 pub const CONTRACT: &str = "teacher-cotton-exploration/1.0.0";
 const DEVELOP_CONTRACT: &str = "teacher-cotton-exploration/2.0.0";
-pub const PROBABILITY: f64 = 0.2;
+const MIXED_CONTRACT: &str = "teacher-cotton-exploration/3.0.0";
 pub const CAP: u8 = 3;
 
-pub fn settings(develop: bool) -> Value {
-    let (contract, probability) = if develop {
-        (DEVELOP_CONTRACT, 0.25)
-    } else {
-        (CONTRACT, PROBABILITY)
-    };
-    json!({"contract":contract,"probability":probability,"max_per_seat_era":CAP,
-        "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":"train"})
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Mode {
+    #[default]
+    Builds,
+    Develop,
+    Mixed,
 }
+
+impl Mode {
+    pub fn develop(self) -> bool {
+        self != Self::Builds
+    }
+
+    fn contract(self) -> &'static str {
+        match self {
+            Self::Builds => CONTRACT,
+            Self::Develop => DEVELOP_CONTRACT,
+            Self::Mixed => MIXED_CONTRACT,
+        }
+    }
+
+    fn rate(self) -> (u128, u128) {
+        match self {
+            Self::Builds => (1, 5),
+            Self::Develop => (1, 4),
+            Self::Mixed => (3, 10),
+        }
+    }
+
+    fn probability(self) -> f64 {
+        match self {
+            Self::Builds => 0.2,
+            Self::Develop => 0.25,
+            Self::Mixed => 0.3,
+        }
+    }
+
+    pub fn settings(self) -> Value {
+        let scope = if self == Self::Mixed { "train-and-heldout" } else { "train" };
+        json!({"contract":self.contract(),"probability":self.probability(),"max_per_seat_era":CAP,
+            "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":scope})
+    }
+}
+
 pub fn cotton(c: &Choice) -> bool {
     c.kind == Kind::Build && c.industry == Some(Industry::CottonMill)
 }
@@ -107,7 +142,7 @@ pub struct State {
     pub used: [[u8; 4]; 2],
     pub built: [[u32; 4]; 2],
     developed: [[u32; 4]; 2],
-    pub develop: bool,
+    pub mode: Mode,
     current: Option<Binding>,
     committed: Option<Binding>,
     eligible: bool,
@@ -117,7 +152,7 @@ pub struct State {
 }
 impl State {
     fn allowed_phase(&self, phase: Phase) -> bool {
-        phase == Phase::Action || self.develop && phase == Phase::Continuation
+        phase == Phase::Action || self.mode.develop() && phase == Phase::Continuation
     }
 
     /// Repeated preparation of one revision is idempotent. No allowance is
@@ -167,9 +202,10 @@ impl State {
                 && !pause();
             return 0;
         }
+        let develop = self.mode.develop();
         let c = &mut self.counts[self.profile];
         c.action_decisions += 1;
-        if choices.len() < 2 || !choices.iter().any(|c| targeted(c, self.develop)) {
+        if choices.len() < 2 || !choices.iter().any(|c| targeted(c, develop)) {
             return 0;
         }
         c.legal_decisions += 1;
@@ -201,11 +237,11 @@ impl State {
     }
 
     fn trigger(&self, seed: u64, decision: u64) -> bool {
-        let inverse = if self.develop { 4 } else { 5 };
+        let (successes, trials) = self.mode.rate();
         u128::from(super::cpu_eval::mix(
             seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a01),
-        )) * inverse
-            < (1u128 << 64)
+        )) * trials
+            < (successes << 64)
     }
 
     /// The second removal is a legal continuation choice within the same action.
@@ -245,10 +281,11 @@ impl State {
             counts.len() == choices.len() && base < choices.len() && total > 0,
             "cotton sampling shape",
         )?;
+        let develop = self.mode.develop();
         let mut cotton_total = 0;
         let mut locations = Vec::with_capacity(2);
         for (choice, n) in choices.iter().zip(counts) {
-            if *n > 0 && targeted(choice, self.develop) {
+            if *n > 0 && targeted(choice, develop) {
                 cotton_total += n;
                 let location = (choice.kind, choice.target.as_deref());
                 if !locations.contains(&location) {
@@ -257,7 +294,7 @@ impl State {
             }
         }
         let trigger = self.trigger(seed, decision);
-        let mixture = if self.develop { 0.25 } else { PROBABILITY };
+        let mixture = self.mode.probability();
         let c = &mut self.counts[self.profile];
         if cotton_total == 0 {
             c.no_cotton_visits += 1;
@@ -276,7 +313,7 @@ impl State {
             let draw = ((u128::from(z) * u128::from(cotton_total)) >> 64) as u64;
             let mut sum = 0;
             for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
-                if targeted(choice, self.develop) {
+                if targeted(choice, develop) {
                     sum += n;
                     if draw < sum {
                         selected = i;
@@ -288,17 +325,13 @@ impl State {
         }
         let binding = self.current.ok_or("cotton choice without preparation")?;
         let probability = (1. - mixture) * counts[selected] as f64 / total as f64
-            + if targeted(&choices[selected], self.develop) {
+            + if targeted(&choices[selected], develop) {
                 mixture * counts[selected] as f64 / cotton_total as f64
             } else {
                 0.
             };
         self.selection = Some(Selection {
-            contract: if self.develop {
-                DEVELOP_CONTRACT
-            } else {
-                CONTRACT
-            },
+            contract: self.mode.contract(),
             targeted: trigger,
             probability,
             used_before: self.used[binding.era][binding.seat],
@@ -342,7 +375,7 @@ impl State {
         }
         if trigger {
             check(
-                targeted(choice, self.develop) && self.used[binding.era][binding.seat] < CAP,
+                targeted(choice, self.mode.develop()) && self.used[binding.era][binding.seat] < CAP,
                 "cotton allowance exceeded",
             )?;
             self.used[binding.era][binding.seat] += 1;
@@ -358,7 +391,7 @@ impl State {
             self.built[binding.era][binding.seat] += 1;
             self.counts[self.profile].actual_builds += 1;
         }
-        if self.develop && develop_cotton(choice) {
+        if self.mode.develop() && develop_cotton(choice) {
             self.developed[binding.era][binding.seat] += 1;
             self.counts[self.profile].actual_develops += 1;
         }
@@ -366,14 +399,9 @@ impl State {
         Ok(())
     }
     pub fn receipt(&self) -> Value {
-        let contract = if self.develop {
-            DEVELOP_CONTRACT
-        } else {
-            CONTRACT
-        };
-        let mut receipt = json!({"contract":contract,"long":self.counts[0],"short":self.counts[1],
+        let mut receipt = json!({"contract":self.mode.contract(),"long":self.counts[0],"short":self.counts[1],
             "targeted_by_era_seat":self.used,"builds_by_era_seat":self.built});
-        if self.develop {
+        if self.mode.develop() {
             receipt["develops_by_era_seat"] = json!(self.developed);
         }
         receipt
@@ -509,40 +537,39 @@ mod tests {
     }
 
     #[test]
-    fn twenty_five_percent_mix_can_develop_twice_in_one_action() {
-        let mut v = view();
-        let mut choices = choices();
-        choices[1].kind = Kind::Develop;
-        choices[1].target = None;
-        choices.truncate(2);
-        let mut s = State {
-            develop: true,
-            ..State::default()
-        };
-        assert_eq!(s.prepare(&v, &choices, false, true), 2);
-        let triggers = (0..10_000).filter(|d| s.trigger(7, *d)).count();
-        assert!((2300..2700).contains(&triggers));
-        let decision = (0..100).find(|d| s.trigger(7, *d)).unwrap();
-        assert_eq!(
-            s.sample(0, &choices, &[90, 10], 100, 7, decision).unwrap(),
-            1
-        );
-        let label = s.selection.as_ref().unwrap().label();
-        assert_eq!(label["contract"], DEVELOP_CONTRACT);
-        assert!((label["probability"].as_f64().unwrap() - 0.325).abs() < 1e-14);
-        s.commit(&v, &choices[1], v.context.revision + 1).unwrap();
+    fn both_develop_mixtures_can_develop_twice_in_one_action() {
+        for (mode, contract, triggers_expected, probability) in [
+            (Mode::Develop, DEVELOP_CONTRACT, 2300..2700, 0.325),
+            (Mode::Mixed, MIXED_CONTRACT, 2800..3200, 0.37),
+        ] {
+            let mut v = view();
+            let mut choices = choices();
+            choices[1].kind = Kind::Develop;
+            choices[1].target = None;
+            choices.truncate(2);
+            let mut s = State { mode, ..State::default() };
+            assert_eq!(s.prepare(&v, &choices, false, true), 2);
+            let triggers = (0..10_000).filter(|d| s.trigger(7, *d)).count();
+            assert!(triggers_expected.contains(&triggers));
+            let decision = (0..100).find(|d| s.trigger(7, *d)).unwrap();
+            assert_eq!(s.sample(0, &choices, &[90, 10], 100, 7, decision).unwrap(), 1);
+            let label = s.selection.as_ref().unwrap().label();
+            assert_eq!(label["contract"], contract);
+            assert!((label["probability"].as_f64().unwrap() - probability).abs() < 1e-14);
+            s.commit(&v, &choices[1], v.context.revision + 1).unwrap();
 
-        v.context.phase = Phase::Continuation;
-        v.context.revision += 1;
-        choices[0].kind = Kind::Finish;
-        assert_eq!(s.prepare(&v, &choices, false, true), 0); // no new search coverage
-        let picked = s.sample_continuation(choices[0].id.clone(), &choices, 7, decision);
-        assert_eq!(picked, choices[1].id);
-        s.commit(&v, &choices[1], v.context.revision + 1).unwrap();
-        let seat = v.context.actor as usize;
-        assert_eq!(s.used[0][seat], 2);
-        assert_eq!(s.counts[0].targeted_develops, 2);
-        assert_eq!(s.counts[0].continuation_targets, 1);
-        assert_eq!(s.receipt()["develops_by_era_seat"][0][seat], 2);
+            v.context.phase = Phase::Continuation;
+            v.context.revision += 1;
+            choices[0].kind = Kind::Finish;
+            assert_eq!(s.prepare(&v, &choices, false, true), 0); // no new search coverage
+            let picked = s.sample_continuation(choices[0].id.clone(), &choices, 7, decision);
+            assert_eq!(picked, choices[1].id);
+            s.commit(&v, &choices[1], v.context.revision + 1).unwrap();
+            let seat = v.context.actor as usize;
+            assert_eq!(s.used[0][seat], 2);
+            assert_eq!(s.counts[0].targeted_develops, 2);
+            assert_eq!(s.counts[0].continuation_targets, 1);
+            assert_eq!(s.receipt()["develops_by_era_seat"][0][seat], 2);
+        }
     }
 }

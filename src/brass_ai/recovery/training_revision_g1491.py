@@ -42,6 +42,7 @@ RESTART = 'g1490-branch-restart'
 WIDE_RESTART = 'g1190-branch-restart-256-rows'
 SEARCH_REFRESH = 'g1190-search-head-refresh-96-rows'
 RETUNED_SEARCH = dict(full_k=8, c_scale=.15, fast_c_scale=.5)
+TEACHER_SEARCH_HEAD_WEIGHT = 'teacher_search_head_weight'
 RESTARTS = (RESTART, WIDE_RESTART, SEARCH_REFRESH)
 # Exact values of each reviewed variant; None is the in-run g1491 adoption.
 VARIANTS = {
@@ -91,6 +92,37 @@ def count_search(config):
     return config.get('teacher_phase', {}).get(KEY, {}).get('count_search')
 
 
+def teacher_search_head_weight(config):
+    return config.get('teacher_phase', {}).get(KEY, {}).get(TEACHER_SEARCH_HEAD_WEIGHT)
+
+
+def _mixed_tables(marker, weight):
+    from .teacher_cotton import settings
+    cotton = dict(settings(mixed=True), table_fraction=.5)
+    return dict(marker, exploration=dict(marker['exploration'], cotton=cotton), **{TEACHER_SEARCH_HEAD_WEIGHT: weight})
+
+
+def configure_teacher_games(config, weight):
+    """Set the teacher-only blend and split cotton exploration within each partition."""
+    require(type(weight) is int and weight in (0, 1), 'Teacher search-head weight must be 0 or 1')
+    require(variant_of(config) == SEARCH_REFRESH and count_search(config) == RETUNED_SEARCH,
+            'Teacher game settings require the retuned g1190 recipe')
+    phase = config['teacher_phase']
+    result = dict(config, teacher_phase=dict(phase, **{KEY: _mixed_tables(phase[KEY], weight)}))
+    validate(result)
+    return result
+
+
+def label_revision(marker):
+    """Play sampling and the root blend vary while the sealed label format stays compatible."""
+    if TEACHER_SEARCH_HEAD_WEIGHT not in marker:
+        return marker
+    from .teacher_cotton import settings
+    result = {k: v for k, v in marker.items() if k != TEACHER_SEARCH_HEAD_WEIGHT}
+    result['exploration'] = dict(marker['exploration'], cotton=settings(develop=True))
+    return result
+
+
 def validate(config):
     """Exact reviewed values; the projected recipe is validated by the caller."""
     c = config['teacher_phase']
@@ -99,7 +131,8 @@ def validate(config):
     name = marker.get('variant')
     allowed = (block(), block(cotton=False)) if name is None else (block(variant=name),)
     if name == SEARCH_REFRESH:
-        allowed += (dict(allowed[0], count_search=RETUNED_SEARCH),)
+        retuned = dict(allowed[0], count_search=RETUNED_SEARCH)
+        allowed += (retuned, _mixed_tables(retuned, 0), _mixed_tables(retuned, 1))
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',
@@ -170,9 +203,22 @@ def previous(config):
 
 
 def compatible(before, after):
-    """Adoption is one-way and its marker can't change once committed."""
-    return not applied(before) or (applied(after) and
-        digest(before['teacher_phase'][KEY]) == digest(after['teacher_phase'][KEY]))
+    """Retuned teacher games can adopt the mixed recipe and switch their blend."""
+    if not applied(before):
+        return True
+    if not applied(after):
+        return False
+    old, new = before['teacher_phase'][KEY], after['teacher_phase'][KEY]
+    if digest(old) == digest(new):
+        return True
+    if TEACHER_SEARCH_HEAD_WEIGHT not in new:
+        return False
+    try:
+        validate(before)
+        validate(after)
+    except (ValueError, KeyError, TypeError):
+        return False
+    return digest(label_revision(old)) == digest(label_revision(new))
 
 
 def shadow_iterations(config):
@@ -196,33 +242,50 @@ def long_weight(config):
     return config['teacher_phase'][KEY]['labels'].get('long_weight') if applied(config) else None
 
 
-def _job_block(exploration, *, split='train', short_labels=True):
+def _job_block(exploration, *, split='train', short_labels=True, search_head_weight=None, cotton_table=False):
     result=dict(contract=CONTRACT, short_labels=short_labels,
                 exploration=dict(contract=exploration['contract'], temperature=exploration['temperature'],
                                  opening_actions_per_era=exploration['opening_actions_per_era'],
                                  long_search=exploration['long_search'] == 'always'))
-    if split=='train' and 'cotton' in exploration:
-        result['exploration']['cotton']=copy.deepcopy(exploration['cotton'])
+    if search_head_weight is not None:
+        result[TEACHER_SEARCH_HEAD_WEIGHT] = search_head_weight
+        if cotton_table:
+            from .teacher_cotton import settings
+            result['exploration']['cotton'] = settings(mixed=True)
+    elif split=='train' and 'cotton' in exploration:
+        result['exploration']['cotton'] = dict(exploration['cotton'])
     return result
 
 
-def job_block(config, *, split='train'):
+def job_block(config, *, split='train', cotton_table=False):
     """What a CPU teacher worker needs; absent for every earlier recipe."""
     if not applied(config):
         return None
     return _job_block(config['teacher_phase'][KEY]['exploration'], split=split,
-                      short_labels=settings(config)['short_labels'])
+                      short_labels=settings(config)['short_labels'],
+                      search_head_weight=teacher_search_head_weight(config), cotton_table=cotton_table)
 
 
 def validate_job(job):
     """A teacher job carries either no revision or exactly a reviewed one."""
     revision = job.get('teacher_revision')
+    if revision is None:
+        return None
     split = job.get('split')
-    allowed=(_job_block(EXPLORATION), _job_block(block()['exploration'],split=split),
-             _job_block(block(variant=RESTART)['exploration'],split=split,short_labels=False),
-             _job_block(block(variant=SEARCH_REFRESH)['exploration'],split=split,short_labels=False))
-    require(revision is None or (digest(revision) in tuple(digest(b) for b in allowed) and
-            job.get('seating') == 'all-seat-search' and not job.get('h2h') and not job.get('shadow_probe')),
+    require(isinstance(revision, dict) and job.get('seating') == 'all-seat-search' and
+            not job.get('h2h') and not job.get('shadow_probe'), 'Unreviewed g1491 teacher job revision')
+    if TEACHER_SEARCH_HEAD_WEIGHT in revision:
+        from brass_ai.learning.search_value import binding
+        weight = revision[TEACHER_SEARCH_HEAD_WEIGHT]
+        require(type(weight) is int and weight in (0, 1) and split in ('train', 'heldout') and
+                job.get('search_value') == binding(weight), 'Teacher job search-head weight differs')
+        allowed = (_job_block(EXPLORATION, short_labels=False, search_head_weight=weight),
+                   _job_block(EXPLORATION, short_labels=False, search_head_weight=weight, cotton_table=True))
+    else:
+        allowed = (_job_block(EXPLORATION), _job_block(block()['exploration'],split=split),
+                   _job_block(block(variant=RESTART)['exploration'],split=split,short_labels=False),
+                   _job_block(block(variant=SEARCH_REFRESH)['exploration'],split=split,short_labels=False))
+    require(digest(revision) in tuple(digest(b) for b in allowed),
             'Unreviewed g1491 teacher job revision')
     return revision
 
@@ -236,8 +299,12 @@ def summary(config):
     c = config['teacher_phase']
     labels = c[KEY]['labels']
     variant = variant_of(config)
-    return dict(contract=CONTRACT, variant=variant, mode=c['mode'], tables=tables(config),
+    result = dict(contract=CONTRACT, variant=variant, mode=c['mode'], tables=tables(config),
         buffer=copy.deepcopy(c['buffer']), teacher_rows_per_step=c['term']['rows_per_step'],
         labels=labels['searches'], long_weight=long_weight(config), short_weight=labels.get('short_weight'),
         ppo_epochs=config['update']['epochs'], beta_calibration_iterations=c['term']['shadow_iterations'],
         exploration=copy.deepcopy(c[KEY]['exploration']), ppo_lr_during_calibration='normal' if variant==SEARCH_REFRESH else 'hold')
+    weight = teacher_search_head_weight(config)
+    if weight is not None:
+        result[TEACHER_SEARCH_HEAD_WEIGHT] = weight
+    return result

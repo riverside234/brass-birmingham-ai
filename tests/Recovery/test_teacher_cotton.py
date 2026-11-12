@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 import unittest
+from collections import Counter
 from unittest.mock import Mock, patch
 
 from brass_ai.learning.contracts import SOURCE_ROOT as ROOT, digest
@@ -27,6 +28,42 @@ class Recipe(unittest.TestCase):
         self.assertNotEqual(digest(R.job_block(old)),digest(R.job_block(after)))
         bad=copy.deepcopy(jobs[0]);bad['split']='heldout'
         with self.assertRaises(ValueError):R.validate_job(bad)
+
+    def test_retuned_teacher_tables_split_both_partitions_and_keep_their_seed_streams(self):
+        from test_utility_width import recipe
+        from brass_ai.recovery import search_head_refresh, teacher_search_retune
+        from brass_ai.recovery.teacher_phase import plan_jobs
+        from brass_ai.recovery.teacher_phase_config import buffer_identity
+
+        config = recipe()
+        config['teacher_phase']['mode'] = 'on'
+        before = teacher_search_retune.configure(search_head_refresh.configure(config, adaptive_beta=True))
+        zero = R.configure_teacher_games(before, 0)
+        one = R.configure_teacher_games(zero, 1)
+        self.assertTrue(R.compatible(before, zero) and R.compatible(zero, one))
+        self.assertFalse(R.compatible(one, before))
+        self.assertEqual(buffer_identity(before), buffer_identity(zero))
+        self.assertEqual(buffer_identity(zero), buffer_identity(one))
+        self.assertIs(before['teacher_phase']['search_value'], one['teacher_phase']['search_value'])
+
+        state = dict(iteration=1964, teacher_seed_cursor=27340, search_value=dict(stage=dict(stage='C', w=1.)))
+        def plan(config):
+            return plan_jobs(config, state, model_id='m'*64, export_hash='e'*64, epoch=1964, ready=True)
+
+        old_jobs, cursor = plan(before)
+        for weight, config in ((0, zero), (1, one)):
+            jobs, new_cursor = plan(config)
+            self.assertEqual(new_cursor, cursor)
+            self.assertEqual(Counter((j['split'], C.enabled(j)) for j in jobs),
+                {('train', True): 16, ('train', False): 16, ('heldout', True): 2, ('heldout', False): 2})
+            for old, job in zip(old_jobs, jobs, strict=True):
+                self.assertEqual(R.validate_job(job), job['teacher_revision'])
+                self.assertEqual(job['search_value']['w'], weight)
+                self.assertEqual(C.job_settings(job), C.settings(mixed=True) if C.enabled(job) else None)
+                for key in ('seed', 'sampling_seed', 'reservations', 'split'):
+                    self.assertEqual(old[key], job[key])
+                self.assertNotEqual(old['expected']['job_id'], job['expected']['job_id'])
+        self.assertEqual(state['search_value']['stage'], dict(stage='C', w=1.))
 
 
 class Labels(unittest.TestCase):

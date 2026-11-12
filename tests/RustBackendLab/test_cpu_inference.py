@@ -578,12 +578,13 @@ class NativeWorkers(unittest.TestCase):
         job['readiness'] = dict(ready=True, reward_id=job['expected']['reward_id'])
         return job
 
-    def run_all_seat(self, weight, budget, revision=None):
+    def run_all_seat(self, weight, budget, revision=None, *, split='train'):
         from brass_ai.rust_backend.lab_teacher import Worker
         from brass_ai.rust_backend.lab_teacher_finalization import TurnVerifier
         native = Path(os.environ['BRASS_CPU_NATIVE'])
         state = json.loads((native/'brass-ai-core/tests/data/initial-state.json').read_text())
         job = self.all_seat_job(weight)
+        job['split'] = split
         if revision is not None:job['teacher_revision'] = revision
         self.assertEqual(job['search_value']['w'], weight)
         cancel = threading.Event()
@@ -643,6 +644,44 @@ class NativeWorkers(unittest.TestCase):
             self.assertEqual((label['requested_k'], label['c2']), (8, .15))
             self.assertIsNotNone(validate_improved_policy(label, row['choices']))
         self.assertTrue(verifier.take(result, job, self.model)[0])
+
+    def test_mixed_teacher_games_apply_the_weight_and_report_actions(self):
+        from brass_ai.recovery import training_revision_g1491 as G
+        from brass_ai.recovery.teacher_phase import action_summary
+
+        budget = dict(mode='count', full=64, fast=24, fast_k=8, **G.RETUNED_SEARCH)
+        for weight, split, biased in ((0, 'heldout', True), (1, 'train', False)):
+            with self.subTest(weight=weight, split=split):
+                revision = G._job_block(G.EXPLORATION, short_labels=False, search_head_weight=weight, cotton_table=biased)
+                job, result, verifier = self.run_all_seat(weight, budget, revision, split=split)
+                G.validate_job(job)
+                self.assertTrue(verifier.take(result, job, self.model)[0])
+                for row in result['value_rows'][:6]:
+                    self.assertEqual(row['search_value'], job['search_value'])
+                    utility, delta = self.root_heads(row)
+                    self.assertGreater(float(delta.abs().max()), 4e-4)
+                    np.testing.assert_allclose(row['v'], (utility + weight*delta)[0].double().numpy(), atol=2e-4, rtol=2e-4)
+                metrics = result['metrics']
+                receipt = metrics['cpu_inference']['revision']
+                report = action_summary([metrics], [job], weight)
+                totals = report['total']
+                self.assertEqual(report['search_head_weight'], weight)
+                group = 'cotton_exploration' if biased else 'standard_exploration'
+                self.assertEqual(report['by_split'][split][group], totals)
+                for kind in ('builds', 'development_actions', 'network_actions'):
+                    self.assertGreater(totals[kind], 0)
+                self.assertGreaterEqual(totals['developed_tiles'], totals['development_actions'])
+                self.assertGreaterEqual(totals['links_laid'], totals['network_actions'])
+                self.assertGreater(receipt['sampled']['long'], 0)
+                self.assertGreater(receipt['sampled']['short'], 0)
+                self.assertEqual('cotton' in receipt, biased)
+                if biased:
+                    cotton = receipt['cotton']
+                    self.assertTrue(any(row['teacher'].get('cotton_exploration') for row in result['rows']))
+                    for kind in ('builds', 'develops'):
+                        self.assertEqual(totals[f'cotton_{kind}'], sum(map(sum, cotton[f'{kind}_by_era_seat'])))
+                else:
+                    self.assertTrue(all('cotton_exploration' not in row['teacher'] for row in result['rows']))
 
     def test_all_seat_table_blends_the_search_head_like_the_gpu_path(self):
         budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)

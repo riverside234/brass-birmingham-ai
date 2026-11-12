@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "c66dad75ab2b6aa5928950c57d8f41c9560ea51a1a5345c7f80b827185f1e365",
+  "execution_implementation": "12c95e5ac3faf765f0c69d0fd130530757f257c6da45db2b4769cee0994f1c09",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -186,15 +186,15 @@
     },
     "src/brass_ai/recovery/teacher_labels.py": {
       "before": "d599ed03d3f3267cddd1c362204ed133f738a7a7c86b7a97b96353857b3536b9",
-      "after": "8f6a39c04965ae6ec9bf88c3efa6e29004063fe00627f9c125462aa328a13f56"
+      "after": "b39b6ff6367d556994d24c5a2f64de0b1c9c671fa6b6ebebf5814674e1749dbc"
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
-      "after": "d16dd345b23f6f63e45ed3b218b281be96f2eb41cce48bc716cca117a17df865"
+      "after": "6fc4e2952b9ebdc65e9679a49617f9416eb961b164e996be21c58c0942b186ab"
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
-      "after": "f785ffe8470604ff75bc42d294447fddccc1fab890ec8943d4e00d6baf7b8c35"
+      "after": "90ada9af297cb45ee2efb3fa0e12d177ce05495957f8970776278b20f21680b1"
     },
     "src/brass_ai/recovery/teacher_term.py": {
       "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
@@ -286,7 +286,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow.py": {
       "before": null,
-      "after": "331749e3cef3b52b82a4d7bf1e9ccbaf553c185634f3c67857000b6300c20d83"
+      "after": "39eb4f4ce2c3a1d07bb5f08b4f6f3884b5b0cad8cf1da0cf5070697896a0d430"
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
@@ -330,11 +330,11 @@
     },
     "lab-native-cpu/src/cpu_eval.rs": {
       "before": "ff4366c142c884fbd07d543c495be0a655eeb848499558a635345c18f5ea1b20",
-      "after": "7f4d376c45a68ef4ea1e163fd566ede50d841b6833306bf023b3e5c9fa9cccf5"
+      "after": "0bd039c147d779465d1a36989afba3d1ad502572c55307a862a1741ede7d539b"
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "93b18800f5545364c6179dbab1e7ddae9ff9e8df6eadc6ed51b53883db0851f4"
+      "after": "5076ae97d1ce8d19b3300c23da0cc04af69db73d2a4b7e44580917eec0ee509a"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -342,15 +342,15 @@
     },
     "scripts/qualify-rust-cpu-inference.py": {
       "before": "8637dea571eaf0351830870dd7c1904ff03d7ee95c4c55c24cdab9151bee044e",
-      "after": "6c54b37cbc1b07b9b5d65f77a49cd55412aab53243d83131ff19a45ca6fe3af9"
+      "after": "c5f8936c67b98236140f129f171b62d51a3ab28bf78057d320c339002733c193"
     },
     "src/brass_ai/recovery/training_revision_g1491.py": {
       "before": "5c6caf54055c00bc4ef2c06a33bfc651b1f82d37dcb9351bb71f997920fb832e",
-      "after": "7c231ebbc961fd719a42d3b90ea377cb3f64f649f7a7380544413a364035e360"
+      "after": "c37a5ce91388028f8e8334ae2512a55a2f34d5dbf516bafe161188e6a5f04e19"
     },
     "src/brass_ai/rust_backend/lab_cpu_overlay.py": {
       "before": "e7fa0229a185321c91a6dfbb9c513ae50800ac201544e9e0c12812fff204ef21",
-      "after": "5d518cf37c3b7545952810c1c54a1b68a4cf9fb4dcbe208c815a6722129db625"
+      "after": "ca4bc5e5153b55b863906fd7c1a5b4fc0a15b040a9b3cab8c00dddf3c901cd92"
     },
     "src/brass_ai/rust_backend/lab_cpu_runtime.py": {
       "before": "71895897093679de776ad5a98a245f6dfca69a8ea7a0035ec7a310f0adb343c4",
@@ -366,11 +366,11 @@
     },
     "lab-native-cpu/src/cpu_cotton.rs": {
       "before": null,
-      "after": "bfae3e87cef3ccf6c8a8b04cbb0951b9e14cc5169eb7e1ac2c0e799ad0be6b37"
+      "after": "1f3f64b9f0e3e25383c7cee6091d3a671eeec357ae8868fbb8cde8c2c4952500"
     },
     "src/brass_ai/recovery/teacher_cotton.py": {
       "before": null,
-      "after": "6ec43e67aa31213b5c634c94c6022cf6faa4560f5ebbd69c494cf65c6cad3a27"
+      "after": "340f909efed0e624a266dce33eaeff186c84a1326e85ec6be7a38d6ad9fa7eea"
     },
     "src/brass_ai/rust_backend/lab_cotton_overlay.py": {
       "before": null,
@@ -378,11 +378,11 @@
     },
     "tests/Recovery/test_teacher_cotton.py": {
       "before": null,
-      "after": "3ec113fac296fe880684ba721c02fbcc4c9c5192a31f9dbbc3f0c8c8339808e9"
+      "after": "90fa65a6cf64e1711595e51fc96bb61d1c95c658d18eca82a021093ecfbdd97c"
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "cc68c9ec138a688e06123e7fe9d5c0d44352e0b00296bcc6ab87f70eebf53ee6"
+      "after": "238c9352f162aaddb3594e17af500f6c9efd4585c1dd75de5a425a7bf06f8618"
     },
     "tests/RustBackendLab/test_collection_overlap.py": {
       "before": null,
@@ -390,7 +390,7 @@
     },
     "tests/RustBackendLab/test_cpu_inference.py": {
       "before": null,
-      "after": "abaf1ce7ba0dce9dcb9f196ba67680f611dec39e499db261cdbd2ef3e84fffb8"
+      "after": "83d99e5654b81f12fdf574fbf0f8cf4f3c567a00a961a0bbf88dd6d6c9914d3c"
     },
     "tests/RustBackendLab/test_cpu_qualification.py": {
       "before": "746a19f5f85f7026f1ef511603d1aa40a2d75dd3d28535bb75dd4df791f67b60",
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "c5fe900876b165daffd4e98a2edc81c79d811a0039a3a810cd9a1b9408c09583"
+      "after": "4d8dc5bd93641bb87d2ff556f24552b9e9bf1151b77b00a85a0862560e05601b"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -705,6 +705,11 @@
       "implementation": "1a98c12c39b5144dde92178c89179e5ab112b032b821bc4ffded34be7bd4c855",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "1300c0d417fd24d2da39b0da1caacf30963fb74527052fa8f35843eaddea77a9"
+    },
+    {
+      "implementation": "c66dad75ab2b6aa5928950c57d8f41c9560ea51a1a5345c7f80b827185f1e365",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "5d44f53857804503d2519fa71daa4b0332979dc6fe2437ad670c4b9c1b2ff423"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -922,6 +927,10 @@
   },
   "value_cleanup_rating_performance": {
     "scope": "Reuse sealed critic row groups and transfer batched metrics while preserving the existing numeric reductions. Stage byte-identical critic features in the mapped file and profile serialization, flush and hashing. Retain exact cleanup hashes and crash recovery with bounded compact journals. Reuse verified rating replay bindings and CPU model bundles and skip zero-weight bootstrap rows with the same loss reduction order.",
+    "qualified_implementation_unchanged": true
+  },
+  "teacher_game_settings": {
+    "scope": "The retuned g1190 recipe can set teacher-only search-head weight to zero or one. Half of each split uses the 30% cotton build and development mix. Normal visit-count exploration runs in both groups. The same sealed policy labels, lambda returns, beta and checkpoint state resume under their existing windows. The CPU worker records action totals from committed choices, and the iteration report aggregates by split and cotton group.",
     "qualified_implementation_unchanged": true
   }
 }

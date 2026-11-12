@@ -35,6 +35,11 @@ at a committed Stage A boundary. It re-measures beta with the teacher on, retire
 the old teacher labels and search values, and holds Stage A during buffer refill.
 Each search-value fit runs for at most one epoch with the existing early stop.
 Subsequent continuations use the committed search settings automatically.
+
+--teacher-search-head-weight 0 uses the utility head alone in every teacher
+game, including held-outs. It also enables 30% cotton build/develop exploration
+in half of each split, alongside ordinary exploration in every game. Pass 1 to
+use the search head at full weight. The setting persists across continuations.
 """
 import importlib.util
 from pathlib import Path
