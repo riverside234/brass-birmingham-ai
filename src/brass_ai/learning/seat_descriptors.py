@@ -38,11 +38,22 @@ def unknown_tensor(reference):
 
 def validate(values):
     a=np.asarray(values,dtype=np.float32)
-    require(a.shape==(4,DIM) and np.isfinite(a).all() and (a>=0).all() and (a<=1).all(),
-            'Invalid seat descriptor values')
-    require(np.isin(a[:,:5],[0,1]).all() and (a[:,:5].sum(1)==1).all(),
+    require(a.shape==(4,DIM),'Invalid seat descriptor values')
+    return _validate_values(a)
+
+
+def validate_batch(values):
+    a=np.asarray(values,dtype=np.float32)
+    require(a.shape==(len(values),4,DIM),'Invalid seat descriptor values')
+    return _validate_values(a)
+
+
+def _validate_values(a):
+    require(np.isfinite(a).all() and (a>=0).all() and (a<=1).all(),'Invalid seat descriptor values')
+    roles=a[...,:5]
+    require(((roles==0)|(roles==1)).all() and (roles.sum(-1)==1).all(),
             'Seat descriptor role must be one-hot')
-    require(np.all(a[a[:,4]==1,5:]==0),'Unknown descriptors must have zero lag/style')
+    require(np.all(a[...,5:][a[...,4]==1]==0),'Unknown descriptors must have zero lag/style')
     return a
 
 

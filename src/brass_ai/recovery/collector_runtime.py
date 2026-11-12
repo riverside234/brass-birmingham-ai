@@ -16,7 +16,8 @@ RUNTIME_KEYS = frozenset(DEFAULTS) | frozenset(OPTIONAL)
 MODES = ('production_fast', 'strict', 'profile')
 CPU_CONTRACT = 'brass-lab-cpu-inference/1.0.0'
 DEFAULT_C_SCALE = .1
-C_SCALES = (DEFAULT_C_SCALE, 1.)
+C_SCALES = (DEFAULT_C_SCALE, .15, .5, 1.)
+FULL_K = (8, 16)
 TEACHER_BUDGET = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=DEFAULT_C_SCALE)
 _current = None
 
@@ -34,12 +35,14 @@ _RECORDED_BLOCK = frozenset(cpu_block()) - {'overlap', 'readers'}
 
 def _valid_count_budget(budget):
     # Recorded configs omit K (before it was selectable) and c_scale (before it was).
-    if set(budget) not in ({'mode', 'full', 'fast'}, set(TEACHER_BUDGET)-{'c_scale'}, set(TEACHER_BUDGET)):
+    if set(budget)-{'fast_c_scale'} not in ({'mode', 'full', 'fast'}, set(TEACHER_BUDGET)-{'c_scale'}, set(TEACHER_BUDGET)):
         return False
     return (type(budget['full']) is int and 64 <= budget['full'] <= 4096 and
             type(budget['fast']) is int and 8 <= budget['fast'] <= 4096 and
-            budget.get('full_k', 16) == 16 and budget.get('fast_k', 4) in (2, 4, 8, 16) and
-            type(budget.get('c_scale', DEFAULT_C_SCALE)) is float and budget.get('c_scale', DEFAULT_C_SCALE) in C_SCALES)
+            type(budget.get('full_k', 16)) is int and budget.get('full_k', 16) in FULL_K and
+            budget.get('fast_k', 4) in (2, 4, 8, 16) and
+            all(type(budget[k]) is float and budget[k] in C_SCALES
+                for k in ('c_scale', 'fast_c_scale') if k in budget))
 
 
 def validate_cpu(block):
@@ -53,6 +56,20 @@ def validate_cpu(block):
     budget = block['teacher_budget']
     require(type(budget) is dict and ((budget.get('mode') == 'timed' and set(budget) == {'mode'}) or
             (budget.get('mode') == 'count' and _valid_count_budget(budget))), 'Invalid teacher search budget')
+
+
+def validate_teacher_budget(config, block):
+    from .training_revision_g1491 import applied, count_search, settings
+    profile = count_search(config)
+    cpu = block or {}
+    budget = cpu.get('teacher_budget', {})
+    if profile is not None:
+        require(cpu.get('teacher') == 'cpu-ort' and budget.get('mode') == 'count' and
+                all(budget.get(k) == v for k, v in profile.items()),
+                'CPU count budget differs from the committed teacher search profile')
+    if teacher_c_scale(budget, fast=True) != teacher_c_scale(budget):
+        require(not applied(config) or not settings(config)['short_labels'],
+                'Distinct search scales require a long-only policy-label buffer')
 
 
 def validate(execution):
@@ -107,10 +124,12 @@ def native_inference():
     return None if _current is None else _current.get('native_inference')
 
 
-def teacher_c_scale():
-    """The Gumbel c_scale of teacher searches on the path this process runs."""
-    block = native_inference()
-    return DEFAULT_C_SCALE if block is None else block['teacher_budget'].get('c_scale', DEFAULT_C_SCALE)
+def teacher_c_scale(budget=None, *, fast=False):
+    """Resolve the search profile from a given budget or the active worker settings."""
+    if budget is None:
+        budget = (native_inference() or {}).get('teacher_budget', {})
+    scale = budget.get('c_scale', DEFAULT_C_SCALE)
+    return budget.get('fast_c_scale', scale) if fast else scale
 
 
 def overlap_collection():

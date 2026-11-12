@@ -15,6 +15,14 @@ from brass_ai.learning.search_value import CONTRACT, correction, install
 from .local_scoring_auxiliary import bundle_id
 
 
+def _search_batches(count, steps, rng, *, one_epoch=False):
+    batch_size = 512
+    if one_epoch:
+        order = rng.permutation(count)
+        return [order[i:i+batch_size] for i in range(0, min(count, steps*batch_size), batch_size)]
+    return [rng.choice(count, min(batch_size, count), replace=False) for _ in range(steps)]
+
+
 def clustered_gate(rows, main, delta, *, seed, use_root=False):
     require(len(rows) == len(main) == len(delta), 'Gate prediction count differs')
     groups = defaultdict(list)
@@ -204,13 +212,16 @@ class Companion:
                 targets.append(state.new_tensor([r['target'] for r in batch]))
         return tuple(map(torch.cat,(inputs,mains,mappings,targets)))
 
-    def _head_steps(self, cached, count, *, generation, steps):
-        model = self.model; x, base, mapping, target = cached
+    def _head_batches(self, count, generation, steps, *, one_epoch=False):
         rng = np.random.default_rng(int(digest([self.seed,generation,self.steps])[:16],16))
+        return _search_batches(count, steps, rng, one_epoch=one_epoch)
+
+    def _head_steps(self, cached, batches):
+        model = self.model; x, base, mapping, target = cached
         losses = []
         model.zero_grad(set_to_none=True)
-        for _ in range(steps):
-            ix = torch.as_tensor(rng.choice(count,min(512,count),replace=False),device=x.device)
+        for indices in batches:
+            ix = torch.as_tensor(indices,device=x.device)
             self.optimizer.zero_grad(set_to_none=True)
             delta = model.search_value_head(x[ix]).gather(1,mapping[ix])
             loss = torch.nn.functional.mse_loss(base[ix]+delta,target[ix])
@@ -222,18 +233,20 @@ class Companion:
         # Preserve every observed loss without a device-to-host read per step.
         return torch.stack(losses).float().cpu().tolist()
 
-    def head_only(self, rows, *, generation, steps=32):
+    def head_only(self, rows, *, generation, steps=32, one_epoch=False):
         began=time.perf_counter()
         require(rows and all(r['split'] == 'train' for r in rows) and 1 <= steps <= 64, 'Invalid head-only training data')
         # Encode once per pass, then run every head step on cached features.
         cached = self._head_inputs(rows)
         encoded_at=time.perf_counter()
-        losses = self._head_steps(cached, len(rows), generation=generation, steps=steps)
-        return dict(steps=steps, rows=len(rows), loss_before=losses[0], loss_after=losses[-1], trunk_gradient=0., policy_kl=0.,
+        batches = self._head_batches(len(rows), generation, steps, one_epoch=one_epoch)
+        losses = self._head_steps(cached, batches)
+        return dict(steps=len(batches), rows=len(rows), loss_before=losses[0], loss_after=losses[-1], trunk_gradient=0., policy_kl=0.,
+            **(dict(max_epochs=1, max_steps=len(batches)) if one_epoch else {}),
             timings=dict(input_and_frozen_encoder_seconds=encoded_at-began,head_update_seconds=time.perf_counter()-encoded_at,
                 total_seconds=time.perf_counter()-began))
 
-    def head_only_heldout(self, rows, heldout, *, generation, intervals, interval_steps):
+    def head_only_heldout(self, rows, heldout, *, generation, intervals, interval_steps, one_epoch=False):
         """Stage A with the Stage C early stop: frozen-trunk head fitting in intervals.
 
         Each interval is kept only if the loss on the whole held-out games
@@ -248,25 +261,31 @@ class Companion:
         current = initial = held()
         cached = self._head_inputs(rows)
         encoded_at=time.perf_counter()
+        limit = intervals*interval_steps
+        epoch = self._head_batches(len(rows), generation, limit, one_epoch=True) if one_epoch else None
+        if epoch is not None:limit = len(epoch)
         reports, steps, losses = [], 0, []
-        for interval in range(intervals):
+        for start in range(0, limit, interval_steps):
+            batches = (epoch[start:start+interval_steps] if epoch is not None else
+                       self._head_batches(len(rows), generation, interval_steps))
             saved = (copy.deepcopy(self.model.search_value_head.state_dict()), copy.deepcopy(self.optimizer.state_dict()), self.steps)
             try:
-                observed = self._head_steps(cached, len(rows), generation=generation, steps=interval_steps)
+                observed = self._head_steps(cached, batches)
                 attempted = held()
             except BaseException:
                 self.model.search_value_head.load_state_dict(saved[0]); self.optimizer.load_state_dict(saved[1]); self.steps = saved[2]
                 raise
             increased = attempted > current
-            reports.append(dict(accepted=not increased, steps=interval_steps, loss_before=observed[0], loss_after=observed[-1],
+            reports.append(dict(accepted=not increased, steps=len(batches), loss_before=observed[0], loss_after=observed[-1],
                 heldout_loss_before=current, heldout_loss_attempted=attempted,
                 reason='heldout_loss_increased' if increased else 'heldout_loss_not_increased'))
             if increased:
                 self.model.search_value_head.load_state_dict(saved[0]); self.optimizer.load_state_dict(saved[1]); self.steps = saved[2]
                 break
-            current = attempted; steps += interval_steps; losses.extend(observed)
+            current = attempted; steps += len(batches); losses.extend(observed)
         self.model.zero_grad(set_to_none=True)
         return dict(steps=steps, rows=len(rows), intervals=reports, validation_gates=True,
+            **(dict(max_epochs=1, max_steps=limit) if one_epoch else {}),
             heldout_loss_before=initial, heldout_loss_after=current,
             loss_before=losses[0] if losses else None, loss_after=losses[-1] if losses else None,
             early_stop_reason=reports[-1]['reason'] if reports and not reports[-1]['accepted'] else None,
@@ -327,7 +346,7 @@ def guarded_pass(companion, rows, heldout, value_optimizer, *, scale, measure_or
 
 
 def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measure_joint_kl,
-                       beta,rate_for_step,kl_cap=.003,heldout=None,intervals=2,**unused):
+                       beta,rate_for_step,kl_cap=.003,heldout=None,intervals=2,one_epoch=False,**unused):
     """Unconditional stage schedule, with interval-level KL/loss retention.
 
     A rejected interval restores both Adams and weights. Stage counters never
@@ -356,11 +375,12 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
     targets=np.asarray([r['target'] for r in rows],dtype=np.float32)
     device=next(model.parameters()).device
     rng=np.random.default_rng(companion.seed+companion.steps);reports=[];steps=0
-    for interval in range(intervals):
+    batches=_search_batches(len(rows),intervals*16,rng,one_epoch=one_epoch)
+    for start in range(0,len(batches),16):
+        interval=batches[start:start+16]
         rollback=Selection(model,value_optimizer,{'search':0.},companion=companion)
         try:
-            for step in range(16):
-                selected=rng.choice(len(rows),min(512,len(rows)),replace=False)
+            for step,selected in enumerate(interval,start=start+1):
                 state,mapping,remaining=(torch.as_tensor(a[selected],device=device) for a in (states,mappings,remaining_costs))
                 encoded=model.encode_state(state)
                 with torch.no_grad():main=model.heads_from_encoded(encoded,mapping,remaining)[-1]
@@ -372,7 +392,7 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
                     'Correction reached main value head')
                 (beta*cloning_loss()).backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(),1.,error_if_nonfinite=True)
-                for group in value_optimizer.param_groups:group['lr']=rate_for_step(interval*16+step+1,intervals*16)
+                for group in value_optimizer.param_groups:group['lr']=rate_for_step(step,len(batches))
                 value_optimizer.step();companion.optimizer.step();companion.steps+=1
             kl=measure_joint_kl();require(np.isfinite(kl) and kl>=0,'Nonfinite search/PPG joint KL')
             attempted_loss=held_loss() if held_loss is not None and kl<=kl_cap else None
@@ -383,10 +403,11 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
                 reason=reason,heldout_loss_before=current_loss,heldout_loss_attempted=attempted_loss))
             if not accepted:rollback.restore(model,value_optimizer);break
             if attempted_loss is not None:current_loss=attempted_loss
-            steps+=16
+            steps+=len(interval)
         except BaseException:
             rollback.restore(model,value_optimizer);raise
         finally:model.zero_grad(set_to_none=True)
     return dict(intervals=reports,steps=steps,cap=kl_cap,validation_gates=held_loss is not None,
+        **(dict(max_epochs=1, max_steps=len(batches)) if one_epoch else {}),
         heldout_loss_before=initial_loss,heldout_loss_after=current_loss,
         early_stop_reason=reports[-1]['reason'] if reports and not reports[-1]['accepted'] else None)

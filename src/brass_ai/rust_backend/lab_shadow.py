@@ -241,11 +241,20 @@ class ShadowCollector:
     def admit(self,phase,state,model,service,directory,jobs,cached,missing,live,collector,cpu_metrics,seed,began,before,*,overlapped=False):
         """Everything after the tables exist: labels, buffers and evidence, in one order."""
         cached.update({r['job_id']:r for r in live})
-        from brass_ai.recovery.collector_runtime import teacher_c_scale
-        if getattr(collector,'inference',None) is not None:
-            scale=teacher_c_scale()
-            require(all(row['teacher']['c2']==scale for r in live for row in r['rows']),'Teacher tables used another c_scale')
         results=[cached[j['expected']['job_id']] for j in jobs]
+        from brass_ai.recovery.training_revision_g1491 import count_search
+        from brass_ai.recovery.collector_runtime import teacher_c_scale
+        profile=count_search(state['signature']['config'])
+        if profile is not None:
+            for result in results:
+                budget=(result['metrics'].get('cpu_inference') or {}).get('budget',{})
+                require(budget.get('mode')=='count' and all(budget.get(k)==v for k,v in profile.items()) and
+                        all(row['teacher']['c2']==profile['c_scale'] and
+                            row['teacher']['requested_k']==profile['full_k'] for row in result['rows']),
+                        'Teacher table used another long-search K or c_scale')
+        elif getattr(collector,'inference',None) is not None:
+            require(all(row['teacher']['c2']==teacher_c_scale(fast=row['teacher'].get('profile')=='fast')
+                        for r in live for row in r['rows']),'Teacher tables used another c_scale')
         # Cached JSON never inherits a process-local verification capability.
         # Rebuild that capability through normal complete row admission.
         if collector is None:

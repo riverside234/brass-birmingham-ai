@@ -1,6 +1,6 @@
 {
   "format": "architecture-source-equivalence/1.0.0",
   "original_sha256": "05368f9337d8a7a37459508f67d0bfd1c9092c4bc4a1e0d5c01748df1502f0d9",
-  "equivalent_sha256": "8faf3f0b90ed15dc29b193fc9dfa6658fed2157b00936bc2b03596b2000f2adc",
-  "reason": "Preserve archived width-32 configs, tensor keys/shapes and forward behavior, including the versioned VP clamp. An explicit utility_hidden=256 config selects a wider utility residual and has its own model identity. Existing checkpoints still load strictly at width 32; the explicit widening migration preserves learned outputs and records its source checkpoint. Only this exact source maps to the existing architecture compatibility identity."
+  "equivalent_sha256": "f9f5cbb83438d3d3d7de84aeb2cce4aa8be28172eee666fd411bf685d4faa385",
+  "reason": "Preserve archived width-32 configs, tensor keys and shapes, and forward behavior including the versioned VP clamp. An explicit utility_hidden=256 config selects a wider utility residual with its own model identity. Existing checkpoints load strictly at width 32 and the explicit widening migration preserves learned outputs and records its source checkpoint. Critic staging batches the existing seat descriptor value and role checks with the same per-row shape and contents. This exact source maps to the existing architecture compatibility identity."
 }

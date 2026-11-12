@@ -48,6 +48,16 @@ class Budgets(unittest.TestCase):
         _, summary = self.run_checks(search('full', 640, 16), search('full', 0, 0), search('fast', 96, 8))
         self.assertEqual(summary['full']['searches'], 1)
 
+    def test_split_scale_checks_the_applied_scale_for_each_search_profile(self):
+        budget = dict(BUDGET, c_scale=.15, fast_c_scale=.5)
+        full = dict(search('full', 640, 16), c_scale=.15)
+        for value in (.5, .15, None):
+            fast = dict(search('fast', 96, 8), c_scale=value)
+            checks = {}
+            Q.check_searches(checks, Q.search_summary(tables(full, fast), budget))
+            self.assertTrue(checks['full_uses_c_scale']['passed'])
+            self.assertEqual(checks['fast_uses_c_scale']['passed'], value == .5)
+
     def test_every_wrong_budget_fails_by_name(self):
         for rows, failed in [((search('full', 256, 16), search('fast', 96, 8)), 'full_uses_the_budget'),
                              ((search('full', 640, 16), search('fast', 48, 8)), 'fast_uses_the_budget'),
@@ -217,6 +227,11 @@ class G1491Teacher(unittest.TestCase):
         summary = Q.label_summary([self.good(), self.good()])
         self.assertEqual((summary['full'], summary['fast']), (dict(labels=6, explored=6), dict(labels=10, explored=4)))
         self.assertEqual(summary['worker']['short_labels'], 10)
+
+    def test_a_long_only_restart_qualifies_with_no_short_labels(self):
+        self.job = dict(self.job, short_labels=False)
+        verdict = self.verdict(table(long=[True]*3, receipt=receipt(self.job, short=0)))
+        self.assertTrue(all(verdict.values()), verdict)
 
     def test_the_revised_qualification_runs_as_many_tables_as_an_iteration(self):
         from brass_ai.recovery import training_revision_g1491 as g1491

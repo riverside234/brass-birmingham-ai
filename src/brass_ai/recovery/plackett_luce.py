@@ -86,17 +86,26 @@ def encode(games,agents):
     return games,agents,ordered,orders
 
 
-def objective(x,ordered,orders,weights,agent_count,theta_sd,seat_sd):
+def objective(x,ordered,orders,weights,agent_count,theta_sd,seat_sd,support=None):
     theta=np.r_[0.,x[:agent_count-1]]
     s=np.r_[x[agent_count-1:],-x[agent_count-1:].sum()]
     utility=theta[ordered]+s[orders];du=np.zeros_like(utility)
+    if support is not None:
+        full_weights,positions=support
+        full_loss=np.zeros_like(full_weights)
     value=0.
     for k in range(3):
         tail=utility[:,k:];top=tail.max(axis=1);exp=np.exp(tail-top[:,None]);total=exp.sum(axis=1)
-        value+=float(np.dot(weights,top+np.log(total)-utility[:,k]))
+        loss=top+np.log(total)-utility[:,k]
+        if support is None:value+=float(np.dot(weights,loss))
+        else:
+            # Keep the original weighted reduction length and row order.
+            full_loss[positions]=loss
+            value+=float(np.dot(full_weights,full_loss))
         du[:,k:]+=weights[:,None]*(exp/total[:,None]);du[:,k]-=weights
-    gt=np.zeros(agent_count);gs=np.zeros(4)
-    np.add.at(gt,ordered.ravel(),du.ravel());np.add.at(gs,orders.ravel(),du.ravel())
+    # Dense integer labels allow a direct weighted accumulation in row order.
+    gt=np.bincount(ordered.ravel(),du.ravel(),minlength=agent_count)
+    gs=np.bincount(orders.ravel(),du.ravel(),minlength=4)
     value+=float(np.dot(theta,theta)/(2*theta_sd**2)+np.dot(s,s)/(2*seat_sd**2))
     gt+=theta/theta_sd**2;gs+=s/seat_sd**2
     return value,np.r_[gt[1:],gs[:3]-gs[3]]
@@ -108,8 +117,14 @@ def fit_encoded(ordered,orders,agent_count,config,weights=None,*,start=None):
             'Invalid bootstrap game weights')
     start=np.zeros(agent_count+2) if start is None else np.array(start,dtype=np.float64,copy=True)
     require(start.shape==(agent_count+2,) and np.isfinite(start).all(),'Invalid PL warm start')
+    positions=np.flatnonzero(weights)
+    support=None
+    if len(positions)<len(weights):
+        # Bootstrap draws assign zero weight to omitted setup clusters.
+        support=(weights,positions)
+        ordered,orders,weights=ordered[positions],orders[positions],weights[positions]
     result=minimize(objective,start,
-        args=(ordered,orders,weights,agent_count,config['theta_prior_sd'],config['seat_prior_sd']),
+        args=(ordered,orders,weights,agent_count,config['theta_prior_sd'],config['seat_prior_sd'],support),
         method='L-BFGS-B',jac=True,options=dict(maxiter=1000,ftol=1e-12,gtol=1e-7,maxls=50))
     gradient=float(np.max(np.abs(result.jac)))
     require(np.isfinite(result.fun) and np.isfinite(result.x).all() and

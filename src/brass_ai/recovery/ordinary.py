@@ -28,13 +28,13 @@ def verify_pool_checkpoints(root,members,verified):
         verified.update(entries)
 
 
-def register_opponent(root,service,entry,path):
+def register_opponent(root,service,entry,path,*,lane='ordinary'):
     """CPU workers read a bundle, so they rarely need the checkpoint loaded (about 3 s each)."""
     if entry['model_id'] in service.models:return
     from .collector_runtime import native_inference
     block=native_inference()
     defer=getattr(service,'defer_checkpoint',None)
-    if defer is not None and block is not None and block['ordinary']=='cpu-ort':
+    if defer is not None and block is not None and block[lane]=='cpu-ort':
         from brass_ai.rust_backend.lab_cpu_models import bundle_ready
         if bundle_ready(root,entry['model_id']):
             defer(entry['model_id'],path);return

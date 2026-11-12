@@ -83,7 +83,7 @@ class Configuration(unittest.TestCase):
         full = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8)
         for change in (dict(workers=0), dict(pinning='sometimes'), dict(teacher_budget=dict(mode='count', full=8, fast=48)),
                        dict(teacher_budget=dict(mode='count', full=256)), dict(teacher='tpu'), dict(extra=1),
-                       dict(teacher_budget=dict(full, full_k=8)), dict(teacher_budget=dict(full, fast_k=3)),
+                       dict(teacher_budget=dict(full, full_k=4)), dict(teacher_budget=dict(full, fast_k=3)),
                        dict(teacher_budget={k: v for k, v in full.items() if k != 'fast_k'})):
             with self.assertRaises(ValueError):
                 R.validate_cpu(dict(R.cpu_block(), **change))
@@ -623,6 +623,27 @@ class NativeWorkers(unittest.TestCase):
         gentle, _ = improved_policy(label['logits'], label['counts'], label['mean_returns'], label['node_value'], 50, .1)
         self.assertGreater(max(label['target']), float(gentle.max()))
 
+    def test_retuned_budget_reaches_long_search_and_its_labels(self):
+        from brass_ai.recovery import training_revision_g1491 as G
+        from brass_ai.recovery.teacher_labels import validate_improved_policy
+
+        budget = dict(mode='count', full=64, fast=24, fast_k=8, **G.RETUNED_SEARCH)
+        revision = G._job_block(G.block(variant=G.SEARCH_REFRESH)['exploration'], short_labels=False)
+        job, result, verifier = self.run_all_seat(0., budget, revision)
+        metrics = result['metrics']
+        self.assertEqual(metrics['cpu_inference']['budget'], budget)
+        self.assertTrue(result['rows'])
+        for profile, scale in (('full', .15), ('fast', .5)):
+            self.assertEqual({s['c_scale'] for s in metrics['searches']
+                              if s['profile'] == profile and s['frozen_n'] > 0}, {scale})
+        self.assertEqual(max(s['effective_k'] for s in metrics['searches'] if s['profile'] == 'full'), 8)
+        self.assertTrue(all(s['completed'] == s['frozen_n'] for s in metrics['searches'] if s['profile'] == 'full'))
+        for row in result['rows']:
+            label = row['teacher']
+            self.assertEqual((label['requested_k'], label['c2']), (8, .15))
+            self.assertIsNotNone(validate_improved_policy(label, row['choices']))
+        self.assertTrue(verifier.take(result, job, self.model)[0])
+
     def test_all_seat_table_blends_the_search_head_like_the_gpu_path(self):
         budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)
         job, result, verifier = self.run_all_seat(.45, budget)
@@ -660,7 +681,7 @@ class NativeWorkers(unittest.TestCase):
     def test_a_g1491_table_labels_short_searches_and_explores_from_visit_counts(self):
         from brass_ai.recovery import training_revision_g1491 as R
         from brass_ai.recovery.teacher_labels import check_turn, label_profile, validate_improved_policy
-        budget = dict(mode='count', full=64, full_k=16, fast=32, fast_k=8, c_scale=1.)
+        budget = dict(mode='count', full=64, full_k=16, fast=32, fast_k=8, c_scale=1., fast_c_scale=.5)
         revision = R._job_block(R.EXPLORATION)
         job, result, verifier = self.run_all_seat(0., budget, revision)
         rows, metrics = result['rows'], result['metrics']
@@ -673,7 +694,8 @@ class NativeWorkers(unittest.TestCase):
             label = row['teacher']
             self.assertIsNotNone(validate_improved_policy(label, row['choices']))
             check_turn(label, row['view']['context']['round'], job)
-            self.assertEqual(label['requested_k'], 8 if label in [r['teacher'] for r in short] else 16)
+            fast = label_profile(label) == 'fast'
+            self.assertEqual((label['requested_k'], label['c2']), (8, .5) if fast else (16, 1.))
             self.assertLessEqual(label['effective_k'], label['requested_k'])
         # Every long-search action is sampled from its root visit counts; short ones only in each seat's opening.
         self.assertTrue(all(r['teacher'].get('explored') is True for r in long))

@@ -282,7 +282,7 @@ def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detac
     from brass_ai.learning.seat_descriptors import critic_inputs
     extra={}
     if getattr(model.config,'architecture',None)==ARCHITECTURE:
-        ids=indices.detach().cpu().tolist() if isinstance(indices,torch.Tensor) else list(indices)
+        ids=indices.detach().cpu().tolist() if dropout is not None and isinstance(indices,torch.Tensor) else indices
         extra['descriptors']=critic_inputs(dataset,ids,dropout=dropout,unknown=unknown)
     if dataset.remaining is not None:extra['remaining']=dataset.remaining[indices]
     # PPO likelihood verification also uses this helper and needs real logits.

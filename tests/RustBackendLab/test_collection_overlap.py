@@ -314,11 +314,30 @@ class CScale(unittest.TestCase):
     def test_the_block_defaults_to_point_one_and_records_only_supported_values(self):
         self.assertEqual(R.cpu_block()['teacher_budget']['c_scale'], .1)
         budget = dict(mode='count', full=64, fast=8)
-        for value in (.1, 1.):
+        for value in (.1, .15, .5, 1.):
             R.validate_cpu(dict(R.cpu_block(), teacher_budget=dict(budget, full_k=16, fast_k=4, c_scale=value)))
-        for bad in (.5, 0., 2., True):
+        for bad in (0., 2., True):
             with self.assertRaises(ValueError):
                 R.validate_cpu(dict(R.cpu_block(), teacher_budget=dict(budget, full_k=16, fast_k=4, c_scale=bad)))
+
+    def test_split_scale_uses_the_committed_profile_and_legacy_uses_one_scale(self):
+        from brass_ai.recovery import training_revision_g1491 as G
+        config = dict(teacher_phase={G.KEY:dict(G.block(variant=G.SEARCH_REFRESH), count_search=G.RETUNED_SEARCH)})
+        budget = dict(R.TEACHER_BUDGET, **G.RETUNED_SEARCH)
+        block = R.cpu_block(teacher_budget=budget)
+        R.validate_cpu(block)
+        R.validate_teacher_budget(config, block)
+        with R.scope(dict(R.DEFAULTS, native_inference=block)):
+            self.assertEqual(R.teacher_c_scale(), .15)
+            self.assertEqual(R.teacher_c_scale(fast=True), .5)
+        common = {k:v for k,v in budget.items() if k!='fast_c_scale'}
+        self.assertEqual(R.teacher_c_scale(common, fast=True), .15)
+        with self.assertRaisesRegex(ValueError, 'committed teacher search profile'):
+            R.validate_teacher_budget(config, R.cpu_block(teacher_budget=common))
+        with self.assertRaises(ValueError):
+            R.validate_cpu(R.cpu_block(teacher_budget=dict(budget, fast_c_scale=True)))
+        with self.assertRaisesRegex(ValueError, 'long-only policy-label buffer'):
+            R.validate_teacher_budget(dict(teacher_phase={G.KEY:G.block()}), block)
 
     def test_blocks_recorded_before_this_change_stay_valid_and_sequential(self):
         old = {k: v for k, v in R.cpu_block().items() if k not in ('overlap', 'readers')}
@@ -361,7 +380,7 @@ class Labels(unittest.TestCase):
 
     def test_only_the_reviewed_constants_are_accepted(self):
         from brass_ai.recovery.teacher_labels import improved_policy
-        for c1, c2 in ((50, .5), (50, 2.), (49, 1.), (50, True), (True, 1.)):
+        for c1, c2 in ((50, .25), (50, 2.), (49, 1.), (50, True), (True, 1.)):
             with self.assertRaises(ValueError):
                 improved_policy([0., 0.], [1, 1], [.1, .2], .1, c1, c2)
 

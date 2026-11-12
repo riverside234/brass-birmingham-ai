@@ -16,7 +16,9 @@ ADAPTER_FILES=('src/brass_ai/legacy.py','src/brass_ai/bank.py',
 
 def read(path): return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 def digest(value): return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
-def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+def sha(path):
+    with Path(path).open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
 def json_sha_matches(path, expected):

@@ -114,10 +114,11 @@ class CleanupOptimization(unittest.TestCase):
         root=Path(t.name);return root,retention_fixture(root,n),dict(RETENTION,quarantine_hours=0)
 
     def test_batched_journal_preserves_pins_and_bounds_writes(self):
-        root,run,cfg=self.fixture()
+        count=retention.JOURNAL_BATCH+3
+        root,run,cfg=self.fixture(count)
         with patch.object(retention,'write_json',wraps=write_json) as writes:
             result=retention.prune(root,run,cfg,apply=True)
-        self.assertEqual(result['permanently_deleted_files'],130)
+        self.assertEqual(result['permanently_deleted_files'],count)
         self.assertLess(writes.call_count,25)
         self.assertEqual((run/'keep.pt').read_bytes(),b'live')
         self.assertTrue(retention.settled(read(Path(result['manifest']))))

@@ -211,4 +211,4 @@ def compact_history(run,archived=(),limit=128):
     # Prefer recent additions. Numeric ordering handles iteration-10000 safely;
     # evaluation reports have their own bounded on-disk selection receipts.
     history=dict(sorted(history.items(),key=lambda item:order(item[0]))[-limit:])
-    if history!=before:write_json(path,history)
+    if history!=before:write_json(path,history,compact=True)

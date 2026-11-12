@@ -1,5 +1,7 @@
 """Matched numeric/byte/work regressions; no local timing benchmarks."""
 import copy
+from pathlib import Path
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -117,6 +119,40 @@ class Cache(unittest.TestCase):
             ds,source,reward,selection=self.fixture();ds.data[0][0]['_reward_return']=[value]*4
             with np.errstate(over='ignore'),self.assertRaisesRegex(ValueError,'Nonfinite'):
                 write_critic(np.empty(4,dtype=row_dtype()),ds,list(range(4)),source,reward,selection,12)
+
+    def test_metric_scans_reuse_sealed_groups_and_batch_result_transfers(self):
+        from brass_ai.recovery import value_phase as V
+        from brass_ai.recovery.config import UPDATE_V21
+        from brass_ai.recovery.ppg_replay import CriticDataset,Rows
+
+        source_ds,source,reward,selection=self.fixture()
+        model=batch_fixture.ValueBatchPerformanceTests().model(True)
+        parts=[]
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                for age,indices in enumerate(([3,1],[2,0])):
+                    array=np.empty(len(indices),dtype=row_dtype())
+                    games,contexts,_=write_critic(array,source_ds,indices,source,reward,selection,12)
+                    path=Path(directory)/f'age-{age}.npy'
+                    np.save(path,array)
+                    parts.append(Rows(path,dict(rows=len(indices),game_ids=list(games),contexts=contexts,files={})))
+                ds=CriticDataset(parts,'cpu');ids=[3,0,1,2]*9;config=dict(UPDATE_V21,microbatch_size=1)
+                with patch.object(ds,'metric_metadata',None):
+                    expected=V.metrics(model,ds,ids,config,evidence=True)
+                transferred=[];cpu=torch.Tensor.cpu
+                def transfer(tensor,*args,**kwargs):
+                    if tensor.ndim==2 and tensor.shape[1]==12:transferred.append(len(tensor))
+                    return cpu(tensor,*args,**kwargs)
+                cache={}
+                with patch.object(V,'metric_groups',wraps=V.metric_groups) as group,patch.object(torch.Tensor,'cpu',transfer):
+                    for _ in range(2):
+                        self.assertEqual(V.metrics(model,ds,ids,config,evidence=True,group_cache=cache),expected)
+                    self.assertEqual(group.call_count,1)
+                    self.assertEqual(transferred,[32,4,32,4])
+                    V.metrics(model,ds,list(reversed(ids)),config,evidence=True,group_cache=cache)
+                    self.assertEqual(group.call_count,2)
+            finally:
+                for part in parts:part.close()
 
 
 class Targets(unittest.TestCase):

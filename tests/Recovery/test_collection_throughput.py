@@ -20,7 +20,7 @@ from brass_ai.learning.batching import Request,accept_response
 from brass_ai.recovery import inputs,ratings,retention,rating_ingress
 from brass_ai.recovery.encoding import PreparedEncoder
 from brass_ai.recovery.admitted_inputs import request as admitted_request
-from brass_ai.recovery.replay import write_shard,cache_receipt
+from brass_ai.recovery.replay import CheckedGame,read_shards,write_shard,cache_receipt
 from brass_ai.recovery.retention_digests import PlanDigests,METADATA_REUSE
 from brass_ai.recovery.config import RETENTION,validate_config
 from brass_ai.recovery.throughput_config import configure
@@ -129,6 +129,27 @@ class AdmittedInputs(unittest.TestCase):
 
 
 class RatingValidation(unittest.TestCase):
+    def test_multi_game_shard_reuses_verified_feature_bindings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=str(Path(tmp)/'rating.jsonl.gz')
+            games=[]
+            for i,seed in enumerate(seeds_for(913,2,'validation')[0]):
+                g=game();g.update(game_id=f'game-{i}',split='validation',
+                    setup_group=digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=seed)))
+                for row in g['records']:correct_topology(row['view'])
+                games.append(g)
+            original=write_shard(path,games,dict(purpose='evaluation'))
+            receipt=cache_receipt(path);expected_hashes={path:sha(path)}
+            with patch.object(CheckedGame,'bind',side_effect=AssertionError('Feature bindings were rehashed')):
+                loaded=read_shards([path],partition='validation',receipts={path:receipt},_expected_hashes=expected_hashes)
+            self.assertEqual(loaded,original)
+            for before,after in zip(original,loaded,strict=True):
+                after.assert_metadata()
+                for a,b in zip(before['records'],after['records'],strict=True):
+                    np.testing.assert_array_equal(before.encoded(a,None).state,after.encoded(b,None).state)
+                after['records'][0]['seconds']+=1
+                with self.assertRaisesRegex(ValueError,'record changed'):after.encoded(after['records'][0],None)
+
     def test_parallel_completion_order_keeps_exact_serial_rows_and_checks_receipts(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             records,jobs,spec=replay_fixture(Path(tmp))

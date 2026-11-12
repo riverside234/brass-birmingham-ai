@@ -41,6 +41,7 @@ RESTART = 'g1490-branch-restart'
 # The same restart with 256 teacher rows per PPO step (the g1190 restart's second attempt).
 WIDE_RESTART = 'g1190-branch-restart-256-rows'
 SEARCH_REFRESH = 'g1190-search-head-refresh-96-rows'
+RETUNED_SEARCH = dict(full_k=8, c_scale=.15, fast_c_scale=.5)
 RESTARTS = (RESTART, WIDE_RESTART, SEARCH_REFRESH)
 # Exact values of each reviewed variant; None is the in-run g1491 adoption.
 VARIANTS = {
@@ -86,6 +87,10 @@ def settings(config):
     return VARIANTS[variant_of(config)]
 
 
+def count_search(config):
+    return config.get('teacher_phase', {}).get(KEY, {}).get('count_search')
+
+
 def validate(config):
     """Exact reviewed values; the projected recipe is validated by the caller."""
     c = config['teacher_phase']
@@ -93,6 +98,8 @@ def validate(config):
     require(isinstance(marker, dict) and marker.get('variant') in VARIANTS, 'Unreviewed g1491 training revision')
     name = marker.get('variant')
     allowed = (block(), block(cotton=False)) if name is None else (block(variant=name),)
+    if name == SEARCH_REFRESH:
+        allowed += (dict(allowed[0], count_search=RETUNED_SEARCH),)
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',

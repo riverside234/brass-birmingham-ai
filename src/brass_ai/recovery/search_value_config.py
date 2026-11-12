@@ -63,6 +63,8 @@ def validate(c):
         expected['head_to_head']['games']=0
         expected['trunk']['kl']=.003
         expected['trunk']['ordinary_heldout_tolerance']=None
+        if dedicated_holdout(c) and 'max_epochs' in c:
+            expected['max_epochs']=1
         if c.get('steps_per_iteration') == MAX_STEPS:
             expected['steps_per_iteration']=MAX_STEPS
             expected['trunk']['intervals']=MAX_STEPS//expected['trunk']['interval_steps']

@@ -9,14 +9,13 @@ from dataclasses import dataclass
 import numpy as np
 
 from brass_ai.learning.contracts import digest, require
+from .collector_runtime import C_SCALES, FULL_K
 from .teacher_phase_config import ALGORITHM, SESSION, LABEL_SOURCE
 
 PHASES = ('canal_early', 'canal_late', 'rail_early', 'rail_late')
 KINDS = ('root', 'continuation', 'replanned_root')
 IDENTITY = ('job_id', 'game_id', 'generation', 'model_id', 'export_hash', 'reward_id',
             'source_fingerprint', 'epoch')
-# c2 is the Gumbel c_scale. The qualified GPU binaries only ever produce .1.
-C_SCALES = (.1, 1.)
 # A short-search label carries profile "fast"; long labels have no profile field.
 SHORT_K = (2, 4, 8, 16)
 
@@ -99,12 +98,13 @@ def validate_improved_policy(label, choices):
     for key in ('requested_k', 'effective_k', 'frozen_n', 'completed_trajectories',
                 'node_trajectories', 'completed_rounds'):
         require(type(label[key]) is int and label[key] >= 0, 'Invalid teacher search counter ' + key)
-    # Long searches always ask for K=16. A short-search label (g1491) records its own K.
-    profile = label_profile(label)
-    requested = 16 if profile == 'full' else label['requested_k']
+    # Only the CPU count worker can override the historical long-search K=16.
+    requested = label['requested_k']
+    allowed_k = (SHORT_K if label_profile(label) == 'fast' else
+                 FULL_K if label.get('inference_backend') == 'cpu-ort' else (16,))
     root_width = label.get('root_legal_count',len(ids)) if label['kind'] == 'continuation' else len(ids)
-    require(type(root_width) is int and root_width >= 1 and requested in SHORT_K and
-            label['requested_k'] == requested and label['effective_k'] in (1, 2, 4, 8, 16)
+    require(type(root_width) is int and root_width >= 1 and requested in allowed_k and
+            label['effective_k'] in (1, 2, 4, 8, 16)
             and label['effective_k'] <= min(root_width, requested),
             'Teacher K differs')
     require(type(label.get('explored', False)) is bool, 'Invalid teacher exploration flag')

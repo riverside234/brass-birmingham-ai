@@ -12,7 +12,7 @@ insolvency charge kept (.0025, cap .025) in the reward:
    starts Stage A (50 iterations), then Stage B (50) and Stage C (10).
 
 The defaults are the CPU path with 64 workers and n=96 short searches (K=8);
-long searches stay n=640, K=16. --iterations counts every iteration from
+long searches use n=640, K=16 until retuned. --iterations counts every iteration from
 --expected-generation, calibration included. After an interruption, rerun with
 --expected-generation set to the last committed generation: the command resumes
 whichever step is unfinished.
@@ -29,6 +29,12 @@ resets PPG beta to .25 and re-measures teacher beta with 96 teacher rows per PPO
 --adaptive-teacher-beta enables ongoing adjustment from the accepted beta.
 Set --share-target at a committed iteration boundary. Adaptive beta carries
 its current weight and running gradient norms into the new target.
+
+--retune-teacher-search adopts long K=8 and C_scale=0.15 with short C_scale=0.5
+at a committed Stage A boundary. It re-measures beta with the teacher on, retires
+the old teacher labels and search values, and holds Stage A during buffer refill.
+Each search-value fit runs for at most one epoch with the existing early stop.
+Subsequent continuations use the committed search settings automatically.
 """
 import importlib.util
 from pathlib import Path

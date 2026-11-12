@@ -94,7 +94,7 @@ class CheckedGame(dict):
         return encoded
 
 
-def check_game(game, arrays=None,*,validated_inputs=False):
+def check_game(game, arrays=None,*,validated_inputs=False,_feature_offset=0):
     require(not validated_inputs or arrays is not None,'Checked ingress requires attested arrays')
     keys(game, ('game_id', 'setup_group', 'players', 'split', 'opponents', 'result', 'records'),
          ('branch','branches','branch_statistics','local_scoring_targets'))
@@ -118,7 +118,7 @@ def check_game(game, arrays=None,*,validated_inputs=False):
         if arrays is None:
             e = encoder.encode(row['view'],row['choices'],row['style'],row['intent'],validated=True)
         else:
-            e = arrays[step]
+            e = arrays[_feature_offset+step]
             check_encoded(e)
             finite_vector(row['style'],4,-1,1);finite_vector(row['intent'],8,-1,1)
             require(e.state.shape == (encoder.state_dim,) and e.actions.shape == (len(row['choices']),encoder.action_dim),
@@ -154,6 +154,9 @@ def check_game(game, arrays=None,*,validated_inputs=False):
         require(type(game['branches']) is list and len(game['branches'])<=1,'Too many branch games')
         game=dict(game,branches=[check_game(child) for child in game['branches']])
         for child in game['branches']:validate_child(game,child)
+    if validated_inputs:
+        from brass_ai.rust_backend.lab_features import VerifiedArrays,bind
+        if isinstance(arrays,VerifiedArrays):return bind(game,arrays,start=_feature_offset)
     return CheckedGame(game).bind(encoded)
 
 
@@ -278,7 +281,7 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native
         jobs=header['provenance'].get('jobs')
         if jobs is not None:require(len(jobs)==len(raw),'Replay provenance job count differs')
         for ordinal,g in enumerate(raw):
-            count=len(g['records']);game=check_game(g,None if arrays is None else arrays[start:start+count],validated_inputs=arrays is not None);start+=count
+            count=len(g['records']);game=check_game(g,arrays,validated_inputs=arrays is not None,_feature_offset=start);start+=count
             require(game['game_id'] not in identities,'Duplicate game across shards');identities.add(game['game_id'])
             # Descriptors are table metadata, separate from the immutable board
             # observation/Features-4 contract. The enclosing replay hash seals it.

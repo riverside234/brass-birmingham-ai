@@ -274,6 +274,15 @@ class Labels(unittest.TestCase):
         explored = self.label(explored=True)
         self.assertIsNotNone(TL.validate_improved_policy(explored.label, explored.row['choices']))
 
+    def test_long_cpu_label_records_the_retuned_search(self):
+        row = self.label(requested_k=8, inference_backend='cpu-ort', c2=.15)
+        label = row.label
+        target, _ = TL.improved_policy(label['logits'], label['counts'], label['mean_returns'], label['node_value'], c2=.15)
+        label['target'] = target.tolist()
+        self.assertIsNotNone(TL.validate_improved_policy(label, row.row['choices']))
+        with self.assertRaisesRegex(ValueError, 'K differs'):
+            TL.validate_improved_policy(dict(label, effective_k=16), row.row['choices'])
+
     def test_short_labels_live_only_on_unreserved_turns_of_a_revised_job(self):
         job = dict(reservations={'0': dict(canal_early=3)}, teacher_revision=dict(short_labels=True))
         long = dict(seat=0, phase='canal_early'); short = dict(long, profile='fast')

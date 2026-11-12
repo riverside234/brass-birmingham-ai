@@ -159,7 +159,7 @@ class SearchHead(unittest.TestCase):
         phase.options = dict(steps_per_iteration=64, trunk=dict(intervals=4), schedule={})
         phase.report = {}
         calls = {}
-        phase.machine = type('Machine', (), dict(state=dict(lam=1., buffer_rebuild=None), advance=lambda self, *a, **k: {}, choose_lambda=lambda self, v: None))()
+        phase.machine = type('Machine', (), dict(state=dict(stage='B', lam=1., buffer_rebuild=None), advance=lambda self, *a, **k: {}, choose_lambda=lambda self, v: None))()
         phase.buffer = type('Buffer', (), dict(rows=lambda self, generation, split: [dict(split='train', game_id='g', index=0, terminal_utility=[0.]*4, u=[0.]*4, r=[0.]*4)] if split == 'train' else []))()
         phase.companion = type('Companion', (), dict(head_only=lambda self, rows, generation, steps: calls.update(steps=steps) or dict(steps=steps), seed=1))()
         phase.trunk_scale = lambda: 0.

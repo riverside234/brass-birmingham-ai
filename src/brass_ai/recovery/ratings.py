@@ -212,7 +212,7 @@ def slot_spec(root,run,rating,entry,config,*,anchor_agent=None):
 
 def jobs_for(spec,directory):
     from .execution import neural_spec
-    jobs=[]
+    jobs=[];spec_digest=digest(spec)
     for i,row in enumerate(spec['lineups']):
         policies=[]
         for agent in row['agents']:
@@ -223,13 +223,13 @@ def jobs_for(spec,directory):
                 policy['frozen_rating']=True
             policies.append(policy)
         provenance=dict(producer='plackett-luce-rating/1.0.0',purpose='evaluation',kind=row['kind'],
-            seed=row['seed'],sampling_seed=row['seed']*7+row['seat'],rotation=row['seat'],spec=digest(spec))
+            seed=row['seed'],sampling_seed=row['seed']*7+row['seat'],rotation=row['seat'],spec=spec_digest)
         jobs.append(dict(index=i,seed=row['seed'],rotation=row['seat'],sampling_seed=provenance['sampling_seed'],
             policies=policies,path=str(directory/f'game-{i:06d}.jsonl.gz'),provenance=provenance))
     return jobs
 
 
-def game_record(game,row,spec):
+def game_record(game,row,spec,*,spec_digest=None):
     targets=terminal_targets(game['result']);rng=random.Random(digest(dict(
         contract=spec['config']['contract'],seed=spec['config']['seed'],slot=spec['generation'],
         setup=game['setup_group'],seat=row['seat'],kind=row['kind'])))
@@ -239,12 +239,14 @@ def game_record(game,row,spec):
     agents=[row['agents'][(s-row['seat'])%4] for s in range(4)]
     return dict(game_id=game['game_id'],setup_id=game['setup_group'],setup_seed=row['seed'],slot=spec['generation'],
         candidate_seat=row['seat'],kind=row['kind'],agents=agents,order=order,
-        official_placement=targets['placement'],vp=targets['vp'],win_share=targets['win_share'],spec_digest=digest(spec))
+        official_placement=targets['placement'],vp=targets['vp'],win_share=targets['win_share'],
+        spec_digest=digest(spec) if spec_digest is None else spec_digest)
 
 
 def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,context_sink=None,telemetry=None):
     from .inference import InferenceService
     from .execution import ActorPool
+    from .ordinary import register_opponent
     from .replay import read_shards
     jobs=jobs_for(spec,directory);rows=[];started=time.perf_counter()
     metrics=telemetry if telemetry is not None else {}
@@ -255,7 +257,7 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,cont
             if ref['kind']=='model':
                 e=ref['checkpoint'];path=project_path(root,e['path'])
                 require(sha(path)==e['sha256'],'Rated checkpoint changed')
-                if e['model_id'] not in service.models:service.register_checkpoint(path)
+                register_opponent(root,service,e,path,lane='rating')
         metrics['model_registration_seconds']=time.perf_counter()-started
         if block is not None and block['rating']=='cpu-ort':
             from brass_ai.rust_backend.lab_cpu_runtime import rating_settings
@@ -287,16 +289,18 @@ def collect_slot(root,directory,spec,config,device,mono,inference_devices,*,cont
                 'Incomplete rating slot')
         loaded={};began=time.perf_counter()
         for record in ([] if parallel else records):
-            job=jobs[record['job']]
-            require(sha(record['path'])==record['sha256'],'Rating replay changed')
-            if record['path'] not in loaded:
-                games=read_shards([record['path']],partition='validation',receipts={record['path']:record.get('features')})
-                loaded[record['path']]={g['game_id']:g for g in games}
-            game=loaded[record['path']][record['game_id']]
+            job=jobs[record['job']];path=str(record['path'])
+            binding=(record['sha256'],record.get('features'))
+            if path not in loaded:
+                games=read_shards([path],partition='validation',receipts={path:binding[1]},_expected_hashes={path:binding[0]})
+                loaded[path]=(binding,{g['game_id']:g for g in games})
+            saved,games=loaded[path]
+            require(saved==binding,'Conflicting rating shard receipts')
+            game=games[record['game_id']]
             expected=[job['policies'][(s-job['rotation'])%4]['policy_id'] for s in range(4)]
             require(game['opponents']==expected and game['setup_group']==digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed'])),
                     'Rating game seat/setup identity differs')
-            rows.append(game_record(game,spec['lineups'][record['job']],spec))
+            rows.append(game_record(game,spec['lineups'][record['job']],spec,spec_digest=job['provenance']['spec']))
             if context_sink is not None:context_sink(game,job,record)
         if not parallel:metrics['replay_validation']=dict(join_seconds=time.perf_counter()-began,
             scope='Serial full replay validation; context extraction when enabled')

@@ -108,7 +108,9 @@ def regressions(out,*,teacher,collector,runtime,fixtures,core,native,focused=Fal
         BRASS_CPU_TEACHER=str(teacher),BRASS_CPU_COLLECTOR=str(collector),BRASS_CPU_RUNTIME=str(runtime),
         BRASS_CPU_FIXTURES=str(fixtures),BRASS_CPU_CORE=core,BRASS_CPU_NATIVE=str(native))
     with (out/'regressions.log').open('w') as log:
-        cases=(['test_teacher_cotton','test_training_revision_g1491','test_cpu_inference.Overlay'] if focused else ['test_cpu_inference','test_teacher_cotton'])
+        cases=(['test_teacher_cotton','test_training_revision_g1491','test_cpu_inference.Overlay',
+                'test_cpu_inference.NativeWorkers.test_retuned_budget_reaches_long_search_and_its_labels']
+               if focused else ['test_cpu_inference','test_teacher_cotton'])
         subprocess.run([sys.executable,'-B','-m','unittest',*cases,'-v'],cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=180 if focused else 900)
 
 

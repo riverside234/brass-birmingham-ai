@@ -5,10 +5,11 @@ import json
 from brass_ai.learning.contracts import SOURCE_ROOT,digest,project_path,require
 from brass_ai.learning.replay import split_for
 from .policy import INDUSTRIES
-def write_json(path, value):
+def write_json(path, value, *, compact=False):
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.tmp')
-    temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + '\n', encoding='utf-8')
+    style = {'separators': (',', ':')} if compact else {'indent': 2}
+    temporary.write_text(json.dumps(value, allow_nan=False, **style) + '\n', encoding='utf-8')
     temporary.replace(path)
 
 

@@ -97,17 +97,42 @@ PATCHES = {
         ('"verification_policy":"sampled-unbounded-verification/3"}),',
          '"verification_policy":"sampled-unbounded-verification/3",\n'
          '        "inference":crate::cpu_eval::teacher_receipt()}),'),
+        ('    fast: bool,\n}\n\n#[derive(Default,serde::Serialize)]',
+         '    fast: bool,\n    c_scale: f64,\n}\n\n#[derive(Default,serde::Serialize)]'),
+        ('            turn_work.fast = forced_fast || !scheduled;\n',
+         '            turn_work.fast = forced_fast || !scheduled;\n'
+         '            turn_work.c_scale = crate::cpu_eval::teacher_c_scale(turn_work.fast);\n'),
         ('                k: if turn_work.fast { 4 } else { 16 },\n',
          '                k: crate::cpu_eval::teacher_k(turn_work.fast, calibration, if turn_work.fast { 4 } else { 16 }),\n'),
         ('                simulations: 8,\n',
          '                simulations: crate::cpu_eval::teacher_simulations(turn_work.fast, calibration),\n'
-         '                c2: crate::cpu_eval::teacher_c_scale(),\n'),
+         '                c2: turn_work.c_scale,\n'),
+        ('"profile":if turn_work.fast {"fast"} else {"full"}}));',
+         '"profile":if turn_work.fast {"fast"} else {"full"},"c_scale":turn_work.c_scale}));'),
+        ('    now: u64,\n) -> Result<Option<Value>> {\n    check(e.info == *actual,',
+         '    now: u64,\n) -> Result<Option<Value>> {\n'
+         '    label_for_scale(e, actual, expected, played, kind, supported, budget, now, crate::cpu_eval::teacher_c_scale(false))\n'
+         '}\n\n'
+         'fn label_for_scale(\n'
+         '    e: &Evidence, actual: &Info<Key, String>, expected: &Value, played: &str,\n'
+         '    kind: &str, supported: bool, budget: Budget, now: u64, c_scale: f64,\n'
+         ') -> Result<Option<Value>> {\n    check(e.info == *actual,'),
+        ('                        label(\n                            e,',
+         '                        label_for_scale(\n                            e,'),
+        ('                            out.budget,\n                            clock.now_ns(),\n',
+         '                            out.budget,\n                            clock.now_ns(),\n                            turn_work.c_scale,\n'),
+        ('                if let Some(mut row) = label(\n',
+         '                if let Some(mut row) = label_for_scale(\n'),
+        ('                    session.as_ref().unwrap().budget(),\n                    clock.now_ns(),\n',
+         '                    session.as_ref().unwrap().budget(),\n                    clock.now_ns(),\n                    turn_work.c_scale,\n'),
         ('    let target: Vec<f32> = e.policy()?.into_iter().map(|v| v as f32).collect();\n',
-         '    let target: Vec<f32> = crate::cpu_eval::teacher_policy(&e.stats, e.info.actor)?\n'
+         '    let target: Vec<f32> = crate::cpu_eval::teacher_policy(&e.stats, e.info.actor, c_scale)?\n'
          '        .into_iter()\n'
          '        .map(|v| v as f32)\n'
          '        .collect();\n'),
-        ('"c1":50,"c2":0.1,"max_n":', '"c1":50,"c2":crate::cpu_eval::teacher_c_scale(),"max_n":'),
+        ('"c1":50,"c2":0.1,"max_n":', '"c1":50,"c2":c_scale,"max_n":'),
+        ('"requested_k":16,"effective_k":',
+         '"requested_k":crate::cpu_eval::teacher_k(false, false, 16),"effective_k":'),
         ('                profile_budget(clock.now_ns(), turn_work.fast)?,\n',
          '                match crate::cpu_eval::teacher_turn_budget(clock.now_ns(), turn_work.fast, calibration)? {\n'
          '                    Some(budget) => budget,\n'

@@ -54,6 +54,16 @@ class PlackettLuce(unittest.TestCase):
         np.testing.assert_allclose(grad,numeric,rtol=1e-6,atol=1e-7)
         self.assertTrue(np.isfinite(value))
 
+    def test_bootstrap_omitted_games_preserve_exact_weighted_loss_and_gradient(self):
+        _,agents,ordered,orders=pl.encode(simulated(setups=41),AGENTS)
+        x=np.array([.3,-.2,.1,-.1,.2,.5]);weights=np.resize([0.,1.,0.,2.,0.,3.,0.],len(ordered))
+        positions=np.flatnonzero(weights);args=(len(agents),2.,.5)
+        full,gradient=pl.objective(x,ordered,orders,weights,*args)
+        reduced,reduced_gradient=pl.objective(x,ordered[positions],orders[positions],weights[positions],*args,
+            support=(weights,positions))
+        self.assertEqual(reduced,full)
+        np.testing.assert_array_equal(reduced_gradient,gradient)
+
     def test_recovers_known_theta_and_seats_and_keeps_IL_zero(self):
         theta=np.array([0.,-.3,.4,.8]);seat=np.array([.2,-.15,.1,-.15])
         result=pl.fit(simulated(theta,seat,setups=1500),AGENTS,RATING)

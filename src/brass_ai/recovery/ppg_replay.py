@@ -1,6 +1,7 @@
 """Checkpoint-owned mmap replay. Never a source of PPO trajectories."""
 import copy
 from contextlib import contextmanager
+import hashlib
 import re
 import time
 
@@ -132,6 +133,15 @@ class CriticDataset(Dataset):
         # replay is admitted/hashed once by Buffer.verify, then read-only.
         if any('packing' in p.receipt for p in self.data.parts):return None
         return tuple((str(p.array.filename),len(p)) for p in self.data.parts)
+
+    def metric_metadata(self,indices):
+        """Use sealed identity columns without reconstructing replay rows."""
+        indices=np.asarray(indices,dtype=np.int64)
+        owners=np.searchsorted(self.data.ends,indices,side='right')
+        games=self.data.column(indices,'game');contexts=self.data.column(indices,'context')
+        receipts=[part.receipt for part in self.data.parts]
+        return ((receipts[p]['game_ids'][g],receipts[p]['contexts'][c],self.tables[i],self.roles[i])
+                for i,p,g,c in zip(indices,owners,games,contexts,strict=True))
 
     def scoring_metadata(self,indices):
         """Small metadata only: never reconstruct an Encoded row or descriptor."""
@@ -281,10 +291,18 @@ class Buffer:
         disk_peak=sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file())
         part=self.path(generation,'critic.npy.partial')
         a=np.lib.format.open_memmap(part,mode='w+',dtype=row_dtype(),shape=(len(ids),))
+        critic_checksum=None;critic_hash_seconds=0.
         try:
             from .ppg_cache_writer import write_critic
             games,context_values,serialization=write_critic(a,dataset,ids,source,self.reward_id,selection,generation)
+            flush_began=time.perf_counter()
             a.flush()
+            serialization['critic_flush_seconds']=time.perf_counter()-flush_began
+            if self.window!=16 and len(a._mmap)==a.offset+a.nbytes:
+                # The mapping covers the full file, including the NPY header.
+                hash_began=time.perf_counter()
+                critic_checksum=hashlib.sha256(a._mmap).hexdigest()
+                critic_hash_seconds=time.perf_counter()-hash_began
         finally:a._mmap.close()
         disk_peak=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file()))
         part.replace(self.path(generation,'critic.npy'))
@@ -320,7 +338,13 @@ class Buffer:
             # Every older checkpoint-owned cache remains until committed().
             for ext in extensions:self.path(generation,ext).unlink()
             extensions=EXTENSIONS
-        files={ext:dict(bytes=self.path(generation,ext).stat().st_size,sha256=sha(self.path(generation,ext))) for ext in extensions}
+        hash_began=time.perf_counter()
+        files={}
+        for ext in extensions:
+            path=self.path(generation,ext)
+            checksum=critic_checksum if ext=='critic.npy' and critic_checksum is not None else sha(path)
+            files[ext]=dict(bytes=path.stat().st_size,sha256=checksum)
+        serialization['data_hash_seconds']=critic_hash_seconds+(time.perf_counter()-hash_began)
         from .domino_config import enabled,CONTRACT as DOMINO_CONTRACT
         if enabled(self.config):
             from .domino_sampling import validate_assignment,learner_row

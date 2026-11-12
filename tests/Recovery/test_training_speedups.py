@@ -222,13 +222,14 @@ class Planning(unittest.TestCase):
 
     def test_cpu_workers_do_not_need_opponents_loaded_when_a_bundle_exists(self):
         from brass_ai.recovery import collector_runtime as R
-        service = mock.Mock(models={})
-        entry = dict(model_id='m1')
-        with R.scope(dict(R.DEFAULTS, native_inference=R.cpu_block())), \
-                mock.patch('brass_ai.rust_backend.lab_cpu_models.bundle_ready', return_value=True):
-            ordinary.register_opponent('root', service, entry, 'checkpoint.pt')
-        service.defer_checkpoint.assert_called_once_with('m1', 'checkpoint.pt')
-        service.register_checkpoint.assert_not_called()
+        for lane in ('ordinary','rating'):
+            service = mock.Mock(models={})
+            entry = dict(model_id='m1')
+            with R.scope(dict(R.DEFAULTS, native_inference=R.cpu_block())), \
+                    mock.patch('brass_ai.rust_backend.lab_cpu_models.bundle_ready', return_value=True):
+                ordinary.register_opponent('root', service, entry, 'checkpoint.pt', lane=lane)
+            service.defer_checkpoint.assert_called_once_with('m1', 'checkpoint.pt')
+            service.register_checkpoint.assert_not_called()
 
     def test_a_missing_bundle_or_the_gpu_path_loads_the_checkpoint(self):
         from brass_ai.recovery import collector_runtime as R

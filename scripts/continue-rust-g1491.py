@@ -95,6 +95,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         help='Widen the g1190 run utility 32 to 256 once, extend Stage A from 50 to 100 and re-measure beta')
     migrations.add_argument('--refresh-search-head', action='store_true',
         help='Replace the g1190 search head with width 32 and re-measure beta with the teacher on')
+    migrations.add_argument('--retune-teacher-search', action='store_true',
+        help='Use long K=8 with C_scale=0.15 and short C_scale=0.5, re-measure beta with teaching on and refill the search buffers')
     if share_target_required:
         # No silent default: the target is the run's own, passed the same way every time.
         action = next(a for a in parser._actions if a.dest == 'share_target')
@@ -106,6 +108,16 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     generation = state['iteration']
     require(generation == args.expected_generation and args.iterations > 0,
             f"The run is at g{generation}; pass --expected-generation {generation}")
+    from brass_ai.recovery import training_revision_g1491 as g1491
+    profile = g1491.count_search(state['signature']['config'])
+    if args.retune_teacher_search:
+        profile = g1491.RETUNED_SEARCH
+    args.teacher_count_search = profile
+    if profile is not None:
+        require(args.inference != 'gpu' and args.teacher_budget == 'count' and
+                args.c_scale in (None, profile['c_scale']), 'Use the committed CPU teacher count-search profile')
+        if args.inference == 'cpu':
+            module.inference_choice(args)
     if getattr(args,'upgrade_utility_head',False):
         from brass_ai.recovery.utility_width_upgrade import prepare
         state=prepare(ROOT,run,expected_generation=generation)
@@ -113,8 +125,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         from brass_ai.recovery.search_head_refresh import prepare
         state=prepare(ROOT,run,expected_generation=generation,adaptive_beta=args.adaptive_teacher_beta)
     ensure_cpu(run,state)
+    if args.retune_teacher_search:
+        from brass_ai.recovery.teacher_search_retune import prepare
+        state=prepare(ROOT,run,expected_generation=generation)
     end = generation+args.iterations
-    from brass_ai.recovery import training_revision_g1491 as g1491
     if not g1491.applied(state['signature']['config']) and interrupted(run, generation):
         # Its tables were collected under the current recipe and the earlier short-search
         # budget (n=96): finish it with exactly those.

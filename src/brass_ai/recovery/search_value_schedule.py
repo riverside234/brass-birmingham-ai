@@ -124,6 +124,7 @@ def previous_recipe(config):
         result['value_phase']['beta_clone_min']==.25,'Revised residual stages require PPG floor .25')
     # The restart schedule's wider head (validated together with it) projects to the reviewed width.
     if dedicated_holdout(options):options['target']['lambda']=None
+    options.pop('max_epochs',None)
     options.pop('schedule');options['head']['hidden']=32;options['head_to_head']['games']=256;options['trunk']['kl']='shared-ppg-cap'
     options['buffer']['staleness']='label-buffer-rule';options['gate']=original()['gate']
     options['trunk']['ordinary_heldout_tolerance']=.013

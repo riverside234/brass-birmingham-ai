@@ -75,4 +75,8 @@ def accepted(qualification, request, target):
                 'Invalid teacher-on beta measurement')
         # An explicit share-target edit uses the same measured ratio at the new target.
         return fixed_beta(target, request['raw_median'])
+    if request is not None and 'previous_beta' in request:
+        beta = request['previous_beta']
+        require(positive(beta) and .01 <= beta <= 10., 'Invalid beta for teacher-on remeasurement')
+        return beta
     return qualification

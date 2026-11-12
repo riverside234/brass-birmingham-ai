@@ -97,8 +97,9 @@ def finish(checks, **fields):
 # ------------------------------------------------------------------ pure checks
 
 def search_summary(tables, budget):
-    """Quotas actually searched, per profile, from real table metrics."""
+    """Search quotas and scales observed for each profile."""
     from collections import Counter
+    from brass_ai.recovery.collector_runtime import teacher_c_scale
     budgets = dict(full=(budget['full'], budget['full_k']), fast=(budget['fast'], budget['fast_k']))
     result = {}
     for name, (quota, k) in budgets.items():
@@ -107,6 +108,9 @@ def search_summary(tables, budget):
             frozen_n=dict(Counter(str(s['frozen_n']) for s in rows)), effective_k=dict(Counter(str(s['effective_k']) for s in rows)),
             completed_all=sum(s['completed'] == s['frozen_n'] for s in rows), deadline_hits=sum(bool(s['deadline_hit']) for s in rows),
             elapsed_seconds=spread(s['elapsed_ns']/1e9 for s in rows))
+        if 'fast_c_scale' in budget:
+            result[name].update(expected_c_scale=teacher_c_scale(budget, fast=name=='fast'),
+                c_scales=dict(Counter(str(s.get('c_scale')) for s in rows)))
     return result
 
 
@@ -116,6 +120,8 @@ def check_searches(checks, summary):
         expect(checks, name+'_uses_the_budget', set(row['frozen_n']) == {str(row['expected_n'])}, row['frozen_n'])
         expect(checks, name+'_stays_within_k', all(int(k) <= row['requested_k'] for k in row['effective_k']), row['effective_k'])
         expect(checks, name+'_reaches_k', str(row['requested_k']) in row['effective_k'], row['effective_k'])
+        if 'expected_c_scale' in row:
+            expect(checks, name+'_uses_c_scale', set(row['c_scales']) == {str(row['expected_c_scale'])}, row['c_scales'])
         fraction = row['deadline_hits']/max(1, row['searches'])
         expect(checks, name+'_rarely_hits_the_safety_cap', fraction <= MAX_DEADLINE_FRACTION, fraction)
 
@@ -136,14 +142,17 @@ def label_summary(tables):
 
 
 def check_revision(checks, jobs, tables, summary):
-    """What the g1491 recipe promises of a table: both label kinds, exploration, and a worker that says so."""
+    """Check the revision's requested labels, exploration, and worker receipt."""
     expect(checks, 'worker_echoed_the_revision', all(t['metrics']['cpu_inference'].get('revision', {}).get('job') == j['teacher_revision']
            for t, j in zip(tables, jobs, strict=True)), None)
     expect(checks, 'long_labels_produced', summary['full']['labels'] > 0, summary['full'])
-    expect(checks, 'short_labels_produced', summary['fast']['labels'] > 0, summary['fast'])
     expect(checks, 'every_long_label_is_explored', summary['full']['explored'] == summary['full']['labels'], summary['full'])
-    # Short searches sample only in each seat's opening; later ones play the search's own choice.
-    expect(checks, 'short_labels_explore_only_openings', 0 < summary['fast']['explored'] < summary['fast']['labels'], summary['fast'])
+    if any(j['teacher_revision']['short_labels'] for j in jobs):
+        expect(checks, 'short_labels_produced', summary['fast']['labels'] > 0, summary['fast'])
+        # Short searches sample only in each seat's opening.
+        expect(checks, 'short_labels_explore_only_openings', 0 < summary['fast']['explored'] < summary['fast']['labels'], summary['fast'])
+    else:
+        expect(checks, 'long_only_policy_labels', summary['fast']['labels'] == 0, summary['fast'])
     worker = summary.get('worker')
     expect(checks, 'worker_counts_match_the_labels', worker is not None and worker['short_labels'] == summary['fast']['labels'] and
            worker['sampled']['long'] >= summary['full']['labels'] and worker['decisions']['short'] > worker['sampled']['short'], worker)
@@ -792,8 +801,10 @@ def overlap(c):
         wall = time.perf_counter()-began
     expect(checks, 'all_tables_finished', len(done) == len(jobs), len(done))
     expect(checks, 'all_games_finished', len(played) == len(games), len(played))
-    scale = c.block['teacher_budget']['c_scale']
-    expect(checks, 'labels_use_c_scale', all(row['teacher']['c2'] == scale for table in done for row in table['rows']), scale)
+    budget = c.block['teacher_budget']
+    scales = {name: R.teacher_c_scale(budget, fast=name=='fast') for name in ('full', 'fast')}
+    expect(checks, 'labels_use_c_scale', all(row['teacher']['c2'] == scales[row['teacher'].get('profile', 'full')]
+           for table in done for row in table['rows']), scales)
     accepted = rejected = 0
     for table, job in zip(done, jobs, strict=True):
         good, bad = collector.verifier.take(table, job, c.model)
@@ -873,6 +884,8 @@ NEEDS = dict(parity=('bundles',), teacher=('bundles',), ordinary=('bundles',), o
 
 
 def main():
+    from brass_ai.recovery import collector_runtime as R, training_revision_g1491 as g1491
+
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--run', default='artifacts/step5/joint7-v11-2-g1290-trained-restart')
     p.add_argument('--expected-generation', type=int, required=True)
@@ -882,6 +895,8 @@ def main():
     p.add_argument('--revision', choices=('auto', 'g1491', 'none'), default='auto',
                    help='Plan teacher tables under the g1491 recipe (long and short labels, visit-count exploration); auto does so from g1491')
     p.add_argument('--teacher-full', type=int, default=640, help='Long-search simulations per turn')
+    p.add_argument('--teacher-full-k', type=int, choices=R.FULL_K, help='Long-search actions (committed K or 16 by default)')
+    p.add_argument('--c-scale', type=float, choices=R.C_SCALES, help='Gumbel c_scale (committed value or 0.1 by default)')
     p.add_argument('--teacher-fast', type=int, default=None, help='Short-search simulations per turn (default 128 under g1491, else 96)')
     p.add_argument('--teacher-fast-k', type=int, default=8)
     p.add_argument('--ordinary-games', type=int, default=128, help='Real frozen jobs on the CPU arm')
@@ -894,7 +909,6 @@ def main():
     args = p.parse_args()
     import torch
     from brass_ai.learning.contracts import project_path, require
-    from brass_ai.recovery import collector_runtime as R
     from brass_ai.recovery.inference import InferenceService
     from brass_ai.recovery.retention import run_lock
     from brass_ai.rust_backend.lab_backend import check_build, validate_state
@@ -923,8 +937,10 @@ def main():
                 c.args, c.out, c.run, c.snapshot, c.model, c.raw = args, out, run, snapshot, model.eval(), raw
                 c.config = snapshot['state']['signature']['config']
                 c.revision, c.teacher_config = teacher_recipe(c.config, snapshot['state'], args.revision)
-                budget = dict(mode='count', full=args.teacher_full, full_k=16, fast=args.teacher_fast or (128 if c.revision else 96),
-                              fast_k=args.teacher_fast_k, c_scale=R.DEFAULT_C_SCALE)
+                profile = g1491.count_search(c.config) or {}
+                budget = dict(profile, mode='count', full=args.teacher_full, full_k=args.teacher_full_k or profile.get('full_k', 16),
+                              fast=args.teacher_fast or (96 if profile or not c.revision else 128), fast_k=args.teacher_fast_k,
+                              c_scale=args.c_scale or profile.get('c_scale', R.DEFAULT_C_SCALE))
                 c.gpu_build = resolve_ordinary(ROOT, check_build(backend['build']))
                 c.cpu_value = resolve(ROOT, teacher_core=teacher_build(snapshot['state'])['core_source'])
                 c.fixtures = Path(c.gpu_build['b01']['path']).parent/'inputs/fixtures.json'

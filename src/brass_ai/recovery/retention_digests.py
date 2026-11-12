@@ -1,5 +1,7 @@
 """Ephemeral cleanup-plan receipts. Final quarantine deletion rehashes bytes."""
+from concurrent.futures import ThreadPoolExecutor
 import stat
+from threading import Lock
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import require
 
@@ -8,6 +10,7 @@ from brass_ai.learning.contracts import require
 # Keep this metric/API for existing reports, but never authorize a cache hit
 # from metadata alone. Final quarantine deletion still performs its own hash.
 METADATA_REUSE=False
+HASH_WORKERS=4
 
 
 def stamp(path):
@@ -16,15 +19,22 @@ def stamp(path):
     return (s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns,s.st_mode,s.st_nlink)
 
 
+def hash_batch(paths,digest):
+    """Read independent files in parallel, retaining the journal's order."""
+    if len(paths)<32:return list(map(digest,paths))
+    with ThreadPoolExecutor(max_workers=HASH_WORKERS,thread_name_prefix='retention-hash') as pool:
+        return list(pool.map(digest,paths))
+
+
 class PlanDigests:
     def __init__(self):
-        self.read_bytes=0;self.reused_bytes=0;self.hits=0
+        self.read_bytes=0;self.reused_bytes=0;self.hits=0;self.lock=Lock()
 
     def digest(self,path):
         before=stamp(path)
         value=sha(path);after=stamp(path)
         require(after==before,'Artifact changed while hashing cleanup plan')
-        self.read_bytes+=after[2]
+        with self.lock:self.read_bytes+=after[2]
         return value
 
     def report(self):

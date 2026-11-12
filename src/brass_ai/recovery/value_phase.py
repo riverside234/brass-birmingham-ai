@@ -135,21 +135,45 @@ def value_parts(dataset,ids,config,model):
     return dataset.microbatches(ids,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
 
 
-def metrics(model,dataset,ids,config,*,unknown=False,evidence=False,preparation=None):
+def metric_groups(dataset,order):
+    from .teacher_schedule import phase_for
+    metadata=getattr(dataset,'metric_metadata',None)
+    rows=(metadata(order) if metadata is not None else
+          ((dataset.data[i][2][0],dataset.rows[i]['view']['context'],dataset.tables[i],dataset.roles[i]) for i in order))
+    groups=defaultdict(list);game_ids=[]
+    for position,(game,context,table,role) in enumerate(rows):
+        game_ids.append(game)
+        branch='/branch/' in game
+        groups['source:'+('branch' if branch else 'ordinary')].append(position)
+        era=context['era']
+        groups['era:'+era].append(position);groups['phase:'+era+'/'+context['phase']].append(position)
+        if not branch:
+            groups['table:'+table].append(position);groups['role:'+role].append(position)
+            groups['table:'+table+'/role:'+role].append(position)
+        name=phase_for(context) if type(context.get('round')) is int else None
+        groups['period:'+(name or 'unassigned')].append(position)
+    return game_ids,len(set(game_ids)),{
+        key:(np.asarray(group,dtype=np.intp),len({game_ids[p] for p in group}))
+        for key,group in sorted(groups.items())}
+
+
+def metrics(model,dataset,ids,config,*,unknown=False,evidence=False,preparation=None,group_cache=None):
     """All four heads' loss/calibration; EV is the observing learner seat's utility."""
     from .updates import value_losses,value_output
-    from .teacher_schedule import phase_for
     if not ids:return dict(rows=0,games=0,loss=None,explained_variance=None,utility_mse=None)
-    arrays=[];order=[];model.eval()
+    arrays=[];pending=[];order=[];model.eval()
     with torch.no_grad():
         for part,ix,inputs in dataset.value_batches(value_parts(dataset,ids,config,model),model,executor=preparation):
             out=value_output(model,inputs,dataset,ix,unknown=unknown,heads_only=True)
             value=value_losses(out,tuple(t[ix] for t in dataset.targets))[0]
             error=out[4].float()-dataset.utility[ix]
             seats=dataset.seats[ix];positions=torch.arange(len(ix),device=ix.device)
-            arrays.append(torch.cat((torch.stack((value+error.square().mean(-1),
+            pending.append(torch.cat((torch.stack((value+error.square().mean(-1),
                 error.square().mean(-1),out[4][positions,seats].float(),dataset.utility[ix,seats]),-1),
-                out[1].float(),dataset.targets[0][ix]),-1).cpu().numpy());order.extend(part)
+                out[1].float(),dataset.targets[0][ix]),-1));order.extend(part)
+            if len(pending)==32:
+                arrays.append(torch.cat(pending).cpu().numpy());pending.clear()
+        if pending:arrays.append(torch.cat(pending).cpu().numpy())
     all_values=np.concatenate(arrays).astype(np.float64)
     require(np.isfinite(all_values).all(),'Nonfinite critic validation metrics')
     def summarize(a):
@@ -157,19 +181,12 @@ def metrics(model,dataset,ids,config,*,unknown=False,evidence=False,preparation=
         return dict(rows=len(a),loss=float(a[:,0].mean()),utility_mse=float(a[:,1].mean()),
             explained_variance=float(1-np.var(error)/variance) if variance>1e-12 else None,
             learner_utility_mse=float(np.square(error).mean()))
-    groups=defaultdict(list);game_ids=[]
-    for position,i in enumerate(order):
-        game_ids.append(dataset.data[i][2][0])
-        branch='/branch/' in dataset.data[i][2][0]
-        groups['source:'+('branch' if branch else 'ordinary')].append(position)
-        context=dataset.rows[i]['view']['context'];era=context['era']
-        groups['era:'+era].append(position);groups['phase:'+era+'/'+context['phase']].append(position)
-        table=dataset.tables[i];role=dataset.roles[i]
-        if not branch:
-            groups['table:'+table].append(position);groups['role:'+role].append(position)
-            groups['table:'+table+'/role:'+role].append(position)
-        name=phase_for(context) if type(context.get('round')) is int else None
-        groups['period:'+(name or 'unassigned')].append(position)
+    if group_cache is not None and group_cache.get('dataset') is dataset and group_cache['order']==order:
+        game_ids,games,groups=group_cache['groups']
+    else:
+        grouped=metric_groups(dataset,order)
+        if group_cache is not None:group_cache.update(dataset=dataset,order=order,groups=grouped)
+        game_ids,games,groups=grouped
     probabilities=all_values[:,4:8].reshape(-1);targets=all_values[:,8:12].reshape(-1)
     buckets=np.minimum((probabilities*10).astype(int),9)
     calibration=[]
@@ -178,19 +195,19 @@ def metrics(model,dataset,ids,config,*,unknown=False,evidence=False,preparation=
         calibration.append(dict(lower=bucket/10,upper=(bucket+1)/10,count=n,
             predicted=float(probabilities[selected].mean()) if n else None,
             observed=float(targets[selected].mean()) if n else None))
-    summaries={key:dict(summarize(all_values[group]),
-        games=len({game_ids[p] for p in group})) for key,group in sorted(groups.items())}
+    summaries={key:dict(summarize(all_values[group]),games=count) for key,(group,count) in groups.items()}
     if evidence:
         from .ev_evidence import statistics,TABLES
         for kind in TABLES:
-            key='table:'+kind+'/role:learner';group=groups.get(key)
-            if group:
+            key='table:'+kind+'/role:learner'
+            if key in groups:
+                group,_=groups[key]
                 a=all_values[group]
                 summaries[key]['ev_evidence']=statistics(a[:,3],a[:,2],[game_ids[p] for p in group])
     summary=summarize(all_values)
     if 'source:ordinary' in summaries:
         summary['explained_variance']=summaries['source:ordinary']['explained_variance']
-    return dict(summary,games=len(set(game_ids)),groups=summaries,
+    return dict(summary,games=games,groups=summaries,
         win_calibration=calibration,
         scope='MC loss over all heldout heads; gate EV and table/role evidence use ordinary games. Branch/ordinary EV reported separately; correlated rows/heads')
 
@@ -375,8 +392,16 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     reference=RawPolicyReference(model,dataset,sorted(set(clones)|set(probe_ids)),update)
     timings['policy_reference_seconds']=time.perf_counter()-started
     deferred_train=defer_train_metrics(model,config)
-    train_before=None if deferred_train else measure('train_before_seconds',model,value_dataset,value_train_ids,update,preparation=preparation)
-    before=measure('acceptance_validation_seconds',model,validation_dataset,heldout_ids,update,evidence=True)
+    # Only the phase-owned replay with sealed metadata can share row groups.
+    train_groups={} if hasattr(value_dataset,'metric_metadata') else None
+    heldout_groups={} if hasattr(validation_dataset,'metric_metadata') else None
+    def measure_train(name):
+        return measure(name,model,value_dataset,value_train_ids,update,preparation=preparation,group_cache=train_groups)
+    def measure_heldout():
+        return measure('acceptance_validation_seconds',model,validation_dataset,heldout_ids,update,
+                       evidence=True,group_cache=heldout_groups)
+    train_before=None if deferred_train else measure_train('train_before_seconds')
+    before=measure_heldout()
     gate_before=measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else before
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
     max_kl=0.;attempted_kl_checks=0;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
@@ -466,7 +491,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             report['attempted_steps']+=attempted;epoch_steps+=attempted;epoch_safe+=safe_steps
             # The KL reference stays frozen across the phase. With spaced KL
             # checks a passing loss boundary is provisional until retention.
-            last_attempt=measure('acceptance_validation_seconds',model,validation_dataset,heldout_ids,update,evidence=True)
+            last_attempt=measure_heldout()
             loss_increased=last_attempt['loss']>current['loss']
             # The interval that reached the KL cap is the phase's last, and it stays.
             kept_at_cap=keep_at_cap and report['kl_guard_tripped']
@@ -548,12 +573,12 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             accepted_weights=copy.deepcopy(model.state_dict())
             try:
                 model.load_state_dict(calibration_source)
-                train_before=measure('train_before_seconds',model,value_dataset,value_train_ids,update,preparation=preparation)
+                train_before=measure_train('train_before_seconds')
             finally:model.load_state_dict(accepted_weights)
         else:
             train_before=dict(rows=len(value_train_ids),games=None,loss=None,utility_mse=None,explained_variance=None,
                 measured=False,reason='No retained PPG updates; existing readiness is preserved, so full-training diagnostics are omitted')
-    train_after=measure('train_after_seconds',model,value_dataset,value_train_ids,update,preparation=preparation) if report['optimizer_steps'] else copy.deepcopy(train_before)
+    train_after=measure_train('train_after_seconds') if report['optimizer_steps'] else copy.deepcopy(train_before)
     if report['optimizer_steps']:
         ready=train_after['utility_mse']<=train_before['utility_mse']+1e-8
         model.utility_calibration=dict(version=config['contract'],reward_id=digest(model.config.utility),ready=ready,

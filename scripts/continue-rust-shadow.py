@@ -52,9 +52,12 @@ def inference_choice(args):
     """Parse --inference: keep the recorded choice, or select CPU/GPU explicitly."""
     if args.inference=='keep':return 'keep'
     if args.inference=='gpu':return None
-    from brass_ai.recovery.collector_runtime import cpu_block,validate_cpu
+    from brass_ai.recovery.collector_runtime import DEFAULT_C_SCALE,cpu_block,validate_cpu
+    profile=getattr(args,'teacher_count_search',None) or {}
+    scale=profile.get('c_scale',DEFAULT_C_SCALE) if args.c_scale is None else args.c_scale
     budget=(dict(mode='timed') if args.teacher_budget=='timed' else
-            dict(mode='count',full=args.teacher_full,full_k=16,fast=args.teacher_fast,fast_k=args.teacher_fast_k,c_scale=args.c_scale))
+            dict(profile,mode='count',full=args.teacher_full,full_k=profile.get('full_k',16),fast=args.teacher_fast,
+                 fast_k=args.teacher_fast_k,c_scale=scale))
     block=cpu_block(workers=args.workers,teacher_budget=budget,pinning='none' if args.no_pinning else 'one-lane-per-cpu',
                     overlap=not args.no_overlap,readers=args.readers)
     validate_cpu(block)
@@ -65,7 +68,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             skip_utility_qualification=False,adaptive_teacher_beta=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
-    from brass_ai.recovery.collector_runtime import configured,from_config,recipe
+    from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
     from brass_ai.recovery.retention import owned,run_lock
     from brass_ai.rust_backend.lab_backend import validate_state
     from brass_ai.rust_backend.lab_shadow import teacher_build
@@ -157,6 +160,9 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix='-rust-search32-share';stages.append(prefix)
         if adaptive.KEY in config['teacher_phase']:
             prefix=prefix.replace('-share','-adaptive-beta-share');stages.append(prefix)
+        profile=g1491.count_search(config)
+        if profile is not None:
+            prefix=prefix.replace('-share','-teacher-k8-c015-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -164,6 +170,10 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         settings=from_config(existing if output.exists() or earlier is None else read(earlier))
         if inference is None:settings.pop('native_inference',None)
         elif inference!='keep':settings['native_inference']=inference
+        elif profile is not None:
+            block=settings.get('native_inference') or cpu_block()
+            settings['native_inference']=dict(block,teacher_budget=dict(block['teacher_budget'],**profile))
+        validate_teacher_budget(config,settings.get('native_inference'))
         if settings.get('native_inference') is not None:
             # Fail before any config write if the CPU workers are not prepared.
             from brass_ai.rust_backend.lab_cpu_runtime import resolve as resolve_cpu
@@ -181,7 +191,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
 
 def parser(*,default_mode='shadow',default_stage_revision=False,workers=64,teacher_fast=96,inference='keep',
            run='artifacts/step5/joint7-v11-2-g1290-trained-restart',iterations=None,description=__doc__):
-    from brass_ai.recovery.collector_runtime import C_SCALES, DEFAULT_C_SCALE
+    from brass_ai.recovery.collector_runtime import C_SCALES
 
     p=argparse.ArgumentParser(description=description)
     p.add_argument('--run',default=run)
@@ -200,12 +210,12 @@ def parser(*,default_mode='shadow',default_stage_revision=False,workers=64,teach
         help='cpu: in-worker ONNX Runtime for search, ordinary and rating lanes; gpu: original service; keep: last recorded choice')
     p.add_argument('--workers',type=int,default=workers,help='CPU lanes; each owns one logical CPU')
     p.add_argument('--teacher-budget',choices=('count','timed'),default='count',help='Teacher search budget on the CPU path')
-    p.add_argument('--teacher-full',type=int,default=640,help='Trajectories per full teacher search (K is fixed at 16)')
+    p.add_argument('--teacher-full',type=int,default=640,help='Trajectories per full teacher search')
     p.add_argument('--teacher-fast',type=int,default=teacher_fast,help='Trajectories per quick teacher search')
     p.add_argument('--teacher-fast-k',type=int,choices=(2,4,8,16),default=8,help='Considered actions per quick teacher search')
     p.add_argument('--no-pinning',action='store_true',help='Leave CPU lane placement to the operating system')
-    p.add_argument('--c-scale',type=float,choices=C_SCALES,default=DEFAULT_C_SCALE,
-        help='Gumbel c_scale (the search constant c2) for count-budget teacher searches (default: %(default)s)')
+    p.add_argument('--c-scale',type=float,choices=C_SCALES,
+        help='Gumbel c_scale for count-budget teacher searches (committed value or 0.1 by default)')
     p.add_argument('--no-overlap',action='store_true',help='Run teacher tables before ordinary games instead of beside them')
     p.add_argument('--readers',type=int,default=24,help='Replay reader processes on the CPU path')
     return p

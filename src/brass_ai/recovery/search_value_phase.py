@@ -196,18 +196,21 @@ class SearchValuePhase:
             from .search_value_retention import reserve_games
             train,validation,self.report['retention_holdout']=reserve_games(train,generation,self.companion.seed)
         prepared=time.perf_counter()
+        epoch_limit={'one_epoch':True} if self.options.get('max_epochs')==1 else {}
         if paused:self.report['update']=dict(steps=0,reason='Rebuilding eight fresh return-buffer ages; stage counter paused')
         elif waiting:self.report['update']=dict(steps=0,reason='Need 16 dedicated held-out games in the last 20 collections; stage counter paused')
         elif train:
             if scale>0:
                 if guarded is not None:
                     self.report['update']=unconditional_pass(self.companion,train,scale=scale,heldout=validation,
-                        intervals=self.options['trunk']['intervals'],**guarded)
+                        intervals=self.options['trunk']['intervals'],**epoch_limit,**guarded)
                 else:self.report['update']=dict(steps=0,reason='No ordinary PPG probe; trunk update deferred')
             elif holdout_a:
                 self.report['update']=self.companion.head_only_heldout(train,validation,generation=generation,
-                    intervals=self.options['trunk']['intervals'],interval_steps=self.options['trunk']['interval_steps'])
-            else:self.report['update']=self.companion.head_only(train,generation=generation,steps=self.options['steps_per_iteration'])
+                    intervals=self.options['trunk']['intervals'],interval_steps=self.options['trunk']['interval_steps'],
+                    **epoch_limit)
+            else:self.report['update']=self.companion.head_only(train,generation=generation,
+                steps=self.options['steps_per_iteration'],**epoch_limit)
         else:self.report['update']=dict(steps=0,reason='No admitted training value rows')
         updated=time.perf_counter()
         # Never reuse an older validation as this iteration's observation.

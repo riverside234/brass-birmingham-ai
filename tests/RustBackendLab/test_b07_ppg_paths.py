@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 import torch
 
-from brass_ai.bank import sha
 from brass_ai.learning.contracts import SOURCE_ROOT as ROOT,digest
 from brass_ai.recovery import value_buffer as V,ppg_replay
 from brass_ai.rust_backend import lab_admission as A,lab_backend as B,lab_replay_compat as R
@@ -148,7 +147,7 @@ class ReviewedRetry(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as tmp:
             rollback=Path(tmp)/'rollback.json';rollback.write_text('{}')
             value.update(contract=B.CONTRACT,config_sha256=digest(state['signature']['config']),
-                build={},qualification={},rollback={'path':str(rollback),'sha256':sha(rollback)})
+                build={},qualification={},rollback=B.pin(rollback))
             q={'passed':True,'implementation':execution['qualified_implementation']}
             raw={'training':{'native_backend':copy.deepcopy(value)}}
             with patch.object(B,'check_build',return_value={}),patch.object(B,'checked_pin',return_value=q):

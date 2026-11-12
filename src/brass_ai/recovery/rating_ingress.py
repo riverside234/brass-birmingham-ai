@@ -1,26 +1,25 @@
 """Streaming rating replay validation; workers return only small outcome rows."""
 import time
 from collections import defaultdict
-from brass_ai.bank import sha
 from brass_ai.learning.contracts import digest,require
 from .replay import read_shards
 
 
-def validate_shard(task):
+def validate_shard(task,spec_digest=None):
     from .ingress import _admission
     from .telemetry import Timings
-    if _admission is None:return _validate_shard(task)
-    with _admission.acquire(1,Timings()):return _validate_shard(task)
+    if _admission is None:return _validate_shard(task,spec_digest)
+    with _admission.acquire(1,Timings()):return _validate_shard(task,spec_digest)
 
 
-def _validate_shard(task):
+def _validate_shard(task,spec_digest):
     from .ratings import game_record
     records,jobs,spec=task;began=time.perf_counter();cpu=time.process_time()
-    first=records[0];path=first['path']
-    require(all(r['path']==path and r['sha256']==first['sha256'] and r.get('features')==first.get('features')
+    first=records[0];path=str(first['path'])
+    require(all(str(r['path'])==path and r['sha256']==first['sha256'] and r.get('features')==first.get('features')
                 for r in records),'Conflicting rating shard receipts')
-    require(sha(path)==first['sha256'],'Rating replay changed')
-    games=read_shards([path],partition='validation',receipts={path:first.get('features')})
+    games=read_shards([path],partition='validation',receipts={path:first.get('features')},
+                      _expected_hashes={path:first['sha256']})
     loaded={g['game_id']:g for g in games}
     require(len(loaded)==len(games)==len(records) and set(loaded)=={r['game_id'] for r in records},
             'Rating shard membership differs')
@@ -30,13 +29,14 @@ def _validate_shard(task):
         expected=[job['policies'][(s-job['rotation'])%4]['policy_id'] for s in range(4)]
         require(game['opponents']==expected and game['setup_group']==digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed'])),
                 'Rating game seat/setup identity differs')
-        rows.append((index,game_record(game,spec['lineups'][index],spec)))
+        rows.append((index,game_record(game,spec['lineups'][index],spec,spec_digest=spec_digest)))
     return rows,dict(worker_seconds=time.perf_counter()-began,worker_cpu_seconds=time.process_time()-cpu)
 
 
 class RatingIngress:
     def __init__(self,pool,jobs,spec):
         self.pool,self.jobs,self.spec=pool,jobs,spec
+        self.spec_digest=digest(spec)
         self.futures={};self.receipts={};self.started=time.perf_counter()
 
     def submit(self,records):
@@ -47,7 +47,8 @@ class RatingIngress:
         for path,group in groups.items():
             require(path not in self.futures,'Repeated rating shard publication')
             self.receipts[path]=group
-            self.futures[path]=self.pool.submit(validate_shard,(group,self.jobs,self.spec))
+            jobs={record['job']:self.jobs[record['job']] for record in group}
+            self.futures[path]=self.pool.submit(validate_shard,(group,jobs,self.spec),self.spec_digest)
 
     def finish(self,records):
         began=time.perf_counter();published=[r for group in self.receipts.values() for r in group]

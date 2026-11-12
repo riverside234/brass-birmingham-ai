@@ -401,7 +401,18 @@ pub enum Budget {
         fast: u64,
         fast_k: usize,
         c_scale: f64,
+        fast_c_scale: Option<f64>,
     },
+}
+
+impl Budget {
+    fn c_scale(self, fast: bool) -> f64 {
+        match self {
+            Self::Count { c_scale, fast_c_scale, .. } if fast => fast_c_scale.unwrap_or(c_scale),
+            Self::Count { c_scale, .. } => c_scale,
+            Self::Timed => DEFAULT_C_SCALE,
+        }
+    }
 }
 
 fn budget_k(value: &Value, name: &str, default: usize) -> Result<usize> {
@@ -412,12 +423,9 @@ fn budget_k(value: &Value, name: &str, default: usize) -> Result<usize> {
 }
 
 fn budget_c_scale(value: &Value) -> Result<f64> {
-    let c_scale = match value.get("c_scale") {
-        None => DEFAULT_C_SCALE,
-        Some(number) => number.as_f64().ok_or("invalid teacher c_scale")?,
-    };
+    let c_scale = value.as_f64().ok_or("invalid teacher c_scale")?;
     check(
-        c_scale == DEFAULT_C_SCALE || c_scale == 1.0,
+        [DEFAULT_C_SCALE, 0.15, 0.5, 1.0].contains(&c_scale),
         "teacher c_scale outside its bounds",
     )?;
     Ok(c_scale)
@@ -425,7 +433,8 @@ fn budget_c_scale(value: &Value) -> Result<f64> {
 
 /// `{"mode":"count","full":N,"full_k":K,"fast":N,"fast_k":K,"c_scale":C}` or
 /// `{"mode":"timed"}`. A count budget without K keeps the job's 16 and 4; one
-/// without `c_scale` keeps the historical 0.1.
+/// without c_scale keeps the historical 0.1. Optional fast_c_scale overrides
+/// the shared value for short searches.
 pub fn budget(value: &Value) -> Result<Budget> {
     match value["mode"].as_str() {
         Some("timed") => Ok(Budget::Timed),
@@ -434,15 +443,15 @@ pub fn budget(value: &Value) -> Result<Budget> {
             let fast = value["fast"].as_u64().ok_or("missing fast search count")?;
             let full_k = budget_k(value, "full_k", 16)?;
             let fast_k = budget_k(value, "fast_k", 4)?;
-            let c_scale = budget_c_scale(value)?;
+            let c_scale = value.get("c_scale").map(budget_c_scale).transpose()?.unwrap_or(DEFAULT_C_SCALE);
+            let fast_c_scale = value.get("fast_c_scale").map(budget_c_scale).transpose()?;
             // A halving tournament over K needs K*log2(K) visits to stay at K.
             check(
                 (64..=4096).contains(&full) && (8..=4096).contains(&fast),
                 "teacher search counts outside their bounds",
             )?;
-            // Labels are only ever produced by full searches, and require K=16.
             check(
-                full_k == 16 && matches!(fast_k, 2 | 4 | 8 | 16),
+                matches!(full_k, 8 | 16) && matches!(fast_k, 2 | 4 | 8 | 16),
                 "teacher search K outside its bounds",
             )?;
             Ok(Budget::Count {
@@ -451,6 +460,7 @@ pub fn budget(value: &Value) -> Result<Budget> {
                 fast,
                 fast_k,
                 c_scale,
+                fast_c_scale,
             })
         }
         _ => Err("unknown teacher search budget".into()),
@@ -811,19 +821,16 @@ pub fn teacher_turn_budget(
     }))
 }
 
-/// The Gumbel `c_scale` (the core's `c2`) of this search; 0.1 unless a budget says otherwise.
-pub fn teacher_c_scale() -> f64 {
-    TEACHER.with(|cell| match cell.borrow().as_ref().map(|t| t.budget) {
-        Some(Budget::Count { c_scale, .. }) => c_scale,
-        _ => DEFAULT_C_SCALE,
-    })
+/// The Gumbel scale (the core's c2) for the selected search profile.
+pub fn teacher_c_scale(fast: bool) -> f64 {
+    TEACHER.with(|cell| cell.borrow().as_ref().map_or(DEFAULT_C_SCALE, |t| t.budget.c_scale(fast)))
 }
 
-/// The improved-policy target for `teacher_c_scale()`.
-pub fn teacher_policy(stats: &Statistics, actor: usize) -> Result<Vec<f64>> {
+/// The improved-policy target for the scale used by this search session.
+pub fn teacher_policy(stats: &Statistics, actor: usize, c_scale: f64) -> Result<Vec<f64>> {
     let parameters = Parameters {
         c1: 50.,
-        c2: teacher_c_scale(),
+        c2: c_scale,
     };
     Ok(stats.policy(actor, parameters)?)
 }
@@ -916,7 +923,11 @@ pub fn teacher_receipt() -> Value {
             "provider":"CPUExecutionProvider","intra_threads":1,"inter_threads":1,"sequential":true,
             "budget":match t.budget {
                 Budget::Timed => json!({"mode":"timed"}),
-                Budget::Count{full,full_k,fast,fast_k,c_scale} => json!({"mode":"count","full":full,"full_k":full_k,"fast":fast,"fast_k":fast_k,"c_scale":c_scale}),
+                Budget::Count{full,full_k,fast,fast_k,c_scale,fast_c_scale} => {
+                    let mut budget = json!({"mode":"count","full":full,"full_k":full_k,"fast":fast,"fast_k":fast_k,"c_scale":c_scale});
+                    if let Some(scale) = fast_c_scale { budget["fast_c_scale"] = json!(scale); }
+                    budget
+                },
             },
             "positions":t.positions,"forward_ns":t.forward_ns,"model":t.model.receipt()}),
         None => Value::Null,
@@ -1252,25 +1263,31 @@ mod tests {
         assert_eq!(budget(&json!({"mode":"timed"})).unwrap(), Budget::Timed);
         assert_eq!(
             budget(&json!({"mode":"count","full":256,"fast":48})).unwrap(),
-            Budget::Count { full: 256, full_k: 16, fast: 48, fast_k: 4, c_scale: DEFAULT_C_SCALE }
+            Budget::Count { full: 256, full_k: 16, fast: 48, fast_k: 4, c_scale: DEFAULT_C_SCALE, fast_c_scale: None }
         );
         assert_eq!(
             budget(&json!({"mode":"count","full":640,"full_k":16,"fast":96,"fast_k":8})).unwrap(),
-            Budget::Count { full: 640, full_k: 16, fast: 96, fast_k: 8, c_scale: DEFAULT_C_SCALE }
+            Budget::Count { full: 640, full_k: 16, fast: 96, fast_k: 8, c_scale: DEFAULT_C_SCALE, fast_c_scale: None }
         );
         assert_eq!(
             budget(&json!({"mode":"count","full":640,"full_k":16,"fast":96,"fast_k":8,"c_scale":1.0})).unwrap(),
-            Budget::Count { full: 640, full_k: 16, fast: 96, fast_k: 8, c_scale: 1.0 }
+            Budget::Count { full: 640, full_k: 16, fast: 96, fast_k: 8, c_scale: 1.0, fast_c_scale: None }
         );
-        for bad in [0.5, 0.0, -1.0, 2.0] {
+        assert_eq!(
+            budget(&json!({"mode":"count","full":640,"full_k":8,"fast":96,"fast_k":8,"c_scale":0.15,"fast_c_scale":0.5})).unwrap(),
+            Budget::Count { full: 640, full_k: 8, fast: 96, fast_k: 8, c_scale: 0.15, fast_c_scale: Some(0.5) }
+        );
+        for bad in [0.0, -1.0, 2.0] {
             let value = json!({"mode":"count","full":640,"fast":96,"c_scale":bad});
+            assert!(budget(&value).is_err());
+            let value = json!({"mode":"count","full":640,"fast":96,"fast_c_scale":bad});
             assert!(budget(&value).is_err());
         }
         for bad in [
             json!({"mode":"count","full":8,"fast":48}),
             json!({"mode":"count","full":256,"fast":4}),
             json!({"mode":"count","full":256}),
-            json!({"mode":"count","full":640,"full_k":8,"fast":96,"fast_k":8}),
+            json!({"mode":"count","full":640,"full_k":4,"fast":96,"fast_k":8}),
             json!({"mode":"count","full":640,"full_k":16,"fast":96,"fast_k":3}),
             json!({"mode":"count","full":640,"full_k":"16","fast":96}),
             json!({"mode":"other"}),
@@ -1281,7 +1298,18 @@ mod tests {
 
     #[test]
     fn c_scale_keeps_the_historical_value_without_a_session() {
-        assert_eq!(teacher_c_scale(), DEFAULT_C_SCALE);
+        assert_eq!(teacher_c_scale(false), DEFAULT_C_SCALE);
+        assert_eq!(teacher_c_scale(true), DEFAULT_C_SCALE);
+    }
+
+    #[test]
+    fn count_budget_selects_scale_by_search_profile() {
+        let mut value = json!({"mode":"count","full":640,"fast":96,"c_scale":0.15});
+        assert_eq!(budget(&value).unwrap().c_scale(true), 0.15);
+        value["fast_c_scale"] = json!(0.5);
+        let split = budget(&value).unwrap();
+        assert_eq!(split.c_scale(false), 0.15);
+        assert_eq!(split.c_scale(true), 0.5);
     }
 
     #[test]

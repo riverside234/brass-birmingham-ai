@@ -60,8 +60,9 @@ def finish_training_diagnostics(model,phases,local_scoring,*,generation=None):
 
 def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False,il_kl_probe_from_run=None):
     from .retention import owned,run_lock
-    from .collector_runtime import from_config,recipe,scope
+    from .collector_runtime import from_config,recipe,scope,validate_teacher_budget
     runtime=from_config(config)
+    validate_teacher_budget(config,runtime.get('native_inference'))
     config=recipe(config)
     _,run=owned(root,run_path)
     require(not (run/'diagnostic-fork.json').exists() and not (run.parent/'diagnostic-fork.json').exists(),

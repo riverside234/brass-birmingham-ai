@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+import numpy as np
 import torch
 
 from brass_ai.bank import read, sha
@@ -114,14 +115,9 @@ class SearchRefresh(unittest.TestCase):
     def setUpClass(cls):
         torch.set_num_threads(2)
 
-    def test_checkpoint_keeps_ordinary_weights_and_restarts_search(self):
+    def refreshed_checkpoint(self):
         from brass_ai.learning.utility_width import widen, optimizer_state
-        from brass_ai.recovery.actor_value import TrainingPhases
-        from brass_ai.recovery.rating_coverage import G1290_BASELINE
-        from brass_ai.recovery.resume import load_resume
-        from brass_ai.recovery.teacher_phase import TeacherPhase
         from brass_ai.recovery.utility_width_upgrade import configure
-        from brass_ai.rust_backend.lab_teacher_activation import authorize
         from test_utility_width import Migration
 
         run, state = Migration.fixture(self)
@@ -152,11 +148,24 @@ class SearchRefresh(unittest.TestCase):
         write_json(run/'state.json', state)
 
         updated = refresh.prepare(ROOT, run, expected_generation=generation, adaptive_beta=True)
+        return run, state, updated, raw
+
+    def test_checkpoint_keeps_ordinary_weights_and_restarts_search(self):
+        from brass_ai.recovery.actor_value import TrainingPhases
+        from brass_ai.recovery.rating_coverage import G1290_BASELINE
+        from brass_ai.recovery.resume import load_resume
+        from brass_ai.recovery.teacher_phase import TeacherPhase
+        from brass_ai.rust_backend.lab_teacher_activation import authorize
+
+        run, state, updated, raw = self.refreshed_checkpoint()
+        generation = state['iteration']
+        entry = state['history'][-1]
+        training = raw['training']
         config = updated['signature']['config']
         self.assertEqual(config['rating_coverage'], G1290_BASELINE)
         current, converted, _ = load_resume(ROOT, run, updated, updated['signature'])
         self.assertEqual((updated['iteration'], width(current), current.config.utility_hidden), (generation, 32, 256))
-        self.assertEqual(sha(original_path), entry['sha256'])
+        self.assertEqual(sha(ROOT/entry['path']), entry['sha256'])
         self.assertTrue(all(torch.equal(t, raw['state_dict'][k]) for k, t in current.state_dict().items()
                             if not k.startswith('search_value_head.')))
         self.assertEqual(torch.count_nonzero(current.search_value_head[-1].bias).item(), 0)
@@ -195,6 +204,137 @@ class SearchRefresh(unittest.TestCase):
         self.assertEqual(signed_recipe(publish.call_args.args[1]), config)
         self.assertEqual(from_config(publish.call_args.args[1])['native_inference'], cpu_block())
         self.assertEqual(refresh.prepare(ROOT, run, expected_generation=generation), updated)
+
+    def test_retune_retires_only_teacher_data_and_resumes_a_after_refill(self):
+        from brass_ai.recovery import teacher_search_retune as retune, training_revision_g1491 as g1491
+        from brass_ai.recovery.collector_runtime import DEFAULTS, cpu_block, scope
+        from brass_ai.recovery.resume import load_resume
+        from brass_ai.recovery.search_value_rows import ValueBuffer
+        from brass_ai.recovery.teacher_buffer import TeacherBuffer
+        from brass_ai.recovery.teacher_labels import IDENTITY, LabelRow
+        from brass_ai.recovery.teacher_phase import TeacherPhase
+
+        run, _, before, _ = self.refreshed_checkpoint()
+        generation = before['iteration']
+        entry = before['history'][-1]
+        model, raw = load_checkpoint(ROOT/entry['path'])
+        training = raw['training']
+        search = training['search_value']
+        search['stage']['stage_a_iterations'] = 26
+        reward_id = search['reward_id']
+
+        def publish(buffer, g, split, games):
+            for i in range(games):
+                game = f'{g}-{split}-{i}'
+                rows = [dict(generation=g, split=split, game_id=game, index=j, reward_id=reward_id,
+                             terminal_utility=[1.]*4, u=[1.]*4, r=[0.]*4) for j in range(1, 65)]
+                buffer.publish(g, split, rows, game_id=game)
+
+        values = ValueBuffer(run/'search-values', reward_id)
+        publish(values, generation-1, 'train', 1)
+        publish(values, generation-1, 'heldout', 4)
+        search['buffer'] = values.payload()
+        teacher = training['teacher_phase']
+        labels = TeacherBuffer(ROOT, run, teacher['buffer']['identity'])
+        label = dict.fromkeys(IDENTITY)
+        label.update(generation=generation-1, model_id=entry['model_id'], reward_id=reward_id, c2=.1,
+                     seat=0, turn_key=[], revision=0, kind='root')
+        labels.publish(generation-1, 'train', [LabelRow(dict(teacher=label), None)],
+                       model_id=entry['model_id'], reward_id=reward_id)
+        teacher['buffer'] = labels.payload()
+        teacher['weight']['beta'] = .089
+        torch.save(raw, ROOT/entry['path'])
+        entry = dict(entry, sha256=sha(ROOT/entry['path']))
+        before.update(history=[*before['history'][:-1], entry], resume=[entry], teacher_phase=teacher,
+                      search_value=stamp(search))
+        write_json(run/'state.json', before)
+
+        after = retune.prepare(ROOT, run, expected_generation=generation)
+        self.assertEqual(retune.prepare(ROOT, run, expected_generation=generation), after)
+        self.assertEqual(after['history'][-1]['model_id'], entry['model_id'])
+        self.assertEqual(sha(ROOT/entry['path']), entry['sha256'])
+        config = after['signature']['config']
+        self.assertEqual(g1491.count_search(config), dict(full_k=8, c_scale=.15, fast_c_scale=.5))
+        self.assertEqual(config['teacher_phase']['search_value']['max_epochs'], 1)
+        self.assertEqual(config['teacher_phase']['mode'], 'on')
+        current, converted, _ = load_resume(ROOT, run, after, after['signature'])
+        for key in ('optimizer', 'rng', 'cuda_rng'):
+            self.assertTrue(_same_payload(raw[key], converted[key]), key)
+        self.assertTrue(_same_payload(training['actor_value_phases'], converted['training']['actor_value_phases']))
+        self.assertTrue(_same_payload(search['companion'], converted['training']['search_value']['companion']))
+
+        block = cpu_block(teacher_budget=dict(cpu_block()['teacher_budget'], **g1491.RETUNED_SEARCH))
+        with scope(dict(DEFAULTS, native_inference=block)):
+            phase = TeacherPhase(ROOT, run, config, after, current, converted)
+        self.assertTrue(phase.ready)
+        self.assertEqual(phase.buffer.rows(generation), [])
+        self.assertEqual(phase.buffer.retired, labels.payload()['receipts'])
+        self.assertEqual(phase.search_value.phase.buffer.retired, values.payload()['receipts'])
+        term = TeacherTerm(current, config['teacher_phase'], [], seed=1, generation=generation, state=phase.weight)
+        self.assertEqual((term.mode, term.beta_used, term.remeasure_pending), ('on', .089, True))
+        self.assertEqual(schedule.validation_plan(config, after)['reason'], 'beta-remeasurement')
+        jobs = phase.begin(after, current, export_hash=after['history'][-1]['sha256'], epoch=generation)
+        self.assertEqual([sum(j['split']==s for j in jobs) for s in ('train', 'heldout')], [32, 4])
+        term.qualification_context = dict(tables=dict(train=32, heldout=4), labels_by_phase={
+            p: 1 for p in ('canal_early', 'canal_late', 'rail_early', 'rail_late')})
+        term.steps = [dict(raw_share=2., share=.178, actor_norm=1., raw_teacher_norm=2.)]
+        measured = term.finish()
+        self.assertEqual(measured[beta.REMEASUREMENT]['measured_generation'], generation)
+        self.assertEqual(measured[beta.KEY]['beta'], .025)
+        self.assertEqual(measured[beta.KEY]['updates'], 0)
+
+        value = phase.search_value.phase
+        with mock.patch('brass_ai.recovery.search_value_phase.predict_rows', return_value=([[0.]*4]*256, [[0.]*4]*256)), \
+             mock.patch.object(value.companion, 'head_only_heldout', return_value=dict(steps=1)) as fit:
+            for g in range(generation, generation+16):
+                publish(value.buffer, g, 'train', 1)
+                if (g+1)%5 == 0:
+                    publish(value.buffer, g, 'heldout', 4)
+                result = value.after_ppg(g, mode='on')
+                self.assertEqual(result['stage']['stage_a_iterations'], 26 + int(g == generation+15))
+            fit.assert_called_once()
+            self.assertTrue(fit.call_args.kwargs['one_epoch'])
+            self.assertEqual(result['stage']['buffer_rebuild']['ready_generation'], generation+7)
+            self.assertTrue(all(r['generation'] >= generation for pool in fit.call_args.args for r in pool))
+
+    def test_one_epoch_fits_each_row_at_most_once_and_rolls_back_a_worse_holdout(self):
+        from brass_ai.recovery.search_value_training import Companion
+        from test_b025 import model_fixture
+        from test_b045 import value_fixture
+
+        model = model_fixture()
+        row, _, _ = value_fixture(model)
+        companion = Companion(model)
+        rows = [row]*513
+        heldout = [dict(row, split='heldout', game_id='heldout')]
+        validation = iter([1., .9, 1.1])
+        with mock.patch('brass_ai.recovery.search_value_retention.HeldoutLoss', return_value=validation.__next__), \
+             mock.patch.object(companion, '_head_steps', wraps=companion._head_steps) as train:
+            report = companion.head_only_heldout(rows, heldout, generation=1760, intervals=4, interval_steps=1, one_epoch=True)
+        first, last = [call.args[1][0] for call in train.call_args_list]
+        self.assertEqual([len(first), len(last)], [512, 1])
+        np.testing.assert_array_equal(np.sort(np.r_[first,last]), np.arange(len(rows)))
+        self.assertEqual((report['max_epochs'], report['max_steps'], report['steps'], companion.steps), (1, 2, 1, 1))
+        self.assertEqual(report['early_stop_reason'], 'heldout_loss_increased')
+        self.assertEqual(report['heldout_loss_after'], .9)
+        head_only = companion.head_only(rows, generation=1761, steps=64, one_epoch=True)
+        self.assertEqual((head_only['steps'], head_only['max_steps']), (2, 2))
+
+    def test_one_epoch_caps_joint_trunk_pass_and_its_learning_rate_schedule(self):
+        from brass_ai.learning.search_value import ordinary_parameters
+        from brass_ai.recovery.search_value_training import Companion, unconditional_pass
+        from test_b025 import model_fixture
+        from test_b045 import value_fixture
+
+        model = model_fixture()
+        row, _, _ = value_fixture(model)
+        companion = Companion(model)
+        optimizer = torch.optim.Adam(ordinary_parameters(model), lr=1e-5)
+        rate = mock.Mock(return_value=1e-5)
+        report = unconditional_pass(companion, [row]*3, optimizer, scale=.1, cloning_loss=lambda:next(model.parameters()).sum()*0,
+            measure_joint_kl=lambda:.001, beta=.25, rate_for_step=rate, intervals=4, one_epoch=True)
+        self.assertEqual((report['max_epochs'], report['max_steps'], report['steps'], companion.steps), (1, 1, 1, 1))
+        rate.assert_called_once_with(1,1)
 
     def test_holdouts_stay_disjoint_over_the_full_twenty_iteration_window(self):
         from brass_ai.recovery.search_value_phase import SearchValuePhase
@@ -282,3 +422,31 @@ class SearchRefresh(unittest.TestCase):
         train.assert_called_once()
         self.assertEqual(train.call_args.kwargs, dict(mode='on', expected=1740, iterations=10, revise_stages=True))
         self.assertEqual(train.call_args.args[0].share_target, .08)
+
+    def test_retuned_search_settings_are_persistent_and_keep_teaching_on(self):
+        from brass_ai.recovery import teacher_search_retune as retune
+        from test_utility_width import recipe
+
+        spec = importlib.util.spec_from_file_location('teacher_search_retune_cli', ROOT/'scripts/continue-rust-g1491.py')
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        shared = script.shared()
+        config = recipe()
+        config = refresh.configure(dict(config, teacher_phase=dict(config['teacher_phase'], mode='on')), adaptive_beta=True)
+        before = dict(iteration=1760, signature=dict(config=config))
+        after = dict(before, signature=dict(config=retune.configure(config)), teacher_phase=dict(
+            weight={beta.REMEASUREMENT: dict(requested_generation=1760, previous_beta=.089)}))
+        resumed = dict(after, iteration=1770, teacher_phase=dict(weight={
+            beta.REMEASUREMENT: dict(requested_generation=1760, measured_generation=1760)}))
+        for g, state, flags in ((1760, before, ['--retune-teacher-search']), (1770, resumed, [])):
+            args = ['continue', '--expected-generation', str(g), '--iterations', '10', '--share-target', '.15',
+                    '--skip-utility-qualification', *flags]
+            with mock.patch('sys.argv', args), mock.patch.object(script, 'shared', return_value=shared), \
+                 mock.patch.object(script, 'state_of', return_value=state), mock.patch.object(script, 'ensure_cpu'), \
+                 mock.patch.object(retune, 'prepare', return_value=after) as migrate, \
+                 mock.patch.object(shared, 'continuation') as train:
+                script.main(teacher_fast=96, share_target_required=True)
+            self.assertEqual(migrate.call_count, int(bool(flags)))
+            self.assertEqual(train.call_args.kwargs, dict(mode='on', expected=g, iterations=10, revise_stages=True))
+            self.assertEqual(shared.inference_choice(train.call_args.args[0])['teacher_budget'],
+                             dict(mode='count', full=640, full_k=8, fast=96, fast_k=8, c_scale=.15, fast_c_scale=.5))
