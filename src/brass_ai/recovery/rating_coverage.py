@@ -11,10 +11,21 @@ DEFAULT=dict(contract=CONTRACT,win_share_above=.8,reference_setups_each=4,
 SEED='trained-start-baseline'
 WITH_SEED=dict(DEFAULT,contract='competitive-rating-coverage/2.0.0',reference_setups_each=2,
     seed_reference=dict(agent=SEED,source_generation=1290,setups=4,source='bound-fresh-run-seed'))
+G1290_BASELINE=dict(WITH_SEED,contract='competitive-rating-coverage/3.0.0',reference_setups_each=0,
+    seed_reference=dict(WITH_SEED['seed_reference'],setups=8))
+
+
+def zero_agent(config):
+    return SEED if config.get('rating_coverage')==G1290_BASELINE else IL
+
+
+def previous(config):
+    """Project the new rating-only settings to the reviewed training recipe."""
+    return dict(config,rating_coverage=WITH_SEED) if zero_agent(config)==SEED else config
 
 
 def validate(config, rating):
-    require(type(config) is dict and config in (DEFAULT,WITH_SEED) and rating['setups']==32 and
+    require(type(config) is dict and config in (DEFAULT,WITH_SEED,G1290_BASELINE) and rating['setups']==32 and
         rating['seat_rotations']==4 and rating['nearest_opponents']>=3,
         'Competitive rating coverage requires the versioned 32-setup protocol')
     return config
@@ -50,7 +61,8 @@ def prepare(root, state, config):
 def lineups(rating, agents, candidate, scores, generation, anchor=None,coverage_config=None):
     """One balanced list per setup, rotated identically through all four seats."""
     c=rating['config']; seeds=rating['seeds']
-    seeded=coverage_config==WITH_SEED
+    g1290=coverage_config==G1290_BASELINE
+    seeded=coverage_config in (WITH_SEED,G1290_BASELINE)
     require(not seeded or SEED in agents,'Missing trained-start PL reference')
     checkpoints=[a for a,e in agents.items() if a not in (IL,V4,SEED,candidate) and
         e['kind']=='model' and a in scores]
@@ -69,7 +81,12 @@ def lineups(rating, agents, candidate, scores, generation, anchor=None,coverage_
     # Spread reference setups every four positions, and rotate that pattern
     # through all fixed seeds over successive slots, rather than pinning IL/v4.
     offset=(generation//c['every_iterations'])%len(seeds)
-    pattern=[IL,SEED,V4,SEED,IL,SEED,V4,SEED] if seeded else [IL,V4]*4
+    if g1290:
+        pattern=[SEED]*coverage_config['seed_reference']['setups']
+        fallback_references=(SEED,)
+    else:
+        pattern=[IL,SEED,V4,SEED,IL,SEED,V4,SEED] if seeded else [IL,V4]*4
+        fallback_references=(IL,V4,SEED) if seeded else (IL,V4)
     references={(offset+4*i)%len(seeds):a for i,a in enumerate(pattern)}
     counts=Counter(); rows=[]; fallback=Counter(); position_counts=Counter()
     for i,seed in enumerate(seeds):
@@ -83,16 +100,17 @@ def lineups(rating, agents, candidate, scores, generation, anchor=None,coverage_
         base+=chosen
         # Explicit startup/duplicate-model fallback: unique references first;
         # only duplicate a seat when there are not enough frozen identities.
-        for a in ((IL,V4,SEED) if seeded else (IL,V4)):
+        for a in fallback_references:
             if len(base)<4 and a not in base:base.append(a);fallback[a]+=1
         while len(base)<4:
-            options=available or [IL,V4]
+            options=available or ([SEED] if g1290 else [IL,V4])
             a=min(options,key=lambda a:(position_counts[a]+base.count(a),a))
             base.append(a);fallback[a]+=1
         position_counts.update(base[1:])
         for seat in range(4):rows.append(dict(seed=seed,seat=seat,kind='rating',agents=base))
     require(len(rows)==128,'Competitive rating changed the game budget')
-    return rows,dict(contract=WITH_SEED['contract'] if seeded else CONTRACT,active=True,estimated_theta=theta,nearest=available,
+    estimated=theta-scores.get(SEED,{}).get('theta',0.) if g1290 and last else theta
+    return rows,dict(contract=(coverage_config or DEFAULT)['contract'],active=True,estimated_theta=estimated,nearest=available,
         required_opponents=required,previous_rated_checkpoint=last,active_kl_reference=anchor,
         reference_setup_indices={str(i):a for i,a in sorted(references.items())},
         rated_setup_appearances=dict(counts),opponent_setup_appearances=dict(position_counts),
@@ -102,7 +120,7 @@ def lineups(rating, agents, candidate, scores, generation, anchor=None,coverage_
 
 def seed_reference(root,state,config):
     """Reuse the immutable original seed; never call it a current-run generation."""
-    if config.get('rating_coverage')!=WITH_SEED:return None
+    if config.get('rating_coverage') not in (WITH_SEED,G1290_BASELINE):return None
     from brass_ai.bank import sha
     from brass_ai.learning.contracts import project_path
     origin=state['origin'];entry=copy.deepcopy(origin['seed_checkpoint'])

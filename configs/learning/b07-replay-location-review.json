@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "295df127da4dbca6e8beb406091dc4636687547ca22cf14fd8d2cf2458c22a8c",
+  "execution_implementation": "f419c9989d10cea1eeb6ddacf3046b48a21d3ee780ff0d1f365347dc80a42b18",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -206,7 +206,7 @@
     },
     "src/brass_ai/recovery/trained_startup.py": {
       "before": "901fb6ae52eb1cdf285e42794938be406fcd8f753d2e092931894ec391e20fea",
-      "after": "9acd0382bbbc56c3a1833eee784704d2113fd8307c8f67fcd54ac43a74ba8bd7"
+      "after": "e5583d2d9a90e52cbf41dbcb91467d7b356c5be40e6003551a9005a52b17c58a"
     },
     "src/brass_ai/recovery/transfer_resume.py": {
       "before": null,
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "4a559840cfa757d9bf3ce611ceb39099bc14f8246ef2df11a75658b65755755c"
+      "after": "7b24ba073a683604c1e5381d6b56ba3c3e61e9514509fe080d82fb5771e806f8"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -430,7 +430,43 @@
     },
     "src/brass_ai/recovery/search_head_refresh.py": {
       "before": null,
-      "after": "ec3d17d22bcf9a398907e88df981d42d8b08c4e8c70948904d1106df1d049eee"
+      "after": "199903527fd9a554854faf0e86d8dd94276461760d82b35119349718184ff0bd"
+    },
+    "scripts/strength-ratings.py": {
+      "before": "b03afa7ddd9626f5f90622fe1f88dbb6de9dca8f863685f03433f840fbc6380e",
+      "after": "76bf3468dee6810d8166bd735db4748d048dce78615f2978de4900d035c47725"
+    },
+    "src/brass_ai/recovery/plackett_luce.py": {
+      "before": "1a13a3e28c7c901d3446cb75cb67f208903f4c4c133306fc78fc237b4a44fb01",
+      "after": "59bf19d818f85a88decb2b5eeaf7c00b6a64868f2e6a6e1d541b5e7d77a34d16"
+    },
+    "src/brass_ai/recovery/policy_anchor.py": {
+      "before": "a5c7e7cfef36a37a30b98f52565d0d6b2c7fe565ac14dc6be066c7c087cf55af",
+      "after": "64fc47105c9df41baadb6abc89c57765e3d742f6ee26dd4b799bf379294a575b"
+    },
+    "src/brass_ai/recovery/rating_coverage.py": {
+      "before": "7bc31d21ebf17e69a3db8ffa6699e64f0e271188030e6f1917f37505743a39c0",
+      "after": "546bbd09d59a2cf01dd41dd679b9eb2563ba84de87a27c17f4fcf97ab29f4929"
+    },
+    "src/brass_ai/recovery/rating_plot.py": {
+      "before": "4fc9dd1a86c9d24c735cc04089bd5dbf03211a6bf98dfa5665aaa008f03f446e",
+      "after": "2585fface755e068745d53d22e7a74e51dc124c90a0383d3624e0d37cbd15e1e"
+    },
+    "src/brass_ai/recovery/ratings.py": {
+      "before": "aa3a2b635bea1b3bf5418215994e02df155a2863724a95e28bdd2fa6f293435f",
+      "after": "141061334f7812cd6df90946c31a00141a9d7ed3f126aabb31b3dfa7d01418f0"
+    },
+    "tests/Recovery/test_rating_plot.py": {
+      "before": "74e8e07077139d647095ab00fc3c4bc9b7d7d41805ba8617b2d1f3ff5c1367ee",
+      "after": "25b325cd9252b54da6255d0df64fbdd58ec74df1276b588025b6346eec45ea80"
+    },
+    "tests/Recovery/test_search_head_refresh.py": {
+      "before": null,
+      "after": "8088b2db3264ea0cba006a244d65bb070013fe9d2efaa022a0b1a94a5f8f176b"
+    },
+    "tests/Recovery/test_strength_rating.py": {
+      "before": "5a2ae1020f8827244c8908eaa7af257b812b55e0385f39111b588f5a5a1855f7",
+      "after": "fb947df1667cc19ad91205fba50c966f0214905e18dc0a390241890345a674bd"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -606,6 +642,11 @@
       "implementation": "ef6e6bfd6919f6a2bf9051fae8965578bf246f31f4cea800d9094bba3f49c52e",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "b41676d196a658798b6e9dfd1201fe0de581cdf55d1709b3722b22ae4b85e480"
+    },
+    {
+      "implementation": "295df127da4dbca6e8beb406091dc4636687547ca22cf14fd8d2cf2458c22a8c",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "5fecf4a8331501dfb258f84e214dac0054a0d26681e52c78fa71cc480a61376b"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -807,6 +848,10 @@
   },
   "search_head_refresh": {
     "scope": "Opt-in g1190 continuation: replace the search head at the committed boundary, reset Stage A and PPG beta, remeasure teacher beta with teaching on, then adapt it using sampled gradient norms from 96 teacher rows per PPO step. Fit lambda .8 with dedicated 16-game early stopping and collect four held-outs every five iterations. CPU teacher cotton builds and both development choices use the 25% exploration recipe. CPU teacher count searches default to c_scale 0.1.",
+    "qualified_implementation_unchanged": true
+  },
+  "g1290_pl_baseline": {
+    "scope": "The g1190 search-head refresh adopts the original trained-start g1290 as the PL zero. Eight reference setups use the pinned seed and 24 use the ladder. Scores and setup-bootstrap draws are centered on g1290 using the common fit. Earlier slots retain their evidence and continue to contribute to the fit.",
     "qualified_implementation_unchanged": true
   }
 }

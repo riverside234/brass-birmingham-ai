@@ -87,10 +87,11 @@ def load_fit(root, rating, fit):
         'Policy anchor requires a valid current PL fit')
     with np.load(project_path(root,fit['bootstrap']['path']),allow_pickle=False) as data:
         samples=data['theta'].copy();names=data['agents'].tolist()
-    require(len(set(names))==len(names) and set(names)==set(report['ratings']) and IL in names and
+    baseline=report.get('baseline',IL)
+    require(baseline==spec.get('baseline',IL) and len(set(names))==len(names) and set(names)==set(report['ratings']) and baseline in names and
         samples.shape==(rating['config']['bootstrap'],len(names)) and np.isfinite(samples).all() and
-        np.all(samples[:,names.index(IL)]==0.) and report['ratings'][IL]['theta']==0.,
-        'Invalid shared setup-bootstrap samples or fixed IL origin')
+        np.all(samples[:,names.index(baseline)]==0.) and report['ratings'][baseline]['theta']==0.,
+        'Invalid shared setup-bootstrap samples or PL zero baseline')
     return report,samples,names
 
 

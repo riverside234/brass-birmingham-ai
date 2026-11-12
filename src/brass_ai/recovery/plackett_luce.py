@@ -124,9 +124,10 @@ def fit(games,agents,config):
     return dict(agents=agents,theta=theta.tolist(),seat=seat.tolist(),diagnostic=diagnostic)
 
 
-def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None):
+def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None,baseline=IL):
     timings=telemetry if telemetry is not None else {};began=time.perf_counter()
     games,agents,ordered,orders=encode(games,agents);n=len(agents)
+    require(baseline in agents,'Missing PL zero baseline')
     timings['fit_encode_seconds']=time.perf_counter()-began;began=time.perf_counter()
     theta,seat,diagnostic=fit_encoded(ordered,orders,n,config)
     timings['full_fit_seconds']=time.perf_counter()-began;began=time.perf_counter()
@@ -153,12 +154,19 @@ def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None):
             gradient_max=max(r[1]['gradient_max'] for r in refits),
             converged=all(r[1]['converged'] for r in refits),cold_retries=sum(r[1]['cold_retry'] for r in refits))
     timings['bootstrap_seconds']=time.perf_counter()-began;began=time.perf_counter()
-    samples=np.asarray(samples);low,high=np.quantile(samples,[.025,.975],axis=0)
-    scale=config['elo_scale'];v4=agents.index(V4)
+    samples=np.asarray(samples)
+    if baseline!=IL:
+        # Recenter each paired draw so the interval includes the reference's uncertainty.
+        zero=agents.index(baseline)
+        theta=theta-theta[zero]
+        samples=samples-samples[:,zero,None]
+    low,high=np.quantile(samples,[.025,.975],axis=0)
+    scale=config['elo_scale'];v4=agents.index(V4);il=agents.index(IL)
     sigmoid=lambda x:float(1/(1+math.exp(-max(-700.,min(700.,float(x))))))
     rated={a:dict(theta=float(theta[i]),points=scale*float(theta[i]),theta_ci95=[float(low[i]),float(high[i])],
         points_ci95=[scale*float(low[i]),scale*float(high[i])],
-        probability_above_IL=sigmoid(theta[i]),probability_above_v4=sigmoid(theta[i]-theta[v4])) for i,a in enumerate(agents)}
+        probability_above_IL=sigmoid(theta[i]-theta[il]),probability_above_v4=sigmoid(theta[i]-theta[v4]),
+        **(dict(probability_above_baseline=sigmoid(theta[i])) if baseline!=IL else {})) for i,a in enumerate(agents)}
     differences=[]
     for i,a in enumerate(agents):
         for j in range(i+1,n):
@@ -166,7 +174,9 @@ def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None):
             differences.append(dict(a=a,b=agents[j],points_delta=scale*float(theta[j]-theta[i]),
                 points_delta_ci95=interval.tolist(),b_stronger=bool(interval[0]>0),a_stronger=bool(interval[1]<0)))
     timings['intervals_seconds']=time.perf_counter()-began
+    origin='IL theta fixed at zero' if baseline==IL else f'Scores and paired draws relative to {baseline} at zero'
     return dict(contract=config['contract'],ratings=rated,seat_offsets=seat.tolist(),fit=diagnostic,
         games=len(games),setups=len(setups),bootstrap_refits=len(samples),differences=differences,
+        **(dict(baseline=baseline) if baseline!=IL else {}),
         **(dict(bootstrap_execution=execution) if execution is not None else {}),
-        scope='Held-out mixed-table PL model with Gaussian priors; IL theta fixed at zero; setup-cluster percentile intervals; seat-neutral outrank probabilities'),samples
+        scope=f'Held-out mixed-table PL model with Gaussian priors; {origin}; setup-cluster percentile intervals; seat-neutral outrank probabilities'),samples

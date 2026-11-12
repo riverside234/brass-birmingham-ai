@@ -57,7 +57,8 @@ def validate(config):
             'Revised trained recipe requires a reviewed loss16/KL32 PPG contract')
     require(config['learning_rate_warmup']['selfplay_steps']==100,'Trained startup needs 100 optimizer-step PPO warmup')
     require(config['panel_gates']==panel_gates.DEFAULT and config['v4_share_gate']==v4_share.CURRENT_DEFAULT
-        and config['rating_coverage']==(rating_coverage.WITH_SEED if fork else rating_coverage.DEFAULT) and config['rating']['enabled']
+        and rating_coverage.previous(config)['rating_coverage']==(rating_coverage.WITH_SEED if fork else rating_coverage.DEFAULT)
+        and config['rating']['enabled']
         and config['games_per_iteration']==320,'Manual startup requires the existing 320-game/PL protocols')
     require(('v4_history' in config)==fork and (not fork or revised),'Incomplete g570 trained recipe')
 

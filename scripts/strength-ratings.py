@@ -12,6 +12,7 @@ def main():
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery import ratings
     from brass_ai.recovery.plackett_luce import estimate
+    from brass_ai.recovery.rating_coverage import zero_agent
     from brass_ai.step5.league import write_json
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run',default='artifacts/step5/joint7-v11-1-grouped-lr')
@@ -21,10 +22,11 @@ def main():
             'Choose a new artifacts/ directory outside the training run')
     path=run/'state.json';before=sha(path);state=read(path)
     require('ratings' in state,'This run has no Plackett-Luce rating state')
-    saved=ratings.validate_state(ROOT,state['ratings'],state['signature']['config']['rating'])
+    config=state['signature']['config']
+    saved=ratings.validate_state(ROOT,state['ratings'],config['rating'])
     require(saved['slots'],'No completed rating slot yet; the default first slot is generation 10')
     games=[g for g in ratings.read_games(ROOT,saved) if g['kind']=='rating']
-    report,_=estimate(games,saved['agents'],saved['config'])
+    report,_=estimate(games,saved['agents'],saved['config'],baseline=zero_agent(config))
     latest=saved['slots'][-1];panels=read(project_path(ROOT,latest['panels']['path']))
     previous=ratings.panel_history(ROOT,saved)[:-1]
     report.update(generation=latest['generation'],alerts=ratings.alerts(report,saved,panels,previous),

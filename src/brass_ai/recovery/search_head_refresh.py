@@ -8,6 +8,7 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.learning.search_value import marker, width
 from brass_ai.step5.league import write_json
 from . import adaptive_teacher_beta as adaptive
+from .rating_coverage import G1290_BASELINE
 from . import search_value_schedule as schedule
 from . import training_revision_g1491 as g1491
 from .retention import owned, run_lock, safe
@@ -35,7 +36,8 @@ def configure(config, *, adaptive_beta=False):
                    **{g1491.KEY: g1491.block(variant=g1491.SEARCH_REFRESH)})
     if adaptive_beta:
         updated[adaptive.KEY] = adaptive.settings()
-    result = dict(config, teacher_phase=updated)
+    coverage = dict(G1290_BASELINE, seed_reference=dict(G1290_BASELINE['seed_reference']))
+    result = dict(config, teacher_phase=updated, rating_coverage=coverage)
     validate_config(result)
     require(is_on(result), 'The refreshed recipe must keep the teacher on')
     return result

@@ -14,7 +14,7 @@ from brass_ai.learning.replay import terminal_targets
 from brass_ai.step5.league import seeds_for,write_json,implementation_id
 from .plackett_luce import IL,V4,estimate,check_dependencies
 from .quality_config import validate_rating
-from .rating_coverage import SEED
+from .rating_coverage import SEED,zero_agent
 
 HISTORY_ITERATIONS=100
 ARCHIVE_FORMAT='plackett-luce-history/1.0.0'
@@ -171,38 +171,41 @@ def read_games(root,state):
 
 def slot_spec(root,run,rating,entry,config,*,anchor_agent=None):
     generation=entry['generation'];agent=f'generation-{generation:06d}';c=config['rating']
+    baseline=zero_agent(config)
     agents=copy.deepcopy(rating['agents']);agents[agent]=dict(kind='model',checkpoint=copy.deepcopy(entry))
     previous=read(project_path(root,rating['latest_report']['path'])) if rating['latest_report'] else None
     scores=previous['ratings'] if previous else {}
-    checkpoints=[a for a in agents if a not in (IL,V4,SEED,agent) and a in scores]
-    last=max(checkpoints,key=lambda a:agents[a]['checkpoint']['generation']) if checkpoints else None
-    estimate_theta=scores[last]['theta'] if last else 0.
-    nearest=sorted(checkpoints,key=lambda a:(abs(scores[a]['theta']-estimate_theta),a))[:c['nearest_opponents']]
-    # Startup has no rated checkpoints. Explicit reference fallback keeps the
-    # comparison graph connected and never loads an unqualified external model.
-    available=nearest or [IL,V4];lineups=[]
-    for i,seed in enumerate(rating['seeds']):
-        rng=random.Random(digest(dict(seed=c['seed'],setup=seed,slot=generation)))
-        opponents=rng.sample(available,2) if len(available)>=2 else available*2
-        base=[agent,IL if i%2==0 else V4]+opponents
-        for seat in range(4):lineups.append(dict(seed=seed,seat=seat,kind='rating',agents=base))
     coverage=None
-    if 'rating_coverage' in config and rating.get('coverage',{}).get('activated'):
+    if 'rating_coverage' in config and (baseline==SEED or rating.get('coverage',{}).get('activated')):
         from .rating_coverage import lineups as competitive_lineups
         lineups,coverage=competitive_lineups(rating,agents,agent,scores,generation,anchor_agent,config['rating_coverage'])
         nearest=coverage['nearest'];estimate_theta=coverage['estimated_theta']
-    for seed in rating['seeds'][:c['panel_setups']]:
-        for seat in range(4):
-            retired=rating.get('panel_gates',{}).get('retired',{}) if 'panel_gates' in config else {}
-            if not retired.get('v4-panel'):
-                lineups.append(dict(seed=seed,seat=seat,kind='v4-panel',agents=[agent,V4,V4,V4]))
-            if not retired.get('il-panel'):
-                lineups.append(dict(seed=seed,seat=seat,kind='il-panel',agents=[agent,agent,IL,IL]))
+    else:
+        checkpoints=[a for a in agents if a not in (IL,V4,SEED,agent) and a in scores]
+        last=max(checkpoints,key=lambda a:agents[a]['checkpoint']['generation']) if checkpoints else None
+        estimate_theta=scores[last]['theta'] if last else 0.
+        nearest=sorted(checkpoints,key=lambda a:(abs(scores[a]['theta']-estimate_theta),a))[:c['nearest_opponents']]
+        available=nearest or [IL,V4];lineups=[]
+        for i,seed in enumerate(rating['seeds']):
+            rng=random.Random(digest(dict(seed=c['seed'],setup=seed,slot=generation)))
+            opponents=rng.sample(available,2) if len(available)>=2 else available*2
+            base=[agent,IL if i%2==0 else V4]+opponents
+            for seat in range(4):lineups.append(dict(seed=seed,seat=seat,kind='rating',agents=base))
+    if baseline==IL:
+        retired=rating.get('panel_gates',{}).get('retired',{}) if 'panel_gates' in config else {}
+        for seed in rating['seeds'][:c['panel_setups']]:
+            for seat in range(4):
+                if not retired.get('v4-panel'):
+                    lineups.append(dict(seed=seed,seat=seat,kind='v4-panel',agents=[agent,V4,V4,V4]))
+                if not retired.get('il-panel'):
+                    lineups.append(dict(seed=seed,seat=seat,kind='il-panel',agents=[agent,agent,IL,IL]))
     used={a for row in lineups for a in row['agents']}
+    origin='IL zero' if baseline==IL else 'g1290 zero'
     return dict(format='plackett-luce-slot/1.0.0',generation=generation,candidate=agent,
         agents={a:agents[a] for a in sorted(used)},lineups=lineups,config=copy.deepcopy(c),
-        estimated_theta=estimate_theta,estimate_scope='Latest rated checkpoint, or IL zero before the first slot',
+        estimated_theta=estimate_theta,estimate_scope=f'Latest rated checkpoint, or {origin} before the first slot',
         nearest=nearest,startup_reference_fallback=bool(coverage['startup_fallback_seats']) if coverage else not nearest,implementation=implementation_id(),
+        **(dict(baseline=baseline) if baseline!=IL else {}),
         **({'coverage':coverage} if coverage is not None else {}),
         execution=copy.deepcopy(config['execution']),host=config['host'],partition='validation')
 
@@ -417,7 +420,7 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         timing['history_read_seconds']=time.perf_counter()-phase
         compute=config.get('rating_compute')
         fitted,samples=estimate([r for r in all_rows if r['kind']=='rating'],working['agents'],c,
-            telemetry=timing,
+            telemetry=timing,baseline=spec.get('baseline',IL),
             **(dict(compute=compute) if compute is not None else {}))
         phase=time.perf_counter()
         recent=state.get('recent_training',[])
@@ -459,8 +462,9 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         # receipt. A cached retry may refresh it without changing fitted bytes.
         write_json(directory/'timing-report.json',dict(generation=generation,spec_digest=digest(spec),
             timing=timing,scope='Operational wall timings; not rating or qualification evidence'))
+        units='PL points vs g1290' if spec.get('baseline')==SEED else 'PL points'
         print(f'Rating generation {generation}: {c["setups"]*4} main + {sum(p["games"] for p in panels["panels"].values())} panel games; '
-              f'{fitted["ratings"][spec["candidate"]]["points"]:.1f} PL points; '
+              f'{fitted["ratings"][spec["candidate"]]["points"]:.1f} {units}; '
               f'{c["bootstrap"]} bootstrap refits; {timing["slot_seconds"]:.1f}s '
               f'(games+validate={timing["games_and_validation_seconds"]:.1f}s '
               f'fit={timing["full_fit_seconds"]:.1f}s bootstrap={timing["bootstrap_seconds"]:.1f}s)',flush=True)

@@ -101,6 +101,7 @@ class SearchRefresh(unittest.TestCase):
     def test_checkpoint_keeps_ordinary_weights_and_restarts_search(self):
         from brass_ai.learning.utility_width import widen, optimizer_state
         from brass_ai.recovery.actor_value import TrainingPhases
+        from brass_ai.recovery.rating_coverage import G1290_BASELINE
         from brass_ai.recovery.resume import load_resume
         from brass_ai.recovery.teacher_phase import TeacherPhase
         from brass_ai.recovery.utility_width_upgrade import configure
@@ -136,6 +137,7 @@ class SearchRefresh(unittest.TestCase):
 
         updated = refresh.prepare(ROOT, run, expected_generation=generation, adaptive_beta=True)
         config = updated['signature']['config']
+        self.assertEqual(config['rating_coverage'], G1290_BASELINE)
         current, converted, _ = load_resume(ROOT, run, updated, updated['signature'])
         self.assertEqual((updated['iteration'], width(current), current.config.utility_hidden), (generation, 32, 256))
         self.assertEqual(sha(original_path), entry['sha256'])

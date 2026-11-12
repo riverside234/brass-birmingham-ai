@@ -147,6 +147,25 @@ class PairedEvidence(unittest.TestCase):
 
 
 class RatingPlot(unittest.TestCase):
+    def test_g1290_baseline_drives_both_progress_panels(self):
+        from brass_ai.recovery.rating_coverage import SEED
+        report, _ = fixture()
+        report['baseline'] = SEED
+        report['ratings'][SEED] = dict(points=0., points_ci95=[0., 0.])
+        report['ratings']['generation-0'] = dict(points=-90., points_ci95=[-110., -80.])
+        report['ratings']['generation-000010'] = dict(points=-10., points_ci95=[-25., 8.])
+        report['ratings']['generation-000020'] = dict(points=70., points_ci95=[30., 110.])
+        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as tmp:
+            path = Path(tmp)/'progress.svg'
+            rating_plot.render(report, path)
+            text = labels(path)
+            self.assertIn('g1290 = 0', text)
+            self.assertIn('g1290 baseline', text)
+            self.assertIn('70.0', text)
+            self.assertNotIn('IL = 0', text)
+            self.assertNotIn('v4 reference', text)
+            self.assertIsNotNone(ET.parse(path).getroot().find(".//*[@id='pl-zero-baseline']"))
+
     def test_automatic_and_standalone_render_identical_style_without_mutations(self):
         report, agents = fixture(); before = copy.deepcopy((report, agents))
         original_fonttype = matplotlib.rcParams['svg.fonttype']
@@ -350,7 +369,7 @@ class RatingPlot(unittest.TestCase):
             root = Path(tmp); c = dict(RATING, setups=2, panel_setups=1, bootstrap=4)
             state = Slots().state(root, c); cfg = dict(rating=c, host='host', execution={})
             with patch('brass_ai.recovery.retention.slim_checkpoint', side_effect=lambda root,run,e,old=None:e), \
-                 patch.object(ratings, 'collect_slot', side_effect=lambda root,directory,spec,*args: fixture_rows(spec)) as collector:
+                 patch.object(ratings, 'collect_slot', side_effect=lambda root,directory,spec,*args,**kwargs: fixture_rows(spec)) as collector:
                 fitted = ratings.schedule(root, root, state, cfg)
                 path = root/'ratings/slots/generation-000010/progress.svg'; before = path.read_bytes()
                 vp = path.with_name('progress_vp.svg'); vp_before = vp.read_bytes()

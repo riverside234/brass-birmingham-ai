@@ -28,8 +28,9 @@ def is_shadow(config):
     from brass_ai.recovery.collector_runtime import recipe
     from brass_ai.recovery.search_value_schedule import previous_recipe
     from brass_ai.learning.post_transfer_reward import previous as previous_reward
+    from brass_ai.recovery.rating_coverage import previous as previous_rating
     from brass_ai.recovery.teacher_phase_config import without_utility_qualification
-    try:config=previous_recipe(previous_reward(without_utility_qualification(recipe(config))))
+    try:config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(recipe(config)))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
     if phase is None:return False

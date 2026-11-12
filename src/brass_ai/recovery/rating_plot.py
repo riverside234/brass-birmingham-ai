@@ -132,6 +132,8 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
     from matplotlib.lines import Line2D
     from matplotlib.patches import FancyBboxPatch, Patch
     from matplotlib.ticker import MaxNLocator, StrMethodFormatter
+    from .plackett_luce import IL, V4
+    from .rating_coverage import SEED
 
     ratings = report['ratings']
     if agents is None:
@@ -157,9 +159,12 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
     history_x = [row['generation'] for row in shown]; history_y = [row['score'] for row in shown]
     lower = [lo for _, lo, _ in data]; upper = [hi for _, _, hi in data]
     latest, latest_name = points[-1]; score, low, high = data[-1]
-    v4, v4low, v4high = values('v4'); anchor = values('generation-0')[0]
-    if anchor != 0:
-        raise ValueError('Expected the fixed IL reference at zero PL points')
+    baseline = report.get('baseline', IL)
+    baseline_label = 'g1290' if baseline == SEED else 'IL' if baseline == IL else baseline
+    anchor, anchor_low, anchor_high = values(baseline)
+    if (anchor, anchor_low, anchor_high) != (0., 0., 0.):
+        raise ValueError('Expected the PL baseline and its interval at zero')
+    v4_reference = values(V4) if baseline == IL else ()
     previous = points[-2] if len(points) > 1 else None
     change = paired_change(report, previous[1], latest_name) if previous else None
     recent_start = max(0, latest - RECENT_GENERATIONS)
@@ -170,6 +175,8 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
 
     ink = '#203B43'; muted = '#5D737C'; blue = '#167D8D'; dark = '#0A6473'
     amber = '#9C753F'; grid = '#E5ECEE'; paper = '#F6F8F7'
+    anchor_color = '#8267A3' if baseline == SEED else '#82979D'
+    anchor_style = (0, (4, 3)) if baseline == SEED else (0, (2, 4))
     with plt.rc_context({'font.family': 'DejaVu Sans', 'font.size': 10,
             'text.color': ink, 'axes.labelcolor': muted, 'xtick.color': muted, 'ytick.color': muted,
             'svg.fonttype': 'none', 'svg.hashsalt': 'brass-pl-progress-v8',
@@ -182,7 +189,8 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
             text(.945, .967, 'GENERATION ' + str(latest), ha='right', fontsize=8.5, weight='bold',
                  color=dark, bbox=dict(boxstyle='round,pad=.5,rounding_size=.25',
                                       facecolor='#E5F0EE', edgecolor='none'))
-            text(.945, .934, 'Plackett–Luce · one common fit · IL = 0', ha='right', fontsize=8.5, color=muted)
+            text(.945, .934, f'Plackett–Luce · one common fit · {baseline_label} = 0',
+                 ha='right', fontsize=8.5, color=muted)
 
             # Three compact cards leave most of the canvas for evidence.
             for left, width in ((.043, .283), (.341, .308), (.664, .293)):
@@ -234,7 +242,7 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                            f'g{recent_start}–g{latest} · exact points · separate y-axis')
             ax.set_xlim(-max(1, latest * .015), latest + max(5, latest * .025))
             ax.set_xticks(_ticks(0, latest, 7))
-            bottom = min(anchor, v4low, *lower, *y); top = max(v4high, *upper, *y)
+            bottom = min(anchor, *v4_reference, *lower, *y); top = max(anchor, *v4_reference, *upper, *y)
             span = max(100., top - bottom)
             ax.set_ylim(bottom - span * .06, top + span * .09)
             if recent_start > 0:
@@ -245,20 +253,23 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                 # window becomes very narrow in a long training history.
                 ax.text(.985, .97, 'Recent window →', transform=ax.transAxes, ha='right', va='top',
                         fontsize=7.5, color=muted)
-            ax.axhspan(v4low, v4high, color=amber, alpha=.045, linewidth=0, zorder=1)
-            ax.axhline(v4, color=amber, linewidth=1., linestyle=(0, (5, 4)), alpha=.75, zorder=2)
-            ax.axhline(anchor, color='#A0AFB3', linewidth=.9, linestyle=(0, (2, 4)), zorder=2)
-            from .rating_coverage import SEED
-            if SEED in ratings:
+            if v4_reference:
+                v4, v4low, v4high = v4_reference
+                ax.axhspan(v4low, v4high, color=amber, alpha=.045, linewidth=0, zorder=1)
+                ax.axhline(v4, color=amber, linewidth=1., linestyle=(0, (5, 4)), alpha=.75, zorder=2)
+                ax.annotate(f'v4  {v4:,.0f}', xy=(1., v4), xycoords=('axes fraction', 'data'),
+                    xytext=(7, 0), textcoords='offset points', fontsize=8.2, color=amber, va='center')
+            ax.axhline(anchor, color=anchor_color if baseline != IL else '#A0AFB3',
+                linewidth=.9, linestyle=anchor_style, zorder=2).set_gid('pl-zero-baseline')
+            if SEED in ratings and baseline != SEED:
                 seed_value,seed_low,seed_high=values(SEED)
                 ax.axhspan(seed_low,seed_high,color='#8267A3',alpha=.045,linewidth=0,zorder=1)
                 ax.axhline(seed_value,color='#8267A3',linewidth=1.,linestyle=(0,(4,3)),zorder=2)
                 ax.annotate(f'Trained start  {seed_value:,.0f}',xy=(1.,seed_value),xycoords=('axes fraction','data'),
                     xytext=(7,0),textcoords='offset points',fontsize=8.2,color='#8267A3',va='center')
                 lo,hi=ax.get_ylim();ax.set_ylim(min(lo,seed_low-span*.06),max(hi,seed_high+span*.09))
-            for value, label, color in ((v4, f'v4  {v4:,.0f}', amber), (anchor, 'IL  0', '#82979D')):
-                ax.annotate(label, xy=(1., value), xycoords=('axes fraction', 'data'),
-                    xytext=(7, 0), textcoords='offset points', fontsize=8.2, color=color, va='center')
+            ax.annotate(f'{baseline_label}  0', xy=(1., anchor), xycoords=('axes fraction', 'data'),
+                xytext=(7, 0), textcoords='offset points', fontsize=8.2, color=anchor_color, va='center')
 
             # Both panels use untouched marginal bootstrap bounds. Include MAP
             # values in limits even when percentile intervals exclude them.
@@ -283,6 +294,8 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
             detail.set_xticks(_ticks(recent_start, latest, 4))
             rbottom = min(*rlo, *ry); rtop = max(*rhi, *ry); rspan = max(20., rtop - rbottom)
             detail.set_ylim(rbottom - rspan * .12, rtop + rspan * .16)
+            if baseline != IL and detail.get_ylim()[0] <= anchor <= detail.get_ylim()[1]:
+                detail.axhline(anchor, color=anchor_color, linewidth=.9, linestyle=anchor_style, zorder=2)
             curve(detail, rx, ry, rlo, rhi, 'recent', 23)
             _endpoint_label(detail, latest, score, dark)
             if len(recent) == 1:
@@ -290,8 +303,11 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                             va='top', fontsize=8.2, color=muted)
             handles = [Line2D([], [], color=blue, marker='o', markerfacecolor='white', linewidth=1.8,
                               markersize=4, label='Adjacent averages (full history)' if averaged else 'Exact checkpoint rating'),
-                       Patch(facecolor=blue, alpha=.12, edgecolor='none', label='Original pointwise 95% intervals'),
-                       Line2D([], [], color=amber, linewidth=1., linestyle=(0, (5, 4)), label='v4 reference · no search')]
+                       Patch(facecolor=blue, alpha=.12, edgecolor='none', label='Original pointwise 95% intervals')]
+            if v4_reference:
+                handles.append(Line2D([], [], color=amber, linewidth=1., linestyle=(0, (5, 4)), label='v4 reference · no search'))
+            else:
+                handles.append(Line2D([], [], color=anchor_color, linewidth=.9, linestyle=anchor_style, label=f'{baseline_label} baseline'))
             fig.legend(handles=handles, loc='center left', bbox_to_anchor=(.066, .095), ncol=3,
                        frameon=False, fontsize=8.4, handlelength=2.2, columnspacing=2.4, labelcolor=muted)
             text(.055, .055, ('Full history: adjacent checkpoints averaged; first/latest exact. Recent panel: exact checkpoints on a separate y-axis.'
@@ -307,7 +323,8 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                     f'Unmodified pointwise 95% setup-bootstrap intervals. Latest {score:.3f}, interval [{low:.3f}, {high:.3f}]. '
                     + (f'Paired change versus generation {previous[0]}: {change["delta"]:.3f}, '
                        f'95% interval [{change["low"]:.3f}, {change["high"]:.3f}]. ' if change else 'Paired change unavailable. ')
-                    + '; '.join(coverage) + '. IL anchor 0; v4 reference ' + f'{v4:.3f}.')
+                    + '; '.join(coverage) + f'. {baseline_label} anchor 0.'
+                    + (f' v4 reference {v4:.3f}.' if v4_reference else ''))
             fig.savefig(output, format='svg', facecolor=paper, metadata=metadata)
             output = Path(output)
             output.write_text('\n'.join(line.rstrip() for line in output.read_text(encoding='utf-8').splitlines()) + '\n',

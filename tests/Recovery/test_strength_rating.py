@@ -13,7 +13,7 @@ import torch
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
 from brass_ai.step5.league import seeds_for
-from brass_ai.recovery import ratings as r,plackett_luce as pl
+from brass_ai.recovery import rating_coverage as coverage,ratings as r,plackett_luce as pl
 from brass_ai.recovery.quality_config import RATING
 
 
@@ -87,6 +87,27 @@ class PlackettLuce(unittest.TestCase):
                 self.assertEqual(len(set(weights[i] for i,g in enumerate(ordered_games) if g['setup_id']==setup)),1)
             self.assertEqual(float(weights.sum()),24.)
 
+    def test_g1290_is_zero_in_every_paired_bootstrap_draw(self):
+        agents=[coverage.SEED if a==AGENTS[2] else a for a in AGENTS]
+        games=[dict(g,agents=[coverage.SEED if a==AGENTS[2] else a for a in g['agents']])
+            for g in simulated(setups=12)]
+        config=dict(RATING,bootstrap=8)
+        legacy,raw=pl.estimate(games,agents,config)
+        report,samples=pl.estimate(games,agents,config,baseline=coverage.SEED)
+        names=list(report['ratings'])
+        seed=names.index(coverage.SEED)
+        self.assertEqual(report['baseline'],coverage.SEED)
+        self.assertEqual(report['ratings'][coverage.SEED]['points_ci95'],[0.,0.])
+        self.assertEqual(report['ratings'][coverage.SEED]['points'],0.)
+        self.assertEqual(report['ratings'][coverage.SEED]['probability_above_baseline'],.5)
+        self.assertNotEqual(report['ratings'][pl.IL]['points'],0.)
+        np.testing.assert_array_equal(samples,raw-raw[:,seed,None])
+        for i,name in enumerate(names):
+            self.assertAlmostEqual(report['ratings'][name]['points'],
+                legacy['ratings'][name]['points']-legacy['ratings'][coverage.SEED]['points'])
+            np.testing.assert_allclose(report['ratings'][name]['points_ci95'],
+                np.quantile(samples[:,i],[.025,.975])*config['elo_scale'])
+
 
 class Slots(unittest.TestCase):
     def test_frozen_reference_keeps_bank_admission_distinct_from_game_purpose(self):
@@ -126,6 +147,34 @@ class Slots(unittest.TestCase):
                 self.assertEqual(job['provenance']['purpose'],'evaluation')
                 for policy in job['policies']:
                     if policy['kind']=='model':self.assertEqual(policy['exploration'],0);self.assertEqual(policy['focus'],'neutral')
+
+    def test_g1290_replaces_each_il_and_v4_seat_in_the_competitive_slot(self):
+        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
+            root=Path(tmp);state=self.state(root,dict(RATING));rating=state['ratings']
+            rating['coverage']=dict(activated=True)
+            rating['panel_gates']=dict(retired={'il-panel':True,'v4-panel':True})
+            rating['agents'][coverage.SEED]=dict(kind='model',checkpoint=dict(generation=0,model_id='original-g1290'))
+            scores={coverage.SEED:dict(theta=2.3)}
+            for g in [*range(10,90,10),1290]:
+                name=f'generation-{g:06d}'
+                rating['agents'][name]=dict(kind='model',checkpoint=dict(generation=g,model_id=f'ladder-{g}'))
+                scores[name]=dict(theta=3.+g/1000)
+            path=root/'previous.json';path.write_text(json.dumps(dict(ratings=scores)),encoding='utf-8')
+            rating['latest_report']=r.receipt(root,path)
+            entry=dict(generation=1740,model_id='learner')
+            config=dict(rating=RATING,host='host',execution={},panel_gates={},rating_coverage=coverage.WITH_SEED)
+            old=r.slot_spec(root,root,rating,entry,config)
+            new=r.slot_spec(root,root,rating,entry,dict(config,rating_coverage=coverage.G1290_BASELINE))
+            self.assertEqual(len(new['lineups']),128)
+            self.assertEqual(new['baseline'],coverage.SEED)
+            self.assertEqual(new['coverage']['opponent_setup_appearances'][coverage.SEED],8)
+            self.assertEqual(new['coverage']['nearest'],old['coverage']['nearest'])
+            self.assertAlmostEqual(new['estimated_theta'],old['estimated_theta']-scores[coverage.SEED]['theta'])
+            self.assertEqual(new['lineups'],[dict(row,agents=[coverage.SEED if a in (pl.IL,pl.V4) else a
+                for a in row['agents']]) for row in old['lineups']])
+            jobs=r.jobs_for(new,root)
+            self.assertEqual(sum(p['model_id']=='original-g1290' for job in jobs for p in job['policies']),32)
+            self.assertTrue(all(p['kind']=='neural' and p['exploration']==0. for job in jobs for p in job['policies']))
 
     def test_official_ties_have_seeded_uniform_order_without_training_rng(self):
         row=dict(seed=42,seat=1,kind='rating',agents=AGENTS)
