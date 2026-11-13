@@ -831,6 +831,8 @@ class ExportTests(unittest.TestCase):
         curve=self.put(directory+'/progress.svg',b'<svg xmlns="http://www.w3.org/2000/svg"/>\n')
         vp_curve=self.put(directory+'/progress_vp.svg',b'<svg xmlns="http://www.w3.org/2000/svg"><title>Self-play learner VP</title></svg>\n')
         vp_history=self.put(self.run+'/ratings/vp-history.json',dict(format='selfplay-vp-history/1.0.0',iterations=[]))
+        teacher_curve=self.put(directory+'/progress_teacher_vp.svg',b'<svg xmlns="http://www.w3.org/2000/svg"><title>Teacher table VP</title></svg>\n')
+        teacher_history=self.put(self.run+'/ratings/teacher-vp-history.json',dict(format='teacher-vp-history/1.0.0',iterations=[]))
         self.put(directory+'/bootstrap.npz',b'large dense bootstrap array')
         self.put(directory+'/game-000001.jsonl.gz',b'full replay')
         self.put(self.run+'/opponent-pool/probes/member.npz',b'large probability cache')
@@ -840,7 +842,7 @@ class ExportTests(unittest.TestCase):
         self.state['quality_pool']=dict(members=[dict(q=-.2,p=.4)],max_members=24)
         self.put(self.run+'/state.json',self.state)
         output,manifest=self.export()
-        for path in [*paths.values(),curve,vp_curve,vp_history]:
+        for path in [*paths.values(),curve,vp_curve,vp_history,teacher_curve,teacher_history]:
             self.assertEqual((output/path.relative_to(self.root/self.run)).read_bytes(),path.read_bytes())
         self.assertFalse(any(p.suffix in ('.npz','.pt') for p in output.rglob('*')))
         self.assertEqual([p.relative_to(output).as_posix() for p in output.rglob('*.gz')],
@@ -854,11 +856,15 @@ class ExportTests(unittest.TestCase):
         for generation in (50,60,70):
             self.put(f'{self.run}/ratings/slots/generation-{generation:06d}/progress_vp.svg',
                      f'<svg xmlns="http://www.w3.org/2000/svg"><title>g{generation}</title></svg>\n'.encode())
+            self.put(f'{self.run}/ratings/slots/generation-{generation:06d}/progress_teacher_vp.svg',
+                     f'<svg xmlns="http://www.w3.org/2000/svg"><title>Teacher VP g{generation}</title></svg>\n'.encode())
         history=self.put(self.run+'/ratings/vp-history.json',dict(committed_generation=60,iterations=[]))
         self.put(self.run+'/state.json',self.state)
         first,_=self.export(output='results/vp-first')
-        names=['ratings/slots/generation-000060/progress_vp.svg','ratings/vp-history.json']
+        names=['ratings/slots/generation-000060/progress_vp.svg','ratings/vp-history.json',
+               'ratings/slots/generation-000060/progress_teacher_vp.svg']
         self.assertEqual([p.relative_to(first).as_posix() for p in first.rglob('progress_vp.svg')],names[:1])
+        self.assertEqual([p.relative_to(first).as_posix() for p in first.rglob('progress_teacher_vp.svg')],names[2:])
         continued,manifest=self.export(output='results/vp-continued',continue_export=True)
         for name in names:
             self.assertFalse((continued/name).exists())

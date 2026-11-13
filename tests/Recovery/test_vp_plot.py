@@ -61,6 +61,74 @@ class VPProgress(unittest.TestCase):
         self.assertEqual(len(history['iterations']), 23)
         self.assertEqual(len(vp_plot.groups(history, 19)), 1)
 
+    def test_teacher_progress_uses_raw_vp_and_only_reconstructs_uncapped_history(self):
+        from brass_ai.recovery import teacher_vp as T
+
+        self.state['teacher_phase'] = {'mode': 'on'}
+        self.write('state.json', self.state)
+        recent = summary(22)
+        recent['teacher_phase'] = {'collection': {'vp': T.summarize([('train', True, [185, 100, 0, 15])])}}
+        recent['search_value'] = {'vp_payments_per_table': {
+            'teacher/low': {'contract': 'canal-and-final-delta/1.0.0', 'total': [.01, .02, .03, .04]},
+            'teacher/capped': {'contract': 'canal-and-final-delta/1.0.0', 'total': [.01, .02, .03, .18]}}}
+        self.write('iteration-0022/report.json', recent)
+        for i, job in ((20, 'low'), (21, 'capped')):
+            earlier = summary(i)
+            earlier['actor'] = {'reward_spec': {'vp': .001, 'vp_cap': 180}}
+            earlier['teacher_phase'] = {'collection': dict(tables={'train': 1},
+                post_admission_per_table_seconds={job: .1}, collection_metrics=[{}])}
+            self.write(f'iteration-{i:04d}/report.json', earlier)
+        pending = dict(recent, iteration=23)
+        self.write('iteration-0023/report.json', pending)
+        vp_plot.companion(self.run/'progress.svg', 23, run=self.run, persist=True)
+        scores = json.loads((self.run/T.HISTORY_PATH).read_text())['iterations']
+        self.assertEqual([row['generation'] for row in scores], [21, 23])
+        self.assertEqual(scores[0]['scores'][T.STANDARD]['mean_vp'], 25.)
+        self.assertEqual(scores[1]['scores'][T.COTTON]['mean_vp'], 75.)
+        root = ET.parse(self.run/T.CHART).getroot()
+        self.assertTrue({node.attrib.get('id') for node in root.iter()} >=
+                        {f'teacher-vp-{panel}{group.replace("_", "-")}' for panel in ('', 'recent-') for group in T.GROUPS})
+
+    def test_teacher_curves_use_all_values_with_bounded_markers(self):
+        from brass_ai.recovery import teacher_vp as T
+
+        scores = T.summarize([('train', True, [11]*4), ('heldout', False, [33]*4)])
+        history = dict(committed_generation=300, iterations=[dict(generation=g, scores=scores) for g in (1, 100, 101, 150, 300)])
+        seen = {}
+        plot = Axes.plot
+        def record(axes, x, y, *args, **kwargs):
+            if kwargs.get('label') == 'All tables':seen[axes] = (list(x), list(y), kwargs['markevery'])
+            return plot(axes, x, y, *args, **kwargs)
+        with patch.object(Axes, 'plot', record):
+            T.render(history, self.run/T.CHART)
+        left, right = seen.values()
+        self.assertEqual(left, ([0, 1, 2, 3, 4], [22.]*5, [0, 1, 2, 3, 4]))
+        self.assertEqual(right[0], list(range(101, 301)))
+        self.assertEqual([g for g, vp in zip(*right[:2], strict=True) if not math.isnan(vp)], [101, 150, 300])
+        self.assertEqual([right[0][i] for i in right[2]], [101, 150, 300])
+
+        history['iterations'] = [dict(generation=g, scores=scores) for g in range(1, 301)]
+        seen.clear()
+        with patch.object(Axes, 'plot', record):
+            T.render(history, self.run/T.CHART)
+        left, right = seen.values()
+        self.assertEqual((len(left[0]),len(left[2])), (300,40))
+        self.assertEqual((len(right[0]),len(right[2])), (200,30))
+        self.assertEqual((left[2][0],left[2][-1]), (0,299))
+        self.assertEqual((right[2][0],right[2][-1]), (0,199))
+        self.assertEqual((right[0][0], right[0][-1]), (101, 300))
+
+    def test_teacher_moving_average_pools_seats_across_the_last_ten_generations(self):
+        from brass_ai.recovery import teacher_vp as T
+
+        first = T.summarize([('train', True, [200]*4)])
+        next_ = T.summarize([('train', True, [100]*4)]*2 + [('heldout', False, [40]*4)])
+        means = T.moving_averages({1: first, 10: next_, 11: next_})
+        self.assertTrue(math.isnan(means[1][T.STANDARD]))
+        self.assertAlmostEqual(means[10][T.COTTON], 400/3)
+        self.assertEqual(means[11][T.COTTON], 100.)
+        self.assertEqual(means[11]['all'], 80.)
+
     def test_full_compact_recent_and_gzip_deduplicate_and_exclude_pending(self):
         self.state['iteration'] = 10
         self.state['recent_training'] = [summary(9)]

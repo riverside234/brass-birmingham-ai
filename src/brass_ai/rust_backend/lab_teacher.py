@@ -113,7 +113,7 @@ class Worker:
         while view:
             n = self.process.stdin.write(view);require(n,'Teacher input closed');view = view[n:]
 
-    def collect(self, expected, core_source, *, calibration=False, verifier=None, turn_probe=False):
+    def collect(self, expected, core_source, *, calibration=False, verifier=None, turn_probe=False, defer_logits=False):
         rows = []; values = []; hello = False; started = last = time.monotonic()
         meta = None; self.failure = None; verified_turns = 0
         try:
@@ -185,7 +185,8 @@ class Worker:
                     validate_receipt((meta['metrics'].get('cpu_inference') or {}).get('revision',{}).get('cotton'),
                                      getattr(self,'job',{}), rows)
                     # Batched model-logit parity of every labelled row, once, as the table ends.
-                    if revision is not None and getattr(verifier,'settle',None) is not None:verifier.settle(expected['job_id'])
+                    if not defer_logits and revision is not None and getattr(verifier,'settle',None) is not None:
+                        verifier.settle(expected['job_id'])
                     return dict(job_id=expected['job_id'],rows=rows,metrics=meta['metrics'],result=meta['result'],
                                 value_rows=values, final_spent=meta.get('final_spent'))
                 else:raise ValueError('Unknown teacher event')
@@ -237,6 +238,7 @@ class TeacherCollector:
         require(self.model is not None, 'Frozen independent model required for bounded turn verification')
         from .lab_teacher_finalization import TurnVerifier
         from .lab_cpu_runtime import count_search_limits
+        from brass_ai.recovery.collector_runtime import teacher_job_budget
         self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel,search_limits=count_search_limits(self.inference))
         c = self.calibration
         require(c['contract'] == CONTRACT and c['source'] == producer and c['core_source'] == self.core_source
@@ -253,12 +255,16 @@ class TeacherCollector:
         owned = [_CpuLane(self.cores[i] if i < len(self.cores) else None) for i in range(count)] if lease is None else [lease.acquire() for _ in range(count)]
         for e in owned:endpoints.put(e)
         failure_lock = threading.Lock(); first_failure = []; self.failures = []
-        unstarted = [len(jobs)]
+        unstarted = len(jobs)
+        defer_logits = (self.core_plan is not None and self.inference is not None and len(jobs) == count and
+                        self.inference['budget']['mode'] == 'count' and all(j.get('teacher_revision') for j in jobs))
+        calibration_id = digest(c)
         def one(job):
+            nonlocal unstarted
             endpoint = None; worker = None
-            with failure_lock:unstarted[0] -= 1
             try:
                 endpoint = endpoints.get(timeout=30)
+                with failure_lock:unstarted -= 1
                 from brass_ai.recovery.telemetry import Timings
                 timings=Timings()
                 with self.service.cpu.acquire(1,timings):
@@ -267,13 +273,26 @@ class TeacherCollector:
                     with Pipe(self.bootstrap,binary=False) as bootstrap:origin = bootstrap.call('init',seed=job['seed'])
                     mono_seconds = time.monotonic()-mono_began
                     request = dict(contract=CONTRACT,op='run',job=job,origin=origin,core_source=self.core_source,
-                                   estimate_ns=c['estimate_ns'],calibration_id=digest(c))
-                    if self.inference is not None:request['inference'] = self.inference
+                                   estimate_ns=c['estimate_ns'],calibration_id=calibration_id)
+                    if self.inference is not None:
+                        budget = self.inference['budget']
+                        table_budget = teacher_job_budget(budget, job)
+                        request['inference'] = (self.inference if table_budget is budget else
+                                                dict(self.inference, budget=table_budget))
                     client = Client(endpoint,job['expected'],self.cancel,job.get('search_value'),job.get('seat_values'))
                     worker = Worker(self.executable,request,client,self.cancel,cpu=getattr(endpoint,'cpu',None))
-                    result = worker.collect(job['expected'],self.core_source,verifier=self.verifier)
-                    if on_result is not None:
-                        result['metrics']['shadow_cache_seconds']=on_result(result,job)
+                    result = worker.collect(job['expected'],self.core_source,verifier=self.verifier,
+                                            **({'defer_logits': True} if defer_logits else {}))
+                # Search has released the CPU admission ticket and shut down the
+                # native process. GPU parity and gzip publication don't need its core.
+                with failure_lock:finished_queue = unstarted == 0
+                core = getattr(endpoint,'cpu',None)
+                if self.core_plan is not None and core is not None and finished_queue:
+                    self.core_plan.release(core)
+                if defer_logits:self.verifier.settle(job['expected']['job_id'])
+                require(not self.cancel.is_set(),'Teacher collection cancelled before publication')
+                if on_result is not None:
+                    result['metrics']['shadow_cache_seconds']=on_result(result,job)
                 result['metrics']['mono_bootstrap_seconds'] = mono_seconds
                 result['metrics']['python_gpu_wait_seconds'] = client.wait_seconds
                 result['metrics']['cpu_admission'] = timings.report()
@@ -283,19 +302,17 @@ class TeacherCollector:
                 # yields in job order, so a cancelled earlier lane can otherwise
                 # mask the actual failure of a later lane.
                 with failure_lock:
+                    primary = not first_failure
                     self.failures.append(dict(job_id=job['expected']['job_id'],split=job['split'],seed=job['seed'],
                         error=str(error),type=type(error).__name__,traceback=traceback.format_exc(),
-                        worker=getattr(worker,'failure',None),primary=not first_failure))
-                    if not first_failure:first_failure.append((error,error.__traceback__))
+                        worker=getattr(worker,'failure',None),primary=primary))
+                    if primary:first_failure.append((error,error.__traceback__))
                     self.cancel.set()
+                if primary and self.core_plan is not None:self.core_plan.fail(error)
                 raise
             finally:
                 if endpoint is not None:
                     endpoints.put(endpoint)
-                    # Hand this CPU to an ordinary lane once no table needs it again.
-                    core = getattr(endpoint,'cpu',None)
-                    if self.core_plan is not None and core is not None and unstarted[0] == 0:
-                        self.core_plan.release(core)
         try:
             try:
                 from .lab_families import _failure_scope

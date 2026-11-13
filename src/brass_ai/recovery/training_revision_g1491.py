@@ -42,6 +42,7 @@ RESTART = 'g1490-branch-restart'
 WIDE_RESTART = 'g1190-branch-restart-256-rows'
 SEARCH_REFRESH = 'g1190-search-head-refresh-96-rows'
 RETUNED_SEARCH = dict(full_k=8, c_scale=.15, fast_c_scale=.5)
+COTTON_SPLIT_SEARCH = dict(RETUNED_SEARCH, c_scale=.20, cotton_c_scale=.10)
 TEACHER_SEARCH_HEAD_WEIGHT = 'teacher_search_head_weight'
 RESTARTS = (RESTART, WIDE_RESTART, SEARCH_REFRESH)
 # Exact values of each reviewed variant; None is the in-run g1491 adoption.
@@ -97,15 +98,16 @@ def teacher_search_head_weight(config):
 
 
 def _mixed_tables(marker, weight):
-    from .teacher_cotton import settings
-    cotton = dict(settings(mixed=True), table_fraction=.5)
+    from .teacher_cotton import MIXED_25_CONTRACT, MIXED_CONTRACT, settings
+    contract = MIXED_25_CONTRACT if marker.get('count_search') == COTTON_SPLIT_SEARCH else MIXED_CONTRACT
+    cotton = dict(settings(contract=contract), table_fraction=.5)
     return dict(marker, exploration=dict(marker['exploration'], cotton=cotton), **{TEACHER_SEARCH_HEAD_WEIGHT: weight})
 
 
 def configure_teacher_games(config, weight):
     """Set the teacher-only blend and split cotton exploration within each partition."""
     require(type(weight) is int and weight in (0, 1), 'Teacher search-head weight must be 0 or 1')
-    require(variant_of(config) == SEARCH_REFRESH and count_search(config) == RETUNED_SEARCH,
+    require(variant_of(config) == SEARCH_REFRESH and count_search(config) in (RETUNED_SEARCH, COTTON_SPLIT_SEARCH),
             'Teacher game settings require the retuned g1190 recipe')
     phase = config['teacher_phase']
     result = dict(config, teacher_phase=dict(phase, **{KEY: _mixed_tables(phase[KEY], weight)}))
@@ -132,7 +134,9 @@ def validate(config):
     allowed = (block(), block(cotton=False)) if name is None else (block(variant=name),)
     if name == SEARCH_REFRESH:
         retuned = dict(allowed[0], count_search=RETUNED_SEARCH)
-        allowed += (retuned, _mixed_tables(retuned, 0), _mixed_tables(retuned, 1))
+        split = dict(retuned, count_search=COTTON_SPLIT_SEARCH)
+        allowed += (retuned, _mixed_tables(retuned, 0), _mixed_tables(retuned, 1),
+                    _mixed_tables(split, 0), _mixed_tables(split, 1))
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',
@@ -250,8 +254,7 @@ def _job_block(exploration, *, split='train', short_labels=True, search_head_wei
     if search_head_weight is not None:
         result[TEACHER_SEARCH_HEAD_WEIGHT] = search_head_weight
         if cotton_table:
-            from .teacher_cotton import settings
-            result['exploration']['cotton'] = settings(mixed=True)
+            result['exploration']['cotton'] = {k: v for k, v in exploration['cotton'].items() if k != 'table_fraction'}
     elif split=='train' and 'cotton' in exploration:
         result['exploration']['cotton'] = dict(exploration['cotton'])
     return result
@@ -276,11 +279,13 @@ def validate_job(job):
             not job.get('h2h') and not job.get('shadow_probe'), 'Unreviewed g1491 teacher job revision')
     if TEACHER_SEARCH_HEAD_WEIGHT in revision:
         from brass_ai.learning.search_value import binding
+        from .teacher_cotton import MIXED_CONTRACTS, settings as cotton_settings
         weight = revision[TEACHER_SEARCH_HEAD_WEIGHT]
         require(type(weight) is int and weight in (0, 1) and split in ('train', 'heldout') and
                 job.get('search_value') == binding(weight), 'Teacher job search-head weight differs')
-        allowed = (_job_block(EXPLORATION, short_labels=False, search_head_weight=weight),
-                   _job_block(EXPLORATION, short_labels=False, search_head_weight=weight, cotton_table=True))
+        allowed = (_job_block(EXPLORATION, short_labels=False, search_head_weight=weight), *(
+            _job_block(dict(EXPLORATION, cotton=cotton_settings(contract=contract)), short_labels=False,
+                       search_head_weight=weight, cotton_table=True) for contract in MIXED_CONTRACTS))
     else:
         allowed = (_job_block(EXPLORATION), _job_block(block()['exploration'],split=split),
                    _job_block(block(variant=RESTART)['exploration'],split=split,short_labels=False),

@@ -265,11 +265,12 @@ def _failure_scope(cancel,on_error):
 
 
 def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=None, model_cohorts=False,on_error=None,
-                     publication_workers=1,cached_records=None):
+                     publication_workers=1,cached_records=None,dispatch_limit=None):
     """Callbacks receive (job, continuation, submit_branch). Never wait on sibling.
 
     At most 2*lanes unfinished families. This bounds the ready checkpoint queue,
     completed sibling buffers, and publication queue independently of job count.
+    A live dispatch limit supplies available lanes and the lower cap for new parents.
     """
     require(type(lanes) is int and lanes>0,'Invalid ordinary lane count')
     require(type(publication_workers) is int and 1<=publication_workers<=min(24,lanes),
@@ -279,6 +280,7 @@ def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=No
     ready=ReadyWork([dict(jobs=[j]) for j in jobs],model_cohorts=model_cohorts)
     messages=queue.Queue(maxsize=2*lanes);active={};pending={};published={};futures={};writes={};forked=set();counts={'rust':0,'reference':0,'cached':0}
     reasons={};began=time.monotonic();peak=0
+    dispatch_peak=0; dispatch_pressure=0.
     if cached_records is None:
         for j in jobs:
             saved=store.load(j)
@@ -301,7 +303,9 @@ def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=No
         while len(published)<len(jobs):
             require(cancel is None or not cancel.is_set(),'Collection canceled')
             drain_branches()
-            while ready and len(futures)<lanes:
+            capacity, limit = (lanes, lanes) if dispatch_limit is None else dispatch_limit()
+            limited = dispatch_limit is not None and limit < capacity
+            while ready and len(futures)<(capacity if ready.branches else limit):
                 # New parents wait when family buffers are full. Ready siblings
                 # always run; no lane is held by a finished family member.
                 if not ready.branches and len(active)>=2*lanes:break
@@ -315,9 +319,18 @@ def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=No
                 else:backend='rust'
                 call=run_native if backend=='rust' else run_reference
                 futures[workers.submit(call,job,child,lambda p,i=index:submit(i,p))]=(index,role)
+            dispatch_peak = max(dispatch_peak, len(futures))
             peak=max(peak,len(active))
+            if not futures and not writes and ready and dispatch_limit is not None and not capacity:
+                # All eligible CPUs still have teacher work. No ordinary worker
+                # is started merely to wait for its first job.
+                if cancel is not None:cancel.wait(.05)
+                else:time.sleep(.05)
+                continue
             require(futures or writes,'Incomplete family without runnable work')
+            waiting_since = time.monotonic() if limited and ready and not ready.branches else None
             done,_=wait([*futures,*writes],timeout=.05,return_when=FIRST_COMPLETED)
+            if waiting_since is not None:dispatch_pressure += time.monotonic()-waiting_since
             # A parent's callback happens before its future completes. Drain it
             # before trusting the completed parent's branch_expected flag.
             drain_branches()
@@ -336,5 +349,8 @@ def collect_families(jobs, store, run_native, run_reference, *, lanes, cancel=No
                     writes[writer.submit(store.publish,by_id[index],parent,family.get('child'),cancel=cancel)]=index
                     pending.pop(index)
     require(not pending and not futures and not writes and messages.empty(),'Unfinished family state')
-    return [published[j['index']] for j in jobs],dict(counts=counts,reference_reasons=reasons,
+    report = dict(counts=counts,reference_reasons=reasons,
         wall_seconds=time.monotonic()-began,lanes=lanes,peak_unfinished_families=peak,limit=2*lanes)
+    if dispatch_limit is not None:
+        report['dispatch']=dict(peak_active_games=dispatch_peak, shared_pressure_seconds=dispatch_pressure)
+    return [published[j['index']] for j in jobs],report

@@ -389,6 +389,7 @@ class Buffer(unittest.TestCase):
         from brass_ai.recovery.teacher_buffer import TeacherBuffer
         buffer = TeacherBuffer.__new__(TeacherBuffer)
         buffer.identity, buffer.c_scale, buffer.iterations, buffer.retired = 'id', 1., 2, []
+        buffer.mixed_scales = None
         buffer.pending = [dict(profile_digest='id', generation=g, c_scale=1.) for g in (1489, 1490, 1491)]
         self.assertEqual([r['generation'] for r in buffer.window(1491)], [1490, 1491])
         self.assertEqual([r['generation'] for r in buffer.retired], [1489])

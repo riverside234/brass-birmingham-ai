@@ -66,7 +66,7 @@ def _merge(rows, row):
     rows[generation] = row
 
 
-def collect(run, *, state=None, history_sources=()):
+def collect(run, *, state=None, history_sources=(), on_report=None):
     """Read committed reports; optional older bundles must share the lineage.
 
     Iteration N's report belongs to committed generation N+1. The state counter
@@ -104,6 +104,8 @@ def collect(run, *, state=None, history_sources=()):
                 raise ValueError('Iteration identity differs in self-play VP history')
             if not 0 <= index < limit:
                 return
+            if on_report is not None:
+                on_report(report)
             totals = _totals(report)
             if totals is not None:
                 _merge(rows, dict(generation=index+1, **totals))
@@ -322,11 +324,25 @@ def companion(output, generation, *, run=None, state=None, persist=False, histor
               max_points=DEFAULT_MAX_POINTS):
     """Generate the sibling chart; standalone redraws only read source evidence."""
     output = Path(output).with_name('progress_vp.svg')
-    history = (collect(run, state=state, history_sources=history_sources) if run is not None else
-               dict(format=FORMAT, initial_checkpoint={}, committed_generation=generation, iterations=[]))
+    teacher = None
+    if run is not None:
+        state = _read(Path(run)/'state.json') if state is None else state
+        history_sources = tuple(history_sources)
+        if state.get('teacher_phase'):
+            from .teacher_vp import History
+            teacher = History(state, (*history_sources, run))
+        history = collect(run, state=state, history_sources=history_sources, on_report=teacher.add_report if teacher else None)
+    else:
+        history = dict(format=FORMAT, initial_checkpoint={}, committed_generation=generation, iterations=[])
     render(history, output, generation=generation, preview=preview, max_points=max_points)
     if persist:
         if run is None:
             raise ValueError('A training run is required to persist VP history')
         save_history(history, Path(run)/HISTORY_PATH)
+    if teacher is not None:
+        from .teacher_vp import CHART, HISTORY_PATH as TEACHER_HISTORY_PATH, render as render_teacher
+        teacher_history = teacher.build()
+        render_teacher(teacher_history, output.with_name(CHART), generation=generation)
+        if persist and teacher_history['iterations']:
+            save_history(teacher_history, Path(run)/TEACHER_HISTORY_PATH)
     return output

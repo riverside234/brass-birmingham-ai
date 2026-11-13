@@ -1,4 +1,4 @@
-"""Render progress.svg and progress_vp.svg, without refitting or training.
+"""Render progress.svg, progress_vp.svg, and progress_teacher_vp.svg when teacher VP is available.
 
 Example:
     python scripts/render-pl-progress.py --report results/.../ratings/slots/generation-000210/report.json
@@ -34,6 +34,8 @@ def main():
         history_sources=args.history_source,preview=args.preview,vp_preview=args.vp_preview,max_points=args.max_points)
     print(output)
     print(vp)
+    teacher_vp=output.with_name('progress_teacher_vp.svg')
+    if teacher_vp.is_file():print(teacher_vp)
 
 
 if __name__=='__main__':main()

@@ -174,8 +174,12 @@ class TurnVerifier:
             began = time.monotonic()
             if deferred:
                 with self._policy_lock():
+                    ready = time.monotonic()
                     self._check_model();check_logits(self.model,deferred)
-            record['settled'] = dict(rows=len(deferred),seconds=time.monotonic()-began) if deferred else {}
+                done = time.monotonic()
+                record['settled'] = dict(rows=len(deferred),seconds=done-began,
+                                         queue_seconds=ready-began,check_seconds=done-ready)
+            else:record['settled'] = {}
         return record['settled']
 
     def take(self, result, job, model):

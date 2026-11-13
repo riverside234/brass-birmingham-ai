@@ -10,6 +10,7 @@ import copy
 import gzip
 import hashlib
 import io
+from itertools import count
 import json
 import multiprocessing
 import os
@@ -358,28 +359,48 @@ def publisher_workers(jobs,capacity):
 
 
 class Lanes:
-    """Ordinary lanes free for work.
+    """Available workers and lazy starters for CPUs still held by teachers."""
+    def __init__(self,core_plan=None,stop=None):
+        self.core_plan=core_plan;self.stop=stop;self.queue=queue.PriorityQueue();self.parked={};self.parked_lanes=0
+        self.lock=threading.Lock();self.capacity=0
+        self.sequence=count()
 
-    A lane on a CPU that a teacher table still holds stays out of the queue, and
-    joins it the moment that table ends. Without teacher overlap every lane joins at once.
-    """
-    def __init__(self,core_plan=None):
-        self.core_plan=core_plan;self.queue=queue.Queue();self.parked={};self.parked_lanes=0
+    def active_lanes(self):
+        with self.lock:return self.capacity
 
-    def add(self,connection,core):
-        if self.core_plan is not None and core is not None and self.core_plan.holds(core):
-            self.parked[core]=connection;self.parked_lanes+=1
-        else:self.queue.put(connection)
+    def still_parked(self):
+        with self.lock:return sum(map(len,self.parked.values()))
+
+    def add(self,connection,core,*,start=None):
+        with self.lock:
+            if self.core_plan is not None and core is not None and self.core_plan.holds(core):
+                self.parked.setdefault(core, []).append((connection,start));self.parked_lanes+=1
+                return
+        if start is not None:start()
+        with self.lock:self.capacity+=1
+        self.put(connection)
 
     def release(self,core):
-        connection=self.parked.pop(core,None)
-        if connection is not None:self.queue.put(connection)
+        with self.lock:
+            lanes = self.parked.pop(core, ())
+            self.capacity += len(lanes)
+        for connection,start in lanes:
+            # The releasing teacher never spawns processes or waits for imports.
+            # Claim the start when the ordinary dispatcher has another job.
+            self.queue.put((start is not None,next(self.sequence),connection,start))
 
     def get(self):
-        # While a teacher table holds a CPU, a free lane can take a table's length to appear.
-        return self.queue.get(timeout=1800 if self.parked_lanes else 120)
+        deadline = time.monotonic() + (1800 if self.parked_lanes else 120)
+        while True:
+            require(self.stop is None or not self.stop.is_set(), 'Native pool canceled while waiting for a lane')
+            try:_,_,connection,start=self.queue.get(timeout=min(.1, max(0., deadline-time.monotonic())))
+            except queue.Empty:
+                if time.monotonic() >= deadline:raise TimeoutError('No ordinary worker became available')
+                continue
+            if start is not None:start()
+            return connection
 
-    def put(self,connection):self.queue.put(connection)
+    def put(self,connection):self.queue.put((False,next(self.sequence),connection,None))
 
 
 class NativePool:
@@ -453,13 +474,15 @@ class NativePool:
         # and fully validated by a publisher before it is returned or reused.
         probe=Publisher(directory,self.producer,self.config,self.scope)
         candidates=[j for j in jobs if Path(str(probe.path(j))+'.record.json').exists()]
-        core_plan=getattr(self,'core_plan',None);available=Lanes(core_plan);width=lanes=0
+        core_plan=getattr(self,'core_plan',None);available=Lanes(core_plan,self.stop);width=lanes=0
+        children=[]
         began=time.perf_counter();first=[];failure_lock=threading.Lock()
         def fail(error):
             with failure_lock:
                 if not first:first.append((error,error.__traceback__))
             self.stop.set();self.service.cpu.abort()
         try:
+            if core_plan is not None:core_plan.attach(available.release,fail)
             publishers=queue.Queue();publisher_count=publisher_workers(jobs,self.service.cpu.capacity)
             for _ in range(publisher_count):
                 writer,child=self.mp.Pipe();self.connections.append(writer)
@@ -469,12 +492,20 @@ class NativePool:
                 try:p.start()
                 finally:child.close()
                 publishers.put(writer)
-            for connection in self.connections:require(self.receive(connection).get('ready') is True,'Native startup failed')
+            progressive=self.cpu is not None
+            writers_ready=set()
+            if not progressive:
+                for connection in self.connections:
+                    require(self.receive(connection).get('ready') is True,'Native startup failed')
+                    writers_ready.add(connection)
             writer_startup=time.perf_counter()-began;callback_lock=threading.Lock();owner=self
             class Store:
                 def call(self,op,*args,validation=None):
                     writer=publishers.get(timeout=120)
                     try:
+                        if writer not in writers_ready:
+                            require(owner.receive(writer).get('ready') is True,'Native publisher startup failed')
+                            writers_ready.add(writer)
                         writer.send(dict(op=op,args=args,validation=validation));return owner.receive(writer)['result']
                     except BaseException as error:fail(error);raise
                     finally:publishers.put(writer)
@@ -506,8 +537,7 @@ class NativePool:
             actor_began=time.perf_counter();wall_began=time.time()
             # Lanes that evaluate in process start working as they become ready
             # and need no GPU reply channels. The GPU path keeps its original wait.
-            progressive=self.cpu is not None
-            lane_startup=[];process_start_seconds=channel_seconds=0.
+            lane_startup=[];start_seconds=channel_seconds=0.;actor_processes=0
             if missing:
                 # Start only missing parents, with all configured lanes for
                 # continuations. A cache-only restart needs no engine or NN IPC.
@@ -521,58 +551,77 @@ class NativePool:
                 cores=[]
                 if self.cpu is not None and self.cpu['pinning']=='one-lane-per-cpu':
                     from .lab_cpu_runtime import core_allocation
-                    cores=core_allocation(width)
-                began_processes=time.perf_counter()
+                    cores=core_allocation(width, held=core_plan.holds if core_plan is not None else None)
+                lane_sources=lane_build(self.build);actor_options=dict(config,**self.runtime)
+                def start_actor(pairs, core):
+                    nonlocal start_seconds,actor_processes
+                    with self.health_lock:
+                        started=time.perf_counter()
+                        require(not self.stop.is_set(), 'Native pool canceled before worker startup')
+                        extra=() if self.cpu is None else (self.cpu,core,time.time())
+                        process=self.mp.Process(target=_actors,args=([b for _,b in pairs],str(self.root),lane_sources,
+                            actor_options,self.mono,lease,self.service.cpu,self.stop,str(directory/'parts'),*extra))
+                        self.processes.append(process)
+                        try:process.start()
+                        finally:
+                            for _,child in pairs:child.close()
+                        actor_processes+=1
+                        start_seconds+=time.perf_counter()-started
                 for number in range(width):
                     pairs=[]
-                    try:
-                        for _ in range(lanes_per):
-                            a,b=self.mp.Pipe();pairs.append((a,b));self.connections.append(a)
-                        extra=() if self.cpu is None else (self.cpu,cores[number] if cores else None,time.time())
-                        p=self.mp.Process(target=_actors,args=([b for a,b in pairs],str(self.root),lane_build(self.build),dict(config,**self.runtime),
-                            self.mono,lease,self.service.cpu,self.stop,str(directory/'parts'),*extra))
-                        self.processes.append(p);p.start()
-                    finally:
-                        for a,b in pairs:b.close()
-                    for a,b in pairs:
-                        new_connections.append(a);available.add(a,cores[number] if cores else None)
-                process_start_seconds=time.perf_counter()-began_processes
+                    for _ in range(lanes_per):
+                        a,b=self.mp.Pipe();pairs.append((a,b));self.connections.append(a);children.append(b)
+                    core=cores[number] if cores else None
+                    if core_plan is not None and core is not None and lanes_per == 1:
+                        available.add(pairs[0][0],core,start=lambda pairs=pairs,core=core:start_actor(pairs,core))
+                    else:
+                        start_actor(pairs,core)
+                        for a,_ in pairs:available.add(a,core)
+                    new_connections.extend(a for a,_ in pairs)
                 if not progressive:
                     for connection in new_connections:
                         message=self.receive(connection)
                         require(message.get('ready') is True,'Native startup failed')
                         if message.get('startup'):lane_startup.append(message['startup'])
             actor_startup=time.perf_counter()-actor_began if missing and not progressive else 0.
-            if core_plan is not None:core_plan.attach(available.release,fail)
             def on_ready(message):
                 if message.get('startup'):lane_startup.append(message['startup'])
             def collect(job,continuation,submit):
-                connection=available.get()
+                connection=None
                 try:
+                    connection=available.get()
                     connection.send(dict(job=job,continuation=continuation,validation=validations[job['index']]))
                     return self.receive(connection,submit=submit,timeout=360,shared_allocate=self.shared.allocate,
                                         on_ready=on_ready if progressive else None)['result']
                 except BaseException as error:
                     fail(error);raise
-                finally:available.put(connection)
+                finally:
+                    if connection is not None:available.put(connection)
+            def dispatch_limit():
+                capacity=available.active_lanes()
+                return capacity,self.shared.dispatch_limit(capacity)
             records,report=collect_families(jobs,store,collect,collect,lanes=max(1,lanes),cancel=self.stop,
                 model_cohorts=config.get('model_cohorts',False),on_error=fail,
-                publication_workers=min(publisher_count,max(1,lanes)),cached_records=cached)
+                publication_workers=min(publisher_count,max(1,lanes)),cached_records=cached,
+                dispatch_limit=dispatch_limit if core_plan is not None else None)
             live_seconds=report['wall_seconds']
             if core_plan is not None:
                 core_plan.detach()
-                report['overlap']=dict(parked_lanes=available.parked_lanes,lanes_still_parked_at_end=len(available.parked),
-                    scope='Ordinary lanes on CPUs that teacher tables held when collection started')
-            breakdown=startup_breakdown(lane_startup,wall_began,width=width,lanes=lanes,barrier=not progressive,
-                process_start_seconds=process_start_seconds,channel_seconds=channel_seconds)
+                report['overlap']=dict(parked_lanes=available.parked_lanes,
+                    lanes_still_parked_at_end=available.still_parked(),
+                    ordinary_processes_started=actor_processes,ordinary_processes_avoided=width-actor_processes,
+                    scope='Ordinary workers on teacher CPUs start only when an ordinary job can use them')
+            breakdown=startup_breakdown(lane_startup,wall_began,width=actor_processes,lanes=lanes,barrier=not progressive,
+                process_start_seconds=start_seconds,channel_seconds=channel_seconds)
             if progressive and lane_startup:actor_startup=breakdown['last_lane_ready_seconds']
             if lane_startup:
                 mono=breakdown['phases']['mono_bootstrap_seconds']
-                print(f"Lane startup: {width} processes; first lane ready {breakdown['first_lane_ready_seconds']:.2f}s, "
+                print(f"Lane startup: {actor_processes} processes; first lane ready {breakdown['first_lane_ready_seconds']:.2f}s, "
                       f"last {breakdown['last_lane_ready_seconds']:.2f}s; Mono bootstrap p50 {mono['p50']:.3f}s, "
                       f"max {mono['max']:.3f}s",flush=True)
-            report.update(startup_seconds=writer_startup+actor_startup,processes=width,publisher_processes=publisher_count,
+            report.update(startup_seconds=writer_startup+actor_startup,processes=actor_processes,publisher_processes=publisher_count,
                 writer_startup_seconds=writer_startup,actor_startup_seconds=actor_startup,
+                waits_for_all_publishers=not progressive,
                 cache_recovery_seconds=recovery_seconds,cache_candidates=len(candidates),
                 live_collection_seconds=live_seconds,wall_seconds=time.perf_counter()-began,
                 lanes=lanes,limit=2*lanes,publication_workers=min(publisher_count,lanes),
@@ -610,7 +659,9 @@ class NativePool:
             if first:
                 error,tb=first[0];raise error.with_traceback(tb)
             raise
-        finally:self.close()
+        finally:
+            for child in children:child.close()
+            self.close()
 
     def close(self):
         began=time.perf_counter()

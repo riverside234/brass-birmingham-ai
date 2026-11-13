@@ -18,6 +18,17 @@ from brass_ai.rust_backend.lab_teacher_overlay import CONTRACT
 
 
 class Plan(unittest.TestCase):
+    def test_small_ordinary_batches_prefer_free_cpus(self):
+        from pathlib import Path
+        from brass_ai.rust_backend import lab_cpu_runtime as CPU
+
+        plan = CorePlan((0, 1))
+        with mock.patch.object(CPU.os, 'sched_getaffinity', return_value={0, 1, 2, 3}, create=True), \
+                mock.patch.object(Path, 'read_text', return_value='0'):
+            self.assertEqual(CPU.core_allocation(2, held=plan.holds), [2, 3])
+            plan.release(0)
+            self.assertEqual(CPU.core_allocation(2, held=plan.holds), [0, 2])
+
     def test_a_released_cpu_stops_being_held_and_reaches_a_later_listener(self):
         plan = CorePlan((3, 7))
         self.assertTrue(plan.holds(3))
@@ -82,6 +93,25 @@ class LaneQueue(unittest.TestCase):
             lanes = Lanes(plan)
             lanes.add('lane', core)
             self.assertEqual(lanes.get(), 'lane')
+
+    def test_a_teacher_release_defers_process_start_until_an_ordinary_job_claims_it(self):
+        plan = CorePlan((5,))
+        lanes = Lanes(plan)
+        start = mock.Mock()
+        lanes.add('lazy', 5, start=start)
+        plan.attach(lanes.release, lambda error: None)
+        self.assertEqual(lanes.capacity, 0)
+        plan.release(5)
+        self.assertEqual(lanes.capacity, 1)
+        start.assert_not_called()
+        lanes.add('already running', 6)
+        self.assertEqual(lanes.get(), 'already running')
+        start.assert_not_called()
+        connection = lanes.get()
+        self.assertEqual(connection, 'lazy')
+        lanes.put(connection)
+        self.assertEqual(lanes.get(), 'lazy')
+        start.assert_called_once()
 
 
 class Background(unittest.TestCase):
@@ -166,7 +196,8 @@ class Barrier(unittest.TestCase):
         write_json(self.run_path/'b01/inputs/fixtures.json',
                    dict(roots=[dict(view=dict(context=dict(phase='action')), expected=dict(choices=[1, 2], state={}))]))
         build = dict(binary=dict(path='fake'), core_source='qualified', bootstrap=dict(binary=dict(path='fake')))
-        plan = dict(binary='binary', inference=dict(budget=dict(R.TEACHER_BUDGET)), receipt={}, exported_bundles=0)
+        plan = dict(binary='binary', core_source='qualified', inference=dict(budget=dict(R.TEACHER_BUDGET)),
+                    receipt={}, exported_bundles=0)
         self.gate = threading.Event()
         self.created = []
         for patcher in (mock.patch.object(S, 'teacher_build', return_value=build),
@@ -243,11 +274,13 @@ class Barrier(unittest.TestCase):
 
 class Tables(unittest.TestCase):
     """The real TeacherCollector with its native worker replaced."""
-    def collect(self, count, lanes):
+    def collect(self, count, lanes, *, defer=False):
         producer = 'producer'
         search = dict(profile=1)
         jobs = [dict(expected=dict(job_id=str(i), model_id='m', export_hash='e', reward_id='r'), search=search, split='train', seed=i)
                 for i in range(count)]
+        if defer:
+            for job in jobs:job['teacher_revision'] = {'test': True}
         calibration = dict(contract=CONTRACT, source=producer, core_source='core', model_id='m', export_hash='e', reward_id='r',
                            device='cpu-ort', profile=digest(search), samples=[1], estimate_ns=1)
         plan = CorePlan((10, 11, 12)[:lanes])
@@ -257,7 +290,8 @@ class Tables(unittest.TestCase):
         class Worker:
             def __init__(self, executable, request, client, cancel, cpu=None):
                 self.job = request['job'];self.failure = None
-            def collect(self, expected, core, verifier=None):
+            def collect(self, expected, core, verifier=None, defer_logits=False):
+                assert defer_logits is defer
                 gates[self.job['expected']['job_id']].wait(10)
                 return dict(job_id=self.job['expected']['job_id'], rows=[], metrics={}, result={}, value_rows=[], final_spent=None)
         class Bootstrap:
@@ -272,16 +306,19 @@ class Tables(unittest.TestCase):
         service = SimpleNamespace(cpu=Admission(), device='cuda')
         collector = T.TeacherCollector('binary', 'core', ['bootstrap'], service, calibration, lanes=lanes, model=object(), history=[],
                                        inference=dict(budget=dict(mode='count', full=64, fast=24)), cores=(10, 11, 12)[:lanes], core_plan=plan)
+        settled = threading.Event()
+        def settle(_):settled.wait(10)
         # The worker threads outlive this method, so the fakes must stay installed.
         for patcher in (mock.patch.object(T, 'Worker', Worker), mock.patch.object(T, 'Pipe', Bootstrap),
                         mock.patch.object(T, '_validate_job', lambda job, source: None), mock.patch.object(T, 'source_fingerprint', lambda: producer),
                         mock.patch.object(T, 'Client', lambda *args: SimpleNamespace(wait_seconds=0.)),
-                        mock.patch('brass_ai.rust_backend.lab_teacher_finalization.TurnVerifier', lambda *args, **kwargs: object())):
+                        mock.patch('brass_ai.rust_backend.lab_teacher_finalization.TurnVerifier',
+                                   lambda *args, **kwargs: SimpleNamespace(settle=settle))):
             patcher.start();self.addCleanup(patcher.stop)
         result = []
         thread = threading.Thread(target=lambda: result.extend(collector.collect(jobs)))
         thread.start()
-        return thread, gates, released, result
+        return thread, gates, released, result, settled
 
     def wait_for(self, released, count):
         for _ in range(500):
@@ -291,7 +328,7 @@ class Tables(unittest.TestCase):
         self.fail(f'Only {len(released)} of {count} CPUs were released')
 
     def test_each_table_frees_its_cpu_as_soon_as_it_ends(self):
-        thread, gates, released, _ = self.collect(2, 2)
+        thread, gates, released, _, _ = self.collect(2, 2)
         gates['1'].set()
         self.wait_for(released, 1)
         self.assertEqual(len(released), 1)
@@ -300,7 +337,7 @@ class Tables(unittest.TestCase):
         self.assertEqual(sorted(released), [10, 11])
 
     def test_a_cpu_stays_held_while_another_table_still_needs_it(self):
-        thread, gates, released, result = self.collect(2, 1)
+        thread, gates, released, result, _ = self.collect(2, 1)
         gates['0'].set()
         threading.Event().wait(.2)
         self.assertEqual(released, [])
@@ -308,6 +345,19 @@ class Tables(unittest.TestCase):
         thread.join(10)
         self.assertEqual(released, [10])
         self.assertEqual(len(result), 2)
+
+    def test_search_cpu_is_available_while_the_table_waits_for_logit_parity(self):
+        thread, gates, released, result, settled = self.collect(1, 1, defer=True)
+        try:
+            gates['0'].set()
+            self.wait_for(released, 1)
+            self.assertEqual(released, [10])
+            self.assertTrue(thread.is_alive())
+            self.assertEqual(result, [])
+        finally:
+            settled.set()
+            thread.join(10)
+        self.assertEqual(len(result), 1)
 
 
 class CScale(unittest.TestCase):
@@ -386,6 +436,30 @@ class Labels(unittest.TestCase):
 
 
 class Window(unittest.TestCase):
+    def test_mixed_scale_shards_survive_reopen_and_aging(self):
+        import tempfile
+        from pathlib import Path
+        from brass_ai.recovery.teacher_buffer import TeacherBuffer
+        from brass_ai.recovery.teacher_labels import IDENTITY, LabelRow
+
+        with tempfile.TemporaryDirectory(dir=str(Path.cwd()/'artifacts')) as temp:
+            root = Path(temp)
+            run = root/'artifacts/step5/run'
+            run.mkdir(parents=True)
+            buffer = TeacherBuffer(root, run, 'mixed', c_scale=.2, cotton_c_scale=.1)
+            rows = []
+            for seat, scale in enumerate((.1, .2)):
+                label = dict.fromkeys(IDENTITY)
+                label.update(generation=9, model_id='m', reward_id='r', c2=scale,
+                             seat=seat, turn_key=[], revision=0, kind='root')
+                rows.append(LabelRow(dict(teacher=label), None))
+            receipt = buffer.publish(9, 'train', rows, model_id='m', reward_id='r')
+            self.assertEqual(receipt['c_scales'], [.1, .2])
+            reopened = TeacherBuffer(root, run, 'mixed', c_scale=.2, cotton_c_scale=.1, receipts=[receipt])
+            self.assertEqual(reopened.window(10), [receipt])
+            self.assertEqual(reopened.window(13), [])
+            self.assertEqual(reopened.retired, [receipt])
+
     def buffer(self, root, c_scale, receipts=()):
         from brass_ai.recovery.teacher_buffer import TeacherBuffer
         return TeacherBuffer(root, root/'artifacts/step5/run', 'identity', receipts=receipts, c_scale=c_scale)

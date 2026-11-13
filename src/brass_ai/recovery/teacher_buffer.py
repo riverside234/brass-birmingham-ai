@@ -17,11 +17,12 @@ OWNER = dict(contract=CONTRACT, purpose='policy-only search-v1 labels')
 
 
 class TeacherBuffer:
-    def __init__(self, root, run, identity, *, receipts=(), retired=(), c_scale=.1, iterations=4):
+    def __init__(self, root, run, identity, *, receipts=(), retired=(), c_scale=.1, cotton_c_scale=None, iterations=4):
         self.root, self.run = owned(root, run)
         self.directory = safe(self.run, self.run / 'teacher-labels')
         require(iterations in (2, 4), 'Invalid teacher buffer window')
         self.identity = identity; self.c_scale = c_scale; self.iterations = iterations
+        self.mixed_scales = None if cotton_c_scale is None else sorted({c_scale, cotton_c_scale})
         self.receipts = copy.deepcopy(list(receipts)); self.retired = copy.deepcopy(list(retired))
         self.pending = list(self.receipts); self._rows = {}
         require(len({r['path'] for r in self.receipts}) == len(self.receipts), 'Duplicate teacher shard receipt')
@@ -62,8 +63,12 @@ class TeacherBuffer:
             generation=generation, split=split, rows=len(rows), model_id=model_id, reward_id=reward_id,
             profile_digest=self.identity, sha256=hashlib.sha256(data).hexdigest())
         scales = {r.label['c2'] for r in rows}
-        require(len(scales) <= 1, 'Teacher shard mixes search constants')
-        if scales and scales != {.1}: receipt['c_scale'] = next(iter(scales))
+        if self.mixed_scales is not None:
+            require(scales.issubset(self.mixed_scales), 'Teacher shard uses an unconfigured search constant')
+            receipt['c_scales'] = self.mixed_scales
+        else:
+            require(len(scales) <= 1, 'Teacher shard mixes search constants')
+            if scales and scales != {.1}: receipt['c_scale'] = next(iter(scales))
         path, sidecar = self.paths(receipt)
         require(not path.exists() or sha(path) == receipt['sha256'], 'Uncommitted teacher shard differs; recover before recollection')
         require(not sidecar.exists() or read(sidecar) == receipt, 'Teacher receipt differs')
@@ -77,12 +82,18 @@ class TeacherBuffer:
         self.pending = [r for r in self.pending if r['path'] != receipt['path']] + [receipt]
         return receipt
 
+    def _matches_scale(self, receipt, generation):
+        if self.mixed_scales is not None:
+            return receipt.get('c_scales') == self.mixed_scales
+        return ('c_scales' not in receipt and
+                (receipt['generation'] == generation or receipt.get('c_scale', .1) == self.c_scale))
+
     def window(self, generation):
         # A changed c_scale is a different search target, so older labels retire
         # with it. The current generation stays: a crash may have sealed its tables.
         keep = [r for r in self.pending if r['profile_digest'] == self.identity
                 and 0 <= generation - r['generation'] < self.iterations
-                and (r['generation'] == generation or r.get('c_scale', .1) == self.c_scale)]
+                and self._matches_scale(r, generation)]
         removed = [r for r in self.pending if r not in keep]
         for r in removed:
             if r not in self.retired: self.retired.append(r)

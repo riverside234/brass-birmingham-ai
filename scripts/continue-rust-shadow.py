@@ -171,6 +171,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             if previous_weight is not None and previous_weight != weight:
                 stages.append(prefix.replace('-share',f'-cotton30-w{previous_weight}-share'))
             prefix=prefix.replace('-share',f'-cotton30-w{weight}-share');stages.append(prefix)
+        if profile is not None and 'cotton_c_scale' in profile:
+            prefix=prefix.replace('-teacher-k8-c015-cotton30-', '-teacher-k8-c020-cotton010-mix25-');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')

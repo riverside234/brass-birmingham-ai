@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 pub const CONTRACT: &str = "teacher-cotton-exploration/1.0.0";
 const DEVELOP_CONTRACT: &str = "teacher-cotton-exploration/2.0.0";
 const MIXED_CONTRACT: &str = "teacher-cotton-exploration/3.0.0";
+const MIXED_25_CONTRACT: &str = "teacher-cotton-exploration/4.0.0";
 pub const CAP: u8 = 3;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -22,6 +23,7 @@ pub enum Mode {
     Builds,
     Develop,
     Mixed,
+    Mixed25,
 }
 
 impl Mode {
@@ -34,13 +36,14 @@ impl Mode {
             Self::Builds => CONTRACT,
             Self::Develop => DEVELOP_CONTRACT,
             Self::Mixed => MIXED_CONTRACT,
+            Self::Mixed25 => MIXED_25_CONTRACT,
         }
     }
 
     fn rate(self) -> (u128, u128) {
         match self {
             Self::Builds => (1, 5),
-            Self::Develop => (1, 4),
+            Self::Develop | Self::Mixed25 => (1, 4),
             Self::Mixed => (3, 10),
         }
     }
@@ -48,13 +51,13 @@ impl Mode {
     fn probability(self) -> f64 {
         match self {
             Self::Builds => 0.2,
-            Self::Develop => 0.25,
+            Self::Develop | Self::Mixed25 => 0.25,
             Self::Mixed => 0.3,
         }
     }
 
     pub fn settings(self) -> Value {
-        let scope = if self == Self::Mixed { "train-and-heldout" } else { "train" };
+        let scope = if matches!(self, Self::Mixed | Self::Mixed25) { "train-and-heldout" } else { "train" };
         json!({"contract":self.contract(),"probability":self.probability(),"max_per_seat_era":CAP,
             "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":scope})
     }
@@ -537,10 +540,11 @@ mod tests {
     }
 
     #[test]
-    fn both_develop_mixtures_can_develop_twice_in_one_action() {
+    fn develop_mixtures_can_develop_twice_in_one_action() {
         for (mode, contract, triggers_expected, probability) in [
             (Mode::Develop, DEVELOP_CONTRACT, 2300..2700, 0.325),
             (Mode::Mixed, MIXED_CONTRACT, 2800..3200, 0.37),
+            (Mode::Mixed25, MIXED_25_CONTRACT, 2300..2700, 0.325),
         ] {
             let mut v = view();
             let mut choices = choices();

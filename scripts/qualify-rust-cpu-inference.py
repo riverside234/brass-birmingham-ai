@@ -96,20 +96,29 @@ def finish(checks, **fields):
 
 # ------------------------------------------------------------------ pure checks
 
-def search_summary(tables, budget):
+def search_summary(tables, budget, *, jobs=None):
     """Search quotas and scales observed for each profile."""
     from collections import Counter
-    from brass_ai.recovery.collector_runtime import teacher_c_scale
-    budgets = dict(full=(budget['full'], budget['full_k']), fast=(budget['fast'], budget['fast_k']))
+    from brass_ai.recovery.collector_runtime import teacher_c_scale, teacher_job_budget
+    from brass_ai.recovery.teacher_cotton import enabled
+    groups = [('full', 'full', tables, budget), ('fast', 'fast', tables, budget)]
+    if 'cotton_c_scale' in budget:
+        by_group = dict(standard=[], cotton=[])
+        for table, job in zip(tables, jobs, strict=True):
+            by_group['cotton' if enabled(job) else 'standard'].append((table, job))
+        groups = [('fast', 'fast', tables, budget)]
+        for group, pairs in by_group.items():
+            effective = teacher_job_budget(budget, pairs[0][1]) if pairs else budget
+            groups.append((f'full_{group}', 'full', [table for table, _ in pairs], effective))
     result = {}
-    for name, (quota, k) in budgets.items():
-        rows = [s for table in tables for s in table['metrics']['searches'] if s['frozen_n'] > 0 and s['profile'] == name]
-        result[name] = dict(searches=len(rows), expected_n=quota, requested_k=k,
+    for name, profile, selected, effective in groups:
+        rows = [s for table in selected for s in table['metrics']['searches'] if s['frozen_n'] > 0 and s['profile'] == profile]
+        result[name] = dict(searches=len(rows), expected_n=budget[profile], requested_k=budget[profile+'_k'],
             frozen_n=dict(Counter(str(s['frozen_n']) for s in rows)), effective_k=dict(Counter(str(s['effective_k']) for s in rows)),
             completed_all=sum(s['completed'] == s['frozen_n'] for s in rows), deadline_hits=sum(bool(s['deadline_hit']) for s in rows),
             elapsed_seconds=spread(s['elapsed_ns']/1e9 for s in rows))
         if 'fast_c_scale' in budget:
-            result[name].update(expected_c_scale=teacher_c_scale(budget, fast=name=='fast'),
+            result[name].update(expected_c_scale=teacher_c_scale(effective, fast=profile=='fast'),
                 c_scales=dict(Counter(str(s.get('c_scale')) for s in rows)))
     return result
 
@@ -625,7 +634,7 @@ def teacher(c):
             raise
         wall = time.perf_counter()-began
     budget = c.block['teacher_budget']
-    summary = search_summary(tables, budget)
+    summary = search_summary(tables, budget, jobs=jobs)
     check_searches(checks, summary)
     accepted = rejected = rows = 0
     labels_seen = 0
@@ -804,9 +813,11 @@ def overlap(c):
     expect(checks, 'all_tables_finished', len(done) == len(jobs), len(done))
     expect(checks, 'all_games_finished', len(played) == len(games), len(played))
     budget = c.block['teacher_budget']
-    scales = {name: R.teacher_c_scale(budget, fast=name=='fast') for name in ('full', 'fast')}
-    expect(checks, 'labels_use_c_scale', all(row['teacher']['c2'] == scales[row['teacher'].get('profile', 'full')]
-           for table in done for row in table['rows']), scales)
+    scales = [R.teacher_job_budget(budget, job) for job in jobs]
+    expect(checks, 'labels_use_c_scale', len(done) == len(scales) and all(
+           row['teacher']['c2'] == R.teacher_c_scale(effective, fast=row['teacher'].get('profile') == 'fast')
+           for table, effective in zip(done, scales) for row in table['rows']),
+           sorted({R.teacher_c_scale(effective) for effective in scales}))
     accepted = rejected = 0
     for table, job in zip(done, jobs, strict=True):
         good, bad = collector.verifier.take(table, job, c.model)

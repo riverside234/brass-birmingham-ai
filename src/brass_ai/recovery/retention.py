@@ -395,7 +395,8 @@ def plan(root,run,config=RETENTION,*,_digests=None):
         archived=archived_history(root,state.get('ratings',{}))
         for slot in archived['slots']:
             directory=archived_slot_directory(run,slot)
-            for name in ('spec.json','report.json','panels.json','progress.svg','progress_vp.svg','bootstrap.npz','games.jsonl','games-manifest.json','timing-report.json'):
+            for name in ('spec.json','report.json','panels.json','progress.svg','progress_vp.svg','progress_teacher_vp.svg',
+                         'bootstrap.npz','games.jsonl','games-manifest.json','timing-report.json'):
                 candidate(directory/name,'retired strength-rating slot')
             for p in directory.glob('*.jsonl.gz*'):candidate(p,'retired strength-rating replay or features')
         # Only the active content-addressed archive stays pinned. Abandoned

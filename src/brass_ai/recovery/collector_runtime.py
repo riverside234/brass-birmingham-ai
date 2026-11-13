@@ -16,7 +16,7 @@ RUNTIME_KEYS = frozenset(DEFAULTS) | frozenset(OPTIONAL)
 MODES = ('production_fast', 'strict', 'profile')
 CPU_CONTRACT = 'brass-lab-cpu-inference/1.0.0'
 DEFAULT_C_SCALE = .1
-C_SCALES = (DEFAULT_C_SCALE, .15, .5, 1.)
+C_SCALES = (DEFAULT_C_SCALE, .15, .2, .5, 1.)
 FULL_K = (8, 16)
 TEACHER_BUDGET = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=DEFAULT_C_SCALE)
 _current = None
@@ -35,14 +35,15 @@ _RECORDED_BLOCK = frozenset(cpu_block()) - {'overlap', 'readers'}
 
 def _valid_count_budget(budget):
     # Recorded configs omit K (before it was selectable) and c_scale (before it was).
-    if set(budget)-{'fast_c_scale'} not in ({'mode', 'full', 'fast'}, set(TEACHER_BUDGET)-{'c_scale'}, set(TEACHER_BUDGET)):
+    if set(budget)-{'fast_c_scale', 'cotton_c_scale'} not in (
+            {'mode', 'full', 'fast'}, set(TEACHER_BUDGET)-{'c_scale'}, set(TEACHER_BUDGET)):
         return False
     return (type(budget['full']) is int and 64 <= budget['full'] <= 4096 and
             type(budget['fast']) is int and 8 <= budget['fast'] <= 4096 and
             type(budget.get('full_k', 16)) is int and budget.get('full_k', 16) in FULL_K and
             budget.get('fast_k', 4) in (2, 4, 8, 16) and
             all(type(budget[k]) is float and budget[k] in C_SCALES
-                for k in ('c_scale', 'fast_c_scale') if k in budget))
+                for k in ('c_scale', 'fast_c_scale', 'cotton_c_scale') if k in budget))
 
 
 def validate_cpu(block):
@@ -67,7 +68,9 @@ def validate_teacher_budget(config, block):
         require(cpu.get('teacher') == 'cpu-ort' and budget.get('mode') == 'count' and
                 all(budget.get(k) == v for k, v in profile.items()),
                 'CPU count budget differs from the committed teacher search profile')
-    if teacher_c_scale(budget, fast=True) != teacher_c_scale(budget):
+    require(budget.get('cotton_c_scale') == (profile or {}).get('cotton_c_scale'),
+            'CPU cotton-table scale differs from the committed teacher search profile')
+    if 'cotton_c_scale' in budget or teacher_c_scale(budget, fast=True) != teacher_c_scale(budget):
         require(not applied(config) or not settings(config)['short_labels'],
                 'Distinct search scales require a long-only policy-label buffer')
 
@@ -130,6 +133,19 @@ def teacher_c_scale(budget=None, *, fast=False):
         budget = (native_inference() or {}).get('teacher_budget', {})
     scale = budget.get('c_scale', DEFAULT_C_SCALE)
     return budget.get('fast_c_scale', scale) if fast else scale
+
+
+def teacher_job_budget(budget, job):
+    """Resolve the long-search scale once using the frozen table assignment."""
+    if 'cotton_c_scale' not in budget:
+        return budget
+    from .teacher_cotton import enabled
+    resolved = dict(budget)
+    cotton_scale = resolved.pop('cotton_c_scale')
+    resolved['fast_c_scale'] = teacher_c_scale(budget, fast=True)
+    if enabled(job):
+        resolved['c_scale'] = cotton_scale
+    return resolved
 
 
 def overlap_collection():

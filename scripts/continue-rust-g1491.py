@@ -97,8 +97,11 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         help='Replace the g1190 search head with width 32 and re-measure beta with the teacher on')
     migrations.add_argument('--retune-teacher-search', action='store_true',
         help='Use long K=8 with C_scale=0.15 and short C_scale=0.5, re-measure beta with teaching on and refill the search buffers')
+    migrations.add_argument('--split-teacher-c-scale', action='store_true',
+        help='Use long C_scale=0.20 on standard tables and 0.10 on cotton tables with 25%% cotton exploration. '
+             'Refill the search buffers and re-measure beta with teaching on.')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
-        help='Use this weight in all retuned g1190 teacher games and enable the half-and-half 30%% cotton mix. '
+        help='Use this weight in all retuned g1190 teacher games and enable cotton exploration in half of each split. '
              'The setting persists across resumes.')
     if share_target_required:
         # No silent default: the target is the run's own, passed the same way every time.
@@ -113,7 +116,9 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
             f"The run is at g{generation}; pass --expected-generation {generation}")
     from brass_ai.recovery import training_revision_g1491 as g1491
     profile = g1491.count_search(state['signature']['config'])
-    if args.retune_teacher_search:
+    if args.split_teacher_c_scale:
+        profile = g1491.COTTON_SPLIT_SEARCH
+    elif args.retune_teacher_search and profile is None:
         profile = g1491.RETUNED_SEARCH
     args.teacher_count_search = profile
     if args.teacher_search_head_weight is not None:
@@ -130,9 +135,9 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         from brass_ai.recovery.search_head_refresh import prepare
         state=prepare(ROOT,run,expected_generation=generation,adaptive_beta=args.adaptive_teacher_beta)
     ensure_cpu(run,state)
-    if args.retune_teacher_search:
+    if args.retune_teacher_search or args.split_teacher_c_scale:
         from brass_ai.recovery.teacher_search_retune import prepare
-        state=prepare(ROOT,run,expected_generation=generation)
+        state=prepare(ROOT,run,expected_generation=generation,split_c_scale=args.split_teacher_c_scale)
     end = generation+args.iterations
     if not g1491.applied(state['signature']['config']) and interrupted(run, generation):
         # Its tables were collected under the current recipe and the earlier short-search

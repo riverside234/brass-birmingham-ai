@@ -8,6 +8,7 @@ import hashlib
 import json
 from multiprocessing import shared_memory
 import threading
+import time
 import uuid
 
 from brass_ai.learning.contracts import require
@@ -15,20 +16,25 @@ from brass_ai.learning.contracts import require
 FORMAT = 'brass-ordinary-shared-part/1'
 CHUNK = 16 * 1024**2
 LIMIT = 512 * 1024**2
-BUDGET = 1024 * 1024**2
+BUDGET = 6 * 1024**3
 
 
 class Registry:
     def __init__(self, cancel, *, budget=BUDGET):
         self.cancel, self.budget = cancel, budget
         self.condition = threading.Condition(); self.leases = {}; self.used = self.peak = 0
+        self.waiting = 0
 
     def allocate(self, size):
         require(type(size) is int and 0 < size <= min(self.budget, LIMIT), 'Shared part exceeds bound')
         with self.condition:
-            while self.used + size > self.budget:
-                require(not self.cancel.is_set(), 'Shared allocation canceled')
-                self.condition.wait(.05)
+            if self.used + size > self.budget:
+                self.waiting += 1
+                try:
+                    while self.used + size > self.budget:
+                        require(not self.cancel.is_set(), 'Shared allocation canceled')
+                        self.condition.wait(.05)
+                finally:self.waiting -= 1
             require(not self.cancel.is_set(), 'Shared allocation canceled')
             self.used += size; self.peak = max(self.peak, self.used)
         owners = []
@@ -42,7 +48,8 @@ class Registry:
         except BaseException:
             for s in owners:
                 s.close(); s.unlink()
-            with self.condition:self.used -= size; self.condition.notify_all()
+            with self.condition:
+                self.used -= size; self.condition.notify_all()
             raise
 
     def verify(self, handle):
@@ -62,7 +69,13 @@ class Registry:
             finally:
                 try:s.unlink()
                 except FileNotFoundError:pass
-        with self.condition:self.used -= expected['size']; self.condition.notify_all()
+        with self.condition:
+            self.used -= expected['size']; self.condition.notify_all()
+
+    def dispatch_limit(self, lanes):
+        """Pause new parents while completed games wait for handoff space."""
+        with self.condition:
+            return 0 if self.waiting else lanes
 
     def close(self):
         for handle, _ in list(self.leases.values()):self.release(handle)
@@ -81,7 +94,6 @@ class Export:
 def write(part, allocate, *, admit=None, cancel=None):
     """Actor writes only a parent-owned lease; control IPC carries no history."""
     import struct
-    import time
     began = time.perf_counter()
     require(isinstance(part, Export), 'Shared export requires native wire pages')
     pages = [dict(meta=meta, size=len(raw)) for meta, raw in part.records]
@@ -91,7 +103,8 @@ def write(part, allocate, *, admit=None, cancel=None):
     require(len(header) <= 4*1024**2, 'Shared export header exceeds bound')
     values = [struct.pack('<I', len(header)), header,
               *(raw for _, raw in part.records), *part.features]
-    size = sum(map(len, values)); handle = allocate(size)
+    size = sum(map(len, values))
+    queued=time.perf_counter(); handle = allocate(size); allocated=time.perf_counter()
     from contextlib import nullcontext
     sources = iter(values); source = memoryview(next(sources)); hashes = []; total = hashlib.sha256()
     # Capacity waits happen outside CPU admission, so a full buffer cannot
@@ -114,6 +127,7 @@ def write(part, allocate, *, admit=None, cancel=None):
     return dict(handle, sha256=total.hexdigest(), chunk_hashes=hashes,
                 branch_expected=part.metadata['branch_expected'],
                 transfer_timings=dict(shared_write_seconds=time.perf_counter()-began,
+                                      shared_allocate_wait_seconds=allocated-queued,
                                       shared_bytes=size, temporary_payload_write_bytes=0))
 
 

@@ -4,6 +4,7 @@ Teacher tables stay outside ordinary replay. Completed tables are sealed once
 for interrupted-update recovery; disk reloads take full row/value admission.
 """
 import gzip
+import hashlib
 import json
 from pathlib import Path
 import threading
@@ -105,7 +106,8 @@ class TableCache:
         with partial.open('wb') as stream:stream.write(data)
         partial.replace(path)
         spent=time.monotonic()-began
-        receipt=dict(job=digest(job),file=pin(path),post_seconds=spent)
+        receipt=dict(job=digest(job),file=dict(path=str(path.resolve()),bytes=len(data),sha256=hashlib.sha256(data).hexdigest()),
+                     post_seconds=spent)
         write_json(sidecar,receipt)
         elapsed=time.monotonic()-began
         return elapsed
@@ -186,32 +188,33 @@ class ShadowCollector:
                 build=self.build;bootstrap=[build['bootstrap']['binary']['path']]
                 import os
                 if os.name!='nt':bootstrap.insert(0,self.mono)
-                # Use the same typical/wide qualified roots as the B07 canary.
-                ordinary=checked_pin(state['native_backend']['build'])
-                from .lab_paths import runtime_path
-                fixtures=read(runtime_path(ordinary['b01']['path']).parent/'inputs/fixtures.json')
-                roots=[r for r in fixtures['roots'] if r['view']['context']['phase']=='action' and len(r['expected']['choices'])>1]
-                require(roots,'Missing qualified teacher calibration roots')
-                origins=[dict(state=r['expected']['state'],rail_keys=list(range(64))) for r in
-                    (roots[0],max(roots,key=lambda r:len(r['expected']['choices'])))]
                 from brass_ai.recovery.collector_runtime import native_inference
                 block=native_inference()
+                counted = block is not None and block['teacher']=='cpu-ort' and block['teacher_budget']['mode']=='count'
                 # Only the CPU teacher overlay implements short labels and visit-count sampling.
-                require(not any(j.get('teacher_revision') for j in missing) or
-                    (block is not None and block['teacher']=='cpu-ort' and block['teacher_budget']['mode']=='count'),
+                require(not any(j.get('teacher_revision') for j in missing) or counted,
                     'The g1491 teacher revision runs on the CPU teacher with fixed-count searches (--inference cpu)')
+                if not counted:
+                    # Only timed calibration uses the typical/wide B07 roots.
+                    ordinary=checked_pin(state['native_backend']['build'])
+                    from .lab_paths import runtime_path
+                    fixtures=read(runtime_path(ordinary['b01']['path']).parent/'inputs/fixtures.json')
+                    roots=[r for r in fixtures['roots'] if r['view']['context']['phase']=='action' and len(r['expected']['choices'])>1]
+                    require(roots,'Missing qualified teacher calibration roots')
+                    origins=[dict(state=r['expected']['state'],rail_keys=list(range(64))) for r in
+                        (roots[0],max(roots,key=lambda r:len(r['expected']['choices'])))]
                 if block is not None and block['teacher']=='cpu-ort':
                     from .lab_cpu_runtime import teacher_plan,core_allocation
                     from .lab_teacher import calibrate_cpu,count_calibration
                     lanes=min(len(missing),service.cpu.capacity,block['workers'])
                     plan=teacher_plan(self.root,build,service,missing,block)
                     cores=core_allocation(lanes) if block['pinning']=='one-lane-per-cpu' else []
-                    calibration=(count_calibration(plan['core_source'],missing[0]) if block['teacher_budget']['mode']=='count' else
+                    calibration=(count_calibration(plan['core_source'],missing[0]) if counted else
                         calibrate_cpu(plan['binary'],plan['core_source'],origins,missing[0],plan['inference'],cores))
                     write_json(directory/'teacher-shadow/calibration.json',calibration)
                     from .lab_cpu_runtime import CorePlan
                     # Timed searches read a clock, so only fixed-count tables may share CPUs.
-                    overlap=overlap and block['teacher_budget']['mode']=='count'
+                    overlap=overlap and counted
                     if overlap:core_plan=CorePlan(cores)
                     collector=TeacherCollector(plan['binary'],plan['core_source'],bootstrap,service,calibration,
                         lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores,core_plan=core_plan)
@@ -243,15 +246,20 @@ class ShadowCollector:
         cached.update({r['job_id']:r for r in live})
         results=[cached[j['expected']['job_id']] for j in jobs]
         from brass_ai.recovery.training_revision_g1491 import count_search
-        from brass_ai.recovery.collector_runtime import teacher_c_scale
+        from brass_ai.recovery.collector_runtime import teacher_c_scale, teacher_job_budget
         profile=count_search(state['signature']['config'])
         if profile is not None:
-            for result in results:
+            for job, result in zip(jobs, results, strict=True):
                 budget=(result['metrics'].get('cpu_inference') or {}).get('budget',{})
-                require(budget.get('mode')=='count' and all(budget.get(k)==v for k,v in profile.items()) and
-                        all(row['teacher']['c2']==profile['c_scale'] and
-                            row['teacher']['requested_k']==profile['full_k'] for row in result['rows']),
+                expected = teacher_job_budget(profile, job)
+                require(budget.get('mode')=='count' and all(budget.get(k)==v for k,v in expected.items()) and
+                        all(row['teacher']['c2']==expected['c_scale'] and
+                            row['teacher']['requested_k']==expected['full_k'] for row in result['rows']),
                         'Teacher table used another long-search K or c_scale')
+                if 'cotton_c_scale' in profile:
+                    require(all(search.get('c_scale') == teacher_c_scale(expected, fast=search['profile']=='fast')
+                                for search in result['metrics']['searches'] if search['frozen_n'] > 0),
+                            'Teacher search used another long- or short-search c_scale')
         elif getattr(collector,'inference',None) is not None:
             require(all(row['teacher']['c2']==teacher_c_scale(fast=row['teacher'].get('profile')=='fast')
                         for r in live for row in r['rows']),'Teacher tables used another c_scale')
@@ -275,6 +283,11 @@ class ShadowCollector:
                   f"network actions={totals['network_actions']}, cotton builds/develops="
                   f"{totals['cotton_builds']}/{totals['cotton_develops']}, pottery builds/develops="
                   f"{totals['pottery_builds']}/{totals['pottery_develops']}", flush=True)
+        if vp := phase.metrics.get('vp'):
+            fields = (('all', 'all'), ('cotton_exploration', 'cotton'), ('standard_exploration', 'standard'))
+            print('Teacher mean final VP per seat: ' + ', '.join(
+                f"{name} {vp[key]['mean_vp']:.2f} ({vp[key]['tables']} tables)"
+                for key, name in fields if vp[key]['tables']), flush=True)
         mono=sorted(r['metrics']['mono_bootstrap_seconds'] for r in live if 'mono_bootstrap_seconds' in r['metrics'])
         if mono:
             phase.metrics['mono_bootstrap_seconds']=dict(tables=len(mono),min=mono[0],p50=mono[len(mono)//2],max=mono[-1],total=sum(mono))

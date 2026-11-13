@@ -426,7 +426,7 @@ fn budget_k(value: &Value, name: &str, default: usize) -> Result<usize> {
 fn budget_c_scale(value: &Value) -> Result<f64> {
     let c_scale = value.as_f64().ok_or("invalid teacher c_scale")?;
     check(
-        [DEFAULT_C_SCALE, 0.15, 0.5, 1.0].contains(&c_scale),
+        [DEFAULT_C_SCALE, 0.15, 0.20, 0.5, 1.0].contains(&c_scale),
         "teacher c_scale outside its bounds",
     )?;
     Ok(c_scale)
@@ -602,7 +602,8 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
     }
     let cotton = match e.get("cotton") {
         None => None,
-        Some(settings) if weight.is_some() && settings == &CottonMode::Mixed.settings() => Some(CottonMode::Mixed),
+        Some(settings) if weight.is_some() => Some([CottonMode::Mixed, CottonMode::Mixed25]
+            .into_iter().find(|mode| settings == &mode.settings()).ok_or("unreviewed mixed cotton exploration")?),
         Some(settings) if weight.is_none() && ordinary_table && job["split"] == "train" => {
             if settings == &CottonMode::Builds.settings() {
                 Some(CottonMode::Builds)
@@ -1372,9 +1373,12 @@ mod tests {
         let mut value = json!({"mode":"count","full":640,"fast":96,"c_scale":0.15});
         assert_eq!(budget(&value).unwrap().c_scale(true), 0.15);
         value["fast_c_scale"] = json!(0.5);
-        let split = budget(&value).unwrap();
-        assert_eq!(split.c_scale(false), 0.15);
-        assert_eq!(split.c_scale(true), 0.5);
+        for scale in [0.10, 0.15, 0.20] {
+            value["c_scale"] = json!(scale);
+            let split = budget(&value).unwrap();
+            assert_eq!(split.c_scale(false), scale);
+            assert_eq!(split.c_scale(true), 0.5);
+        }
     }
 
     #[test]
@@ -1590,8 +1594,10 @@ mod tests {
         job["search_value"]["w"] = json!(0.0);
         job["teacher_revision"]["short_labels"] = json!(false);
         job["teacher_revision"][TEACHER_SEARCH_HEAD_WEIGHT] = json!(0);
-        job["teacher_revision"]["exploration"]["cotton"] = CottonMode::Mixed.settings();
-        assert_eq!(revision(&job).unwrap().unwrap().cotton, Some(CottonMode::Mixed));
+        for mode in [CottonMode::Mixed, CottonMode::Mixed25] {
+            job["teacher_revision"]["exploration"]["cotton"] = mode.settings();
+            assert_eq!(revision(&job).unwrap().unwrap().cotton, Some(mode));
+        }
         job["search_value"]["w"] = json!(1.0);
         assert!(revision(&job).is_err());
         job["teacher_revision"][TEACHER_SEARCH_HEAD_WEIGHT] = json!(1);

@@ -22,6 +22,7 @@ exports of the same run (same initial checkpoint) still hold, the exported
 ratings/vp-history.json and latest progress_vp.svg are rebuilt from both and
 marked as derived in the manifest. The run's own files are never edited.
 The latest VP chart is redrawn from valid cumulative VP history using the current renderer.
+Teacher VP history and progress_teacher_vp.svg are included when present.
 The default run is the current g1190 restart (artifacts/step5/joint7-v11-2-g1190-restart-3); pass --run for another.
 A branch-restart run reports the fresh-start seed recorded by its source run (checked by SHA-256), and its first --continue
 export copies everything because earlier exports belong to the source run.
@@ -680,6 +681,9 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
     vp_history=run/'ratings'/'vp-history.json'
     if vp_history.is_file():
         add(vp_history,vp_history.relative_to(run),'Cumulative ordinary self-play learner VP totals')
+    teacher_vp_history=run/'ratings'/'teacher-vp-history.json'
+    if teacher_vp_history.is_file():
+        add(teacher_vp_history,teacher_vp_history.relative_to(run),'Cumulative teacher VP totals by exploration group')
     for path in report_files(root, run / 'il-kl'):
         add(path, path.relative_to(run), 'Fixed IL-KL probe manifest or initial measurement')
     for path in report_files(root,run/'policy-anchor'):
@@ -736,7 +740,8 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
                 add(path, path.relative_to(run), 'Append-only held-out rating outcomes or separate panel results',
                     document='jsonl' if key == 'records' else 'json')
         for name,reason in (('progress.svg','Strength progress curve'),
-                            ('progress_vp.svg','Ten-iteration self-play learner VP curve')):
+                            ('progress_vp.svg','Ten-iteration self-play learner VP curve'),
+                            ('progress_teacher_vp.svg','Teacher VP by cotton exploration and overall')):
             curve = below(root, Path(slot['report']['path']).parent / name)
             if curve.exists():
                 add(curve, curve.relative_to(run), reason, document='svg')

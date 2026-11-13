@@ -11,7 +11,8 @@ from .teacher_buffer import TeacherBuffer
 from .teacher_labels import PHASES
 from .teacher_term import TeacherTerm, heldout_measure, summary
 from .search_value_schedule import validation_plan
-from .training_revision_g1491 import job_block, teacher_search_head_weight
+from .training_revision_g1491 import count_search, job_block, teacher_search_head_weight
+from .teacher_vp import summarize as summarize_vp
 
 KEY = 'teacher_phase'
 
@@ -161,8 +162,10 @@ class TeacherPhase:
                         for e in state['history']) for r in cache.get('receipts', ())),
                 'Teacher buffer model is not in committed run lineage')
         from .collector_runtime import teacher_c_scale
+        profile = count_search(config) or {}
         self.buffer = TeacherBuffer(root, run, buffer_identity(config), receipts=cache.get('receipts', ()),
-                                    retired=cache.get('retired', ()), c_scale=teacher_c_scale(),
+                                    retired=cache.get('retired', ()), c_scale=teacher_c_scale(profile or None),
+                                    cotton_c_scale=profile.get('cotton_c_scale'),
                                     iterations=self.options['buffer']['iterations'])
         self.weight = saved.get('weight', {}); self.term = None; self.jobs = []; self.heldout = []
         if cache and cache.get('identity') != self.buffer.identity:
@@ -253,6 +256,10 @@ class TeacherPhase:
         cotton=aggregate(table_metrics)
         if cotton is not None:self.metrics['cotton_exploration']=cotton
         if actions is not None:self.metrics['teacher_actions']=actions
+        if self.jobs and all(by_id[j['expected']['job_id']].get('result') for j in self.jobs):
+            from .teacher_cotton import enabled as cotton_enabled
+            self.metrics['vp'] = summarize_vp((job['split'], cotton_enabled(job),
+                [s['vp'] for s in by_id[job['expected']['job_id']]['result']['seats']]) for job in self.jobs)
         reached=self.metrics['reached_reserved_turns']
         self.metrics['root_label_yield']=self.metrics['root_labels']/reached if reached else None
         self.metrics['root_label_yield_pass']=bool(reached and self.metrics['root_label_yield']>=.95)

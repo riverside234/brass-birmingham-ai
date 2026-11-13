@@ -205,7 +205,7 @@ class SearchRefresh(unittest.TestCase):
         self.assertEqual(from_config(publish.call_args.args[1])['native_inference'], cpu_block())
         self.assertEqual(refresh.prepare(ROOT, run, expected_generation=generation), updated)
 
-    def test_retune_retires_only_teacher_data_and_resumes_a_after_refill(self):
+    def check_buffer_retune(self, *, split_c_scale):
         from brass_ai.recovery import teacher_search_retune as retune, training_revision_g1491 as g1491
         from brass_ai.recovery.collector_runtime import DEFAULTS, cpu_block, scope
         from brass_ai.recovery.resume import load_resume
@@ -216,11 +216,20 @@ class SearchRefresh(unittest.TestCase):
 
         run, _, before, _ = self.refreshed_checkpoint()
         generation = before['iteration']
+        if split_c_scale:
+            before = retune.prepare(ROOT, run, expected_generation=generation)
         entry = before['history'][-1]
         model, raw = load_checkpoint(ROOT/entry['path'])
         training = raw['training']
         search = training['search_value']
-        search['stage']['stage_a_iterations'] = 26
+        if split_c_scale:
+            mixed = g1491.configure_teacher_games(before['signature']['config'], 0)
+            before['signature'] = dict(before['signature'], config=mixed)
+            before['native_backend'] = dict(before['native_backend'], config_sha256=digest(mixed))
+            training.update(signature=digest(before['signature']), native_backend=before['native_backend'])
+            search['stage'].update(stage='C', w=1., scale=1., stage_a_iterations=100, stage_b_iterations=50)
+        else:
+            search['stage']['stage_a_iterations'] = 26
         reward_id = search['reward_id']
 
         def publish(buffer, g, split, games):
@@ -237,7 +246,8 @@ class SearchRefresh(unittest.TestCase):
         teacher = training['teacher_phase']
         labels = TeacherBuffer(ROOT, run, teacher['buffer']['identity'])
         label = dict.fromkeys(IDENTITY)
-        label.update(generation=generation-1, model_id=entry['model_id'], reward_id=reward_id, c2=.1,
+        label.update(generation=generation-1, model_id=entry['model_id'], reward_id=reward_id,
+                     c2=.15 if split_c_scale else .1,
                      seat=0, turn_key=[], revision=0, kind='root')
         labels.publish(generation-1, 'train', [LabelRow(dict(teacher=label), None)],
                        model_id=entry['model_id'], reward_id=reward_id)
@@ -249,21 +259,24 @@ class SearchRefresh(unittest.TestCase):
                       search_value=stamp(search))
         write_json(run/'state.json', before)
 
-        after = retune.prepare(ROOT, run, expected_generation=generation)
-        self.assertEqual(retune.prepare(ROOT, run, expected_generation=generation), after)
+        after = retune.prepare(ROOT, run, expected_generation=generation, split_c_scale=split_c_scale)
+        self.assertEqual(retune.prepare(ROOT, run, expected_generation=generation, split_c_scale=split_c_scale), after)
         self.assertEqual(after['history'][-1]['model_id'], entry['model_id'])
         self.assertEqual(sha(ROOT/entry['path']), entry['sha256'])
         config = after['signature']['config']
-        self.assertEqual(g1491.count_search(config), dict(full_k=8, c_scale=.15, fast_c_scale=.5))
+        expected_profile = dict(full_k=8, c_scale=.2, cotton_c_scale=.1, fast_c_scale=.5) if split_c_scale else dict(
+            full_k=8, c_scale=.15, fast_c_scale=.5)
+        self.assertEqual(g1491.count_search(config), expected_profile)
         self.assertEqual(config['teacher_phase']['search_value']['max_epochs'], 1)
         self.assertEqual(config['teacher_phase']['mode'], 'on')
         current, converted, _ = load_resume(ROOT, run, after, after['signature'])
         for key in ('optimizer', 'rng', 'cuda_rng'):
             self.assertTrue(_same_payload(raw[key], converted[key]), key)
+        self.assertTrue(_same_payload(raw['state_dict'], converted['state_dict']))
         self.assertTrue(_same_payload(training['actor_value_phases'], converted['training']['actor_value_phases']))
         self.assertTrue(_same_payload(search['companion'], converted['training']['search_value']['companion']))
 
-        block = cpu_block(teacher_budget=dict(cpu_block()['teacher_budget'], **g1491.RETUNED_SEARCH))
+        block = cpu_block(teacher_budget=dict(cpu_block()['teacher_budget'], **expected_profile))
         with scope(dict(DEFAULTS, native_inference=block)):
             phase = TeacherPhase(ROOT, run, config, after, current, converted)
         self.assertTrue(phase.ready)
@@ -275,6 +288,18 @@ class SearchRefresh(unittest.TestCase):
         self.assertEqual(schedule.validation_plan(config, after)['reason'], 'beta-remeasurement')
         jobs = phase.begin(after, current, export_hash=after['history'][-1]['sha256'], epoch=generation)
         self.assertEqual([sum(j['split']==s for j in jobs) for s in ('train', 'heldout')], [32, 4])
+        if split_c_scale:
+            from brass_ai.recovery.collector_runtime import teacher_job_budget
+            for split, tables in (('train', 16), ('heldout', 2)):
+                cotton_jobs = [j for j in jobs if j['split'] == split and cotton.enabled(j)]
+                self.assertEqual(len(cotton_jobs), tables)
+                self.assertTrue(all(cotton.job_settings(j)['probability'] == .25 for j in cotton_jobs))
+            for job in jobs:
+                g1491.validate_job(job)
+                budget = teacher_job_budget(block['teacher_budget'], job)
+                self.assertEqual(budget['c_scale'], .10 if cotton.enabled(job) else .20)
+                self.assertEqual(budget['fast_c_scale'], .5)
+                self.assertEqual(job['search_value']['w'], 0.)
         term.qualification_context = dict(tables=dict(train=32, heldout=4), labels_by_phase={
             p: 1 for p in ('canal_early', 'canal_late', 'rail_early', 'rail_late')})
         term.steps = [dict(raw_share=2., share=.178, actor_norm=1., raw_teacher_norm=2.)]
@@ -284,18 +309,31 @@ class SearchRefresh(unittest.TestCase):
         self.assertEqual(measured[beta.KEY]['updates'], 0)
 
         value = phase.search_value.phase
+        guarded = {} if split_c_scale else None
         with mock.patch('brass_ai.recovery.search_value_phase.predict_rows', return_value=([[0.]*4]*256, [[0.]*4]*256)), \
-             mock.patch.object(value.companion, 'head_only_heldout', return_value=dict(steps=1)) as fit:
+             mock.patch.object(value.companion, 'head_only_heldout', return_value=dict(steps=1)) as head_fit, \
+             mock.patch('brass_ai.recovery.search_value_training.unconditional_pass', return_value=dict(steps=1)) as joint_fit:
             for g in range(generation, generation+16):
                 publish(value.buffer, g, 'train', 1)
                 if (g+1)%5 == 0:
                     publish(value.buffer, g, 'heldout', 4)
-                result = value.after_ppg(g, mode='on')
-                self.assertEqual(result['stage']['stage_a_iterations'], 26 + int(g == generation+15))
+                result = value.after_ppg(g, mode='on', guarded=guarded)
+                if split_c_scale:
+                    self.assertEqual((result['stage']['stage'], result['stage']['w'], result['stage']['scale']), ('C', 1., 1.))
+                else:
+                    self.assertEqual(result['stage']['stage_a_iterations'], 26 + int(g == generation+15))
+            fit = joint_fit if split_c_scale else head_fit
             fit.assert_called_once()
             self.assertTrue(fit.call_args.kwargs['one_epoch'])
             self.assertEqual(result['stage']['buffer_rebuild']['ready_generation'], generation+7)
-            self.assertTrue(all(r['generation'] >= generation for pool in fit.call_args.args for r in pool))
+            pools = (fit.call_args.args[1], fit.call_args.kwargs['heldout']) if split_c_scale else fit.call_args.args
+            self.assertTrue(all(r['generation'] >= generation for pool in pools for r in pool))
+
+    def test_retune_retires_only_teacher_data_and_resumes_a_after_refill(self):
+        self.check_buffer_retune(split_c_scale=False)
+
+    def test_mixed_scale_retune_retires_both_buffers_and_refills_in_stage_c(self):
+        self.check_buffer_retune(split_c_scale=True)
 
     def test_one_epoch_fits_each_row_at_most_once_and_rolls_back_a_worse_holdout(self):
         from brass_ai.recovery.search_value_training import Companion
@@ -450,3 +488,35 @@ class SearchRefresh(unittest.TestCase):
             self.assertEqual(train.call_args.kwargs, dict(mode='on', expected=g, iterations=10, revise_stages=True))
             self.assertEqual(shared.inference_choice(train.call_args.args[0])['teacher_budget'],
                              dict(mode='count', full=640, full_k=8, fast=96, fast_k=8, c_scale=.15, fast_c_scale=.5))
+
+    def test_split_teacher_scales_resume_from_the_requested_boundary(self):
+        from brass_ai.recovery import teacher_search_retune as retune, training_revision_g1491 as revision
+        from test_utility_width import recipe
+
+        spec = importlib.util.spec_from_file_location('teacher_split_cli', ROOT/'scripts/continue-rust-g1491.py')
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        shared = script.shared()
+        config = recipe()
+        config = refresh.configure(dict(config, teacher_phase=dict(config['teacher_phase'], mode='on')), adaptive_beta=True)
+        config = revision.configure_teacher_games(retune.configure(config), 0)
+        after = retune.configure(config, split_c_scale=True)
+        for generation, current, flags in ((2020, config, ['--split-teacher-c-scale']), (2080, after, [])):
+            state = dict(iteration=generation, signature=dict(config=current))
+            migrated = dict(state, signature=dict(config=after))
+            argv = ['continue', '--expected-generation', str(generation), '--iterations', '60', '--share-target', '.30',
+                    '--skip-utility-qualification', '--teacher-search-head-weight', '0', *flags]
+            with mock.patch('sys.argv', argv), mock.patch.object(script, 'shared', return_value=shared), \
+                 mock.patch.object(script, 'state_of', return_value=state), mock.patch.object(script, 'ensure_cpu'), \
+                 mock.patch.object(retune, 'prepare', return_value=migrated) as migrate, \
+                 mock.patch.object(shared, 'continuation') as train:
+                script.main(teacher_fast=96, share_target_required=True)
+            if flags:
+                self.assertEqual(migrate.call_args.kwargs, dict(expected_generation=generation, split_c_scale=True))
+            else:
+                migrate.assert_not_called()
+            train.assert_called_once()
+            self.assertEqual(train.call_args.kwargs, dict(mode='on', expected=generation, iterations=60, revise_stages=True))
+            self.assertEqual(shared.inference_choice(train.call_args.args[0])['teacher_budget'],
+                             dict(mode='count', full=640, full_k=8, fast=96, fast_k=8,
+                                  c_scale=.2, cotton_c_scale=.1, fast_c_scale=.5))

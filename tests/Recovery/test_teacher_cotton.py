@@ -10,6 +10,17 @@ from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as R,
 
 
 class Recipe(unittest.TestCase):
+    def test_teacher_vp_weights_every_seat_and_keeps_raw_scores(self):
+        from brass_ai.recovery.teacher_vp import summarize
+        result = summarize([('train', True, [200, 100, 0, 40]),
+                            ('train', False, [30, 50, 70, 90]),
+                            ('heldout', True, [10, 20, 30, 40])])
+        self.assertEqual(result['cotton_exploration'], dict(tables=2, vp_sum=440, mean_vp=55., mean_table_vp=220.))
+        self.assertEqual(result['standard_exploration']['mean_vp'], 60.)
+        self.assertEqual(result['all']['mean_vp'], 680/12)
+        self.assertEqual(result['by_split']['heldout']['all']['mean_vp'], 25.)
+        self.assertIsNone(result['by_split']['heldout']['standard_exploration']['mean_vp'])
+
     def test_training_jobs_only_and_old_recipe_remains_loadable(self):
         from test_training_revision_g1491 import committed
         from brass_ai.recovery.teacher_phase import plan_jobs

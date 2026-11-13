@@ -104,6 +104,23 @@ class Performance(unittest.TestCase):
         self.assertFalse(thread.is_alive());self.assertEqual(len(errors),1);registry.release(first)
         self.assertEqual(registry.used,0)
 
+    def test_dispatch_lets_publishers_drain_a_saturated_handoff(self):
+        import time
+        registry=S.Registry(self.cancel,budget=256);self.addCleanup(registry.close)
+        first=registry.allocate(200)
+        second=[]
+        waiting=threading.Thread(target=lambda:second.append(registry.allocate(100)))
+        waiting.start()
+        try:
+            deadline=time.monotonic()+2
+            while registry.dispatch_limit(32) and time.monotonic()<deadline:time.sleep(.01)
+            self.assertEqual(registry.dispatch_limit(32),0)
+        finally:
+            registry.release(first)
+            waiting.join(2)
+        self.assertEqual(len(second),1)
+        self.assertEqual(registry.dispatch_limit(32),32)
+
     def test_cancellation_after_allocation_keeps_parent_ownership_until_cleanup(self):
         part=S.Export(dict(branch_expected=False),[],[b'x'*64])
         def allocate(size):

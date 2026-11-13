@@ -68,6 +68,21 @@ class Budgets(unittest.TestCase):
                 checks, _ = self.run_checks(*rows)
                 self.assertFalse(checks[failed]['passed'])
 
+    def test_mixed_long_scales_are_bound_to_each_table_group(self):
+        from brass_ai.recovery.training_revision_g1491 import COTTON_SPLIT_SEARCH
+
+        budget = dict(BUDGET, **COTTON_SPLIT_SEARCH)
+        fast = dict(search('fast', 96, 8), c_scale=.5)
+        jobs = [{}, dict(teacher_revision=dict(exploration=dict(cotton={})))]
+        for cotton_scale in (.1, .2):
+            games = [*tables(dict(search('full', 640, 8), c_scale=.2), fast),
+                     *tables(dict(search('full', 640, 8), c_scale=cotton_scale), fast)]
+            checks = {}
+            Q.check_searches(checks, Q.search_summary(games, budget, jobs=jobs))
+            self.assertTrue(checks['full_standard_uses_c_scale']['passed'])
+            self.assertTrue(checks['fast_uses_c_scale']['passed'])
+            self.assertEqual(checks['full_cotton_uses_c_scale']['passed'], cotton_scale == .1)
+
     def test_searches_stopped_by_the_safety_cap_fail(self):
         rows = [search('full', 640, 16, completed=500, hit=True)]*5+[search('full', 640, 16)]*95+[search('fast', 96, 8)]
         checks, summary = self.run_checks(*rows)

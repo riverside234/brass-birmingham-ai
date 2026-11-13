@@ -36,8 +36,13 @@ the old teacher labels and search values, and holds Stage A during buffer refill
 Each search-value fit runs for at most one epoch with the existing early stop.
 Subsequent continuations use the committed search settings automatically.
 
+--split-teacher-c-scale switches the mixed recipe to long C_scale=0.20 on
+standard tables and 0.10 on cotton tables, and sets cotton targeting to 25%.
+It retires both search buffers, keeps the committed search-head stage, and
+re-measures beta with the teacher on.
+
 --teacher-search-head-weight 0 uses the utility head alone in every teacher
-game, including held-outs. It also enables 30% cotton build/develop exploration
+game, including held-outs. It also enables cotton build/develop exploration
 in half of each split, alongside ordinary exploration in every game. Pass 1 to
 use the search head at full weight. The setting persists across continuations.
 """

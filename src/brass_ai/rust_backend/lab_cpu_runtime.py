@@ -65,7 +65,7 @@ def accept_cached_cpu_work(root, build):
     return dict(build, _previous_build_sha256s=tuple(dict.fromkeys((*previous, pin(path)['sha256']))))
 
 
-def core_allocation(count):
+def core_allocation(count, *, held=None):
     """Spread workers evenly across sockets; empty where affinity is unavailable."""
     if not hasattr(os, 'sched_getaffinity'):
         return []
@@ -83,15 +83,18 @@ def core_allocation(count):
         for pool in pools:
             if pool:
                 ordered.append(pool.pop(0))
+    if held is not None:
+        # Small retries should use available CPUs even when the first cores
+        # in topology order are all running teacher tables.
+        ordered.sort(key=held)
     return [ordered[i % len(ordered)] for i in range(count)]
 
 
 class CorePlan:
     """The logical CPUs that teacher tables hold while ordinary games run beside them.
 
-    Longest work first: every table (about 50 s) starts at once on its own CPU
-    and ordinary lanes fill the rest. When a table ends its CPU goes straight to a
-    parked ordinary lane, so both workloads keep every CPU busy until the end.
+    Start the longer teacher games first. Ordinary lanes use the remaining
+    CPUs and can claim a teacher CPU after its final search has stopped.
     """
     def __init__(self, cores):
         self.cores = frozenset(cores)
@@ -130,6 +133,7 @@ class CorePlan:
 
     def fail(self, error):
         with self.lock:
+            if self.error is not None:return
             self.error = error
             failed = self.failed
         if failed is not None:

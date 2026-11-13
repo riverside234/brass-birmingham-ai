@@ -337,11 +337,12 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
 
 def render_progress(report, output, *, run=None, state=None, persist_vp=False, history_sources=(),
                     preview=None, vp_preview=None, agents=None, max_points=DEFAULT_MAX_POINTS):
-    """Generate both progress charts, leaving PL evidence and rendering unchanged."""
+    """Generate the PL chart and its VP companions."""
     from .vp_plot import companion
     output = Path(output)
-    if output.name.lower() == 'progress_vp.svg':
-        raise ValueError('progress_vp.svg is reserved for the companion VP chart; choose another PL output name')
+    from .teacher_vp import CHART
+    if output.name.lower() in ('progress_vp.svg', CHART):
+        raise ValueError(f'{output.name} is reserved for the companion VP chart; choose another PL output name')
     render(report, output, preview=preview, agents=agents, max_points=max_points)
     generation = report.get('generation')
     if generation is None:

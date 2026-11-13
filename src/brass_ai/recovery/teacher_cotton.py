@@ -6,17 +6,22 @@ from brass_ai.learning.contracts import require
 CONTRACT='teacher-cotton-exploration/1.0.0'
 DEVELOP_CONTRACT='teacher-cotton-exploration/2.0.0'
 MIXED_CONTRACT='teacher-cotton-exploration/3.0.0'
+MIXED_25_CONTRACT='teacher-cotton-exploration/4.0.0'
 PROBABILITY=.2
 DEVELOP_PROBABILITY=.25
 MIXED_PROBABILITY=.3
 CAP=3
-PROBABILITIES={CONTRACT:PROBABILITY, DEVELOP_CONTRACT:DEVELOP_PROBABILITY, MIXED_CONTRACT:MIXED_PROBABILITY}
+MIXED_CONTRACTS=(MIXED_CONTRACT,MIXED_25_CONTRACT)
+PROBABILITIES={CONTRACT:PROBABILITY, DEVELOP_CONTRACT:DEVELOP_PROBABILITY, MIXED_CONTRACT:MIXED_PROBABILITY,
+               MIXED_25_CONTRACT:DEVELOP_PROBABILITY}
 
 
-def settings(*, develop=False, mixed=False):
-    contract = MIXED_CONTRACT if mixed else (DEVELOP_CONTRACT if develop else CONTRACT)
+def settings(*, develop=False, mixed=False, contract=None):
+    if contract is None:
+        contract = MIXED_CONTRACT if mixed else (DEVELOP_CONTRACT if develop else CONTRACT)
     return dict(contract=contract, probability=PROBABILITIES[contract], max_per_seat_era=CAP,
-        long_candidates=2, short_candidates=1, pause_unflipped=True, scope='train-and-heldout' if mixed else 'train')
+        long_candidates=2, short_candidates=1, pause_unflipped=True,
+        scope='train-and-heldout' if contract in MIXED_CONTRACTS else 'train')
 
 
 def job_settings(job):
@@ -106,8 +111,7 @@ def aggregate(metrics):
     if not receipts:return None
     contract = receipts[0]['contract']
     require(all(r['contract']==contract for r in receipts), 'Mixed cotton exploration settings')
-    result=dict(contract=contract, tables=len(receipts),
-                settings=settings(develop=contract==DEVELOP_CONTRACT, mixed=contract==MIXED_CONTRACT))
+    result=dict(contract=contract, tables=len(receipts), settings=settings(contract=contract))
     for profile in ('long','short'):
         counts=Counter()
         for r in receipts:counts.update(r[profile])

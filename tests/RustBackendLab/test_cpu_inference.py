@@ -586,6 +586,7 @@ class NativeWorkers(unittest.TestCase):
         job = self.all_seat_job(weight)
         job['split'] = split
         if revision is not None:job['teacher_revision'] = revision
+        budget = R.teacher_job_budget(budget, job)
         self.assertEqual(job['search_value']['w'], weight)
         cancel = threading.Event()
         from brass_ai.rust_backend.lab_cpu_runtime import count_search_limits
@@ -625,34 +626,43 @@ class NativeWorkers(unittest.TestCase):
         self.assertGreater(max(label['target']), float(gentle.max()))
 
     def test_retuned_budget_reaches_long_search_and_its_labels(self):
-        from brass_ai.recovery import training_revision_g1491 as G
+        from brass_ai.recovery import teacher_cotton, training_revision_g1491 as G
         from brass_ai.recovery.teacher_labels import validate_improved_policy
 
-        budget = dict(mode='count', full=64, fast=24, fast_k=8, **G.RETUNED_SEARCH)
-        revision = G._job_block(G.block(variant=G.SEARCH_REFRESH)['exploration'], short_labels=False)
-        job, result, verifier = self.run_all_seat(0., budget, revision)
-        metrics = result['metrics']
-        self.assertEqual(metrics['cpu_inference']['budget'], budget)
-        self.assertTrue(result['rows'])
-        for profile, scale in (('full', .15), ('fast', .5)):
-            self.assertEqual({s['c_scale'] for s in metrics['searches']
-                              if s['profile'] == profile and s['frozen_n'] > 0}, {scale})
-        self.assertEqual(max(s['effective_k'] for s in metrics['searches'] if s['profile'] == 'full'), 8)
-        self.assertTrue(all(s['completed'] == s['frozen_n'] for s in metrics['searches'] if s['profile'] == 'full'))
-        for row in result['rows']:
-            label = row['teacher']
-            self.assertEqual((label['requested_k'], label['c2']), (8, .15))
-            self.assertIsNotNone(validate_improved_policy(label, row['choices']))
-        self.assertTrue(verifier.take(result, job, self.model)[0])
+        budget = dict(mode='count', full=64, fast=24, fast_k=8, **G.COTTON_SPLIT_SEARCH)
+        exploration = dict(G.EXPLORATION, cotton=teacher_cotton.settings(contract=teacher_cotton.MIXED_25_CONTRACT))
+        for split, cotton, long_scale in (('train', False, .20), ('heldout', True, .10)):
+            with self.subTest(split=split, cotton=cotton):
+                revision = G._job_block(exploration, short_labels=False, search_head_weight=0, cotton_table=cotton)
+                job, result, verifier = self.run_all_seat(0., budget, revision, split=split)
+                metrics = result['metrics']
+                receipt = metrics['cpu_inference']['revision'].get('cotton')
+                self.assertEqual(receipt['contract'] if receipt else None,
+                                 teacher_cotton.MIXED_25_CONTRACT if cotton else None)
+                effective = {k: v for k, v in budget.items() if k != 'cotton_c_scale'}
+                self.assertEqual(metrics['cpu_inference']['budget'], dict(effective, c_scale=long_scale))
+                self.assertTrue(result['rows'])
+                for profile, scale in (('full', long_scale), ('fast', .5)):
+                    self.assertEqual({s['c_scale'] for s in metrics['searches']
+                                      if s['profile'] == profile and s['frozen_n'] > 0}, {scale})
+                full = [s for s in metrics['searches'] if s['profile'] == 'full']
+                self.assertEqual(max(s['effective_k'] for s in full), 8)
+                self.assertTrue(all(s['completed'] == s['frozen_n'] for s in full))
+                for row in result['rows']:
+                    label = row['teacher']
+                    self.assertEqual((label['requested_k'], label['c2']), (8, long_scale))
+                    self.assertIsNotNone(validate_improved_policy(label, row['choices']))
+                self.assertTrue(verifier.take(result, job, self.model)[0])
 
     def test_mixed_teacher_games_apply_the_weight_and_report_actions(self):
-        from brass_ai.recovery import training_revision_g1491 as G
+        from brass_ai.recovery import teacher_cotton, training_revision_g1491 as G
         from brass_ai.recovery.teacher_phase import action_summary
 
         budget = dict(mode='count', full=64, fast=24, fast_k=8, **G.RETUNED_SEARCH)
+        exploration = dict(G.EXPLORATION, cotton=teacher_cotton.settings(mixed=True))
         for weight, split, biased in ((0, 'heldout', True), (1, 'train', False)):
             with self.subTest(weight=weight, split=split):
-                revision = G._job_block(G.EXPLORATION, short_labels=False, search_head_weight=weight, cotton_table=biased)
+                revision = G._job_block(exploration, short_labels=False, search_head_weight=weight, cotton_table=biased)
                 job, result, verifier = self.run_all_seat(weight, budget, revision, split=split)
                 G.validate_job(job)
                 self.assertTrue(verifier.take(result, job, self.model)[0])
@@ -912,6 +922,7 @@ class CpuPool(unittest.TestCase):
         from unittest.mock import Mock, patch
         from brass_ai.recovery.resources import CPUAdmission
         from brass_ai.rust_backend import lab_pool as P
+        from brass_ai.rust_backend.lab_cpu_runtime import CorePlan
         from brass_ai.step5.league import write_json
         from test_b03 import family_fixture
         torch.set_num_threads(2)
@@ -938,9 +949,34 @@ class CpuPool(unittest.TestCase):
             breakdown = report['startup_breakdown']
             self.assertEqual(breakdown['lanes_reported'], 1)
             self.assertFalse(breakdown['waits_for_all_lanes'])
+            self.assertFalse(report['waits_for_all_publishers'])
             self.assertEqual(breakdown['phases']['mono_bootstrap_seconds']['p50'], .15)
             self.assertGreater(report['actor_startup_seconds'], 0)
             self.assertEqual(report['collector_runtime']['cpu_inference']['contract'], R.CPU_CONTRACT)
+            self.assertFalse(pool.processes)
+
+            # A retry can have just one parent and its CPU still held by a teacher.
+            # Use a new replay path so this run exercises the lazy process start.
+            second = dict(job, path=str(out/'retry/job.jsonl.gz'))
+            plan = CorePlan((10,))
+            pool = P.NativePool(SOURCE_ROOT, service, execution, build, c, f['producer']['signature'],
+                                scope='ordinary', cpu=dict(settings,pinning='one-lane-per-cpu'), core_plan=plan)
+            offered = threading.Event()
+            add_lane = P.Lanes.add
+            def add(lanes, *args, **kwargs):
+                add_lane(lanes, *args, **kwargs)
+                offered.set()
+            def release():
+                if offered.wait(10):plan.release(10)
+            handoff = threading.Thread(target=release, daemon=True)
+            handoff.start()
+            with patch.object(P, '_actors', fixture_cpu_actors), patch.object(P.Lanes, 'add', add), \
+                    patch('brass_ai.rust_backend.lab_cpu_runtime.core_allocation', return_value=[10]):
+                records = pool.collect([second])
+            handoff.join(10)
+            self.assertEqual(len(records),1)
+            self.assertEqual(pool.last_collection_report['overlap']['parked_lanes'],1)
+            self.assertEqual(pool.last_collection_report['overlap']['ordinary_processes_started'],1)
             self.assertFalse(pool.processes)
 
 
