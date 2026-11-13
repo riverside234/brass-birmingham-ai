@@ -4,7 +4,7 @@ import math
 import statistics
 
 from brass_ai.learning.contracts import digest, require
-from brass_ai.step5.policy import COTTON_EXPLORATION, COTTON_PROBABILITY, FAMILY_WEIGHTS
+from brass_ai.step5.policy import COTTON_EXPLORATION, COTTON_PROBABILITIES, FAMILY_WEIGHTS
 
 GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
 FIXED_ENTROPY = dict(contract='fixed-group-entropy/1.0.0',
@@ -175,9 +175,11 @@ def validate(config):
     revised=(config['opening']==REVISED_OPENING and config['branching']==REVISED_BRANCH) or (
         config['opening']==THREE_OPENING and config['branching']==THREE_BRANCH)
     three_t2=config['opening']==THREE_T2_OPENING and config['branching'] in (THREE_T2_BRANCH,BALANCED_BRANCH)
-    fork=config['opening']==THREE_OPENING and config['branching'] in (FORK_T15_BRANCH,dict(FORK_T15_BRANCH,rate_per_decision=0.))
+    branch_off=dict(FORK_T15_BRANCH,rate_per_decision=0.)
+    fork=(config['opening']==THREE_OPENING and config['branching']==FORK_T15_BRANCH or
+          config['opening'] in (THREE_OPENING,THREE_T2_OPENING) and config['branching']==branch_off)
     quarter=config.get('value_phase',{}).get('contract') in (QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT,KL_STOP_CONTRACT)
-    neutral=config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH,FORK_T15_BRANCH,dict(FORK_T15_BRANCH,rate_per_decision=0.))
+    neutral=fork or config['opening']==THREE_OPENING and config['branching'] in (NEUTRAL_BRANCH,T2_ONLY_BRANCH)
     current=(config['opening']==OPENING and config['branching'] in (BRANCH,LOCAL_SCORING_BRANCH)) or revised or three_t2 or neutral
     uniform=config['opening']==OPENING and config['branching']==HIGH_BRANCH
     legacy=config['opening']==LEGACY_OPENING and config['branching']==LEGACY_BRANCH
@@ -254,7 +256,7 @@ def check_behavior(b, phase, *, branch_move=False):
     require(set(b)=={'kind','policy_id','probability','temperature','exploration','exploration_version',
         'component','action_decision'} | ({COTTON_EXPLORATION} if cotton else set())
         and (not cotton or (not branch_move and phase in ('action','continuation') and
-                           b[COTTON_EXPLORATION] == COTTON_PROBABILITY))
+                           b[COTTON_EXPLORATION] in COTTON_PROBABILITIES))
         and b['kind']=='model' and type(b['exploration_version']) is int and
         b['exploration_version']==3 and type(b['exploration']) in (float,int) and
         math.isfinite(b['exploration']) and 0<=b['exploration']<=.5 and

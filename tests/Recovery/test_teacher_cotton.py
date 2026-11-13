@@ -101,6 +101,21 @@ class Labels(unittest.TestCase):
             current,choices=self.example(targeted=False,choice=choice)
             L.validate_improved_policy(current,choices)
 
+    def test_tempered_cotton_label_matches_the_new_probability(self):
+        label,choices=self.example()
+        label.update(sampling_temperature=2., phase='canal_early', seat=0)
+        label['cotton_exploration'].update(contract=C.SEATED_CONTRACT, probability=.7*.25+.3)
+        L.validate_improved_policy(label,choices)
+        job = dict(split='train', reservations={'0':{'canal_early':2}}, search_value=None,
+            teacher_revision=dict(cotton_seats=[0], exploration=dict(game_opening=R.GAME_OPENING,
+                                  cotton=C.settings(contract=C.SEATED_CONTRACT))))
+        L.check_turn(label,2,job)
+        with self.assertRaisesRegex(ValueError, 'opening temperature'):
+            L.check_turn(label,3,job)
+        label['cotton_exploration']['probability'] = .7*.10+.3
+        with self.assertRaisesRegex(ValueError, 'behavior probability'):
+            L.validate_improved_policy(label,choices)
+
     def test_bad_probability_counts_cap_and_played_move_are_rejected(self):
         for key,value in [('probability',float('nan')),('probability',.5),('used_before',3),('targeted',1),
                           ('cotton_visits',9),('covered_locations',2),('total_visits',101)]:

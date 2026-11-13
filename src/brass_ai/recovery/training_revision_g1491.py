@@ -37,6 +37,7 @@ PREVIOUS_SHADOW_ITERATIONS = 4
 LONG_WEIGHT = .6
 EXPLORATION = dict(contract='root-visit-count-sampling/1.0.0', temperature=1., opening_actions_per_era=7,
                    long_search='always')
+GAME_OPENING = dict(temperature=2., actions_per_seat=3)
 RESTART = 'g1490-branch-restart'
 # The same restart with 256 teacher rows per PPO step (the g1190 restart's second attempt).
 WIDE_RESTART = 'g1190-branch-restart-256-rows'
@@ -131,6 +132,7 @@ def label_revision(marker):
     from .teacher_cotton import settings
     result = {k: v for k, v in marker.items() if k != TEACHER_SEARCH_HEAD_WEIGHT}
     result['exploration'] = dict(marker['exploration'], cotton=settings(develop=True))
+    result['exploration'].pop('game_opening', None)
     return result
 
 
@@ -147,6 +149,8 @@ def validate(config):
         allowed += (retuned, _mixed_tables(retuned, 0), _mixed_tables(retuned, 1),
                     _mixed_tables(split, 0), _mixed_tables(split, 1),
                     _mixed_tables(retuned, 0, seated=True), _mixed_tables(retuned, 1, seated=True))
+        opening = dict(retuned, exploration=dict(retuned['exploration'], game_opening=GAME_OPENING))
+        allowed += tuple(_mixed_tables(opening, weight, seated=True) for weight in (0, 1))
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',
@@ -261,6 +265,8 @@ def _job_block(exploration, *, split='train', short_labels=True, search_head_wei
                 exploration=dict(contract=exploration['contract'], temperature=exploration['temperature'],
                                  opening_actions_per_era=exploration['opening_actions_per_era'],
                                  long_search=exploration['long_search'] == 'always'))
+    if 'game_opening' in exploration:
+        result['exploration']['game_opening'] = dict(exploration['game_opening'])
     if search_head_weight is not None:
         result[TEACHER_SEARCH_HEAD_WEIGHT] = search_head_weight
     if seats is not None:
@@ -310,8 +316,10 @@ def validate_job(job):
                 all(type(seat) is int for seat in seats) and
                 seats == cotton_seats(job['sampling_seed'], len(seats), SEATED_CONTRACT),
                 'Teacher cotton seat assignment differs')
-        allowed = (_job_block(dict(EXPLORATION, cotton=cotton_settings(contract=SEATED_CONTRACT)), short_labels=False,
-                              search_head_weight=weight, cotton_table=bool(seats), seats=seats),)
+        exploration = dict(EXPLORATION, cotton=cotton_settings(contract=SEATED_CONTRACT))
+        allowed = tuple(_job_block(e, short_labels=False, search_head_weight=weight,
+                                   cotton_table=bool(seats), seats=seats) for e in
+                        (exploration, dict(exploration, game_opening=GAME_OPENING)))
     elif weight is not None:
         from .teacher_cotton import MIXED_CONTRACTS
         allowed = (_job_block(EXPLORATION, short_labels=False, search_head_weight=weight), *(

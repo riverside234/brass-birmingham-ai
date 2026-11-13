@@ -31,6 +31,7 @@ def configure(config):
 
 def validate(config):
     from . import neutral_training,policy_observations,exploration,gae,v4_share,panel_gates,rating_coverage
+    from .training_revision_g2090 import previous_opening
     require(enabled(config),'Invalid trained startup settings')
     require(neutral_training.enabled(config) and policy_observations.enabled(config),
         'Trained startup requires neutral contexts/fingerprints and AnchorKL off')
@@ -44,7 +45,8 @@ def validate(config):
     if quarter:require(fork and scheduled and config['update'][anneal.KEY]['contract'] in (anneal.EXTENDED_CONTRACT,anneal.AUTO_CONTRACT),
         'Quarter-beta trained recipe requires the extended insolvency schedule')
     require(config['exploration_rollout']==exploration.TRAINED_ROLLOUT
-        and config['branching']==(config['branching'] if fork else exploration.T2_ONLY_BRANCH if revised else exploration.NEUTRAL_BRANCH) and config['opening']==exploration.THREE_OPENING
+        and config['branching']==(config['branching'] if fork else exploration.T2_ONLY_BRANCH if revised else exploration.NEUTRAL_BRANCH)
+        and previous_opening(config)['opening']==exploration.THREE_OPENING
         and config['rehearsal_weight']==0. and config['diversity']['mode']=='off'
         and config['context_evaluation']['mode']=='off' and config['exploration']==(0. if quarter else .02 if fork else .05)
         and config['update']['fixed_entropy']==(exploration.FIXED_ENTROPY_0025 if fork and not scheduled else exploration.FIXED_ENTROPY_005)

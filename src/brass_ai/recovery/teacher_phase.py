@@ -14,6 +14,7 @@ from .teacher_labels import PHASES
 from .teacher_term import TeacherTerm, heldout_measure, summary
 from .search_value_schedule import validation_plan
 from .training_revision_g1491 import count_search, job_block, seated_cotton, teacher_search_head_weight
+from .training_revision_g2090 import teacher_weight as opening_revision_weight
 from .teacher_vp import summarize as summarize_vp
 
 KEY = 'teacher_phase'
@@ -28,7 +29,7 @@ def committed_weight(config, state):
     saved = state.get(KEY, {})
     cache = saved.get('buffer', {})
     if cache and cache.get('identity') != buffer_identity(config): return {}
-    return saved.get('weight', {})
+    return opening_revision_weight(config, state, saved.get('weight', {}))
 
 
 def initial_cursor(config):
@@ -177,9 +178,10 @@ class TeacherPhase:
                                     retired=cache.get('retired', ()), c_scale=teacher_c_scale(profile or None),
                                     cotton_c_scale=profile.get('cotton_c_scale'),
                                     iterations=self.options['buffer']['iterations'])
-        self.weight = saved.get('weight', {}); self.term = None; self.jobs = []; self.heldout = []
-        if cache and cache.get('identity') != self.buffer.identity:
-            self.weight = {}  # Static producer/profile changes retire beta with its labels.
+        # Static producer/profile changes retire beta with its labels.
+        self.weight = ({} if cache and cache.get('identity') != self.buffer.identity
+                       else opening_revision_weight(config, state, saved.get('weight', {})))
+        self.term = None; self.jobs = []; self.heldout = []
         self.cursor = state.get('teacher_seed_cursor', initial_cursor(config))
         self.receipt, self.ready = readiness(saved.get('readiness'), getattr(model, 'utility_calibration', None), self.reward_id,
                                             skip=self.options.get('skip_utility_qualification', False))

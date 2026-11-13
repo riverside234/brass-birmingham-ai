@@ -517,8 +517,8 @@ class NativeWorkers(unittest.TestCase):
 
     def test_ordinary_cotton_game_replays_exact_mixed_likelihood(self):
         from brass_ai.recovery import ordinary_cotton as cotton
-        from brass_ai.recovery.exploration import THREE_OPENING
-        from brass_ai.recovery.opening_objective import Reference
+        from brass_ai.recovery.exploration import THREE_T2_OPENING
+        from brass_ai.recovery.opening_objective import Reference, T2_THREE
         from brass_ai.recovery.updates import Dataset, policy_measure, prepared
         from brass_ai.recovery.telemetry import Timings
         from brass_ai.recovery.execution import neural_spec
@@ -533,10 +533,11 @@ class NativeWorkers(unittest.TestCase):
         binary = os.environ['BRASS_CPU_COLLECTOR']
         endpoint = SimpleNamespace(lock=threading.RLock())
         execution = dict(max_decisions=5000, batch_size=32, max_candidate_cells=8192)
-        spec = neural_spec(self.identity, 0., 'neutral', version=3, opening=THREE_OPENING)
+        spec = neural_spec(self.identity, 0., 'neutral', version=3, opening=THREE_T2_OPENING)
         index = 13
-        assignment = cotton.assignment(index, 31)
-        config_with_cotton = cotton.configure(dict(update=config()['update'], table_plan={}))
+        assignment = cotton.assignment(index, 31, probability=.10)
+        config_with_cotton = cotton.configure(dict(update=dict(config()['update'], opening_objective=T2_THREE),
+                                                  table_plan={}), probability=.10)
         opening = config_with_cotton['update']['opening_objective']
         signature = 'a'*64
         job = dict(index=0, seed=19, sampling_seed=31, policies=[spec]*4,
@@ -551,8 +552,10 @@ class NativeWorkers(unittest.TestCase):
         game = validate_part(part, job, semantic=False)
         targeted = [r for r in game['records'] if cotton.KEY in r['behavior']]
         self.assertTrue(targeted)
+        self.assertTrue(all(r['behavior'][cotton.KEY] == .10 for r in targeted))
         self.assertEqual({r['seat'] for r in targeted}, set(assignment['seats']))
         self.assertTrue(any(r['behavior']['component']=='cotton' for r in targeted))
+        self.assertEqual(Counter(r['seat'] for r in game['records'] if r['behavior']['temperature']==2.), {s:3 for s in range(4)})
         changed = dict(targeted[0], behavior=dict(targeted[0]['behavior'], probability=.999))
         rows = [changed if r['step']==changed['step'] else r for r in game['records']]
         with self.assertRaisesRegex(ValueError, 'Behavior denominator differs'):
@@ -573,7 +576,7 @@ class NativeWorkers(unittest.TestCase):
             data = prepared([restored])
         dataset = Dataset(data, 'cpu')
         self.assertEqual(len(dataset.cotton_rows), len(targeted))
-        behavior = Behavior(self.identity, 0., dict(version=3, opening=THREE_OPENING))
+        behavior = Behavior(self.identity, 0., dict(version=3, opening=THREE_T2_OPENING))
         dataset.opening_reference = Reference(dataset, behavior, opening)
         self.assertFalse(bool(dataset.opening_reference.mask[list(dataset.cotton_rows)].any()))
         kl = policy_measure(self.model, dataset, range(len(data)), behavior, config_with_cotton['update'],
@@ -778,6 +781,24 @@ class NativeWorkers(unittest.TestCase):
             self.assertTrue(any(r['teacher'].get('cotton_exploration') for r in result['rows']))
             self.assertTrue(all(r['seat'] in seats for r in result['rows'] if r['teacher'].get('cotton_exploration')))
             self.assertTrue(all(r['search_value']['w'] == .42 for r in result['value_rows']))
+
+    def test_game_opening_temperature_on_standard_and_cotton_teacher_tables(self):
+        from brass_ai.recovery import teacher_cotton, training_revision_g1491 as G
+        from brass_ai.step5.policy import cotton_seats
+        budget = dict(mode='count', full=64, fast=24, fast_k=8, **G.RETUNED_SEARCH)
+        exploration = dict(G.EXPLORATION, game_opening=G.GAME_OPENING,
+                           cotton=teacher_cotton.settings(contract=teacher_cotton.SEATED_CONTRACT))
+        seed = self.all_seat_job(0.)['sampling_seed']
+        for split, seats in (('train', []), ('heldout', cotton_seats(seed, 2, teacher_cotton.SEATED_CONTRACT))):
+            revision = G._job_block(exploration, short_labels=False, cotton_table=bool(seats), seats=seats)
+            job, result, verifier = self.run_all_seat(0., budget, revision, split=split)
+            self.assertEqual(G.validate_job(job), revision)
+            self.assertTrue(verifier.take(result, job, self.model)[0])
+            self.assertTrue(any(r['teacher'].get('sampling_temperature') == 2. for r in result['rows']))
+            for row in result['rows']:
+                context = row['view']['context']
+                opening = context['era']=='CanalEra' and context['round']<=2 and row['teacher'].get('explored')
+                self.assertEqual(row['teacher'].get('sampling_temperature'), 2. if opening else None)
 
     def test_all_seat_table_blends_the_search_head_like_the_gpu_path(self):
         budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)

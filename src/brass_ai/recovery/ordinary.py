@@ -171,7 +171,8 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             provenance['exploration']=exploration
             provenance['learner_behavior'].update(exploration_version=exploration['version'],opening=exploration['opening'])
         if cotton and kind == 'selfplay':
-            assignment = ordinary_cotton.assignment(index, provenance['sampling_seed'])
+            assignment = ordinary_cotton.assignment(index, provenance['sampling_seed'],
+                probability=config['table_plan'][ordinary_cotton.KEY]['probability'])
             if assignment is not None:
                 require(exploration and exploration['version'] == 3, 'Cotton self-play requires v3 behavior')
                 provenance[ordinary_cotton.KEY] = assignment

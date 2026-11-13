@@ -31,8 +31,9 @@ def is_shadow(config):
     from brass_ai.recovery.rating_coverage import previous as previous_rating
     from brass_ai.recovery.teacher_phase_config import without_utility_qualification
     from brass_ai.recovery.ordinary_cotton import previous as previous_tables
+    from brass_ai.recovery.training_revision_g2090 import previous_opening
     try:
-        config=previous_tables(recipe(config))
+        config=previous_tables(previous_opening(recipe(config)))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -77,8 +78,17 @@ def is_active(config):
 def signature_transition(before,after):
     from .lab_replay_compat import QUALIFIED,execution
     old,new=before['config'],after['config']
+    from brass_ai.recovery import training_revision_g2090 as g2090
+    if g2090.applied(old) != g2090.applied(new):
+        if g2090.applied(old):return False
+        try:old=g2090.configure(old)
+        except (ValueError, KeyError, TypeError):return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False
+    from brass_ai.recovery.ordinary_cotton import KEY as COTTON
+    if (old.get('table_plan', {}).get(COTTON, {}).get('probability')
+            != new.get('table_plan', {}).get(COTTON, {}).get('probability')):
+        return False
     from brass_ai.learning.post_transfer_reward import previous as previous_reward
     from .lab_teacher_activation import is_on
     from brass_ai.recovery.search_value_schedule import previous_recipe
@@ -175,7 +185,8 @@ def rebind_backend(previous,updated):
             beta=q['beta'],qualified_generation=q['qualified_generation'],generation=previous['iteration'])
         options=updated['signature']['config']['teacher_phase']['search_value']
         if 'schedule' in options:
-            after['teacher'].update(stage_schedule=digest(options['schedule']),ppg_beta_floor=.25)
+            after['teacher'].update(stage_schedule=digest(options['schedule']),
+                ppg_beta_floor=updated['signature']['config']['value_phase']['beta_clone_min'])
     else:
         from brass_ai.recovery.training_revision_g1491 import applied
         # A g1491 re-calibration retires the old fixed beta until the next reviewed switch.

@@ -65,7 +65,8 @@ def inference_choice(args):
 
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
-            skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None):
+            skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
+            update_opening_sampling=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -117,6 +118,10 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             config=revise(config)
         if teacher_search_head_weight is not None:
             config=g1491.configure_teacher_games(config,teacher_search_head_weight)
+        from brass_ai.recovery import training_revision_g2090 as g2090
+        if update_opening_sampling:
+            from brass_ai.recovery.config import validate_config
+            config=validate_config(g2090.configure(config))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -180,6 +185,14 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             if config['value_phase']['max_epochs'] == 1:
                 prefix=prefix.replace('-share', '-ppg-epoch1-share')
                 stages.append(prefix)
+        if g2090.applied(config):
+            if weight is not None and previous_weight is not None and previous_weight != weight:
+                prior_prefix=prefix.replace(f'-w{weight}-', f'-w{previous_weight}-')
+                if g2090.applied(before):
+                    prior_prefix=prior_prefix.replace('-share', '-opening-t2-cotton10-share')
+                stages.append(prior_prefix)
+            prefix=prefix.replace('-share', '-opening-t2-cotton10-share')
+            stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -258,6 +271,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
     from rust_lab_results import export
     from brass_ai.rust_backend.lab_replay_compat import execution
     from brass_ai.recovery import training_revision_g1491 as g1491
+    from brass_ai.recovery import training_revision_g2090 as g2090
     out=ROOT/'artifacts/rust-backend'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'-'+mode+'-training-'+uuid.uuid4().hex[:8])
     out.mkdir(parents=True);report=dict(passed=False,training_passed=False,teacher_mode=mode,branching=0.,
         tables=dict(train=28,held_out=4),share_target=args.share_target,qualification_iterations=4,expected_generation=expected)
@@ -272,6 +286,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'adaptive_teacher_beta',False):kwargs['adaptive_teacher_beta']=True
         teacher_weight=getattr(args,'teacher_search_head_weight',None)
         if teacher_weight is not None:kwargs['teacher_search_head_weight']=teacher_weight
+        if getattr(args,'update_opening_sampling',False):kwargs['update_opening_sampling']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -289,6 +304,9 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         print('Branching=0%; teacher='+mode+'; '+cadence+
             ((beta_mode+'; residual stage restored from checkpoint.' if revised else beta_mode+'; search head Stage A (w=0, frozen trunk).') if mode=='on' else
              f'qualification={calibration} iterations; teacher gradients are diagnostic only.'),flush=True)
+        from brass_ai.recovery.search_value_schedule import validation_plan
+        if g2090.applied(options) and validation_plan(options,state).get('forced_by_beta_remeasurement'):
+            print('Teacher beta will be re-measured with teaching on and four held-out tables.',flush=True)
         if revised:
             schedule=report['stage_schedule'];a=schedule['stage_a_iterations'];b=schedule['stage_b_iterations'];c=schedule['stage_c_iterations']
             floor_stage = 'B' if 'ppg_beta_floor_after_stage_b' in schedule else 'A'
@@ -297,6 +315,12 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
             floor_change = f', {floor:g} after Stage {floor_stage}' if floor != base_floor else ''
             print(f'Residual stages: A{a} head-only; B{b} blend warm-up; C{c} trunk warm-up; KL cap .003; '
                   f'PPG beta floor {base_floor:g}{floor_change}. Ordinary PPG epoch cap {options["value_phase"]["max_epochs"]}.', flush=True)
+        if g2090.applied(options):
+            from brass_ai.recovery.ordinary_cotton import KEY
+            opening=options['opening']
+            probability=options['table_plan'][KEY]['probability']
+            print(f'PPO and teacher opening temperature {opening["temperature"]:g} for the first '
+                  f'{opening["action_decisions_per_seat"]} actions per seat. PPO cotton targeting {probability:.0%}.', flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
         if is_revised(options):
             r=options['reward'];cost=options['insolvency']

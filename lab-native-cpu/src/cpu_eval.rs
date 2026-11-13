@@ -490,13 +490,14 @@ const TEACHER_SEARCH_HEAD_WEIGHT: &str = "teacher_search_head_weight";
 const COTTON_SEATS: &str = "cotton_seats";
 
 /// `job["teacher_revision"]`: label short searches too, and sample the played
-/// action from the root visit counts (temperature 1) for each seat's first
+/// action from the root visit counts for each seat's first
 /// `opening_actions` actions of an era and, with `long_search`, every long search.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Revision {
     job: Value,
     short_labels: bool,
     opening_actions: u32,
+    tempered_opening: bool,
     long_search: bool,
     cotton: Option<CottonMode>,
     cotton_seats: Option<u8>,
@@ -585,12 +586,13 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
     let opening = e["opening_actions_per_era"].as_u64().unwrap_or(u64::MAX);
     let weight = block.get(TEACHER_SEARCH_HEAD_WEIGHT);
     let seats = block.get(COTTON_SEATS);
+    let game_opening = e.get("game_opening");
     let ordinary_table = job["h2h"] != true && job["shadow_probe"] != true;
     check(
         block["contract"] == REVISION_CONTRACT
             && block.as_object().is_some_and(|o| o.len() == 3 + usize::from(weight.is_some()) + usize::from(seats.is_some()))
             && block["short_labels"].is_boolean()
-            && e.as_object().is_some_and(|o| o.len() == if e.get("cotton").is_some() {5} else {4})
+            && e.as_object().is_some_and(|o| o.len() == 4 + usize::from(e.get("cotton").is_some()) + usize::from(game_opening.is_some()))
             && e["contract"] == EXPLORATION_CONTRACT
             && e["temperature"].as_f64() == Some(1.0)
             && e["long_search"].is_boolean()
@@ -602,6 +604,10 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         check(ordinary_table && (job["split"] == "train" || job["split"] == "heldout")
             && block["short_labels"] == false && opening == 7 && e["long_search"] == true,
             "unreviewed mixed teacher job")?;
+    }
+    if let Some(opening) = game_opening {
+        check(seats.is_some() && opening == &json!({"temperature":2.0,"actions_per_seat":3}),
+            "unreviewed teacher opening temperature")?;
     }
     if let Some(weight) = weight {
         check(matches!(weight.as_u64(), Some(0 | 1)) && weight.as_f64() == job["search_value"]["w"].as_f64(),
@@ -644,6 +650,7 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         job: block.clone(),
         short_labels: block["short_labels"] == true,
         opening_actions: opening as u32,
+        tempered_opening: game_opening.is_some(),
         long_search: e["long_search"] == true,
         cotton,
         cotton_seats,
@@ -672,6 +679,30 @@ fn visit_sample(counts: &[u64], total: u64, seed: u64, decision: u64) -> Result<
         }
     }
     Err("root visit sample out of range".into())
+}
+
+pub(crate) fn sample_weights(weights: impl Iterator<Item = (usize, f64)>, total: f64, draw: u64) -> Result<usize> {
+    let target = ((draw >> 11) as f64 * (1. / ((1u64 << 53) as f64)) * total).min(total.next_down());
+    let mut seen = 0.;
+    for (i, weight) in weights {
+        seen += weight;
+        if target < seen {
+            return Ok(i);
+        }
+    }
+    Err("tempered visit sample out of range".into())
+}
+
+fn game_opening(era: Era, round: u8) -> bool {
+    // Four seats take one action in the first Canal round and two in the second.
+    era == Era::CanalEra && round <= 2
+}
+
+pub fn teacher_tempered_opening(view: &Observation) -> bool {
+    let c = &view.context;
+    c.phase == Phase::Action && game_opening(c.era, c.round) && REVISION.with(|cell| {
+        cell.borrow().as_ref().is_some_and(|(r, _)| r.tempered_opening)
+    })
 }
 
 /// The action to play. A g1491 job samples it from the decision root's visit
@@ -713,9 +744,17 @@ pub fn teacher_explore(
             if revision.cotton.is_some() { state.cotton.no_evidence(); }
             return Ok((planned, false));
         }
-        let base = visit_sample(counts, total, seed, decision)?;
+        let weights = (revision.tempered_opening && game_opening(c.era, c.round))
+            .then(|| counts.iter().map(|&n| (n as f64).sqrt()).collect::<Vec<_>>());
+        let tempered = weights.as_deref().map(|w| (w, w.iter().sum::<f64>()));
+        let base = if let Some((weights, mass)) = tempered {
+            let draw = mix(seed ^ mix(decision ^ 0x1491_0000_0000_0000));
+            sample_weights(weights.iter().copied().enumerate(), mass, draw)?
+        } else {
+            visit_sample(counts, total, seed, decision)?
+        };
         let index = if revision.cotton.is_some() {
-            state.cotton.sample(base, &actual.key.choices, counts, total, seed, decision)?
+            state.cotton.sample(base, &actual.key.choices, counts, total, tempered, seed, decision)?
         } else { base };
         let choice = actual.actions[index].clone();
         state.sampled[profile] += 1;
@@ -777,6 +816,9 @@ pub fn teacher_mark_label(row: &mut Value, fast: bool, explored: bool) -> Result
             return Ok(());
         };
         check(!fast || revision.short_labels, "short-search label without short labels")?;
+        let tempered = revision.tempered_opening && explored
+            && row["view"]["context"]["era"] == "CanalEra"
+            && row["view"]["context"]["round"].as_u64().is_some_and(|r| r <= 2);
         let teacher = row.get_mut("teacher").ok_or("label row without teacher fields")?;
         if fast {
             teacher["profile"] = json!("fast");
@@ -785,6 +827,9 @@ pub fn teacher_mark_label(row: &mut Value, fast: bool, explored: bool) -> Result
         }
         if explored {
             teacher["explored"] = json!(true);
+        }
+        if tempered {
+            teacher["sampling_temperature"] = json!(2.0);
         }
         if revision.cotton.is_some() {
             if let Some(selection)=&state.cotton.selection {
@@ -1542,6 +1587,35 @@ mod tests {
         }
         assert_eq!(visit_sample(&counts, 100, 11, 5).unwrap(), visit_sample(&counts, 100, 11, 5).unwrap());
         assert!(visit_sample(&counts, 99, 11, 5).is_err());
+    }
+
+    #[test]
+    fn seated_teacher_opening_flattens_visits_for_the_first_three_game_actions() {
+        let mut job = revision_job(7, true);
+        job["split"] = json!("heldout");
+        job["teacher_revision"]["short_labels"] = json!(false);
+        job["teacher_revision"][COTTON_SEATS] = json!([]);
+        job["teacher_revision"]["exploration"]["game_opening"] = json!({"temperature":2.0,"actions_per_seat":3});
+        install_revision(Some(job.clone()));
+        let (input, _) = root(&initial());
+        let info = Brass::new(input.clone(), false).unwrap().root().unwrap();
+        let mut counts = vec![0; info.actions.len()];
+        counts[0] = 90;
+        counts[1] = 10;
+        let planned = &info.actions[0];
+        for (era, round, expected) in [(Era::CanalEra, 1, 0.25), (Era::CanalEra, 2, 0.25),
+                                      (Era::CanalEra, 3, 0.10), (Era::RailEra, 1, 0.10)] {
+            let mut view = input.view.clone();
+            view.context.era = era;
+            view.context.round = round;
+            let low = (0..4000).filter(|&decision| {
+                let (choice, sampled) = teacher_explore(planned.clone(), Some(&counts), &info, &view, false, 7, decision).unwrap();
+                assert!(sampled && (choice == info.actions[0] || choice == info.actions[1]));
+                choice == info.actions[1]
+            }).count();
+            assert!((low as f64 / 4000. - expected).abs() < 0.025);
+        }
+        install_revision(None);
     }
 
     #[test]

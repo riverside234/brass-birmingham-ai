@@ -183,6 +183,8 @@ def compact(report):
     out['economy']={key:report.get('economy',{}).get(key) for key in
         ('actions','actions_by_era','builds','build_levels','observed_flips','last_seen_unflipped',
          'passes_with_nonpass_alternative','sale_actions_started','sale_continuations','merchant_beer_by_bonus')}
+    if 'cotton_by_selfplay' in report.get('economy',{}):
+        out['economy']['cotton_by_selfplay'] = report['economy']['cotton_by_selfplay']
     utilization=report.get('utilization',{})
     out['utilization']={key:utilization.get(key) for key in ('games_per_second','mean_inference_batch',
         'inference_batches','inference_positions','padding_fraction','actor_phase_seconds',

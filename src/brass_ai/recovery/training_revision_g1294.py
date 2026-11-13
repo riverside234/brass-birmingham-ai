@@ -51,6 +51,8 @@ def previous(config):
     require(options['steps_per_iteration']==MAX_STEPS,'Incomplete g1294 training revision')
     result=S.without_raise(config)
     result['value_phase'].update(contract=P.TEACHER_FLOOR_CONTRACT)
+    if result['value_phase']['beta_clone_min'] == .5:
+        result['value_phase']['beta_clone_min'] = P.TEACHER_FLOOR_DEFAULT['beta_clone_min']
     if result['value_phase']['max_epochs'] == 1:
         result['value_phase']['max_epochs'] = P.TEACHER_FLOOR_DEFAULT['max_epochs']
     original=defaults()
@@ -62,7 +64,7 @@ def previous(config):
 def compatible(before,after):
     """The committed entropy timing and PPG cap survive ordinary recipe switches."""
     return not applied(before) or (applied(after) and raise_block(before)==raise_block(after)
-        and before['value_phase']['max_epochs'] == after['value_phase']['max_epochs'])
+        and all(before['value_phase'][key] == after['value_phase'][key] for key in ('max_epochs','beta_clone_min')))
 
 
 def summary(config):

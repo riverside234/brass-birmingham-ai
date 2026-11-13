@@ -226,6 +226,8 @@ def validate(c):
     default=KL_STOP_DEFAULT if c.get('contract')==KL_STOP_CONTRACT else TEACHER_FLOOR_DEFAULT if c.get('contract')==TEACHER_FLOOR_CONTRACT else EVERY_ITER_DEFAULT if c.get('contract')==EVERY_ITER_CONTRACT else TWO_ITER_DEFAULT if two_iteration(c) else EARLY_DEFAULT if c.get('contract')==EARLY_CONTRACT else QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
     if default is KL_STOP_DEFAULT and c.get('max_epochs') == 1:
         default = dict(default, max_epochs=1)
+        if c.get('beta_clone_min') == .5:
+            default['beta_clone_min'] = .5
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():
@@ -362,12 +364,20 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             if adopting_teacher_floor:options_match=teacher_floor_options(saved['options'])==phases.options
             adopting_kl_stop=config['value_phase']['contract']==KL_STOP_CONTRACT and saved['options']['value_phase']['contract']==TEACHER_FLOOR_CONTRACT
             if adopting_kl_stop:options_match=kl_stop_options(saved['options'])==phases.options
+            saved_value = saved['options']['value_phase']
+            raising_floor = (saved_value['contract'] == config['value_phase']['contract'] == KL_STOP_CONTRACT
+                and saved_value['beta_clone_min'] == .25 and config['value_phase']['beta_clone_min'] == .5
+                and dict(saved['options'], value_phase=dict(saved_value, beta_clone_min=.5)) == phases.options)
+            options_match = options_match or raising_floor
             if two_iteration(saved['options']['value_phase']):fields.add('phase_origin')
             expected_contract=TWO_ITER_CHECKPOINT if two_iteration(saved['options']['value_phase']) else CHECKPOINT
             require(saved.get('contract')==expected_contract and set(saved)==fields and options_match,
                 'g210 checkpoint configuration differs')
             phases.beta=saved['beta_clone'];phases.trips=saved['kl_trips']
             phases.cache_origin=saved['cache_origin'];receipts=saved['rolling_buffer'];phases.adoption=saved['adoption']
+            if raising_floor:
+                require(type(phases.beta) in (int, float) and .25 <= phases.beta <= 32, 'Invalid saved PPG beta')
+                phases.beta = max(.5, phases.beta)
             if adopting_kl_stop:
                 phases.ppg_schedule_migration=dict(contract=KL_STOP_MIGRATION,origin=generation,
                     beta_before=phases.beta,beta_after=phases.beta,previous_adoption=copy.deepcopy(phases.adoption),

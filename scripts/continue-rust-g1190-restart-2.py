@@ -51,6 +51,11 @@ Stage C. Teacher cotton tables target one or two fixed random seats at 30%.
 Ordinary tables use a 50/20/30 mix, with 15% cotton targeting on selected seats
 in the cotton self-play games. Long and short C_scale are .15 and .5.
 Ordinary PPG runs at most one epoch with a beta floor of .25 across all stages.
+
+--update-opening-sampling continues the seated run with temperature 2 for each
+seat's first three actions in ordinary and teacher games, 10% ordinary cotton
+targeting, and a .5 PPG beta floor at every stage. Re-measure teacher beta on
+the first iteration with teaching on. The new settings persist.
 """
 import importlib.util
 from pathlib import Path

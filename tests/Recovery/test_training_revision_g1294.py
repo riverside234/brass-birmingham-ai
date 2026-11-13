@@ -334,6 +334,36 @@ class KlCap(unittest.TestCase):
             again = TrainingPhases(model, new, raw=dict(training={KEY: revised.payload()}), root=ROOT, run=run)
             self.assertIsNone(again.ppg_schedule_migration)
 
+    def test_one_epoch_floor_raises_low_beta_and_preserves_higher_beta_on_resume(self):
+        from test_ppg_eight import stage_only
+        from brass_ai.recovery import gae
+        model, _, config = ppg_config()
+        config['value_phase'] = dict(G.KL_STOP_DEFAULT, max_epochs=1, batch_size=32, clone_rows=64, clone_batch_size=8)
+        revised = dict(config, value_phase=dict(config['value_phase'], beta_clone_min=.5))
+        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as tmp:
+            run = Path(tmp)
+            phase = TrainingPhases(model, config, root=ROOT, run=run)
+            p = next(model.parameters())
+            p.grad = torch.ones_like(p)
+            phase.optimizer.step()
+            phase.optimizer.zero_grad(set_to_none=True)
+            stage_only(model,phase,1)
+            phase.state = gae.initial(config['advantage'],1)
+            phase.critic_state['generation'] = 1
+            from brass_ai.recovery import snapshot_r2
+            phase.critic_state['weight_recovery'] = snapshot_r2.initial(1,phase.critic_state['snapshot_weight'])
+            phase.trips = [True,False]
+            payload = phase.payload()
+            for beta, expected in ((.25,.5),(1.,1.)):
+                raw = dict(training={KEY:dict(payload,beta_clone=beta)})
+                restored = TrainingPhases(model,revised,raw=raw,generation=1,root=ROOT,run=run)
+                self.assertEqual(restored.beta,expected)
+                self.assertEqual(restored.trips,phase.trips)
+                self.assertEqual(restored.buffer.receipts,payload['rolling_buffer'])
+                self.assertTrue(_same_payload(restored.optimizer.state_dict(),payload['optimizer']))
+                clean = dict(optimizer_steps=16,kl_guard_tripped=False,probe_kl=.001)
+                self.assertEqual(G.beta_after_phase(restored.beta,restored.trips,clean,revised['value_phase'])[0],.5)
+
     def test_the_previous_recipe_keeps_its_rollback(self):
         with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as tmp:
             m, p = self.phases(tmp)

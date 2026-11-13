@@ -106,5 +106,6 @@ def validate_backend(state,value):
         receipt.get('qualified_generation')==q['qualified_generation'], 'Teacher activation receipt changed')
     options=state['signature']['config']['teacher_phase']['search_value']
     if 'schedule' in options:
-        require(receipt.get('stage_schedule')==digest(options['schedule']) and receipt.get('ppg_beta_floor')==.25,
+        require(receipt.get('stage_schedule')==digest(options['schedule']) and
+            receipt.get('ppg_beta_floor')==state['signature']['config']['value_phase']['beta_clone_min'],
             'Teacher stage schedule activation receipt changed')

@@ -34,6 +34,10 @@ def check_turn(label, row_round, job):
     """Long labels belong to the reserved turns; short labels only to the other turns of a g1491 job."""
     reserved = row_round == job['reservations'][str(label['seat'])][label['phase']]
     revision = job.get('teacher_revision') or {}
+    opening = revision.get('exploration', {}).get('game_opening')
+    tempered = opening and label.get('explored') is True and label['phase']=='canal_early' and row_round<=2
+    require(label.get('sampling_temperature') == (opening['temperature'] if tempered else None),
+            'Teacher label opening temperature differs from its job')
     if TEACHER_SEARCH_HEAD_WEIGHT in revision or SEATS in revision:
         require(label.get('search_value') == job['search_value'], 'Teacher label search-head weight differs')
     if label.get('cotton_exploration') is not None:
@@ -114,6 +118,9 @@ def validate_improved_policy(label, choices):
             and label['effective_k'] <= min(root_width, requested),
             'Teacher K differs')
     require(type(label.get('explored', False)) is bool, 'Invalid teacher exploration flag')
+    if 'sampling_temperature' in label:
+        require(label['sampling_temperature']==2. and label.get('explored') is True and label['phase']=='canal_early',
+                'Invalid teacher opening sampling temperature')
     require(sum(label['counts']) == label['node_trajectories'] <= label['completed_trajectories'],
             'Teacher completed watermark differs')
     require(label['completed_trajectories'] <= label['frozen_n'] <= 1_000_000,

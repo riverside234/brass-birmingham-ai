@@ -208,7 +208,7 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     from collections import deque
     from . import ordinary_cotton
     proof = job['provenance']
-    cotton_seats = ordinary_cotton.validate_assignment(proof) if ordinary_cotton.KEY in proof else ()
+    cotton_seats, cotton_probability = ordinary_cotton.validate_assignment(proof)
     buffered=deque();decision=None;branch_packet=None;eligible_count=0
     for step in range(len(game['records']),max_decisions):
         if context['terminal']: break
@@ -254,7 +254,7 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
                     rngs[seat].choices([0],weights=[1.0],k=1)
                     chosen,probability,teacher=0,1.0,None
             elif seat in cotton_seats:
-                chosen,probability,teacher=p.select_batch([(view,choices,rngs[seat])],cotton=True)[0]
+                chosen,probability,teacher=p.select_batch([(view,choices,rngs[seat])],cotton_probability=cotton_probability)[0]
             else: chosen,probability,teacher=p.select_batch([(view,choices,rngs[seat])])[0]
         require(type(chosen) is int and 0<=chosen<len(choices),'Actor returned an illegal choice')
         style,intent=p.context_features(view,rngs[seat]) if hasattr(p,'context_features') else ([0.0]*4,[0.0]*8)

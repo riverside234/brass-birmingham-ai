@@ -40,11 +40,15 @@ def health_counts(games,learner_ids):
     return out
 
 
-def economy(games,learner_ids=None):
+def economy(games,learner_ids=None,*,selfplay=False):
     actions=Counter();phases=Counter();builds=Counter();flipped=Counter();merchant=Counter()
     cash=[];income=[];forced=0;debt=0;feasible_sales=0;selected_sales=0;seen_tiles=set();tile_states={}
     by_era=Counter();levels=Counter();passes_with_alternative=sale_starts=sale_continuations=0
+    cotton = {key: dict(tables=0, builds=0, flips=0) for key in ('cotton_exploration','standard_exploration')} if selfplay else {}
     for game in games:
+        if selfplay:
+            group = 'cotton_exploration' if getattr(game, 'cotton_seats', ()) else 'standard_exploration'
+            builds_before, flips_before = builds['CottonMill'], flipped['CottonMill']
         relevant={s for s,p in enumerate(game['opponents']) if learner_ids is None or p in learner_ids}
         for row in game['records']:
             view=row['view']
@@ -75,6 +79,11 @@ def economy(games,learner_ids=None):
                 identity=choice['target'].split(':',1)[1]
                 bonus=next((m['bonus'] for m in view['merchants'] if m['id']==identity),'unknown')
                 merchant[bonus]+=1
+        if selfplay:
+            cotton_counts = cotton[group]
+            cotton_counts['tables'] += 1
+            cotton_counts['builds'] += builds['CottonMill'] - builds_before
+            cotton_counts['flips'] += flipped['CottonMill'] - flips_before
     unflipped=Counter(v['type'] for v in tile_states.values() if not v['flipped'])
     return dict(actions=dict(actions),phases=dict(phases),forced_decisions=forced,
         actions_by_era=dict(by_era),build_levels=dict(levels),
@@ -86,6 +95,7 @@ def economy(games,learner_ids=None):
         mean_observed_income=sum(income)/len(income) if income else None,
         debt_decisions=debt,feasible_sale_decisions=feasible_sales,selected_sales=selected_sales,
         merchant_beer_by_bonus=dict(merchant),
+        **({'cotton_by_selfplay':cotton} if selfplay else {}),
         interpretation='Counts use public predecision views; build level is the next public mat tile. A legal alternative to Pass need not be good. Sale starts and continuation tile choices are separate. Last-seen unflipped tiles are not exact end-of-era waste; scoring may follow the last view.')
 
 
@@ -97,7 +107,7 @@ def summarize(games,learner_ids,kind_by_group=None):
     # previous path walked every board/history again for the same totals.
     parts=[]
     for kind,group in kinds.items():
-        summary=dict(matches=match_report(group),economy=economy(group,learner_ids),
+        summary=dict(matches=match_report(group),economy=economy(group,learner_ids,selfplay=kind=='selfplay'),
                      diversity=pottery_metrics(group,learner_ids),learner_by_seat=learner_seats(group,learner_ids),
                      health_counts=health_counts(group,learner_ids))
         parts.append(dict(**summary,by_composition={kind:summary},
@@ -135,6 +145,9 @@ def merge_summaries(parts):
         out['minimum_observed_cash']=min(minima) if minima else None
         for key in ('mean_observed_cash','mean_observed_income'):
             out[key]=sum(p[key]*n for p,n in zip(items,counts) if n)/total if total else None
+        cotton = [p['cotton_by_selfplay'] for p in items if 'cotton_by_selfplay' in p]
+        if cotton:
+            out['cotton_by_selfplay'] = {key: counters([p[key] for p in cotton]) for key in cotton[0]}
         return out
     def diversity(items):
         out=dict(items[0])

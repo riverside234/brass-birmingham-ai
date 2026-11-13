@@ -79,7 +79,7 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
     else:
         require(part['producer']['contract']=='brass-reference-collection/1.0.0','Unknown producer')
     proof = job['provenance']
-    cotton_seats = ordinary_cotton.validate_assignment(proof) if ordinary_cotton.KEY in proof else ()
+    cotton_seats, cotton_probability = ordinary_cotton.validate_assignment(proof)
     require(not cotton_seats or not child, 'Cotton exploration is bound to complete self-play tables')
     # Replay draws for assigned seats even on the structural fast path.
     audited_seats = range(4) if semantic else cotton_seats
@@ -128,7 +128,7 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
                     'External behavior attribution differs')
             continue
         b=row['behavior'];phase=row['view']['context']['phase'];opening=spec.get('opening')
-        candidates = ordinary_cotton.check_row(row, seat in cotton_seats)
+        candidates = ordinary_cotton.check_row(row, cotton_probability if seat in cotton_seats else 0.)
         if child:opening=branch_opening(job,opening)
         focus=job.get('focuses',{}).get(str(seat),'neutral') if spec['focus']=='mixed' else spec['focus']
         assignment=job['provenance'].get('diversity_assignment')
@@ -175,7 +175,7 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
             component = 'exploration' if explore else 'policy'
             probability = mixed[expected]
             if candidates:
-                expected, probability, targeted = sample_cotton(rngs[seat], expected, mixed, candidates)
+                expected, probability, targeted = sample_cotton(rngs[seat], expected, mixed, candidates, cotton_probability)
                 if targeted: component = 'cotton'
             require(b['component']==component,'Sampling component differs')
         else:

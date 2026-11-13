@@ -273,7 +273,7 @@ impl State {
     }
 
     /// Called after search, and AFTER candidate coverage. The mixture's exact
-    /// behavior probability mixes the root visits with visits to targeted cotton choices.
+    /// behavior probability mixes the root visit weights with the cotton subset.
     /// Separate keyed streams leave search and the existing baseline draw intact.
     pub fn sample(
         &mut self,
@@ -281,6 +281,7 @@ impl State {
         choices: &[Choice],
         counts: &[u64],
         total: u64,
+        tempered: Option<(&[f64], f64)>,
         seed: u64,
         decision: u64,
     ) -> Result<usize> {
@@ -293,10 +294,14 @@ impl State {
         )?;
         let develop = self.mode.develop();
         let mut cotton_total = 0;
+        let mut cotton_mass = 0.;
         let mut locations = Vec::with_capacity(2);
-        for (choice, n) in choices.iter().zip(counts) {
+        for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
             if *n > 0 && targeted(choice, develop) {
                 cotton_total += n;
+                if let Some((weights, _)) = tempered {
+                    cotton_mass += weights[i];
+                }
                 let location = (choice.kind, choice.target.as_deref());
                 if !locations.contains(&location) {
                     locations.push(location);
@@ -314,32 +319,36 @@ impl State {
         c.covered_locations += locations.len() as u64;
         c.cotton_visits += cotton_total;
         c.total_visits += total;
-        let base_p = cotton_total as f64 / total as f64;
+        let base_p = tempered.map_or(cotton_total as f64 / total as f64, |(_, mass)| cotton_mass / mass);
         c.base_cotton_probability_sum += base_p;
         c.mixed_cotton_probability_sum += (1. - mixture) * base_p + mixture;
         let mut selected = base;
         if trigger {
             let z = super::cpu_eval::mix(seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a02));
-            let draw = ((u128::from(z) * u128::from(cotton_total)) >> 64) as u64;
-            let mut sum = 0;
-            for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
-                if targeted(choice, develop) {
-                    sum += n;
-                    if draw < sum {
-                        selected = i;
-                        break;
+            if let Some((weights, _)) = tempered {
+                let eligible = weights.iter().copied().enumerate().filter(|(i, _)| targeted(&choices[*i], develop));
+                selected = super::cpu_eval::sample_weights(eligible, cotton_mass, z)?;
+            } else {
+                let draw = ((u128::from(z) * u128::from(cotton_total)) >> 64) as u64;
+                let mut sum = 0;
+                for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
+                    if targeted(choice, develop) {
+                        sum += n;
+                        if draw < sum {
+                            selected = i;
+                            break;
+                        }
                     }
                 }
             }
             c.triggers += 1;
         }
         let binding = self.current.ok_or("cotton choice without preparation")?;
-        let probability = (1. - mixture) * counts[selected] as f64 / total as f64
-            + if targeted(&choices[selected], develop) {
-                mixture * counts[selected] as f64 / cotton_total as f64
-            } else {
-                0.
-            };
+        let (selected_mass, full_mass, cotton_mass) = tempered.map_or(
+            (counts[selected] as f64, total as f64, cotton_total as f64),
+            |(weights, mass)| (weights[selected], mass, cotton_mass));
+        let probability = (1. - mixture) * selected_mass / full_mass
+            + if targeted(&choices[selected], develop) { mixture * selected_mass / cotton_mass } else { 0. };
         self.selection = Some(Selection {
             contract: self.mode.contract(),
             targeted: trigger,
@@ -470,7 +479,7 @@ mod tests {
         let mut picked = [0; 3];
         s.prepare(&v, &c, false, true);
         for d in 0..10_000 {
-            let i = s.sample(0, &c, &[90, 3, 7], 100, 7, d).unwrap();
+            let i = s.sample(0, &c, &[90, 3, 7], 100, None, 7, d).unwrap();
             picked[i] += 1;
             let e = s.selection.as_ref().unwrap();
             assert!((e.probability - ([0.72, 0.024 + 0.06, 0.056 + 0.14][i])).abs() < 1e-14);
@@ -479,6 +488,20 @@ mod tests {
         assert!((1800..2200).contains(&(picked[1] + picked[2])));
         assert!((500..700).contains(&picked[1]));
         assert_eq!(s.used, [[0; 4]; 2]); // sampling alone never spends an allowance
+    }
+    #[test]
+    fn tempered_opening_cotton_mixture_records_the_tempered_probability() {
+        let v = view();
+        let c = choices();
+        let mut s = State { mode: Mode::Seated, ..State::default() };
+        s.prepare(&v, &c, false, true);
+        let weights = [9., 3., 4.];
+        let decision = (0..100).find(|d| s.trigger(7, *d)).unwrap();
+        let i = s.sample(0, &c, &[81, 9, 16], 106, Some((&weights, 16.)), 7, decision).unwrap();
+        assert!(i == 1 || i == 2);
+        let e = s.selection.as_ref().unwrap();
+        assert_eq!((e.cotton_visits, e.total_visits), (25, 106));
+        assert!((e.probability - (0.7 * weights[i] / 16. + 0.3 * weights[i] / 7.)).abs() < 1e-14);
     }
     #[test]
     fn commit_is_bound_idempotent_and_caps_each_seat_and_era_independently() {
@@ -490,7 +513,7 @@ mod tests {
             v.context.revision += 1;
             assert_eq!(s.prepare(&v, &c, true, true), 1);
             assert_eq!(s.prepare(&v, &c, true, true), 1);
-            let i = s.sample(0, &c, &[90, 3, 7], 100, 7, trigger()).unwrap();
+            let i = s.sample(0, &c, &[90, 3, 7], 100, None, 7, trigger()).unwrap();
             assert!(s.selection.as_ref().unwrap().targeted);
             assert!(s.commit(&v, &c[0], v.context.revision + 1).is_err());
             assert!(s.commit(&v, &c[i], v.context.revision).is_err());
@@ -536,7 +559,7 @@ mod tests {
         v.slots[0].tile.as_mut().unwrap().flipped = true;
         v.context.revision += 1;
         assert_eq!(s.prepare(&v, &c, false, true), 2);
-        assert_eq!(s.sample(0, &c, &[100, 0, 0], 100, 7, trigger()).unwrap(), 0);
+        assert_eq!(s.sample(0, &c, &[100, 0, 0], 100, None, 7, trigger()).unwrap(), 0);
         assert!(s.selection.is_none());
         assert_eq!(s.counts[0].no_cotton_visits, 1);
         // A cancelled/unpublished decision is retried from its frozen table seed;
@@ -563,7 +586,7 @@ mod tests {
             let triggers = (0..10_000).filter(|d| s.trigger(7, *d)).count();
             assert!(triggers_expected.contains(&triggers));
             let decision = (0..100).find(|d| s.trigger(7, *d)).unwrap();
-            assert_eq!(s.sample(0, &choices, &[90, 10], 100, 7, decision).unwrap(), 1);
+            assert_eq!(s.sample(0, &choices, &[90, 10], 100, None, 7, decision).unwrap(), 1);
             let label = s.selection.as_ref().unwrap().label();
             assert_eq!(label["contract"], contract);
             assert!((label["probability"].as_f64().unwrap() - probability).abs() < 1e-14);

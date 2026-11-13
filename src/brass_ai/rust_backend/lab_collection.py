@@ -80,7 +80,7 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
         assigned = [policies[(s-job.get('rotation',0))%4] for s in range(4)]
         from brass_ai.recovery import ordinary_cotton
         proof = job['provenance']
-        cotton_seats = ordinary_cotton.validate_assignment(proof) if ordinary_cotton.KEY in proof else ()
+        cotton_seats, cotton_probability = ordinary_cotton.validate_assignment(proof)
         group = digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed']))
         game_id = job.get('stable_game_id') or digest(dict(job=job_id, seed=job['seed']))
         game = dict(game_id=game_id,setup_group=group,players=4,split=split_for(group),
@@ -141,7 +141,7 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
                 if p.exploration_version==3: chosen,probability,teacher=p.sample_training(view,choices,rng,np.ones(1),intent)
                 else: rng.choices([0],weights=[1.],k=1); chosen,probability,teacher=0,1.,None
             elif seat in cotton_seats:
-                chosen,probability,teacher=p.select_batch([(view,choices,rng)],cotton=True)[0]
+                chosen,probability,teacher=p.select_batch([(view,choices,rng)],cotton_probability=cotton_probability)[0]
             else: chosen,probability,teacher=p.select_batch([(view,choices,rng)])[0]
             style,intent=p.context_features(view,rng)
             behavior=dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=getattr(p,'temperature',1.))

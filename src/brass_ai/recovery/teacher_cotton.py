@@ -56,6 +56,12 @@ def validate_label(label, choices):
         (e['cotton_visits'],e['total_visits'],e['covered_locations'])==(cotton,total,len(locations)),
         'Cotton coverage counters differ from search evidence')
     n,is_cotton=played
+    if label.get('sampling_temperature') == 2.:
+        weights = [math.sqrt(count) for count in label['counts']]
+        total = sum(weights)
+        cotton = sum(w for c,w in zip(choices,weights) if c.get('industry')=='CottonMill'
+                     and (c['kind']=='build' or develop and c['kind']=='develop'))
+        n = math.sqrt(n)
     probability=(1-mixture)*n/total+(mixture*n/cotton if is_cotton else 0.)
     require((not e['targeted'] or is_cotton) and type(e['probability']) in (int,float) and
         math.isfinite(e['probability']) and abs(e['probability']-probability)<=1e-12,
