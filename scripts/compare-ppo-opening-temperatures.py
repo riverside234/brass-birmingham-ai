@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import random
 import sys
+from tempfile import TemporaryDirectory
 import threading
 import time
 
@@ -23,6 +24,8 @@ ACTION_KINDS = ('build', 'develop', 'network', 'sell', 'loan', 'scout', 'pass')
 COMPOUND_KINDS = ('develop', 'network', 'sell')
 MOVE_FIELDS = ('kind', 'target', 'industry', 'merchant')
 DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1190-restart-3'
+DEFAULT_GENERATION = 2090
+STUDY_FOLDER = 'opening-temperature-study'
 
 
 def play_game(session, origin, spec, seed, temperature, max_decisions, stop):
@@ -194,13 +197,14 @@ def summarize(games, board):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', default=DEFAULT_RUN, help='Read-only training run')
-    parser.add_argument('--generation', type=int, default=2080)
+    parser.add_argument('--generation', type=int, default=DEFAULT_GENERATION,
+                        help=f'Checkpoint generation (default: {DEFAULT_GENERATION})')
     parser.add_argument('--checkpoint', help='Alternate location for the same verified checkpoint')
     parser.add_argument('--games-per-temperature', type=int, default=320)
     parser.add_argument('--seed-start', type=int, default=20800000, help='Start of the validation seed scan')
     parser.add_argument('--workers', type=int, default=16)
     parser.add_argument('--mono', default='mono')
-    parser.add_argument('--output', help='New study output directory under the project root')
+    parser.add_argument('--output', help=f'New report directory (default: results/{STUDY_FOLDER}/g<generation>-<UTC>)')
     args = parser.parse_args()
     if args.games_per_temperature < 1 or args.workers < 1 or not 0 <= args.seed_start < 2**31:
         parser.error('Use positive game and worker counts and a setup seed in [0, 2**31).')
@@ -243,28 +247,34 @@ def main():
     board = topology()
 
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
-    output = project_path(ROOT, args.output or f'artifacts/opening-temperature-study/g{args.generation}-{stamp}')
+    output = project_path(ROOT, args.output or f'results/{STUDY_FOLDER}/g{args.generation}-{stamp}')
     require(not output.is_relative_to(run), 'Write study artifacts outside the training run')
+    require(not output.exists(), f'Report directory already exists: {output}')
     torch.set_num_threads(2)
     model, checkpoint_data = load_checkpoint(checkpoint)
     require(checkpoint_data['step'] == args.generation and checkpoint_data['model_id'] == entry['model_id'],
             'Loaded checkpoint generation or model ID differs from the run history')
     del checkpoint_data
-    output.mkdir(parents=True, exist_ok=False)
-    bundle = output / 'cpu-model'
-    lab_cpu_models.export_bundle(model.eval(), bundle)
-    del model
-    manifest = bundle / 'manifest.json'
-    cpu = dict(contract=lab_cpu_runtime.CONTRACT,
-               runtime=dict(path=str(runtime_path(runtime['runtime']['path'])), sha256=runtime['runtime']['sha256']),
-               bundles={entry['model_id']: dict(manifest=str(manifest), sha256=sha(manifest))}, model_cache=1)
+    scratch = project_path(ROOT, f'artifacts/{STUDY_FOLDER}')
+    require(not scratch.is_relative_to(run), 'Write the temporary CPU model outside the training run')
+    scratch.mkdir(parents=True, exist_ok=True)
     workers = min(args.workers, len(seeds))
     print(f'g{args.generation} | {len(seeds)} paired setups | {len(seeds) * len(TEMPERATURES)} games | '
           f'{workers} CPU lanes | {output}', flush=True)
 
     stop = threading.Event()
     games = []
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    with (
+        TemporaryDirectory(prefix=f'g{args.generation}-', dir=scratch) as temporary,
+        ThreadPoolExecutor(max_workers=workers) as pool,
+    ):
+        bundle = Path(temporary) / 'cpu-model'
+        lab_cpu_models.export_bundle(model.eval(), bundle)
+        del model
+        manifest = bundle / 'manifest.json'
+        cpu = dict(contract=lab_cpu_runtime.CONTRACT,
+                   runtime=dict(path=str(runtime_path(runtime['runtime']['path'])), sha256=runtime['runtime']['sha256']),
+                   bundles={entry['model_id']: dict(manifest=str(manifest), sha256=sha(manifest))}, model_cache=1)
         tasks = [pool.submit(play_batch, seeds[index::workers], command, collector, execution, cpu, specs, stop)
                  for index in range(workers)]
         try:
@@ -283,6 +293,7 @@ def main():
                                 actions_per_seat=OPENING_STEPS, after_opening_temperature=1.,
                                 epsilon=0., seats='all four use the same frozen checkpoint'),
                   network_link_endpoints=board['link_endpoints'], **summarize(games, board))
+    output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'opening-actions.json', games, compact=True)
     write_json(output / 'summary.json', report)
     print('Temperature  First-at-table  Pooled  Seat 0  Seat 1  Seat 2  Seat 3  (distinct actions)')
