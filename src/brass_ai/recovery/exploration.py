@@ -4,7 +4,7 @@ import math
 import statistics
 
 from brass_ai.learning.contracts import digest, require
-from brass_ai.step5.policy import FAMILY_WEIGHTS
+from brass_ai.step5.policy import COTTON_EXPLORATION, COTTON_PROBABILITY, FAMILY_WEIGHTS
 
 GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
 FIXED_ENTROPY = dict(contract='fixed-group-entropy/1.0.0',
@@ -249,11 +249,16 @@ def effective_alphas(config,state):
 
 
 def check_behavior(b, phase, *, branch_move=False):
+    cotton = COTTON_EXPLORATION in b
+    components = ('branch_move',) if branch_move else ('policy','exploration','cotton') if cotton else ('policy','exploration')
     require(set(b)=={'kind','policy_id','probability','temperature','exploration','exploration_version',
-        'component','action_decision'} and b['kind']=='model' and type(b['exploration_version']) is int and
+        'component','action_decision'} | ({COTTON_EXPLORATION} if cotton else set())
+        and (not cotton or (not branch_move and phase in ('action','continuation') and
+                           b[COTTON_EXPLORATION] == COTTON_PROBABILITY))
+        and b['kind']=='model' and type(b['exploration_version']) is int and
         b['exploration_version']==3 and type(b['exploration']) in (float,int) and
         math.isfinite(b['exploration']) and 0<=b['exploration']<=.5 and
-        b['component'] in (('branch_move',) if branch_move else ('policy','exploration')) and b['temperature'] in (1.,1.3,1.5,2.),
+        b['component'] in components and b['temperature'] in (1.,1.3,1.5,2.),
         'Invalid v3 behavior record')
     count=b['action_decision']
     require((type(count) is int and count>=0) if phase=='action' else count is None,

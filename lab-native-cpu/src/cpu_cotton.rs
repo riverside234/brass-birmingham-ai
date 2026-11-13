@@ -15,6 +15,7 @@ pub const CONTRACT: &str = "teacher-cotton-exploration/1.0.0";
 const DEVELOP_CONTRACT: &str = "teacher-cotton-exploration/2.0.0";
 const MIXED_CONTRACT: &str = "teacher-cotton-exploration/3.0.0";
 const MIXED_25_CONTRACT: &str = "teacher-cotton-exploration/4.0.0";
+const SEATED_CONTRACT: &str = "teacher-cotton-exploration/5.0.0";
 pub const CAP: u8 = 3;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -24,6 +25,7 @@ pub enum Mode {
     Develop,
     Mixed,
     Mixed25,
+    Seated,
 }
 
 impl Mode {
@@ -37,6 +39,7 @@ impl Mode {
             Self::Develop => DEVELOP_CONTRACT,
             Self::Mixed => MIXED_CONTRACT,
             Self::Mixed25 => MIXED_25_CONTRACT,
+            Self::Seated => SEATED_CONTRACT,
         }
     }
 
@@ -44,7 +47,7 @@ impl Mode {
         match self {
             Self::Builds => (1, 5),
             Self::Develop | Self::Mixed25 => (1, 4),
-            Self::Mixed => (3, 10),
+            Self::Mixed | Self::Seated => (3, 10),
         }
     }
 
@@ -52,12 +55,12 @@ impl Mode {
         match self {
             Self::Builds => 0.2,
             Self::Develop | Self::Mixed25 => 0.25,
-            Self::Mixed => 0.3,
+            Self::Mixed | Self::Seated => 0.3,
         }
     }
 
     pub fn settings(self) -> Value {
-        let scope = if matches!(self, Self::Mixed | Self::Mixed25) { "train-and-heldout" } else { "train" };
+        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated) { "train-and-heldout" } else { "train" };
         json!({"contract":self.contract(),"probability":self.probability(),"max_per_seat_era":CAP,
             "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":scope})
     }
@@ -146,6 +149,7 @@ pub struct State {
     pub built: [[u32; 4]; 2],
     developed: [[u32; 4]; 2],
     pub mode: Mode,
+    pub seats: Option<u8>,
     current: Option<Binding>,
     committed: Option<Binding>,
     eligible: bool,
@@ -190,6 +194,9 @@ impl State {
         self.continuation_choice = None;
         self.eligible = false;
         self.profile = usize::from(fast);
+        if self.seats.is_some_and(|mask| mask & (1 << binding.seat) == 0) {
+            return 0;
+        }
         let pause = || {
             view.slots.iter().any(|s| {
                 s.tile.as_ref().is_some_and(|t| {

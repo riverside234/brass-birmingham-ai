@@ -209,11 +209,15 @@ class ExportTests(unittest.TestCase):
         self.assertEqual((output/'fresh-start.json').read_bytes(),raw)
         entry=next(e for e in manifest['files'] if e['path']=='fresh-start.json')
         self.assertEqual(entry['recovered_from'],'rollback-backup');self.assertEqual(entry['recorded_source'],self.run+'/seed/manifest.json')
+        self.assertEqual(manifest['warnings'], [])
         self.assertFalse((self.root/self.run/'seed/manifest.json').exists())
         self.assertEqual(before,{p:p.read_bytes() for p in before})
         self.assertFalse(any(p.suffix in ('.pt','.npz') for p in output.rglob('*')))
         _,second=self.export(output='results/recovered-seed-next',continue_export=True)
-        self.assertIn('fresh-start.json',{e['path'] for e in second['reused_files']})
+        reused=next(e for e in second['reused_files'] if e['path']=='fresh-start.json')
+        self.assertEqual(reused['recovered_from'],'rollback-backup')
+        self.assertEqual(reused['recorded_source'],self.run+'/seed/manifest.json')
+        self.assertEqual(second['warnings'], [])
 
     def test_seed_recovers_only_exact_bytes_from_previous_same_run_reports(self):
         source,raw=self.seed_provenance();first,_=self.export(output='results/seed-first')
@@ -222,11 +226,14 @@ class ExportTests(unittest.TestCase):
         self.assertEqual((output/'fresh-start.json').read_bytes(),raw)
         entry=next(e for e in manifest['files'] if e['path']=='fresh-start.json')
         self.assertEqual(entry['recovered_from'],'previous-report')
+        self.assertEqual(entry['recorded_source'],self.run+'/seed/manifest.json')
+        self.assertEqual(manifest['warnings'], [])
         (first/'fresh-start.json').write_bytes(b'{}')
         (output/'fresh-start.json').write_bytes(b'{}')
         final,missing=self.export(output='results/seed-missing',continue_export=True)
         self.assertFalse((final/'fresh-start.json').exists())
         self.assertIn(self.run+'/seed/manifest.json',{r['source'] for r in missing['missing']})
+        self.assertTrue(any('Original seed manifest is absent' in w for w in missing['warnings']))
 
     def test_rollback_seed_and_binding_corruption_remain_errors(self):
         source,_=self.seed_provenance(rollback=True);raw=source.read_bytes();source.write_bytes(b'{}')

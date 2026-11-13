@@ -515,6 +515,71 @@ class NativeWorkers(unittest.TestCase):
         self.assertGreater(first['timings']['ipc_cpu_forward_ns'], 0)
         self.assertEqual(second['timings']['policy_reuses'], 4)
 
+    def test_ordinary_cotton_game_replays_exact_mixed_likelihood(self):
+        from brass_ai.recovery import ordinary_cotton as cotton
+        from brass_ai.recovery.exploration import THREE_OPENING
+        from brass_ai.recovery.opening_objective import Reference
+        from brass_ai.recovery.updates import Dataset, policy_measure, prepared
+        from brass_ai.recovery.telemetry import Timings
+        from brass_ai.recovery.execution import neural_spec
+        from brass_ai.recovery.league import Behavior
+        from brass_ai.rust_backend import lab_admission, lab_perf
+        from brass_ai.rust_backend.lab_collection import collect_lane
+        from brass_ai.rust_backend.lab_families import FORMAT, validate_part
+        from brass_ai.rust_backend.lab_session import OrdinarySession
+        native = Path(os.environ['BRASS_CPU_NATIVE'])
+        state = json.loads((native/'brass-ai-core/tests/data/initial-state.json').read_text())
+        origin = dict(state=state, rail_keys=list(range(64)))
+        binary = os.environ['BRASS_CPU_COLLECTOR']
+        endpoint = SimpleNamespace(lock=threading.RLock())
+        execution = dict(max_decisions=5000, batch_size=32, max_candidate_cells=8192)
+        spec = neural_spec(self.identity, 0., 'neutral', version=3, opening=THREE_OPENING)
+        index = 13
+        assignment = cotton.assignment(index, 31)
+        config_with_cotton = cotton.configure(dict(update=config()['update'], table_plan={}))
+        opening = config_with_cotton['update']['opening_objective']
+        signature = 'a'*64
+        job = dict(index=0, seed=19, sampling_seed=31, policies=[spec]*4,
+                   provenance=dict(kind='selfplay', purpose='training', ordinary_game_index=index,
+                                   sampling_seed=31, spec=signature,
+                                   ppo_opening_objective=opening,
+                                   learner_behavior=dict(model_id=self.identity, policy_id=spec['policy_id']),
+                                   **{cotton.KEY: assignment}))
+        cpu = dict(contract=R.CPU_CONTRACT, runtime=self.runtime, bundles=self.bundles, model_cache=2, pinning='none')
+        with OrdinarySession(SOURCE_ROOT, binary, endpoint, execution, cpu=cpu) as session:
+            part = collect_lane(SOURCE_ROOT, binary, None, job, endpoint, execution, origin=origin, session=session)
+        game = validate_part(part, job, semantic=False)
+        targeted = [r for r in game['records'] if cotton.KEY in r['behavior']]
+        self.assertTrue(targeted)
+        self.assertEqual({r['seat'] for r in targeted}, set(assignment['seats']))
+        self.assertTrue(any(r['behavior']['component']=='cotton' for r in targeted))
+        changed = dict(targeted[0], behavior=dict(targeted[0]['behavior'], probability=.999))
+        rows = [changed if r['step']==changed['step'] else r for r in game['records']]
+        with self.assertRaisesRegex(ValueError, 'Behavior denominator differs'):
+            validate_part(dict(part, game=dict(game, records=rows)), job,
+                          arrays=[game.encoded(r,None) for r in game['records']], semantic=False)
+        producer = dict(build_sha256='b'*64, b01_sha256='c'*64, signature=signature,
+                        profile=lab_admission.METHOD, v205_enabled=False)
+        admission = lab_admission.binding(job, producer, generation=0, model_id=self.identity, config=config_with_cotton)
+        family = dict(format=FORMAT, job_id=admission['job_id'], frozen_job=job, producer=producer,
+                      parent=part, child=None, training_admitted=False)
+        coverage = lab_perf.coverage(lab_perf.selection(job, ordinal=1, selected_mode='production_fast'))
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)/'actor.jsonl.gz'
+            record = lab_admission.publish(path, family, admission, validation_receipt=True, coverage=coverage,
+                                           _owned_family=True)
+            restored = lab_admission.read(path, record['native_admission'])
+            self.assertEqual(restored.cotton_seats, tuple(assignment['seats']))
+            data = prepared([restored])
+        dataset = Dataset(data, 'cpu')
+        self.assertEqual(len(dataset.cotton_rows), len(targeted))
+        behavior = Behavior(self.identity, 0., dict(version=3, opening=THREE_OPENING))
+        dataset.opening_reference = Reference(dataset, behavior, opening)
+        self.assertFalse(bool(dataset.opening_reference.mask[list(dataset.cotton_rows)].any()))
+        kl = policy_measure(self.model, dataset, range(len(data)), behavior, config_with_cotton['update'],
+                            Timings(), verify=True)
+        self.assertLess(kl, 1e-6)
+
     def teacher_request(self, job, state, budget=None):
         from brass_ai.rust_backend.lab_teacher import CONTRACT
         return dict(contract=CONTRACT, op='run', job=job, origin=dict(state=state, rail_keys=list(range(64))),
@@ -692,6 +757,27 @@ class NativeWorkers(unittest.TestCase):
                         self.assertEqual(totals[f'cotton_{kind}'], sum(map(sum, cotton[f'{kind}_by_era_seat'])))
                 else:
                     self.assertTrue(all('cotton_exploration' not in row['teacher'] for row in result['rows']))
+
+    def test_seated_teacher_cotton_at_stage_b_blend(self):
+        from brass_ai.recovery import teacher_cotton, training_revision_g1491 as G
+        from brass_ai.step5.policy import cotton_seats
+        budget = dict(mode='count', full=64, fast=24, fast_k=8, **G.RETUNED_SEARCH)
+        exploration = dict(G.EXPLORATION, cotton=teacher_cotton.settings(contract=teacher_cotton.SEATED_CONTRACT))
+        for split, count in (('train', 2), ('heldout', 1)):
+            seed = self.all_seat_job(.42)['sampling_seed']
+            seats = cotton_seats(seed, count, teacher_cotton.SEATED_CONTRACT)
+            revision = G._job_block(exploration, short_labels=False, cotton_table=True, seats=seats)
+            job, result, verifier = self.run_all_seat(.42, budget, revision, split=split)
+            G.validate_job(job)
+            metrics = result['metrics']
+            receipt = metrics['cpu_inference']['revision']['cotton']
+            self.assertEqual(receipt[teacher_cotton.SEATS], seats)
+            self.assertTrue(verifier.take(result, job, self.model)[0])
+            self.assertTrue(all(r['teacher']['c2'] == .15 for r in result['rows']))
+            self.assertEqual({s['c_scale'] for s in metrics['searches'] if s['profile']=='fast'}, {.5})
+            self.assertTrue(any(r['teacher'].get('cotton_exploration') for r in result['rows']))
+            self.assertTrue(all(r['seat'] in seats for r in result['rows'] if r['teacher'].get('cotton_exploration')))
+            self.assertTrue(all(r['search_value']['w'] == .42 for r in result['value_rows']))
 
     def test_all_seat_table_blends_the_search_head_like_the_gpu_path(self):
         budget = dict(mode='count', full=64, full_k=16, fast=24, fast_k=8)

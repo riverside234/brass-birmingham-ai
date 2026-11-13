@@ -487,6 +487,7 @@ thread_local! {
 const REVISION_CONTRACT: &str = "training-revision-g1491/1.0.0";
 const EXPLORATION_CONTRACT: &str = "root-visit-count-sampling/1.0.0";
 const TEACHER_SEARCH_HEAD_WEIGHT: &str = "teacher_search_head_weight";
+const COTTON_SEATS: &str = "cotton_seats";
 
 /// `job["teacher_revision"]`: label short searches too, and sample the played
 /// action from the root visit counts (temperature 1) for each seat's first
@@ -498,6 +499,7 @@ pub struct Revision {
     opening_actions: u32,
     long_search: bool,
     cotton: Option<CottonMode>,
+    cotton_seats: Option<u8>,
     report_actions: bool,
 }
 
@@ -556,6 +558,7 @@ impl Exploration {
     fn for_revision(revision: &Revision) -> Self {
         let mut state = Self::default();
         state.cotton.mode = revision.cotton.unwrap_or_default();
+        state.cotton.seats = revision.cotton_seats;
         state
     }
 
@@ -581,10 +584,11 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
     let e = &block["exploration"];
     let opening = e["opening_actions_per_era"].as_u64().unwrap_or(u64::MAX);
     let weight = block.get(TEACHER_SEARCH_HEAD_WEIGHT);
+    let seats = block.get(COTTON_SEATS);
     let ordinary_table = job["h2h"] != true && job["shadow_probe"] != true;
     check(
         block["contract"] == REVISION_CONTRACT
-            && block.as_object().is_some_and(|o| o.len() == 3 + usize::from(weight.is_some()))
+            && block.as_object().is_some_and(|o| o.len() == 3 + usize::from(weight.is_some()) + usize::from(seats.is_some()))
             && block["short_labels"].is_boolean()
             && e.as_object().is_some_and(|o| o.len() == if e.get("cotton").is_some() {5} else {4})
             && e["contract"] == EXPLORATION_CONTRACT
@@ -594,14 +598,36 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
             && job["seating"] == "all-seat-search",
         "unreviewed teacher revision",
     )?;
-    if let Some(weight) = weight {
-        check(matches!(weight.as_u64(), Some(0 | 1)) && weight.as_f64() == job["search_value"]["w"].as_f64()
-            && ordinary_table && (job["split"] == "train" || job["split"] == "heldout")
+    if weight.is_some() || seats.is_some() {
+        check(ordinary_table && (job["split"] == "train" || job["split"] == "heldout")
             && block["short_labels"] == false && opening == 7 && e["long_search"] == true,
+            "unreviewed mixed teacher job")?;
+    }
+    if let Some(weight) = weight {
+        check(matches!(weight.as_u64(), Some(0 | 1)) && weight.as_f64() == job["search_value"]["w"].as_f64(),
             "teacher job search-head weight differs")?;
     }
+    let cotton_seats = if let Some(seats) = seats {
+        let seats = seats.as_array().ok_or("teacher cotton seats must be an array")?;
+        check(seats.len() <= 2 && (!seats.is_empty()) == e.get("cotton").is_some(),
+            "teacher cotton seat count differs")?;
+        let mut mask = 0u8;
+        for seat in seats {
+            let index = seat.as_u64().filter(|&index| index < 4).ok_or("invalid teacher cotton seat")?;
+            let bit = 1 << index;
+            check(mask < bit, "teacher cotton seats must be sorted and distinct")?;
+            mask |= bit;
+        }
+        Some(mask)
+    } else {
+        None
+    };
     let cotton = match e.get("cotton") {
         None => None,
+        Some(settings) if seats.is_some() => {
+            check(settings == &CottonMode::Seated.settings(), "unreviewed seated cotton exploration")?;
+            Some(CottonMode::Seated)
+        }
         Some(settings) if weight.is_some() => Some([CottonMode::Mixed, CottonMode::Mixed25]
             .into_iter().find(|mode| settings == &mode.settings()).ok_or("unreviewed mixed cotton exploration")?),
         Some(settings) if weight.is_none() && ordinary_table && job["split"] == "train" => {
@@ -620,7 +646,8 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         opening_actions: opening as u32,
         long_search: e["long_search"] == true,
         cotton,
-        report_actions: weight.is_some(),
+        cotton_seats,
+        report_actions: weight.is_some() || seats.is_some(),
     }))
 }
 
@@ -776,7 +803,13 @@ fn revision_receipt() -> Option<Value> {
                 "decisions":{"long":s.decisions[0],"short":s.decisions[1]},
                 "sampled":{"long":s.sampled[0],"short":s.sampled[1]},
                 "changed":{"long":s.changed[0],"short":s.changed[1]}});
-            if r.cotton.is_some() { value["cotton"]=s.cotton.receipt(); }
+            if r.cotton.is_some() {
+                let mut receipt = s.cotton.receipt();
+                if let Some(seats) = r.job.get(COTTON_SEATS) {
+                    receipt[COTTON_SEATS] = seats.clone();
+                }
+                value["cotton"] = receipt;
+            }
             if r.report_actions { value["actions"] = json!({"by_era_seat":s.actions}); }
             value
         })

@@ -286,6 +286,14 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native
             # Descriptors are table metadata, separate from the immutable board
             # observation/Features-4 contract. The enclosing replay hash seals it.
             proof=jobs[ordinal]['provenance'] if jobs is not None else header['provenance']
+            from . import ordinary_cotton
+            if ordinary_cotton.KEY in proof:
+                game.cotton_seats = ordinary_cotton.validate_assignment(proof)
+                for row in game['records']:
+                    ordinary_cotton.check_row(row, row['seat'] in game.cotton_seats)
+            else:
+                require(all(ordinary_cotton.KEY not in r['behavior'] for r in game['records']),
+                        'Cotton replay is missing its table assignment')
             if 'seat_contexts' in proof:
                 from .neutral_training import check_rows
                 for member in [game]+game.get('branches',[]):check_rows(member,proof)

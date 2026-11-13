@@ -579,6 +579,9 @@ def teacher_jobs(c, weight, count, offset):
     if g1491.teacher_search_head_weight(config) is not None:
         require(weight in (0, 1), 'Mixed teacher games need weight 0 or 1')
         config = g1491.configure_teacher_games(config, int(weight))
+        if g1491.seated_cotton(config):
+            # Exercise the override in its Stage C collection scope.
+            state['search_value'] = dict(stage=dict(stage='C', w=1.))
     jobs, _ = plan_jobs(config, state, model_id=c.snapshot['model_id'], export_hash=c.snapshot['checkpoint']['sha256'], epoch=1, ready=True,
                         native_source=source_fingerprint())
     jobs = [j for j in jobs if j['split'] == 'train'][:count]
@@ -601,7 +604,9 @@ def teacher(c):
     state = c.snapshot['state']
     build = teacher_build(state)
     reward = digest(c.model.config.utility)
-    receipt, ready = readiness(state.get('teacher_phase', {}).get('readiness'), c.raw['training'].get('utility_calibration'), reward)
+    config = getattr(c, 'teacher_config', c.config)
+    receipt, ready = readiness(state.get('teacher_phase', {}).get('readiness'), c.raw['training'].get('utility_calibration'),
+                               reward, skip=config.get('teacher_phase', {}).get('skip_utility_qualification', False))
     if not expect(checks, 'teacher_readiness', ready, receipt):
         return finish(checks)
     c.readiness = receipt
@@ -609,7 +614,7 @@ def teacher(c):
     # A g1491 iteration runs 48 tables at once, so its qualification does too (36+6+6 over the three blends):
     # the verification and lock contention that stretched g1490's tables from 43 s of search to 76 s grows with the table count.
     counts = TABLES_PER_BLEND_REVISED if getattr(c, 'revision', None) else TABLES_PER_BLEND
-    blends = (0., 1.) if g1491.teacher_search_head_weight(getattr(c, 'teacher_config', c.config)) is not None else BLENDS
+    blends = (0., 1.) if g1491.teacher_search_head_weight(config) is not None else BLENDS
     for number, weight in enumerate(blends):
         jobs += teacher_jobs(c, weight, counts[weight], 100000*number)
     actual_blends = sorted({j['search_value']['w'] for j in jobs})

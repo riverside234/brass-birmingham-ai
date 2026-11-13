@@ -614,7 +614,6 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
             require(files['fresh-start.json'][0]['sha256']==seed['sha256'],'Fresh-start seed changed during report selection')
             if recovered:
                 files['fresh-start.json'][0].update(recovered_from=recovered,recorded_source=seed['manifest'])
-                warnings.append(f'Recovered exact seed provenance from {recovered}: {path.relative_to(root)}')
     transfer=state.get('machine_transfer') or {}
     for key in ('instruction','original_state'):
         if key not in transfer:continue

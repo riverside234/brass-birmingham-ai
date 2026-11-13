@@ -335,6 +335,69 @@ class SearchRefresh(unittest.TestCase):
     def test_mixed_scale_retune_retires_both_buffers_and_refills_in_stage_c(self):
         self.check_buffer_retune(split_c_scale=True)
 
+    def test_reset_a_trained_32_head_and_gate_teacher_override(self):
+        from collections import Counter
+        from brass_ai.recovery import teacher_search_retune as retune, training_revision_g1491 as revision
+        from brass_ai.recovery.teacher_phase import plan_jobs
+
+        run, _, state, _ = self.refreshed_checkpoint()
+        generation = state['iteration']
+        before = state['signature']['config']
+        before = retune.configure(revision.configure_teacher_games(retune.configure(before), 0), split_c_scale=True)
+        state['signature'] = dict(state['signature'], config=before)
+        state['native_backend'] = dict(state['native_backend'], config_sha256=digest(before))
+        entry = state['history'][-1]
+        model, raw = load_checkpoint(ROOT/entry['path'])
+        with torch.no_grad():
+            model.search_value_head[-1].bias.fill_(.37)
+        raw['state_dict'] = model.state_dict()
+        training = raw['training']
+        search = training['search_value']
+        search['stage'].update(stage='C', w=1., scale=1., stage_a_iterations=100, stage_b_iterations=50)
+        training.update(signature=digest(state['signature']), native_backend=state['native_backend'])
+        training['actor_value_phases']['beta_clone'] = .5
+        raw['model_id'] = model_id(model)
+        torch.save(raw, ROOT/entry['path'])
+        entry = dict(entry, sha256=sha(ROOT/entry['path']), model_id=raw['model_id'])
+        state.update(history=[*state['history'][:-1], entry], resume=[entry], search_value=stamp(search))
+        write_json(run/'state.json', state)
+
+        reset = refresh.prepare(ROOT, run, expected_generation=generation, reset=True)
+        self.assertEqual(refresh.prepare(ROOT, run, expected_generation=generation, reset=True), reset)
+        self.assertEqual(reset[refresh.RESET_KEY]['previous_checkpoint'], entry)
+        self.assertEqual(reset[refresh.KEY], state[refresh.KEY])
+        self.assertEqual(reset['iteration'], generation)
+        current, converted = load_checkpoint(ROOT/reset['history'][-1]['path'])
+        self.assertEqual(width(current), 32)
+        self.assertEqual(torch.count_nonzero(current.search_value_head[-1].bias).item(), 0)
+        self.assertEqual(torch.count_nonzero(current.search_value_head[-1].weight).item(), 0)
+        self.assertTrue(all(torch.equal(t, raw['state_dict'][k]) for k, t in current.state_dict().items()
+                            if not k.startswith('search_value_head.')))
+        self.assertTrue(_same_payload(raw['optimizer'], converted['optimizer']))
+        self.assertTrue(torch.equal(raw['rng'], converted['rng']))
+        self.assertEqual(converted['training']['actor_value_phases']['beta_clone'], .25)
+        self.assertEqual(converted['training']['search_value']['companion']['steps'], 0)
+        config = reset['signature']['config']
+        self.assertEqual(revision.count_search(config), revision.RETUNED_SEARCH)
+        self.assertEqual(schedule.validation_plan(config, reset)['reason'], 'beta-remeasurement')
+        progress = reset['search_value']['stage']
+        self.assertEqual((progress['stage'], progress['w'], progress['stage_a_iterations']), ('A', 0., 0))
+        self.assertEqual(schedule.beta_floor(config['teacher_phase']['search_value'], 'C'), .5)
+
+        for stage, committed, expected in (('A', 0., 0.), ('B', 0., .02), ('B', .98, 1.), ('C', 1., 0.)):
+            scheduled = dict(reset, search_value=dict(stage=dict(progress, stage=stage, w=committed)))
+            jobs, _ = plan_jobs(config, scheduled, model_id=model_id(current),
+                               export_hash=reset['history'][-1]['sha256'], epoch=generation, ready=True)
+            self.assertEqual(Counter((j['split'], len(j['teacher_revision'][cotton.SEATS])) for j in jobs),
+                {('train', 0): 16, ('train', 1): 8, ('train', 2): 8, ('heldout', 0): 2,
+                 ('heldout', 1): 1, ('heldout', 2): 1})
+            for job in jobs:
+                revision.validate_job(job)
+                self.assertEqual(job['search_value']['w'], expected)
+                self.assertEqual(revision.TEACHER_SEARCH_HEAD_WEIGHT in job['teacher_revision'], stage == 'C')
+                if cotton.enabled(job):
+                    self.assertEqual(cotton.job_settings(job)['probability'], .30)
+
     def test_one_epoch_fits_each_row_at_most_once_and_rolls_back_a_worse_holdout(self):
         from brass_ai.recovery.search_value_training import Companion
         from test_b025 import model_fixture
@@ -520,3 +583,38 @@ class SearchRefresh(unittest.TestCase):
             self.assertEqual(shared.inference_choice(train.call_args.args[0])['teacher_budget'],
                              dict(mode='count', full=640, full_k=8, fast=96, fast_k=8,
                                   c_scale=.2, cotton_c_scale=.1, fast_c_scale=.5))
+
+    def test_g2080_reset_cli_uses_the_new_profile_on_first_launch_and_resume(self):
+        from brass_ai.recovery import teacher_search_retune as retune, training_revision_g1491 as revision
+        from test_utility_width import recipe
+        original = recipe()
+        current = refresh.configure(dict(original, teacher_phase=dict(original['teacher_phase'], mode='on')),
+                                    adaptive_beta=True)
+        current = retune.configure(revision.configure_teacher_games(retune.configure(current), 0), split_c_scale=True)
+        state = dict(iteration=2080, signature=dict(config=current))
+        config = refresh.configure(current, reset=True)
+        spec = importlib.util.spec_from_file_location('g2080_reset_cli', ROOT/'scripts/continue-rust-g1491.py')
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        shared = script.shared()
+        reset = dict(state, signature=dict(state['signature'], config=config))
+        for generation, current, flags in ((2080, state, ['--reset-search-head']), (2140, reset, [])):
+            argv = ['continue', '--expected-generation', str(generation), '--iterations', '60', '--share-target', '.30',
+                    '--skip-utility-qualification', '--teacher-search-head-weight', '0', *flags]
+            with (
+                mock.patch('sys.argv', argv),
+                mock.patch.object(script, 'shared', return_value=shared),
+                mock.patch.object(script, 'state_of', return_value=dict(current, iteration=generation)),
+                mock.patch.object(script, 'ensure_cpu'),
+                mock.patch.object(refresh, 'prepare', return_value=reset) as migrate,
+                mock.patch.object(shared, 'continuation') as train,
+            ):
+                script.main(teacher_fast=96, share_target_required=True)
+            if flags:
+                migrate.assert_called_once_with(ROOT, ROOT/script.RUN,
+                                                expected_generation=generation, adaptive_beta=False, reset=True)
+            else:
+                migrate.assert_not_called()
+            self.assertEqual(train.call_args.kwargs, dict(mode='on', expected=generation, iterations=60, revise_stages=True))
+            self.assertEqual(shared.inference_choice(train.call_args.args[0])['teacher_budget'],
+                             dict(mode='count', full=640, full_k=8, fast=96, fast_k=8, c_scale=.15, fast_c_scale=.5))

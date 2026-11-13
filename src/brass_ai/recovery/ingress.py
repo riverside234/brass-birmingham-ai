@@ -127,7 +127,8 @@ def _prepare_inner(task):
                        '_ppo_opening_objective','_local_scoring','_domino','_domino_event') if k in r}),
               target,identity,encoded) for r,target,identity,encoded in data]
     headers=[dict({k:v for k,v in g.items() if k not in ('records','branches')},
-        **({'_diversity_assignment':g.diversity_assignment} if hasattr(g,'diversity_assignment') else {})) for g in games]
+        **({'_diversity_assignment':g.diversity_assignment} if hasattr(g,'diversity_assignment') else {}),
+        **({'_cotton_seats':g.cotton_seats} if hasattr(g,'cotton_seats') else {})) for g in games]
     # Only small training metadata is detached. Do not let an Owned choice or
     # envelope retain its whole game in the single-reader/no-pickle path.
     memo={};headers=replay_binding.compact_metadata(headers,memo)

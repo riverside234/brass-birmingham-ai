@@ -13,8 +13,9 @@ def mixed(config):return config.get('table_plan',{}).get('contract')==TABLE_CONT
 
 
 def validate_mix(config):
+    from .ordinary_cotton import KEY, SETTINGS, enabled
     plan=config['table_plan']
-    require(set(plan)==set(TABLE_PLAN)|{'contract','origin_generation','origin_games'} and
+    require(set(plan)==set(TABLE_PLAN)|{'contract','origin_generation','origin_games'}|({KEY} if enabled(config) else set()) and
         plan['contract']==TABLE_CONTRACT and plan['quotas']==QUOTAS and
         plan['learner_seats']==TABLE_PLAN['learner_seats'] and plan['pair_rotation']==TABLE_PLAN['pair_rotation'],
         'Invalid 70/30 table plan')
@@ -25,6 +26,9 @@ def validate_mix(config):
     require(config['curriculum']==([old] if games else [])+[dict(until=None,**QUOTAS)],
         '70/30 curriculum must preserve the previous schedule through its committed origin')
     require(config.get('v4_history') is not None,'70/30 requires v4 already moved into history')
+    if enabled(config):
+        require(plan[KEY] == SETTINGS and config.get('branching', {}).get('rate_per_decision') == 0,
+                'Ordinary cotton self-play uses the 50/20/30 recipe with branching disabled')
     return plan
 
 
@@ -50,12 +54,19 @@ def configure(config,state):
     return result
 
 
-def exposure(plan):
+def exposure(plan, *, cotton=False):
     """PFSP p is conditional on a frozen opponent seat, never a loss weight."""
     rows=[dict(model_id=r['model_id'],conditional_probability=r['p'],
         expected_opponent_seats=192*r['p'],all_seat_probability=.15*r['p']) for r in plan['members']]
-    return dict(contract=TABLE_CONTRACT,tables=dict(selfplay=224,historical=96,legacy=0),
+    result = dict(contract=TABLE_CONTRACT,tables=dict(selfplay=224,historical=96,legacy=0),
         learner_seats=dict(selfplay=896,historical=192,legacy=0),history_opponent_seats=192,
         history_pairwise_comparisons=384,members=rows,
         scope='PFSP probabilities normalized within history; marginal exposure is 30% tables x 2/4 opponent seats. '
               'Recorded comparison counts and PPO per-row means are not multiplied by the mix again.')
+    if cotton:
+        from .ordinary_cotton import SETTINGS
+        standard = 320 * SETTINGS['standard_selfplay'] // 100
+        targeted = 320 * SETTINGS['cotton_selfplay'] // 100
+        result['selfplay_exploration'] = dict(standard_tables=standard, cotton_tables=targeted,
+                                            one_cotton_seat_tables=targeted//2, two_cotton_seat_tables=targeted//2)
+    return result

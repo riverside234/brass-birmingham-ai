@@ -17,27 +17,38 @@ from .search_value_training import Companion, StageMachine
 from .utility_width_upgrade import archive_pending
 
 KEY = 'search_head_refresh'
+RESET_KEY = 'search_head_reset'
 
 
-def configure(config, *, adaptive_beta=False):
+def configure(config, *, adaptive_beta=False, reset=False):
     from brass_ai.rust_backend.lab_teacher_activation import is_on
     from .config import validate_config
 
     phase = config['teacher_phase']
     options = phase['search_value']
-    require(is_on(config) and g1491.variant_of(config) == g1491.WIDE_RESTART and options['head']['hidden'] == 256,
-            'Search-head refresh requires the wide g1190 teacher-on recipe')
+    variant = g1491.SEARCH_REFRESH if reset else g1491.WIDE_RESTART
+    require(is_on(config) and g1491.variant_of(config) == variant and options['head']['hidden'] == (32 if reset else 256),
+            'Search-head reset requires the corresponding g1190 teacher-on recipe')
     search = dict(options, stage='A', head=dict(options['head'], hidden=32),
                   blend=dict(options['blend'], w=0.), trunk=dict(options['trunk'], scale=0.),
                   target=dict(options['target'], **{'lambda': .8}),
                   schedule=schedule.refreshed_schedule(schedule.stage_a_iterations(options)))
+    revision = (dict(phase[g1491.KEY], count_search=dict(g1491.RETUNED_SEARCH)) if reset
+                else g1491.block(variant=g1491.SEARCH_REFRESH))
     updated = dict(phase, search_value=search, skip_utility_qualification=True,
                    term=dict(phase['term'], rows_per_step=g1491.VARIANTS[g1491.SEARCH_REFRESH]['rows_per_step']),
-                   **{g1491.KEY: g1491.block(variant=g1491.SEARCH_REFRESH)})
+                   **{g1491.KEY: revision})
     if adaptive_beta:
         updated[adaptive.KEY] = adaptive.settings()
-    coverage = dict(G1290_BASELINE, seed_reference=dict(G1290_BASELINE['seed_reference']))
-    result = dict(config, teacher_phase=updated, rating_coverage=coverage)
+    result = dict(config, teacher_phase=updated)
+    if reset:
+        from .ordinary_cotton import configure as cotton_selfplay
+        require(g1491.count_search(config) == g1491.COTTON_SPLIT_SEARCH and
+                g1491.teacher_search_head_weight(config) is not None, 'Reset from the mixed-table teacher recipe')
+        result = cotton_selfplay(g1491.configure_teacher_games(
+            result, g1491.teacher_search_head_weight(config), seated=True))
+    else:
+        result['rating_coverage'] = dict(G1290_BASELINE, seed_reference=dict(G1290_BASELINE['seed_reference']))
     validate_config(result)
     require(is_on(result), 'The refreshed recipe must keep the teacher on')
     return result
@@ -61,7 +72,7 @@ def refresh_buffer(run, buffer, generation):
     return dict(buffer, receipts=list(kept.values()), retired=list(old.values()))
 
 
-def prepare(root, run, *, expected_generation, adaptive_beta=False):
+def prepare(root, run, *, expected_generation, adaptive_beta=False, reset=False):
     from brass_ai.rust_backend.lab_backend import validate_state
     from brass_ai.rust_backend.lab_replay_compat import execution
     from .resume import load_resume
@@ -73,15 +84,18 @@ def prepare(root, run, *, expected_generation, adaptive_beta=False):
         generation = state['iteration']
         require(generation == expected_generation, 'Run advanced; use the committed generation in state.json')
         before = state['signature']['config']
-        if KEY in state:
-            require(schedule.dedicated_holdout(before['teacher_phase']['search_value']), 'Refresh receipt differs from recipe')
+        key = RESET_KEY if reset else KEY
+        if key in state:
+            require(schedule.dedicated_holdout(before['teacher_phase']['search_value']) and
+                    (not reset or g1491.seated_cotton(before)), 'Refresh receipt differs from recipe')
             return state
-        config = configure(before, adaptive_beta=adaptive_beta)
+        config = configure(before, adaptive_beta=adaptive_beta, reset=reset)
         model, raw, _ = load_resume(root, run, state, state['signature'])
         validate_state(state, raw)
         training = dict(raw['training'])
         saved = training['search_value']
-        require(saved['generation'] == generation and stamp(saved) == state['search_value'] and width(model) == 256,
+        require(saved['generation'] == generation and stamp(saved) == state['search_value'] and
+                width(model) == before['teacher_phase']['search_value']['head']['hidden'],
                 'The current search head does not match the committed checkpoint')
         require(training['teacher_phase'] == state['teacher_phase'], 'Teacher checkpoint/state differs')
 
@@ -90,11 +104,25 @@ def prepare(root, run, *, expected_generation, adaptive_beta=False):
         options = config['teacher_phase']['search_value']
         stage = StageMachine(options=options).state
         stage['generation'] = generation - 1
-        search = dict(saved, stage=stage, companion=companion.snapshot(), label_ages=[],
-                      buffer=refresh_buffer(run, saved['buffer'], generation))
+        previous = state['history'][-1]
+        tag = 'search32-reset' if reset else 'search32'
+        directory = safe(run, run / 'configuration-history' / f'{tag}-{generation:04d}')
+        backup = directory / 'state-before.json'
+        receipt = dict(generation=generation, previous_checkpoint=previous, backup=backup.relative_to(run).as_posix())
+        buffer = saved['buffer']
+        if reset:
+            stage['buffer_rebuild'] = dict(origin_generation=generation, required_ages=8,
+                                           ready_generation=None, instruction_id=digest(receipt))
+            buffer = dict(buffer, receipts=[], retired=[*buffer['retired'], *buffer['receipts']])
+        else:
+            buffer = refresh_buffer(run, buffer, generation)
+        search = dict(saved, stage=stage, companion=companion.snapshot(), label_ages=[], buffer=buffer)
 
         teacher = state['teacher_phase']
         weight = dict(teacher['weight'], **{adaptive.REMEASUREMENT: dict(requested_generation=generation)})
+        if reset:
+            weight[adaptive.REMEASUREMENT]['previous_beta'] = weight['beta']
+            weight['outside_streak'] = 0
         weight.pop(adaptive.KEY, None)
         labels = teacher['buffer']
         teacher = dict(teacher, weight=weight, buffer=dict(labels, identity=buffer_identity(config), receipts=[],
@@ -108,14 +136,11 @@ def prepare(root, run, *, expected_generation, adaptive_beta=False):
         checkpoint = dict(raw, training=training, model_id=model_id(model),
                           state_dict={k: v.detach() for k, v in model.state_dict().items()})
 
-        previous = state['history'][-1]
-        directory = safe(run, run / 'configuration-history' / f'search32-{generation:04d}')
-        backup = directory / 'state-before.json'
         if backup.exists():
             require(read(backup) == state, 'Search-head migration backup differs from committed state')
         else:
             write_json(backup, state)
-        output = safe(run, run / f'generation-{generation:04d}-search32.pt')
+        output = safe(run, run / f'generation-{generation:04d}-{tag}.pt')
         temporary = output.with_suffix('.pt.tmp')
         try:
             torch.save(checkpoint, temporary)
@@ -127,9 +152,8 @@ def prepare(root, run, *, expected_generation, adaptive_beta=False):
             temporary.unlink(missing_ok=True)
         entry = dict(path=output.relative_to(root).as_posix(), sha256=sha(output),
                      model_id=checkpoint['model_id'], generation=generation)
-        receipt = dict(generation=generation, previous_checkpoint=previous, backup=backup.relative_to(run).as_posix())
         updated = dict(state, signature=signature, native_backend=backend, teacher_phase=teacher, search_value=stamp(search),
-                       history=[*state['history'][:-1], entry], **{KEY: receipt})
+                       history=[*state['history'][:-1], entry], **{key: receipt})
         updated.pop('native_backend_switch', None)
         if 'resume' in state:
             updated['resume'] = [entry if r == previous else r for r in state['resume']]

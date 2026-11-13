@@ -11,7 +11,7 @@ from torch.nn import functional as F
 from brass_ai.learning.batching import collate, model_id
 from brass_ai.learning.contracts import require
 from brass_ai.learning.replay import terminal_targets, validate_teacher
-from brass_ai.step5.policy import exploration_distribution
+from brass_ai.step5.policy import COTTON_EXPLORATION, cotton_candidates, exploration_distribution
 from brass_ai.step5.updates import bounded_batches
 from .encoding import PreparedEncoder
 from .telemetry import Timings, profile_window, memory
@@ -108,8 +108,7 @@ def bc_loss(logits, chosen):
 class ExplorationMixture:
     """Each row's exploration distribution, computed the first time it is used.
 
-    Building this walks every legal choice of every row in Python. Behavior
-    policies with zero exploration never read it.
+    Collation only builds distributions for rows with active exploration.
     """
     def __init__(self,rows):
         self.rows=rows;self.values=[None]*len(rows)
@@ -120,8 +119,20 @@ class ExplorationMixture:
         value=self.values[index]
         if value is None:
             row=self.rows[index]
-            value=exploration_distribution(row['choices'],row['intent'],row['behavior'].get('exploration_version',2),
-                row.get('view',{}).get('context',{}).get('phase')).astype(np.float32)
+            b=row['behavior']; phase=row.get('view',{}).get('context',{}).get('phase')
+            cotton=b.get(COTTON_EXPLORATION,0.)
+            if cotton and not b['exploration']:
+                value=np.zeros(len(row['choices']),dtype=np.float32)
+            else:
+                value=exploration_distribution(row['choices'],row['intent'],b.get('exploration_version',2),phase).astype(np.float32)
+            if cotton:
+                candidates=cotton_candidates(row['choices'],phase)
+                require(candidates,'Cotton PPO row lacks eligible choices')
+                # Combine the baseline and cotton exploration components.
+                base=(1-cotton)*b['exploration']
+                value*=base
+                value[candidates]+=cotton/len(candidates)
+                value/=base+cotton
             self.values[index]=value
         return value
 
@@ -162,6 +173,10 @@ class Dataset:
             require(self.vp_paid.shape==(len(self.rows),4) and bool(torch.isfinite(self.vp_paid).all()),'Invalid paid VP credits')
         if log:log(2)
         self.q=ExplorationMixture(self.rows) if policy else None
+        self.cotton_rows = frozenset(i for i,r in enumerate(self.rows)
+                                     if COTTON_EXPLORATION in r['behavior']) if policy else frozenset()
+        self.cotton_rates = (torch.tensor([r['behavior'].get(COTTON_EXPLORATION,0.) for r in self.rows],
+                                         device=device,dtype=torch.float32)[:,None] if self.cotton_rows else None)
         self.temperatures=torch.tensor([r['behavior'].get('temperature',1.) for r in self.rows],device=device)[:,None]
         if log:log(3)
         self.forced_cpu=[len(r['choices'])==1 for r in self.rows]
@@ -194,15 +209,24 @@ class Dataset:
         ix=torch.tensor(indices,device=self.device)
         inputs=collate(self._batch_rows(indices,value_only),self.device,
                        audit=None if value_only else self.input_audit)
-        width=inputs[1].shape[1]
-        q=np.zeros((len(indices),width),dtype=np.float32)
-        if exploration:
-            for j,i in enumerate(indices): q[j,:len(self.q[i])]=self.q[i]
+        q=self._batch_mixture(indices,inputs[1].shape[1],exploration,value_only)
         return ix, inputs, torch.from_numpy(q).to(self.device)
 
     def input_seal(self, indices, exploration=0):
+        cotton=getattr(self,'cotton_rows',())
         return self.input_audit.seal([self.encoded[i] for i in indices],
-                                    [self.q[i] for i in indices] if exploration else ())
+                                    (self.q[i] for i in indices if exploration or i in cotton))
+
+    def _batch_mixture(self, indices, width, exploration, value_only):
+        q=np.zeros((len(indices),width),dtype=np.float32)
+        if not value_only:
+            cotton=getattr(self,'cotton_rows',())
+            if exploration or cotton:
+                for j,i in enumerate(indices):
+                    if exploration or i in cotton:
+                        distribution=self.q[i]
+                        q[j,:len(distribution)]=distribution
+        return q
 
     def _pinned_batch(self, indices, exploration=0, *, value_only=False, cache=False):
         # A small background queue prepares/pins CPU tensors while CUDA trains.
@@ -222,9 +246,7 @@ class Dataset:
 
     def batch_cpu(self, indices, exploration=0, *, value_only=False):
         inputs=collate(self._batch_rows(indices,value_only),audit=None if value_only else self.input_audit)
-        q=np.zeros((len(indices),inputs[1].shape[1]),dtype=np.float32)
-        if exploration:
-            for j,i in enumerate(indices):q[j,:len(self.q[i])]=self.q[i]
+        q=self._batch_mixture(indices,inputs[1].shape[1],exploration,value_only)
         return torch.tensor(indices),inputs,torch.from_numpy(q)
 
     def supervised_batches(self, parts, executor=None):
@@ -324,7 +346,11 @@ def row_probabilities(dataset, indices, logits, q, behavior):
     # per-row sampling contract, including the opening decision counter.
     version=getattr(behavior,'exploration_version',2)
     temperature=dataset.temperatures[indices] if version==3 else behavior.temperature
-    return probabilities(logits,q,behavior.exploration,temperature)
+    exploration=behavior.exploration
+    if getattr(dataset,'cotton_rates',None) is not None:
+        cotton=dataset.cotton_rates[indices]
+        exploration=exploration+(1-exploration)*cotton
+    return probabilities(logits,q,exploration,temperature)
 
 
 def verify_behavior_metadata(dataset, behavior):

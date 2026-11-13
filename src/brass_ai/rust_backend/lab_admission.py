@@ -58,6 +58,14 @@ def binding(job, producer, *, generation, model_id, config, scope='ordinary'):
     require(proof['purpose'] == 'training' and proof['kind'] in ('selfplay', 'historical', 'legacy')
             and proof['spec'] == producer['signature'] and proof['learner_behavior']['model_id'] == model_id,
             'Frozen ordinary job/signature/learner differs')
+    from brass_ai.recovery import ordinary_cotton
+    cotton = (ordinary_cotton.assignment(proof['ordinary_game_index'], job['sampling_seed'])
+              if ordinary_cotton.enabled(config) and proof['kind'] == 'selfplay' else None)
+    require(proof.get(ordinary_cotton.KEY) == cotton and (cotton is None or
+            (proof['sampling_seed'] == job['sampling_seed'] and not job.get('branching') and
+             all(p.get('exploration_version') == 3 and
+            p['policy_id'] == proof['learner_behavior']['policy_id'] for p in job['policies']))),
+            'Ordinary cotton job differs from the table plan')
     require(type(generation) is int and generation >= 0 and scope in ('ordinary', 'diagnostic'), 'Invalid collection scope')
     require(all(p['kind'] in ('neural', 'legacy', 'lab-legacy') for p in job['policies'])
             and all(p['kind'] == 'neural' or p.get('search_free') is True for p in job['policies']),
@@ -183,6 +191,9 @@ def _assemble(family, admission, *, checked=None, arrays=None, owned=False):
         if 'seat_contexts' in proof:
             from brass_ai.recovery.neutral_training import check_rows
             check_rows(game,proof)
+        from brass_ai.recovery import ordinary_cotton
+        if ordinary_cotton.KEY in proof:
+            game.cotton_seats = ordinary_cotton.validate_assignment(proof)
         if 'critic_table' in proof:
             from brass_ai.recovery.critic_data import check_table
             table = copy.deepcopy(proof['critic_table'])

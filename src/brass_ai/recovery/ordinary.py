@@ -14,6 +14,7 @@ from .execution import neural_spec
 from .population import sample_opponents
 from .champion import enabled as champion_enabled,selfplay_policies
 from . import champion_mix
+from . import ordinary_cotton
 from . import v4_share
 from . import v4_history
 
@@ -81,6 +82,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         verify_pool_checkpoints(root,state['quality_pool']['members'],verified_snapshots)
     v4_in_history=v4_history.active(state.get('quality_pool'))
     from .training_revision_g1041 import mixed,exposure
+    cotton = ordinary_cotton.enabled(config)
     if mixed(config):
         require(v4_in_history and config['table_plan']['origin_games']<=state['games_done'],
             '70/30 collection requires committed v4 retirement and mix origin')
@@ -168,6 +170,11 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         if exploration:
             provenance['exploration']=exploration
             provenance['learner_behavior'].update(exploration_version=exploration['version'],opening=exploration['opening'])
+        if cotton and kind == 'selfplay':
+            assignment = ordinary_cotton.assignment(index, provenance['sampling_seed'])
+            if assignment is not None:
+                require(exploration and exploration['version'] == 3, 'Cotton self-play requires v3 behavior')
+                provenance[ordinary_cotton.KEY] = assignment
         if 'opening_objective' in config['update']:
             provenance['ppo_opening_objective']=config['update']['opening_objective']
         if diverse:
@@ -226,7 +233,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         context_counter=context_counter,historical_generations=historical_generations,
         mix_receipts=mix_receipts,transition_added=transition_added,incumbent=incumbent,
         quality_planning=quality_planning,quality_tables=quality_tables,
-        table_mix=exposure(quality_planning) if mixed(config) else None)
+        table_mix=exposure(quality_planning, cotton=cotton) if mixed(config) else None)
 
 
 def sampling_report(games,data,policy_id,kinds,config,*,legacy_profiles=None):
@@ -258,6 +265,10 @@ def sampling_report(games,data,policy_id,kinds,config,*,legacy_profiles=None):
             exploration_versions=dict(Counter(str(d[0]['behavior'].get('exploration_version',2)) for d in data)),
             observed_temperatures=dict(Counter(str(d[0]['behavior'].get('temperature',1.)) for d in data))),
         scope='Actual completed tables and learner seats; forced decisions are critic-only. Table fractions do not define PPO sample fractions.')
+    if ordinary_cotton.enabled(config):
+        counts = Counter(len(g.get('_cotton_seats', ())) for g in games if kinds[g['setup_group']] == 'selfplay')
+        report['selfplay_exploration'] = dict(standard_tables=counts[0], cotton_tables=counts[1]+counts[2],
+            one_cotton_seat_tables=counts[1], two_cotton_seat_tables=counts[2])
     if legacy_profiles is not None:
         profiles={p:dict(seats=0,seat_counts=[0]*4) for p in sorted(set(legacy_profiles.values()))}
         for game in games:

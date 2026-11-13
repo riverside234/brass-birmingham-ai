@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from contextlib import contextmanager
+import random
 import time
 import uuid
 import weakref
@@ -27,6 +28,32 @@ def inference_deadline(policies, deadline):
 
 
 FAMILY_WEIGHTS = dict(build=4, develop=4, network=4, loan=2, sell=2, scout=1)
+COTTON_EXPLORATION = 'cotton_exploration'
+COTTON_PROBABILITY = .15
+
+
+def cotton_seats(seed, count, stream):
+    """Draw fixed physical seats without advancing the action RNG."""
+    rng = random.Random(digest(dict(seed=seed, stream=stream)))
+    return sorted(rng.sample(range(4), count))
+
+
+def cotton_candidates(choices, phase):
+    if len(choices) <= 1 or phase not in ('action', 'continuation'):
+        return []
+    kinds = ('build', 'develop') if phase == 'action' else ('develop',)
+    return [i for i, c in enumerate(choices) if c['kind'] in kinds and c.get('industry') == 'CottonMill']
+
+
+def sample_cotton(rng, selected, baseline, candidates):
+    """Use a uniform cotton component over this decision's legal choices."""
+    targeted = rng.random() < COTTON_PROBABILITY
+    if targeted:
+        selected = rng.choice(candidates)
+    probability = (1-COTTON_PROBABILITY)*baseline[selected]
+    if selected in candidates:
+        probability += COTTON_PROBABILITY/len(candidates)
+    return selected, probability, targeted
 
 
 def policy_identity(model, exploration, temperature, focus, version=2, opening=None):
@@ -176,7 +203,7 @@ class NeuralPolicy:
         requests=self.prediction_requests(inputs)
         return self.prediction_outputs(requests,self.evaluator.predict(requests))
 
-    def select_batch(self, inputs):
+    def select_batch(self, inputs, *, cotton=False):
         if self.exploration_version == 3:
             requests = self.prediction_requests(inputs)
             responses = self.evaluator.predict(requests)
@@ -185,7 +212,7 @@ class NeuralPolicy:
                 accept_response(request, response, view['context']['revision'], self.evaluator.model_id)
                 raw = np.asarray(response['probabilities'], dtype=np.float64)
                 raw /= raw.sum()
-                output.append(self.sample_training(view, choices, rng, raw, request.intent))
+                output.append(self.sample_training(view, choices, rng, raw, request.intent, cotton=cotton))
             return output
         output = []
         for (probabilities, _), (_, _, rng) in zip(self.predict(inputs), inputs):
@@ -193,7 +220,7 @@ class NeuralPolicy:
             output.append((selected, float(probabilities[selected]), None))
         return output
 
-    def sample_training(self, view, choices, rng, raw, intent):
+    def sample_training(self, view, choices, rng, raw, intent, *, cotton=False):
         phase = view['context']['phase']
         count = self.action_counts.get(rng, 0)
         temperature = (self.opening['temperature'] if self.opening and phase == 'action' and
@@ -208,10 +235,16 @@ class NeuralPolicy:
         self.last_behavior[rng] = dict(temperature=temperature, exploration=self.exploration,
             exploration_version=3, component='exploration' if explore else 'policy',
             action_decision=count if phase == 'action' else None)
+        probability = mixed[selected]
+        if cotton and (candidates := cotton_candidates(choices, phase)):
+            selected, probability, targeted = sample_cotton(rng, selected, mixed, candidates)
+            self.last_behavior[rng][COTTON_EXPLORATION] = COTTON_PROBABILITY
+            if targeted:
+                self.last_behavior[rng]['component'] = 'cotton'
         self.last_raw[rng] = raw
         if phase == 'action':
             self.action_counts[rng] = count+1
-        return selected, float(mixed[selected]), None
+        return selected, float(probability), None
 
 
 def predict_groups(groups):

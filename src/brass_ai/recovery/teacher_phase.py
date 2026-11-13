@@ -6,12 +6,14 @@ from collections import Counter, defaultdict
 
 from brass_ai.learning.contracts import digest, require
 from brass_ai.step5.league import seeds_for
+from brass_ai.step5.policy import cotton_seats
 from .teacher_phase_config import CONTRACT, SCHEDULE, SOURCE, validate, buffer_identity
 from .teacher_buffer import TeacherBuffer
+from .teacher_cotton import SEATED_CONTRACT, SEATS
 from .teacher_labels import PHASES
 from .teacher_term import TeacherTerm, heldout_measure, summary
 from .search_value_schedule import validation_plan
-from .training_revision_g1491 import count_search, job_block, teacher_search_head_weight
+from .training_revision_g1491 import count_search, job_block, seated_cotton, teacher_search_head_weight
 from .teacher_vp import summarize as summarize_vp
 
 KEY = 'teacher_phase'
@@ -63,6 +65,11 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
     validation=validation_plan(config,state)
     profile = buffer_identity(config)
     teacher_weight = teacher_search_head_weight(config)
+    progress = state.get('search_value', {}).get('stage', state.get('search_value', {}))
+    # The committed stage owns the blend until Stage B finishes.
+    if not isinstance(progress, dict): progress = state.get('search_value', {})
+    stage = progress.get('stage', c['search_value']['stage']) if c.get('seating') == 'all-seat-search' else None
+    seated = seated_cotton(config)
     for split, partition, count in (('train', 'train', c['tables']['train']), ('heldout', 'validation', c['tables']['held_out'])):
         seeds, cursor = seeds_for(cursor, count, partition=partition)
         # Reserve the same independent seed stream, but create no held-out jobs
@@ -73,7 +80,11 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
                             profile=profile)
             job_id = digest(identity); sampling = int(job_id[:8], 16)
             # Alternate within each split. Keep setup and sampling streams stable when switching the blend.
-            revision = job_block(config, split=split, cotton_table=(index + generation) % 2 == 0)
+            cotton_table = (index + generation) % 2 == 0
+            seats = None
+            if seated and cotton_table:
+                seats = cotton_seats(sampling, 1 + (index//2 + generation) % 2, SEATED_CONTRACT)
+            revision = job_block(config, split=split, cotton_table=cotton_table, stage=stage, seats=seats)
             if teacher_weight is not None:
                 job_id = digest(dict(identity, teacher_revision=revision))
             jobs.append(dict(kind='teacher_phase', split=split, seed=seed, sampling_seed=sampling,
@@ -86,10 +97,6 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
                 jobs[-1]['teacher_revision'] = revision
     if c.get('seating') == 'all-seat-search':
         from brass_ai.learning.search_value import binding
-        progress = state.get('search_value', {}).get('stage', state.get('search_value', {}))
-        # A saved machine owns the dynamic blend; it is not a manual recipe
-        # edit and must not reset when the ordinary iteration starts again.
-        if not isinstance(progress, dict): progress = state.get('search_value', {})
         weight = progress.get('w', c['search_value']['blend']['w'])
         if 'schedule' in c['search_value'] and progress.get('stage')=='B':
             # The first B collection uses one step (.05, or .02 over fifty); its committed
@@ -99,7 +106,8 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
         if c['search_value']['blend']['w'] > 0:
             require(progress.get('stage') in ('B','head_to_head','C') and
                     progress.get('w') == c['search_value']['blend']['w'], 'Search blend requires committed stage progress')
-        value = binding(teacher_weight if teacher_weight is not None else
+        use_override = teacher_weight is not None and (not seated or stage == 'C')
+        value = binding(teacher_weight if use_override else
                         (0. if c['search_value']['stage']=='off' else weight))
         for job in jobs:
             job.update(seating=c['seating'], fast_search=copy.deepcopy(c['fast_search']),
@@ -132,6 +140,8 @@ def action_summary(table_metrics, jobs, weight):
         split = job['split']
         cotton = 'cotton' in revision['job']['exploration']
         tables.append(dict(seed=job['seed'], split=split, cotton_exploration=cotton, **counts))
+        if seats := revision['job'].get(SEATS):
+            tables[-1][SEATS] = seats
         counts['tables'] = 1
         total.update(counts)
         split_counts = by_split[split]
@@ -213,7 +223,8 @@ class TeacherPhase:
             table_metrics.append(dict(result.get('metrics', {})))
             post_spent[job['expected']['job_id']]=time.perf_counter()-table_began+result.get('metrics',{}).get('shadow_cache_seconds',0.)
         weight = teacher_search_head_weight(self.config)
-        actions = action_summary(table_metrics, self.jobs, weight) if self.jobs and weight is not None else None
+        actions = (action_summary(table_metrics, self.jobs, self.jobs[0]['search_value']['w'])
+                   if self.jobs and weight is not None else None)
         if self.jobs:
             for split, rows in splits.items():
                 if not rows:continue

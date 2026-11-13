@@ -22,7 +22,8 @@ from brass_ai.recovery.branching import validate_child
 from brass_ai.recovery.branch_scheduler import ReadyWork
 from brass_ai.recovery.replay import check_game
 from brass_ai.recovery.local_scoring_targets import validate_receipt
-from brass_ai.step5.policy import exploration_distribution,context_for
+from brass_ai.recovery import ordinary_cotton
+from brass_ai.step5.policy import exploration_distribution,context_for,sample_cotton
 from .lab_collection import frozen_id, route, branch_opening
 from .lab_contract import SOURCE
 
@@ -77,10 +78,24 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
         validate_receipt(part['scoring'],game,producer='rust-local-scoring/1.0.0')
     else:
         require(part['producer']['contract']=='brass-reference-collection/1.0.0','Unknown producer')
-    if not semantic:
-        for index,(row,evidence) in enumerate(zip(game['records'],part['evidence'],strict=True)):
-            spec=job['policies'][(row['seat']-job.get('rotation',0))%4]
-            require(row['behavior']['policy_id']==spec['policy_id'],'Changed frozen policy assignment')
+    proof = job['provenance']
+    cotton_seats = ordinary_cotton.validate_assignment(proof) if ordinary_cotton.KEY in proof else ()
+    require(not cotton_seats or not child, 'Cotton exploration is bound to complete self-play tables')
+    # Replay draws for assigned seats even on the structural fast path.
+    audited_seats = range(4) if semantic else cotton_seats
+    counts=[0]*4
+    rngs={s:random.Random(digest(dict(branch=game['branch']['seed'],seat=s)) if child else
+            digest(dict(sampling_seed=job['sampling_seed'],game=job.get('rng_index',0),seat=s))) for s in audited_seats}
+    if semantic and child and game['branch']['contract']=='selfplay-branching/1.0.0':
+        # Legacy branches keep their counters; the parent independently audits the inherited value.
+        counts=list(part['origin_counts'])
+    for index,(row,evidence) in enumerate(zip(game['records'],part['evidence'],strict=True)):
+        seat=row['seat']
+        spec=job['policies'][(seat-job.get('rotation',0))%4]
+        require(row['behavior']['policy_id']==spec['policy_id'],'Changed frozen policy assignment')
+        if seat not in audited_seats:
+            require(ordinary_cotton.KEY not in row['behavior'] and row['behavior'].get('component') != 'cotton',
+                    'Unexpected ordinary cotton behavior')
             if child and index==0:
                 require(evidence['kind']=='excluded-fork' and evidence['metadata']['seed']==game['branch']['seed'],
                         'Missing excluded-fork evidence')
@@ -95,17 +110,7 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
                 require(row['behavior']['kind']=='model' and row['behavior']['temperature']>0,
                         'Neural behavior attribution differs')
                 if len(row['choices'])==1:require(evidence['raw_probabilities']==[1.],'Forced choice differs')
-        return game
-    counts=[0]*4
-    rngs=[random.Random(digest(dict(branch=game['branch']['seed'],seat=s)) if child else
-            digest(dict(sampling_seed=job['sampling_seed'],game=job.get('rng_index',0),seat=s))) for s in range(4)]
-    if child and game['branch']['contract']=='selfplay-branching/1.0.0':
-        # Legacy branches keep their counters; the first recorded post-fork
-        # action exposes the inherited value, independently audited by parent.
-        counts=list(part['origin_counts'])
-    for index,(row,evidence) in enumerate(zip(game['records'],part['evidence'],strict=True)):
-        spec=job['policies'][(row['seat']-job.get('rotation',0))%4]
-        require(row['behavior']['policy_id']==spec['policy_id'],'Changed frozen policy assignment')
+            continue
         if child and index==0:
             allowed={'contract','parent_game_id','decision','played','seed','prior_events','raw_probabilities',
                      'chosen','component','probability','component_probability','marginal_probability'}
@@ -122,7 +127,8 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
                     and evidence['semantic_id']==row['choices'][row['chosen']]['id'],
                     'External behavior attribution differs')
             continue
-        b=row['behavior'];phase=row['view']['context']['phase'];seat=row['seat'];opening=spec.get('opening')
+        b=row['behavior'];phase=row['view']['context']['phase'];opening=spec.get('opening')
+        candidates = ordinary_cotton.check_row(row, seat in cotton_seats)
         if child:opening=branch_opening(job,opening)
         focus=job.get('focuses',{}).get(str(seat),'neutral') if spec['focus']=='mixed' else spec['focus']
         assignment=job['provenance'].get('diversity_assignment')
@@ -136,6 +142,9 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
         require(b['temperature']==temperature,'Wrong opening temperature')
         version=spec.get('exploration_version',2)
         if version==3:
+            if candidates:
+                from brass_ai.recovery.exploration import check_behavior
+                check_behavior(b,phase)
             require(b['action_decision']==(counts[seat] if phase=='action' else None),'Opening counter differs')
             require(b['exploration_version']==version and b['exploration']==spec['exploration'],
                     'Frozen exploration settings differ')
@@ -157,18 +166,23 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
         raw/=raw.sum(); p=np.power(raw.clip(1e-30),1/temperature);p/=p.sum()
         q=exploration_distribution(row['choices'],row['intent'],spec.get('exploration_version',2),phase)
         mixed=(1-spec['exploration'])*p+spec['exploration']*q
-        require(abs(b['probability']-float(mixed[row['chosen']]))<1e-12,'Behavior denominator differs')
         require(len(row['choices'])!=1 or b['probability']==1.,'Forced choice probability differs')
         # Replay the original per-seat random stream, including forced and
         # intermediate choices. No GPU call or new policy identity is involved.
         if version==3:
             explore=rngs[seat].random()<spec['exploration']
             expected=rngs[seat].choices(range(len(p)),weights=q if explore else p,k=1)[0]
-            require(b['component']==('exploration' if explore else 'policy'),'Sampling component differs')
+            component = 'exploration' if explore else 'policy'
+            probability = mixed[expected]
+            if candidates:
+                expected, probability, targeted = sample_cotton(rngs[seat], expected, mixed, candidates)
+                if targeted: component = 'cotton'
+            require(b['component']==component,'Sampling component differs')
         else:
-            mixed/=mixed.sum()
-            expected=rngs[seat].choices(range(len(p)),weights=mixed,k=1)[0]
+            expected=rngs[seat].choices(range(len(p)),weights=mixed/mixed.sum(),k=1)[0]
+            probability = mixed[expected]
         require(row['chosen']==expected,'Frozen sampling RNG differs')
+        require(abs(b['probability']-float(probability))<1e-12,'Behavior denominator differs')
     return game
 
 

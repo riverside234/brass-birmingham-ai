@@ -7,13 +7,15 @@ CONTRACT='teacher-cotton-exploration/1.0.0'
 DEVELOP_CONTRACT='teacher-cotton-exploration/2.0.0'
 MIXED_CONTRACT='teacher-cotton-exploration/3.0.0'
 MIXED_25_CONTRACT='teacher-cotton-exploration/4.0.0'
+SEATED_CONTRACT='teacher-cotton-exploration/5.0.0'
+SEATS='cotton_seats'
 PROBABILITY=.2
 DEVELOP_PROBABILITY=.25
 MIXED_PROBABILITY=.3
 CAP=3
 MIXED_CONTRACTS=(MIXED_CONTRACT,MIXED_25_CONTRACT)
 PROBABILITIES={CONTRACT:PROBABILITY, DEVELOP_CONTRACT:DEVELOP_PROBABILITY, MIXED_CONTRACT:MIXED_PROBABILITY,
-               MIXED_25_CONTRACT:DEVELOP_PROBABILITY}
+               MIXED_25_CONTRACT:DEVELOP_PROBABILITY, SEATED_CONTRACT:MIXED_PROBABILITY}
 
 
 def settings(*, develop=False, mixed=False, contract=None):
@@ -21,7 +23,7 @@ def settings(*, develop=False, mixed=False, contract=None):
         contract = MIXED_CONTRACT if mixed else (DEVELOP_CONTRACT if develop else CONTRACT)
     return dict(contract=contract, probability=PROBABILITIES[contract], max_per_seat_era=CAP,
         long_candidates=2, short_candidates=1, pause_unflipped=True,
-        scope='train-and-heldout' if contract in MIXED_CONTRACTS else 'train')
+        scope='train-and-heldout' if contract in (*MIXED_CONTRACTS, SEATED_CONTRACT) else 'train')
 
 
 def job_settings(job):
@@ -67,6 +69,9 @@ def validate_receipt(receipt, job, rows):
         return
     contract = job_settings(job)['contract']
     require(isinstance(receipt,dict) and receipt.get('contract')==contract, 'Missing cotton exploration receipt')
+    seats = job['teacher_revision'].get(SEATS)
+    if seats is not None:
+        require(receipt.get(SEATS) == seats, 'Teacher cotton receipt seats differ')
     used=receipt['targeted_by_era_seat'];built=receipt['builds_by_era_seat']
     developed=receipt['develops_by_era_seat'] if contract!=CONTRACT else [[0]*4 for _ in range(2)]
     require(len(used)==len(built)==len(developed)==2 and all(len(x)==4 for x in (*used,*built,*developed)), 'Cotton receipt shape')
@@ -79,6 +84,7 @@ def validate_receipt(receipt, job, rows):
         if not e:continue
         require(e['contract']==contract, 'Cotton label and table settings differ')
         era=0 if row['view']['context']['era']=='CanalEra' else 1;seat=l['seat']
+        require(seats is None or seat in seats, 'Cotton label from an unassigned teacher seat')
         require(e['used_before']==observed[era][seat] if every and contract==CONTRACT else e['used_before']>=observed[era][seat],
                 'Cotton exploration allowance sequence differs')
         observed[era][seat]=e['used_before']+int(e['targeted']);labelled+=int(e['targeted'])
@@ -89,6 +95,9 @@ def validate_receipt(receipt, job, rows):
     require(quota_matches and labelled==labelled_triggers and
             all(type(n) is int and 0<=n<=CAP for a in used for n in a),
             'Cotton committed quota differs from labels')
+    if seats is not None:
+        require(all(n == 0 for a in used for seat, n in enumerate(a) if seat not in seats),
+                'Unassigned teacher seat used cotton exploration')
     require(all(type(b) is int and type(d) is int and min(b,d)>=0 and b+d>=u
         for bs,ds,us in zip(built,developed,used) for b,d,u in zip(bs,ds,us)), 'Cotton action counts differ')
     require(sum(receipt[p]['triggers'] for p in ('long','short')) + continuation==sum(map(sum,used)) and
@@ -112,6 +121,9 @@ def aggregate(metrics):
     contract = receipts[0]['contract']
     require(all(r['contract']==contract for r in receipts), 'Mixed cotton exploration settings')
     result=dict(contract=contract, tables=len(receipts), settings=settings(contract=contract))
+    if contract == SEATED_CONTRACT:
+        counts = Counter(len(r[SEATS]) for r in receipts)
+        result.update(one_seat_tables=counts[1], two_seat_tables=counts[2])
     for profile in ('long','short'):
         counts=Counter()
         for r in receipts:counts.update(r[profile])

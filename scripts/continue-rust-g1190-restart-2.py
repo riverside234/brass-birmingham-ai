@@ -41,10 +41,15 @@ standard tables and 0.10 on cotton tables, and sets cotton targeting to 25%.
 It retires both search buffers, keeps the committed search-head stage, and
 re-measures beta with the teacher on.
 
---teacher-search-head-weight 0 uses the utility head alone in every teacher
-game, including held-outs. It also enables cotton build/develop exploration
-in half of each split, alongside ordinary exploration in every game. Pass 1 to
-use the search head at full weight. The setting persists across continuations.
+--teacher-search-head-weight 0 selects a utility-only teacher override, including
+held-outs. Pass 1 for full search-head weight. The override persists across
+continuations. The retuned teacher recipe targets cotton in half of each split.
+
+--reset-search-head replaces the current 32-wide head once and restarts Stage A.
+Stage B uses its scheduled blend. The teacher-only override takes effect at
+Stage C. Teacher cotton tables target one or two fixed random seats at 30%.
+Ordinary tables use a 50/20/30 mix, with 15% cotton targeting on selected seats
+in the cotton self-play games. Long and short C_scale are .15 and .5.
 """
 import importlib.util
 from pathlib import Path

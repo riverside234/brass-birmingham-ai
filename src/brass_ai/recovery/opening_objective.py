@@ -4,6 +4,7 @@ import copy
 import torch
 
 from brass_ai.learning.contracts import require
+from brass_ai.step5.policy import COTTON_EXPLORATION
 
 CONTRACT='opening-ppo-objective/1.0.0'
 MIGRATION='decoupled-opening-ppo/1.0.0'
@@ -78,7 +79,8 @@ class Reference:
             require(not opening or (row['view']['context']['phase']=='action' and
                 type(b['action_decision']) is int and 0<=b['action_decision']<row_decisions),
                 'Tempered row is not an opening action')
-            selected.append(opening and len(row['choices'])>1)
+            # Cotton rows use the actual mixed likelihood even during a tempered opening.
+            selected.append(opening and len(row['choices'])>1 and COTTON_EXPLORATION not in b)
         self.mask=torch.tensor(selected,device=dataset.device,dtype=torch.bool)
         self.old=torch.ones_like(dataset.old)
         self.seen=torch.zeros_like(self.mask)

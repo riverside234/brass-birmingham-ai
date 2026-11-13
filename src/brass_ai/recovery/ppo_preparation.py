@@ -173,8 +173,9 @@ class Preparation:
 
     def _rows(self,dataset,part,exploration,value_only):
         began=time.perf_counter();result=[]
+        cotton=getattr(dataset,'cotton_rows',())
         for index,row in zip(part,dataset._batch_rows(part,value_only)):
-            q=dataset.q[index] if exploration else None
+            q=dataset.q[index] if not value_only and (exploration or index in cotton) else None
             arrays=(row.state,row.actions,row.stable_to_relative)
             if q is not None and q.flags.writeable:q.setflags(write=False)
             # Sealed rows are bytes-backed and immutable, so hashing them again
