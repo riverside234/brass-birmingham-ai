@@ -26,9 +26,9 @@ def restart_schedule():
         stage_a_fit=HELDOUT_EARLY_STOP,ppg_beta_floor_after_stage_a=.5)
 
 
-def refreshed_schedule(stage_a):
+def refreshed_schedule(stage_a, *, beta_floor_after_stage_b=.5):
     return dict(defaults(),stage_a_iterations=stage_a,stage_b_iterations=50,validation_interval=5,
-        stage_a_fit=DEDICATED_EARLY_STOP,ppg_beta_floor_after_stage_b=.5)
+        stage_a_fit=DEDICATED_EARLY_STOP,ppg_beta_floor_after_stage_b=beta_floor_after_stage_b)
 
 
 def dedicated_holdout(options):
@@ -41,9 +41,11 @@ def enabled(options):return 'schedule' in options
 def validate(options):
     schedule=options['schedule'];expected=defaults()
     if dedicated_holdout(options):
+        floor = schedule.get('ppg_beta_floor_after_stage_b')
         require(type(schedule['validation_during_beta_qualification']) is bool and
             type(schedule['stage_a_iterations']) is int and schedule['stage_a_iterations'] in (50,100) and
-            dict(schedule,validation_during_beta_qualification=True)==refreshed_schedule(schedule['stage_a_iterations']),
+            floor in (.25,.5) and dict(schedule,validation_during_beta_qualification=True)==refreshed_schedule(
+                schedule['stage_a_iterations'], beta_floor_after_stage_b=floor),
             'Invalid refreshed search-value schedule')
         return schedule
     if type(schedule) is dict and set(schedule)==set(restart_schedule()):

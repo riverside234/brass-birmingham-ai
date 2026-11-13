@@ -224,6 +224,8 @@ def rate_factor(step,total,config):
 
 def validate(c):
     default=KL_STOP_DEFAULT if c.get('contract')==KL_STOP_CONTRACT else TEACHER_FLOOR_DEFAULT if c.get('contract')==TEACHER_FLOOR_CONTRACT else EVERY_ITER_DEFAULT if c.get('contract')==EVERY_ITER_CONTRACT else TWO_ITER_DEFAULT if two_iteration(c) else EARLY_DEFAULT if c.get('contract')==EARLY_CONTRACT else QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
+    if default is KL_STOP_DEFAULT and c.get('max_epochs') == 1:
+        default = dict(default, max_epochs=1)
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():

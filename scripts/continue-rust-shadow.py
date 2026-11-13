@@ -177,6 +177,9 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             stages.append(prefix.replace('-teacher-k8-c015-cotton30-', '-teacher-k8-c020-cotton010-mix25-'))
             prefix=prefix.replace('-cotton30-', '-seated-cotton30-selfplay50-20-')
             stages.append(prefix)
+            if config['value_phase']['max_epochs'] == 1:
+                prefix=prefix.replace('-share', '-ppg-epoch1-share')
+                stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
@@ -289,8 +292,11 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if revised:
             schedule=report['stage_schedule'];a=schedule['stage_a_iterations'];b=schedule['stage_b_iterations'];c=schedule['stage_c_iterations']
             floor_stage = 'B' if 'ppg_beta_floor_after_stage_b' in schedule else 'A'
-            floor=schedule.get(f'ppg_beta_floor_after_stage_{floor_stage.lower()}',options['value_phase']['beta_clone_min'])
-            print(f'Residual stages: A{a} head-only; B{b} blend warm-up; C{c} trunk warm-up; KL cap .003; PPG beta floor {floor:g} after {floor_stage}.',flush=True)
+            base_floor = options['value_phase']['beta_clone_min']
+            floor = schedule.get(f'ppg_beta_floor_after_stage_{floor_stage.lower()}', base_floor)
+            floor_change = f', {floor:g} after Stage {floor_stage}' if floor != base_floor else ''
+            print(f'Residual stages: A{a} head-only; B{b} blend warm-up; C{c} trunk warm-up; KL cap .003; '
+                  f'PPG beta floor {base_floor:g}{floor_change}. Ordinary PPG epoch cap {options["value_phase"]["max_epochs"]}.', flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
         if is_revised(options):
             r=options['reward'];cost=options['insolvency']

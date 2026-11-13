@@ -337,7 +337,8 @@ class SearchRefresh(unittest.TestCase):
 
     def test_reset_a_trained_32_head_and_gate_teacher_override(self):
         from collections import Counter
-        from brass_ai.recovery import teacher_search_retune as retune, training_revision_g1491 as revision
+        from brass_ai.recovery import ppg_g210, teacher_search_retune as retune, training_revision_g1491 as revision
+        from brass_ai.recovery.actor_value import TrainingPhases
         from brass_ai.recovery.teacher_phase import plan_jobs
 
         run, _, state, _ = self.refreshed_checkpoint()
@@ -375,14 +376,24 @@ class SearchRefresh(unittest.TestCase):
                             if not k.startswith('search_value_head.')))
         self.assertTrue(_same_payload(raw['optimizer'], converted['optimizer']))
         self.assertTrue(torch.equal(raw['rng'], converted['rng']))
-        self.assertEqual(converted['training']['actor_value_phases']['beta_clone'], .25)
         self.assertEqual(converted['training']['search_value']['companion']['steps'], 0)
         config = reset['signature']['config']
+        self.assertEqual(config['value_phase'], dict(before['value_phase'], max_epochs=1))
+        phases = TrainingPhases(current, config, raw=converted, generation=generation, root=ROOT, run=run)
+        self.assertEqual(phases.beta, .25)
+        self.assertEqual(phases.options['value_phase'], config['value_phase'])
+        self.assertTrue(_same_payload(training['actor_value_phases']['optimizer'], phases.optimizer.state_dict()))
+        self.assertEqual(phases.buffer.receipts, training['actor_value_phases']['rolling_buffer'])
         self.assertEqual(revision.count_search(config), revision.RETUNED_SEARCH)
         self.assertEqual(schedule.validation_plan(config, reset)['reason'], 'beta-remeasurement')
         progress = reset['search_value']['stage']
         self.assertEqual((progress['stage'], progress['w'], progress['stage_a_iterations']), ('A', 0., 0))
-        self.assertEqual(schedule.beta_floor(config['teacher_phase']['search_value'], 'C'), .5)
+        clean = dict(scheduled=True, kl_guard_tripped=False, optimizer_steps=1, probe_kl=0.)
+        for stage in ('A', 'B', 'C'):
+            phases.beta_floor = schedule.beta_floor(config['teacher_phase']['search_value'], stage)
+            self.assertEqual(phases.beta_floor, .25)
+            next_beta, _, _ = ppg_g210.beta_after_phase(.5, [], clean, phases.floor_options())
+            self.assertEqual(next_beta, .25)
 
         for stage, committed, expected in (('A', 0., 0.), ('B', 0., .02), ('B', .98, 1.), ('C', 1., 0.)):
             scheduled = dict(reset, search_value=dict(stage=dict(progress, stage=stage, w=committed)))

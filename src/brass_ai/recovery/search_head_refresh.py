@@ -32,7 +32,8 @@ def configure(config, *, adaptive_beta=False, reset=False):
     search = dict(options, stage='A', head=dict(options['head'], hidden=32),
                   blend=dict(options['blend'], w=0.), trunk=dict(options['trunk'], scale=0.),
                   target=dict(options['target'], **{'lambda': .8}),
-                  schedule=schedule.refreshed_schedule(schedule.stage_a_iterations(options)))
+                  schedule=schedule.refreshed_schedule(schedule.stage_a_iterations(options),
+                                                      beta_floor_after_stage_b=.25 if reset else .5))
     revision = (dict(phase[g1491.KEY], count_search=dict(g1491.RETUNED_SEARCH)) if reset
                 else g1491.block(variant=g1491.SEARCH_REFRESH))
     updated = dict(phase, search_value=search, skip_utility_qualification=True,
@@ -47,6 +48,7 @@ def configure(config, *, adaptive_beta=False, reset=False):
                 g1491.teacher_search_head_weight(config) is not None, 'Reset from the mixed-table teacher recipe')
         result = cotton_selfplay(g1491.configure_teacher_games(
             result, g1491.teacher_search_head_weight(config), seated=True))
+        result['value_phase'] = dict(config['value_phase'], max_epochs=1)
     else:
         result['rating_coverage'] = dict(G1290_BASELINE, seed_reference=dict(G1290_BASELINE['seed_reference']))
     validate_config(result)
@@ -130,9 +132,13 @@ def prepare(root, run, *, expected_generation, adaptive_beta=False, reset=False)
         backend = dict(state['native_backend'], config_sha256=digest(config))
         backend['teacher'] = dict(backend['teacher'], stage_schedule=digest(options['schedule']))
         signature = dict(state['signature'], config=config)
+        ppg = dict(training['actor_value_phases'], beta_clone=.25)
+        if reset:
+            require(ppg['options']['value_phase'] == before['value_phase'], 'Ordinary PPG checkpoint options differ')
+            ppg['options'] = dict(ppg['options'], value_phase=config['value_phase'])
         training.update(signature=digest(signature), teacher_phase=teacher, search_value=search,
                         search_value_head=marker(model), native_backend=backend, native_backend_execution=execution(),
-                        actor_value_phases=dict(training['actor_value_phases'], beta_clone=.25))
+                        actor_value_phases=ppg)
         checkpoint = dict(raw, training=training, model_id=model_id(model),
                           state_dict={k: v.detach() for k, v in model.state_dict().items()})
 

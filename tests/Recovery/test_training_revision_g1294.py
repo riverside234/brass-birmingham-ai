@@ -203,9 +203,10 @@ class KlCap(unittest.TestCase):
     def setUpClass(cls):
         torch.set_num_threads(2)
 
-    def phases(self, tmp, batch_size=2):
+    def phases(self, tmp, batch_size=2, *, max_epochs=2):
         m, opt, c = ppg_config()
-        c['value_phase'] = dict(G.KL_STOP_DEFAULT, batch_size=batch_size, clone_rows=64, clone_batch_size=8)
+        c['value_phase'] = dict(G.KL_STOP_DEFAULT, batch_size=batch_size, clone_rows=64,
+                                clone_batch_size=8, max_epochs=max_epochs)
         G.validate(c['value_phase'])
         p = TrainingPhases(m, c, root=ROOT, run=Path(tmp))
         prepare(m, p, 1)
@@ -232,6 +233,17 @@ class KlCap(unittest.TestCase):
                 patch.object(V.RawPolicyReference, 'measure', side_effect=lambda *a: next(checks, 0.)):
             report = p.fit(m)
         return report, capture
+
+    def test_ordinary_value_fit_is_capped_at_one_epoch(self):
+        import math
+        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as tmp:
+            model, phase = self.phases(tmp, batch_size=32, max_epochs=1)
+            report, _ = self.run_fit(model, phase, lambda n: 1.-.001*n, [])
+            steps = math.ceil(report['train_rows'] / 32)
+            self.assertEqual((report['epoch_cap_used'], report['attempted_epochs'], report['completed_epochs']), (1, 1, 1))
+            self.assertEqual((report['attempted_steps'], report['planned_steps']), (steps, steps))
+            self.assertEqual(report['value_presentations'], report['train_rows'])
+            self.assertEqual(report['acceptance'], 'kl-cap-stops-and-keeps-interval/1.0.0')
 
     def test_hitting_the_cap_stops_and_keeps_the_update(self):
         with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as tmp:

@@ -50,6 +50,7 @@ Stage B uses its scheduled blend. The teacher-only override takes effect at
 Stage C. Teacher cotton tables target one or two fixed random seats at 30%.
 Ordinary tables use a 50/20/30 mix, with 15% cotton targeting on selected seats
 in the cotton self-play games. Long and short C_scale are .15 and .5.
+Ordinary PPG runs at most one epoch with a beta floor of .25 across all stages.
 """
 import importlib.util
 from pathlib import Path

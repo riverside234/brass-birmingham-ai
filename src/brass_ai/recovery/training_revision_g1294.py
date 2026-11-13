@@ -51,6 +51,8 @@ def previous(config):
     require(options['steps_per_iteration']==MAX_STEPS,'Incomplete g1294 training revision')
     result=S.without_raise(config)
     result['value_phase'].update(contract=P.TEACHER_FLOOR_CONTRACT)
+    if result['value_phase']['max_epochs'] == 1:
+        result['value_phase']['max_epochs'] = P.TEACHER_FLOOR_DEFAULT['max_epochs']
     original=defaults()
     result['teacher_phase']['search_value'].update(steps_per_iteration=original['steps_per_iteration'])
     result['teacher_phase']['search_value']['trunk']['intervals']=original['trunk']['intervals']
@@ -58,8 +60,9 @@ def previous(config):
 
 
 def compatible(before,after):
-    """Adoption is one-way, and the raise cannot be re-timed once it is committed."""
-    return not applied(before) or (applied(after) and raise_block(before)==raise_block(after))
+    """The committed entropy timing and PPG cap survive ordinary recipe switches."""
+    return not applied(before) or (applied(after) and raise_block(before)==raise_block(after)
+        and before['value_phase']['max_epochs'] == after['value_phase']['max_epochs'])
 
 
 def summary(config):
