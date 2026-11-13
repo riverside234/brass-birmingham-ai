@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Play paired, frozen PPO self-play tables and compare their opening actions."""
+"""Play paired PPO self-play openings with frozen weights."""
 
 import argparse
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import itertools
 import os
 from pathlib import Path
+from queue import Empty, Queue
 import random
 import sys
 from tempfile import TemporaryDirectory
@@ -33,16 +34,17 @@ def play_game(session, origin, spec, seed, temperature, max_decisions, stop):
     from brass_ai.learning.contracts import digest, require
     from brass_ai.rust_backend.lab_collection import frozen_id
     from brass_ai.rust_backend.lab_perf import admit
-    from brass_ai.rust_backend.lab_transport import CONTRACT, VERSION
+    from brass_ai.rust_backend.lab_transport import VERSION
 
     job = dict(seed=seed, sampling_seed=seed, policies=[spec] * 4)
     job_id = frozen_id(job)
     rngs = [random.Random(digest(dict(sampling_seed=seed, game=0, seat=seat))) for seat in SEATS]
     opening = []
     active = None
+    completed_seats = set()
     with session.game(job, Counter(), stop) as (lane, policies):
         lane.begin(job_id, origin, max_decisions)
-        while not lane.current.get('terminal'):
+        while len(completed_seats) < len(SEATS) and not lane.current.get('terminal'):
             require(not stop.is_set(), 'Study interrupted')
             started = time.monotonic()
             decision = lane.current['decision']
@@ -86,35 +88,37 @@ def play_game(session, origin, spec, seed, temperature, max_decisions, stop):
                             forced=forced, raw_probabilities=raw.tolist(), feature_version=VERSION,
                             semantic_id=choice['id'])
             lane.append(row, evidence)
+            # A third action can still have payments or an additional development before Finish.
+            if phase == 'continuation' and active is not None and active['seat'] == seat and choice['kind'] == 'finish':
+                if active['move'] == OPENING_STEPS:
+                    completed_seats.add(seat)
+                active = None
 
-        receipt = lane.call('finish')
-        require(receipt['contract'] == CONTRACT and receipt['job'] == job_id and receipt['token'] == lane.token,
-                'Foreign completion receipt')
+        # Release the opening state without requesting a terminal-game receipt.
         lane.release()
 
     observed = {(row['seat'], row['move']) for row in opening}
-    require(len(opening) == len(observed) and
+    require(completed_seats == set(SEATS) and len(opening) == len(observed) and
             observed == {(seat, index) for seat in SEATS for index in range(1, OPENING_STEPS + 1)},
             f'Incomplete opening for setup seed {seed} at T={temperature}')
     return dict(seed=seed, temperature=temperature, opening=opening)
 
 
-def play_batch(seeds, command, collector, execution, cpu, specs, stop):
+def play_batch(seeds, command, collector, execution, cpu, specs, stop, completed):
     from brass_ai.rust_backend.lab_cpu_inference import NoServiceEndpoint
     from brass_ai.rust_backend.lab_session import OrdinarySession
     from brass_ai.rust_backend.lab_transport import Pipe
 
-    games = []
     with Pipe(command, binary=False, timeout=120) as bootstrap, OrdinarySession(
             ROOT, collector, NoServiceEndpoint(), execution, cpu=cpu) as session:
         for seed in seeds:
             if stop.is_set():
                 break
             origin = bootstrap.call('init', seed=seed)
-            for temperature in TEMPERATURES:
-                games.append(play_game(session, origin, specs[temperature], seed, temperature,
-                                       execution['max_decisions'], stop))
-    return games
+            completed.put([
+                play_game(session, origin, specs[temperature], seed, temperature, execution['max_decisions'], stop)
+                for temperature in TEMPERATURES
+            ])
 
 
 def move_key(row):
@@ -259,38 +263,58 @@ def main():
     require(not scratch.is_relative_to(run), 'Write the temporary CPU model outside the training run')
     scratch.mkdir(parents=True, exist_ok=True)
     workers = min(args.workers, len(seeds))
-    print(f'g{args.generation} | {len(seeds)} paired setups | {len(seeds) * len(TEMPERATURES)} games | '
+    total_openings = len(seeds) * len(TEMPERATURES)
+    print(f'g{args.generation} | {len(seeds)} paired setups | {total_openings} openings | '
           f'{workers} CPU lanes | {output}', flush=True)
 
     stop = threading.Event()
+    completed = Queue()
     games = []
     with (
         TemporaryDirectory(prefix=f'g{args.generation}-', dir=scratch) as temporary,
         ThreadPoolExecutor(max_workers=workers) as pool,
     ):
         bundle = Path(temporary) / 'cpu-model'
+        print('Preparing the frozen CPU model', flush=True)
         lab_cpu_models.export_bundle(model.eval(), bundle)
         del model
         manifest = bundle / 'manifest.json'
         cpu = dict(contract=lab_cpu_runtime.CONTRACT,
                    runtime=dict(path=str(runtime_path(runtime['runtime']['path'])), sha256=runtime['runtime']['sha256']),
                    bundles={entry['model_id']: dict(manifest=str(manifest), sha256=sha(manifest))}, model_cache=1)
-        tasks = [pool.submit(play_batch, seeds[index::workers], command, collector, execution, cpu, specs, stop)
-                 for index in range(workers)]
+        tasks = [
+            pool.submit(play_batch, seeds[index::workers], command, collector, execution, cpu, specs, stop, completed)
+            for index in range(workers)
+        ]
+        for task in tasks:
+            task.add_done_callback(completed.put)
+        finished_lanes = 0
+        print('Collecting paired openings', flush=True)
+        progress_interval = 16 * len(TEMPERATURES)
         try:
-            for task in as_completed(tasks):
-                games.extend(task.result())
-                print(f'Finished {len(games)}/{len(seeds) * len(TEMPERATURES)} games', flush=True)
+            while finished_lanes < workers:
+                try:
+                    update = completed.get(timeout=1)
+                except Empty:
+                    continue
+                if isinstance(update, list):
+                    games.extend(update)
+                    count = len(games)
+                    if count == len(TEMPERATURES) or count % progress_interval == 0 or count == total_openings:
+                        print(f'Finished {count}/{total_openings} openings', flush=True)
+                else:
+                    update.result()
+                    finished_lanes += 1
         except BaseException:
             stop.set()
             raise
     require({(game['seed'], game['temperature']) for game in games}
-            == set(itertools.product(seeds, TEMPERATURES)) and len(games) == len(seeds) * len(TEMPERATURES),
-            'Incomplete or duplicated paired games')
+            == set(itertools.product(seeds, TEMPERATURES)) and len(games) == total_openings,
+            'Incomplete or duplicated paired openings')
     games.sort(key=lambda game: (game['seed'], game['temperature']))
     report = dict(checkpoint=dict(path=str(checkpoint), **{k: entry[k] for k in ('generation', 'model_id', 'sha256')}),
                   sampling=dict(setup_seeds=seeds, sampling_seeds=seeds, seed_partition='validation',
-                                actions_per_seat=OPENING_STEPS, after_opening_temperature=1.,
+                                scope='opening-only', actions_per_seat=OPENING_STEPS, other_decisions_temperature=1.,
                                 epsilon=0., seats='all four use the same frozen checkpoint'),
                   network_link_endpoints=board['link_endpoints'], **summarize(games, board))
     output.mkdir(parents=True, exist_ok=False)
