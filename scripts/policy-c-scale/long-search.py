@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare re-scored K8/640 policies against a K8/2560 reference move and label."""
+"""Run K8/640 searches at each scale against a K8/2560 reference."""
 
 import numpy as np
 
@@ -11,23 +11,27 @@ HEADER = 'short_scale  match_long_move  match_long_label  move_NLL'
 
 def compare(probes, case, scales):
     _, row, origin = case
-    archived = row['teacher']
-    trial = probes.trial(archived)
+    trial = probes.trial(row['teacher'])
     reference = probes.run(trial, origin, row, REF_N, probes.ref_scale)
     if reference is None or reference['fallback_played']:
         return None
-    base = probes.run(trial, origin, row, LONG_N, archived['c2'])
-    if base is None:
-        return None
-    move = reference['legal_ids'].index(reference['played_action'])
+    ids = reference['legal_ids']
+    move = ids.index(reference['played_action'])
     label = int(np.argmax(reference['target']))
-    logits = np.asarray(base['logits'], dtype=np.float64)
-    adjustment = (base['c1'] + max(base['counts'])) * completed_q(base)
-    return [
-        (int(np.argmax(scores)) == move, int(np.argmax(scores)) == label,
-         float(np.logaddexp.reduce(scores) - scores[move]))
-        for scores in (logits, *(logits + scale * adjustment for scale in scales))
-    ]
+    logits = np.asarray(reference['logits'], dtype=np.float64)
+    policy = int(np.argmax(logits))
+    comparisons = [(policy == move, policy == label, float(np.logaddexp.reduce(logits) - logits[move]))]
+    for scale in scales:
+        candidate = probes.run(trial, origin, row, LONG_N, scale)
+        if candidate is None:
+            return None
+        # Keep NLL in log space using this candidate's own search statistics.
+        multiplier = candidate['c2'] * (candidate['c1'] + max(candidate['counts']))
+        scores = np.asarray(candidate['logits'], dtype=np.float64) + multiplier * completed_q(candidate)
+        comparisons.append((candidate['played_action'] == reference['played_action'],
+                            int(np.argmax(candidate['target'])) == label,
+                            float(np.logaddexp.reduce(scores) - scores[move])))
+    return comparisons
 
 
 def summarize(valid, scales):
@@ -41,4 +45,4 @@ def summarize(valid, scales):
 
 
 if __name__ == '__main__':
-    main('long', SCALES, compare, summarize)
+    main('long', SCALES, compare, summarize, candidate_n=LONG_N)

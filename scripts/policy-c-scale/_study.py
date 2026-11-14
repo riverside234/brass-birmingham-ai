@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import random
+import shutil
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -25,11 +26,14 @@ from brass_ai.bank import sha
 from brass_ai.learning.contracts import digest, project_path, read_json, require
 from brass_ai.learning.search_value import binding
 from brass_ai.recovery.teacher_phase import plan_jobs, readiness, reserved_rounds
+from brass_ai.recovery.training_revision_g1491 import EXPLORATION, GAME_OPENING, _job_block
 from brass_ai.rust_backend import lab_cpu_models, lab_cpu_runtime, lab_teacher
+from brass_ai.rust_backend.lab_contract import native_fingerprint
 from brass_ai.rust_backend.lab_paths import runtime_path
 from brass_ai.step5.league import write_json
 
 RUN = 'artifacts/step5/joint7-v11-2-g1190-restart-3'
+DEFAULT_GENERATION = 2250
 WEIGHT = 1.0
 K = 8
 SHORT_N = 96
@@ -122,6 +126,21 @@ def completed_q(label):
     return np.where(np.asarray(label['counts']) > 0, label['mean_returns'], label['v_mix'])
 
 
+def diagnostic_job(config, state, entry, saved, utility_calibration):
+    generation = entry['generation']
+    jobs, _ = plan_jobs(config, dict(state, iteration=generation, search_value=saved),
+                        model_id=entry['model_id'], export_hash=entry['sha256'], epoch=generation,
+                        ready=True, native_source=lab_teacher.source_fingerprint())
+    job = dict(next(j for j in jobs if not j.get('shadow_probe')), split='heldout', search_value=binding(WEIGHT))
+    # The diagnostic binary uses the native visit sampler only inside game_opening.
+    # All source groups use the same job recipe and an empty set of cotton seats.
+    job['teacher_revision'] = _job_block(dict(EXPLORATION, game_opening=GAME_OPENING),
+                                         short_labels=False, search_head_weight=int(WEIGHT), seats=[])
+    job['readiness'], _ = readiness(None, utility_calibration, job['expected']['reward_id'], skip=True)
+    lab_teacher.validate_job(job)
+    return job
+
+
 class DiagnosticTurn:
     def __init__(self, job, profile):
         self.job, self.profile = job, profile
@@ -170,11 +189,17 @@ class Probes:
         if searches[0]['completed'] != n:
             return None
         require(len(labels) == 1, 'Complete diagnostic search did not export one root label')
-        label = labels[0]['teacher']
-        require(labels[0]['view'] == row['view'] and labels[0]['diagnostic'] is True
+        probe_row = labels[0]
+        label = probe_row['teacher']
+        require(probe_row['view'] == row['view'] and probe_row['diagnostic'] is True
                 and label['legal_ids'] == archived['legal_ids'] and label['search_value'] == binding(WEIGHT)
                 and label['requested_k'] == K and label['frozen_n'] == label['completed_trajectories'] == n
-                and label['c2'] == scale and not label.get('explored', False), 'Probe root or settings differ')
+                and label['c2'] == scale, 'Probe root or settings differ')
+        context = row['view']['context']
+        opening = context['era'] == 'CanalEra' and context['round'] <= 2
+        require(label.get('explored', False) == opening
+                and label.get('sampling_temperature') == (GAME_OPENING['temperature'] if opening else None)
+                and 'cotton_exploration' not in label, 'Probe opening sampling differs')
         return label
 
 
@@ -189,6 +214,43 @@ def build_binary(manifest, target, name, toolchain, *, teacher=False):
     env.pop('CARGO_BUILD_TARGET', None)
     subprocess.run(command, cwd=ROOT, env=env, check=True)
     return target / 'release' / (name + ('.exe' if os.name == 'nt' else ''))
+
+
+def study_worker(binary, scratch, toolchain, core):
+    # The CPU preparation script puts target/<host>/release beside checkout.
+    source = binary.parents[3] / 'checkout'
+    require((source / 'lab-native/src/cpu_eval.rs').is_file() and native_fingerprint(source / 'native') == core,
+            f'Expected the pinned CPU teacher checkout beside the build: {source}')
+    destination = scratch / 'teacher-probe'
+    for name in ('native', 'lab-native'):
+        shutil.copytree(source / name, destination / name,
+                        ignore=shutil.ignore_patterns('target', '.git', '__pycache__'))
+
+    def patch(file, replacements):
+        path = destination / 'lab-native/src' / file
+        code = path.read_text(encoding='utf-8')
+        for before, after in replacements:
+            require(code.count(before) == 1, f'CPU teacher diagnostic edit did not match {path.name}: {before}')
+            code = code.replace(before, after, 1)
+        path.write_text(code, encoding='utf-8', newline='\n')
+
+    patch('cpu_eval.rs', [
+        ('[DEFAULT_C_SCALE, 0.15, 0.20, 0.5, 1.0].contains(&c_scale)',
+         'c_scale.is_finite() && c_scale > 0. && c_scale <= 1.'),
+        ('        let index = state.action(actual.actor, c.era, c.round, c.actions_remaining);\n'
+         '        let window = index <= revision.opening_actions || !fast && revision.long_search;',
+         '        let window = revision.tempered_opening && game_opening(c.era, c.round);'),
+        ('        check(!fast || revision.short_labels, "short-search label without short labels")?;\n', ''),
+    ])
+    patch('teacher.rs', [
+        ('    let job = &request["job"];',
+         '    check(request["op"] == "turn_probe", "research worker only accepts turn probes")?;\n'
+         '    let job = &request["job"];'),
+        ('(!turn_work.fast || crate::cpu_eval::teacher_short_labels())',
+         '(!turn_work.fast || probe || crate::cpu_eval::teacher_short_labels())'),
+    ])
+    return build_binary(destination / 'lab-native/Cargo.toml', destination / 'target',
+                        'brass-lab-teacher', toolchain, teacher=True)
 
 
 def print_and_save(kind, context, groups):
@@ -210,10 +272,11 @@ def print_and_save(kind, context, groups):
     print(f'Results: {output}')
 
 
-def main(kind, default_scales, compare, summarize, study_worker=None):
-    parser = argparse.ArgumentParser(description=f'Offline g2240 {kind} search C_scale study')
+def main(kind, default_scales, compare, summarize, *, candidate_n):
+    parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study')
     parser.add_argument('--run', default=RUN)
-    parser.add_argument('--generation', type=int, default=int(os.getenv('GEN', '2240')))
+    parser.add_argument('--generation', type=int, default=int(os.getenv('GEN', str(DEFAULT_GENERATION))),
+                        help=f'Frozen checkpoint (default: g{DEFAULT_GENERATION} or GEN)')
     parser.add_argument('--collected-generation', type=int, help='Source of archived positions (default: generation - 1)')
     parser.add_argument('--lanes', type=int, default=int(os.getenv('LANES', '48')))
     parser.add_argument('--ref-scale', type=float, choices=(0.1, 1.0), default=float(os.getenv('REF_SCALE', '0.1')))
@@ -244,24 +307,16 @@ def main(kind, default_scales, compare, summarize, study_worker=None):
     require(raw['step'] == args.generation and raw['model_id'] == entry['model_id']
             and hasattr(model, 'search_value_head'), 'Expected checkpoint with a search value head')
     saved = raw['training']['search_value']
-    jobs, _ = plan_jobs(state['signature']['config'], dict(state, iteration=args.generation, search_value=saved),
-                        model_id=entry['model_id'], export_hash=entry['sha256'], epoch=args.generation,
-                        ready=True, native_source=lab_teacher.source_fingerprint())
-    job = dict(next(j for j in jobs if not j.get('shadow_probe')), split='heldout', search_value=binding(WEIGHT))
-    # Use the archived table groups, with identical search seeds and no cotton or
-    # visit-count action sampling in the new probes.
-    job.pop('teacher_revision', None)
-    reward_id = job['expected']['reward_id']
-    job['readiness'], _ = readiness(None, raw['training'].get('utility_calibration'), reward_id, skip=True)
-    lab_teacher.validate_job(job)
-    rows = source_roots(run, incoming, saved, reward_id, args.limit)
+    job = diagnostic_job(state['signature']['config'], state, entry, saved, raw['training'].get('utility_calibration'))
+    rows = source_roots(run, incoming, saved, job['expected']['reward_id'], args.limit)
     build = lab_cpu_runtime.resolve(ROOT)
     core = build['teacher_execution_core']
     lab_cpu_runtime.raise_open_file_limit()
     cap_seconds = REF_N * lab_cpu_runtime.COUNT_CAP_PER_TRAJECTORY_NS / 1e9
     lab_teacher.COUNT_TURN_SECONDS = max(lab_teacher.COUNT_TURN_SECONDS, cap_seconds + 30)
     print(f'g{args.generation} | g{referenced} positions | {len(rows)} roots {dict(Counter(g for g, _ in rows))} | '
-          f'{args.lanes} lanes | w={WEIGHT:g} | REF_SCALE={args.ref_scale:g}', flush=True)
+          f'{args.lanes} lanes | w={WEIGHT:g} | REF_SCALE={args.ref_scale:g} | opening T={GAME_OPENING["temperature"]:g}',
+          flush=True)
 
     with TemporaryDirectory(prefix='brass-policy-c-scale-', dir=ROOT / 'artifacts',
                             ignore_cleanup_errors=os.name == 'nt') as directory:
@@ -276,9 +331,7 @@ def main(kind, default_scales, compare, summarize, study_worker=None):
         if not manifest.is_file():
             manifest = scratch / 'model/manifest.json'
             lab_cpu_models.export_bundle(model, manifest.parent)
-        binary = runtime_path(build['teacher']['path'])
-        if study_worker is not None:
-            binary = study_worker(binary, scratch, args.toolchain, core)
+        binary = study_worker(runtime_path(build['teacher']['path']), scratch, args.toolchain, core)
         inference = dict(contract=lab_cpu_runtime.CONTRACT,
                          runtime=dict(path=str(runtime_path(build['runtime']['path'])), sha256=build['runtime']['sha256']),
                          bundle=dict(manifest=str(manifest), sha256=sha(manifest)))
@@ -308,8 +361,7 @@ def main(kind, default_scales, compare, summarize, study_worker=None):
         groups[group] = dict(roots=len(pairs), valid=len(valid), **summarize(valid, args.scales))
     print_and_save(kind, dict(run=str(run), generation=args.generation, collected_generation=referenced,
                               checkpoint=entry, w=WEIGHT, k=K, ref_scale=args.ref_scale, ref_n=REF_N,
-                              candidate_n=SHORT_N if study_worker is not None else LONG_N,
-                              method='native-scale-sweep' if study_worker is not None else 'rescore-root-statistics',
+                              candidate_n=candidate_n, method='native-scale-sweep', game_opening=GAME_OPENING,
                               lanes=args.lanes, scales=args.scales, worker_sha256=worker_sha, core_sha256=core),
                    groups)
     require(groups['total']['valid'], 'No complete, supported reference pairs')
