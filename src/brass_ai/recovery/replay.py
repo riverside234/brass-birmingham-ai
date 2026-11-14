@@ -288,9 +288,10 @@ def read_shards(paths,partition=None,receipts=None,*,heuristic_only=False,native
             proof=jobs[ordinal]['provenance'] if jobs is not None else header['provenance']
             from . import ordinary_cotton
             if ordinary_cotton.KEY in proof:
-                game.cotton_seats, probability = ordinary_cotton.validate_assignment(proof)
+                cotton = ordinary_cotton.TableExploration(proof)
+                game.cotton_seats = cotton.seats
                 for row in game['records']:
-                    ordinary_cotton.check_row(row, probability if row['seat'] in game.cotton_seats else 0.)
+                    cotton.check(row)
             else:
                 require(all(ordinary_cotton.KEY not in r['behavior'] for r in game['records']),
                         'Cotton replay is missing its table assignment')

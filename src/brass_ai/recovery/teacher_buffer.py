@@ -115,7 +115,7 @@ class TeacherBuffer:
                     label = row['teacher']
                     require(label['generation'] == receipt['generation'] and label['model_id'] == receipt['model_id']
                             and label['reward_id'] == receipt['reward_id'], 'Teacher shard row identity differs')
-                    require(validate_improved_policy(label, row['choices']) is not None, 'Unadmitted sealed teacher row')
+                    require(validate_improved_policy(label, row['choices'], view=row['view']) is not None, 'Unadmitted sealed teacher row')
                     values.append(LabelRow(row, encoder.encode(row['view'], row['choices'], [0.] * 4, [0.] * 8)))
                 require(len({r.identity for r in values}) == len(values), 'Duplicate sealed teacher row')
                 self._rows[receipt['sha256']] = tuple(values)

@@ -9,11 +9,12 @@ pub struct Coverage {
     pub context: ViewContext,
     pub limit: usize,
     pub develop: bool,
+    pub build: bool,
 }
 
-fn cotton(choice: &Choice, develop: bool) -> bool {
+fn cotton(choice: &Choice, develop: bool, build: bool) -> bool {
     choice.industry == Some(Industry::CottonMill)
-        && (choice.kind == Kind::Build || develop && choice.kind == Kind::Develop)
+        && (build && choice.kind == Kind::Build || develop && choice.kind == Kind::Develop)
 }
 
 /// Reserve up to two distinct cotton choices within the existing K slots.
@@ -26,6 +27,7 @@ pub fn candidates(
     selected: &[usize],
     limit: usize,
     develop: bool,
+    build: bool,
 ) -> Result<Vec<usize>> {
     check(
         logits.len() == choices.len()
@@ -40,7 +42,7 @@ pub fn candidates(
     let mut required = Vec::with_capacity(3);
     // Retain an ordinary comparator, even if the original top K was all cotton.
     let ordinary = (0..choices.len())
-        .filter(|i| !cotton(&choices[*i], develop))
+        .filter(|i| !cotton(&choices[*i], develop, build))
         .max_by(|a, b| {
             (logits[*a] + gumbels[*a])
                 .total_cmp(&(logits[*b] + gumbels[*b]))
@@ -53,7 +55,7 @@ pub fn candidates(
         let prefer_develop = develop && slot == 0 && slots == 2;
         let best = (0..choices.len())
             .filter(|i| {
-                cotton(&choices[*i], develop)
+                cotton(&choices[*i], develop, build)
                     && !required.iter().any(|j: &usize| {
                         choices[*j].kind == choices[*i].kind
                             && choices[*j].target == choices[*i].target
@@ -127,14 +129,14 @@ mod tests {
         let l = vec![5., 4., -8., -9., -10.];
         let g = vec![0.; 5];
         assert_eq!(
-            candidates(&l, &g, &c, &[0, 1, 2, 3], 2, false).unwrap(),
+            candidates(&l, &g, &c, &[0, 1, 2, 3], 2, false, true).unwrap(),
             vec![0, 1, 2, 4]
         );
         assert_eq!(
-            candidates(&l, &g, &c, &[0, 1], 2, false).unwrap(),
+            candidates(&l, &g, &c, &[0, 1], 2, false, true).unwrap(),
             vec![0, 2]
         );
-        assert_eq!(candidates(&l, &g, &c, &[0], 2, false).unwrap(), vec![0]);
+        assert_eq!(candidates(&l, &g, &c, &[0], 2, false, true).unwrap(), vec![0]);
         assert_eq!(l, vec![5., 4., -8., -9., -10.]);
     }
     #[test]
@@ -145,11 +147,11 @@ mod tests {
             choice("c", "C", true),
         ];
         assert_eq!(
-            candidates(&[0., 9., 8.], &[0.; 3], &c, &[1, 2], 1, false).unwrap(),
+            candidates(&[0., 9., 8.], &[0.; 3], &c, &[1, 2], 1, false, true).unwrap(),
             vec![0, 1]
         );
         assert_eq!(
-            candidates(&[0.], &[0.], &c[..1], &[0], 1, false).unwrap(),
+            candidates(&[0.], &[0.], &c[..1], &[0], 1, false, true).unwrap(),
             vec![0]
         );
     }
@@ -167,12 +169,16 @@ mod tests {
         ];
         let logits = [0., -1., -2., -5.];
         assert_eq!(
-            candidates(&logits, &[0.; 4], &c, &[0, 1, 2], 2, true).unwrap(),
+            candidates(&logits, &[0.; 4], &c, &[0, 1, 2], 2, true, true).unwrap(),
             vec![0, 1, 3]
         );
         assert_eq!(
-            candidates(&logits, &[0.; 4], &c, &[0, 1, 2], 2, false).unwrap(),
+            candidates(&logits, &[0.; 4], &c, &[0, 1, 2], 2, false, true).unwrap(),
             vec![0, 1, 2]
+        );
+        assert_eq!(
+            candidates(&logits, &[0.; 4], &c, &[0, 1], 2, true, false).unwrap(),
+            vec![0, 3]
         );
     }
 }

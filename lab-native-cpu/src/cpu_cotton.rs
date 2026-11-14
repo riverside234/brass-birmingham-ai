@@ -16,6 +16,7 @@ const DEVELOP_CONTRACT: &str = "teacher-cotton-exploration/2.0.0";
 const MIXED_CONTRACT: &str = "teacher-cotton-exploration/3.0.0";
 const MIXED_25_CONTRACT: &str = "teacher-cotton-exploration/4.0.0";
 const SEATED_CONTRACT: &str = "teacher-cotton-exploration/5.0.0";
+const SINGLE_SEAT_CONTRACT: &str = "teacher-cotton-exploration/6.0.0";
 pub const CAP: u8 = 3;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -26,6 +27,7 @@ pub enum Mode {
     Mixed,
     Mixed25,
     Seated,
+    SingleSeat,
 }
 
 impl Mode {
@@ -40,6 +42,7 @@ impl Mode {
             Self::Mixed => MIXED_CONTRACT,
             Self::Mixed25 => MIXED_25_CONTRACT,
             Self::Seated => SEATED_CONTRACT,
+            Self::SingleSeat => SINGLE_SEAT_CONTRACT,
         }
     }
 
@@ -47,7 +50,7 @@ impl Mode {
         match self {
             Self::Builds => (1, 5),
             Self::Develop | Self::Mixed25 => (1, 4),
-            Self::Mixed | Self::Seated => (3, 10),
+            Self::Mixed | Self::Seated | Self::SingleSeat => (3, 10),
         }
     }
 
@@ -55,14 +58,19 @@ impl Mode {
         match self {
             Self::Builds => 0.2,
             Self::Develop | Self::Mixed25 => 0.25,
-            Self::Mixed | Self::Seated => 0.3,
+            Self::Mixed | Self::Seated | Self::SingleSeat => 0.3,
         }
     }
 
     pub fn settings(self) -> Value {
-        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated) { "train-and-heldout" } else { "train" };
-        json!({"contract":self.contract(),"probability":self.probability(),"max_per_seat_era":CAP,
-            "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":scope})
+        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated | Self::SingleSeat) { "train-and-heldout" } else { "train" };
+        let mut settings = json!({"contract":self.contract(),"probability":self.probability(),"max_per_seat_era":CAP,
+            "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":scope});
+        if self == Self::SingleSeat {
+            settings["minimum_build_level"] = json!(2);
+            settings["short_window"] = json!("all-actions");
+        }
+        settings
     }
 }
 
@@ -72,8 +80,8 @@ pub fn cotton(c: &Choice) -> bool {
 fn develop_cotton(c: &Choice) -> bool {
     c.kind == Kind::Develop && c.industry == Some(Industry::CottonMill)
 }
-fn targeted(c: &Choice, develop: bool) -> bool {
-    cotton(c) || develop && develop_cotton(c)
+fn targeted(c: &Choice, develop: bool, build: bool) -> bool {
+    build && cotton(c) || develop && develop_cotton(c)
 }
 fn is_zero(n: &u64) -> bool {
     *n == 0
@@ -134,12 +142,17 @@ pub struct Selection {
     pub total_visits: u64,
     pub covered_locations: usize,
     pub choice: String,
+    planned: Option<String>,
 }
 impl Selection {
     pub fn label(&self) -> Value {
-        json!({"contract":self.contract,"targeted":self.targeted,"probability":self.probability,
+        let mut label = json!({"contract":self.contract,"targeted":self.targeted,"probability":self.probability,
             "used_before":self.used_before,"cotton_visits":self.cotton_visits,"total_visits":self.total_visits,
-            "covered_locations":self.covered_locations})
+            "covered_locations":self.covered_locations});
+        if let Some(planned) = &self.planned {
+            label["planned_action"] = json!(planned);
+        }
+        label
     }
 }
 #[derive(Default, Debug)]
@@ -153,6 +166,7 @@ pub struct State {
     current: Option<Binding>,
     committed: Option<Binding>,
     eligible: bool,
+    builds: bool,
     profile: usize,
     pub selection: Option<Selection>,
     continuation_choice: Option<String>,
@@ -213,9 +227,12 @@ impl State {
             return 0;
         }
         let develop = self.mode.develop();
+        self.builds = self.mode != Mode::SingleSeat || view.players[binding.seat].mat.iter()
+            .find(|m| m.industry == Industry::CottonMill)
+            .and_then(|m| m.tiles.first()).is_some_and(|tile| tile.level > 1);
         let c = &mut self.counts[self.profile];
         c.action_decisions += 1;
-        if choices.len() < 2 || !choices.iter().any(|c| targeted(c, develop)) {
+        if choices.len() < 2 || !choices.iter().any(|c| targeted(c, develop, self.builds)) {
             return 0;
         }
         c.legal_decisions += 1;
@@ -238,6 +255,14 @@ impl State {
         } else {
             2
         }
+    }
+
+    pub fn eligible(&self) -> bool {
+        self.eligible
+    }
+
+    pub fn builds(&self) -> bool {
+        self.builds
     }
 
     pub fn no_evidence(&mut self) {
@@ -293,11 +318,13 @@ impl State {
             "cotton sampling shape",
         )?;
         let develop = self.mode.develop();
+        let builds = self.builds;
+        let planned = self.mode == Mode::SingleSeat;
         let mut cotton_total = 0;
         let mut cotton_mass = 0.;
         let mut locations = Vec::with_capacity(2);
         for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
-            if *n > 0 && targeted(choice, develop) {
+            if *n > 0 && targeted(choice, develop, builds) {
                 cotton_total += n;
                 if let Some((weights, _)) = tempered {
                     cotton_mass += weights[i];
@@ -319,20 +346,21 @@ impl State {
         c.covered_locations += locations.len() as u64;
         c.cotton_visits += cotton_total;
         c.total_visits += total;
-        let base_p = tempered.map_or(cotton_total as f64 / total as f64, |(_, mass)| cotton_mass / mass);
+        let base_p = if planned { f64::from(u8::from(targeted(&choices[base], develop, builds))) }
+                     else { tempered.map_or(cotton_total as f64 / total as f64, |(_, mass)| cotton_mass / mass) };
         c.base_cotton_probability_sum += base_p;
         c.mixed_cotton_probability_sum += (1. - mixture) * base_p + mixture;
         let mut selected = base;
         if trigger {
             let z = super::cpu_eval::mix(seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a02));
             if let Some((weights, _)) = tempered {
-                let eligible = weights.iter().copied().enumerate().filter(|(i, _)| targeted(&choices[*i], develop));
+                let eligible = weights.iter().copied().enumerate().filter(|(i, _)| targeted(&choices[*i], develop, builds));
                 selected = super::cpu_eval::sample_weights(eligible, cotton_mass, z)?;
             } else {
                 let draw = ((u128::from(z) * u128::from(cotton_total)) >> 64) as u64;
                 let mut sum = 0;
                 for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
-                    if targeted(choice, develop) {
+                    if targeted(choice, develop, builds) {
                         sum += n;
                         if draw < sum {
                             selected = i;
@@ -347,8 +375,9 @@ impl State {
         let (selected_mass, full_mass, cotton_mass) = tempered.map_or(
             (counts[selected] as f64, total as f64, cotton_total as f64),
             |(weights, mass)| (weights[selected], mass, cotton_mass));
-        let probability = (1. - mixture) * selected_mass / full_mass
-            + if targeted(&choices[selected], develop) { mixture * selected_mass / cotton_mass } else { 0. };
+        let base_mass = if planned { f64::from(u8::from(selected == base)) } else { selected_mass / full_mass };
+        let probability = (1. - mixture) * base_mass
+            + if targeted(&choices[selected], develop, builds) { mixture * selected_mass / cotton_mass } else { 0. };
         self.selection = Some(Selection {
             contract: self.mode.contract(),
             targeted: trigger,
@@ -358,6 +387,7 @@ impl State {
             total_visits: total,
             covered_locations: locations.len(),
             choice: choices[selected].id.clone(),
+            planned: planned.then(|| choices[base].id.clone()),
         });
         Ok(selected)
     }
@@ -394,7 +424,7 @@ impl State {
         }
         if trigger {
             check(
-                targeted(choice, self.mode.develop()) && self.used[binding.era][binding.seat] < CAP,
+                targeted(choice, self.mode.develop(), self.builds) && self.used[binding.era][binding.seat] < CAP,
                 "cotton allowance exceeded",
             )?;
             self.used[binding.era][binding.seat] += 1;
@@ -605,5 +635,32 @@ mod tests {
             assert_eq!(s.counts[0].continuation_targets, 1);
             assert_eq!(s.receipt()["develops_by_era_seat"][0][seat], 2);
         }
+    }
+
+    #[test]
+    fn single_seat_keeps_the_plan_and_uses_only_develop_visits_at_level_one() {
+        let mut v = view();
+        let mut choices = choices();
+        let seat = v.seat as usize;
+        choices[2].kind = Kind::Develop;
+        let mut state = State { mode: Mode::SingleSeat, seats: Some(1 << seat), ..State::default() };
+        assert_eq!(state.prepare(&v, &choices, true, true), 1);
+        assert!(!state.builds());
+        let hold = (0..100).find(|&d| !state.trigger(7, d)).unwrap();
+        let trigger = (0..100).find(|&d| state.trigger(7, d)).unwrap();
+        // Level-one build retains its planned probability and gets no cotton mass.
+        assert_eq!(state.sample(1, &choices, &[0, 9, 1], 10, None, 7, hold).unwrap(), 1);
+        let selection = state.selection.as_ref().unwrap();
+        assert_eq!(selection.cotton_visits, 1);
+        assert_eq!(selection.probability, 0.7);
+        assert_eq!(state.sample(1, &choices, &[0, 9, 1], 10, None, 7, trigger).unwrap(), 2);
+        assert_eq!(state.selection.as_ref().unwrap().probability, 0.3);
+        state.commit(&v, &choices[2], v.context.revision + 1).unwrap();
+        assert_eq!(state.used[0][seat], 1);
+        let mat = v.players[seat].mat.iter_mut().find(|m| m.industry == Industry::CottonMill).unwrap();
+        while mat.tiles.first().is_some_and(|t| t.level == 1) { mat.tiles.remove(0); }
+        v.context.revision += 1;
+        assert_eq!(state.prepare(&v, &choices, true, true), 1);
+        assert!(state.builds());
     }
 }

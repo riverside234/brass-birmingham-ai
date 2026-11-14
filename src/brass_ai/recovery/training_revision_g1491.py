@@ -38,6 +38,7 @@ LONG_WEIGHT = .6
 EXPLORATION = dict(contract='root-visit-count-sampling/1.0.0', temperature=1., opening_actions_per_era=7,
                    long_search='always')
 GAME_OPENING = dict(temperature=2., actions_per_seat=3)
+COTTON_ONLY_EXPLORATION = dict(EXPLORATION, normal_sampling=False, game_opening=GAME_OPENING)
 RESTART = 'g1490-branch-restart'
 # The same restart with 256 teacher rows per PPO step (the g1190 restart's second attempt).
 WIDE_RESTART = 'g1190-branch-restart-256-rows'
@@ -98,9 +99,18 @@ def teacher_search_head_weight(config):
     return config.get('teacher_phase', {}).get(KEY, {}).get(TEACHER_SEARCH_HEAD_WEIGHT)
 
 
+def cotton_settings(config):
+    return config.get('teacher_phase', {}).get(KEY, {}).get('exploration', {}).get('cotton', {})
+
+
 def seated_cotton(config):
-    from .teacher_cotton import SEATED_CONTRACT
-    return config.get('teacher_phase', {}).get(KEY, {}).get('exploration', {}).get('cotton', {}).get('contract') == SEATED_CONTRACT
+    from .teacher_cotton import SEATED_CONTRACTS
+    return cotton_settings(config).get('contract') in SEATED_CONTRACTS
+
+
+def cotton_only(config):
+    from .teacher_cotton import SINGLE_SEAT_CONTRACT
+    return cotton_settings(config).get('contract') == SINGLE_SEAT_CONTRACT
 
 
 def _mixed_tables(marker, weight, *, seated=False):
@@ -113,13 +123,20 @@ def _mixed_tables(marker, weight, *, seated=False):
     return dict(marker, exploration=dict(marker['exploration'], cotton=cotton), **{TEACHER_SEARCH_HEAD_WEIGHT: weight})
 
 
+def cotton_only_marker(marker):
+    from .teacher_cotton import SINGLE_SEAT_CONTRACT, settings
+    cotton = dict(settings(contract=SINGLE_SEAT_CONTRACT), table_fraction=.25)
+    return dict(marker, exploration=dict(COTTON_ONLY_EXPLORATION, cotton=cotton))
+
+
 def configure_teacher_games(config, weight, *, seated=False):
     """Set the teacher-only blend and split cotton exploration within each partition."""
     require(type(weight) is int and weight in (0, 1), 'Teacher search-head weight must be 0 or 1')
     require(variant_of(config) == SEARCH_REFRESH and count_search(config) in (RETUNED_SEARCH, COTTON_SPLIT_SEARCH),
             'Teacher game settings require the retuned g1190 recipe')
     phase = config['teacher_phase']
-    revision = _mixed_tables(phase[KEY], weight, seated=seated or seated_cotton(config))
+    revision = (dict(phase[KEY], **{TEACHER_SEARCH_HEAD_WEIGHT: weight}) if cotton_only(config)
+                else _mixed_tables(phase[KEY], weight, seated=seated or seated_cotton(config)))
     result = dict(config, teacher_phase=dict(phase, **{KEY: revision}))
     validate(result)
     return result
@@ -133,6 +150,7 @@ def label_revision(marker):
     result = {k: v for k, v in marker.items() if k != TEACHER_SEARCH_HEAD_WEIGHT}
     result['exploration'] = dict(marker['exploration'], cotton=settings(develop=True))
     result['exploration'].pop('game_opening', None)
+    result['exploration'].pop('normal_sampling', None)
     return result
 
 
@@ -151,6 +169,7 @@ def validate(config):
                     _mixed_tables(retuned, 0, seated=True), _mixed_tables(retuned, 1, seated=True))
         opening = dict(retuned, exploration=dict(retuned['exploration'], game_opening=GAME_OPENING))
         allowed += tuple(_mixed_tables(opening, weight, seated=True) for weight in (0, 1))
+        allowed += tuple(cotton_only_marker(_mixed_tables(opening, weight, seated=True)) for weight in (0, 1))
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',
@@ -267,6 +286,8 @@ def _job_block(exploration, *, split='train', short_labels=True, search_head_wei
                                  long_search=exploration['long_search'] == 'always'))
     if 'game_opening' in exploration:
         result['exploration']['game_opening'] = dict(exploration['game_opening'])
+    if 'normal_sampling' in exploration:
+        result['exploration']['normal_sampling'] = exploration['normal_sampling']
     if search_head_weight is not None:
         result[TEACHER_SEARCH_HEAD_WEIGHT] = search_head_weight
     if seats is not None:
@@ -303,7 +324,7 @@ def validate_job(job):
     split = job.get('split')
     require(isinstance(revision, dict) and job.get('seating') == 'all-seat-search' and
             not job.get('h2h') and not job.get('shadow_probe'), 'Unreviewed g1491 teacher job revision')
-    from .teacher_cotton import SEATED_CONTRACT, SEATS, settings as cotton_settings
+    from .teacher_cotton import SEATED_CONTRACT, SINGLE_SEAT_CONTRACT, SEATS, settings as cotton_options
     weight = revision.get(TEACHER_SEARCH_HEAD_WEIGHT)
     if TEACHER_SEARCH_HEAD_WEIGHT in revision:
         from brass_ai.learning.search_value import binding
@@ -312,18 +333,20 @@ def validate_job(job):
     if SEATS in revision:
         from brass_ai.step5.policy import cotton_seats
         seats = revision[SEATS]
-        require(split in ('train', 'heldout') and type(seats) is list and len(seats) <= 2 and
+        cotton_only = revision.get('exploration', {}).get('normal_sampling') is False
+        contract, limit = (SINGLE_SEAT_CONTRACT, 1) if cotton_only else (SEATED_CONTRACT, 2)
+        require(split in ('train', 'heldout') and type(seats) is list and len(seats) <= limit and
                 all(type(seat) is int for seat in seats) and
-                seats == cotton_seats(job['sampling_seed'], len(seats), SEATED_CONTRACT),
+                seats == cotton_seats(job['sampling_seed'], len(seats), contract),
                 'Teacher cotton seat assignment differs')
-        exploration = dict(EXPLORATION, cotton=cotton_settings(contract=SEATED_CONTRACT))
+        exploration = dict(COTTON_ONLY_EXPLORATION if cotton_only else EXPLORATION, cotton=cotton_options(contract=contract))
+        variants = (exploration,) if cotton_only else (exploration, dict(exploration, game_opening=GAME_OPENING))
         allowed = tuple(_job_block(e, short_labels=False, search_head_weight=weight,
-                                   cotton_table=bool(seats), seats=seats) for e in
-                        (exploration, dict(exploration, game_opening=GAME_OPENING)))
+                                   cotton_table=bool(seats), seats=seats) for e in variants)
     elif weight is not None:
         from .teacher_cotton import MIXED_CONTRACTS
         allowed = (_job_block(EXPLORATION, short_labels=False, search_head_weight=weight), *(
-            _job_block(dict(EXPLORATION, cotton=cotton_settings(contract=contract)), short_labels=False,
+            _job_block(dict(EXPLORATION, cotton=cotton_options(contract=contract)), short_labels=False,
                        search_head_weight=weight, cotton_table=True) for contract in MIXED_CONTRACTS))
     else:
         allowed = (_job_block(EXPLORATION), _job_block(block()['exploration'],split=split),

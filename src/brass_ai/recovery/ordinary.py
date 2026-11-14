@@ -82,7 +82,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         verify_pool_checkpoints(root,state['quality_pool']['members'],verified_snapshots)
     v4_in_history=v4_history.active(state.get('quality_pool'))
     from .training_revision_g1041 import mixed,exposure
-    cotton = ordinary_cotton.enabled(config)
+    cotton = config['table_plan'].get(ordinary_cotton.KEY)
     if mixed(config):
         require(v4_in_history and config['table_plan']['origin_games']<=state['games_done'],
             '70/30 collection requires committed v4 retirement and mix origin')
@@ -171,8 +171,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
             provenance['exploration']=exploration
             provenance['learner_behavior'].update(exploration_version=exploration['version'],opening=exploration['opening'])
         if cotton and kind == 'selfplay':
-            assignment = ordinary_cotton.assignment(index, provenance['sampling_seed'],
-                probability=config['table_plan'][ordinary_cotton.KEY]['probability'])
+            assignment = ordinary_cotton.planned_assignment(cotton, index, provenance['sampling_seed'])
             if assignment is not None:
                 require(exploration and exploration['version'] == 3, 'Cotton self-play requires v3 behavior')
                 provenance[ordinary_cotton.KEY] = assignment

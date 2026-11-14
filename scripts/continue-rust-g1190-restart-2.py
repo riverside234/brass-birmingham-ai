@@ -56,6 +56,12 @@ Ordinary PPG runs at most one epoch with a beta floor of .25 across all stages.
 seat's first three actions in ordinary and teacher games, 10% ordinary cotton
 targeting, and a .5 PPG beta floor at every stage. Re-measure teacher beta on
 the first iteration with teaching on. The new settings persist.
+
+--update-cotton-sampling adopts the g2240 cotton recipe. Teacher cotton tables
+make up 25% of training and held-outs, with normal teacher sampling disabled.
+PPO uses 60/10/30 with 20% targeting on the cotton tables. Both use one fixed
+random seat, target cotton builds from level two, and cap targeting at three
+per era. The new settings persist.
 """
 import importlib.util
 from pathlib import Path

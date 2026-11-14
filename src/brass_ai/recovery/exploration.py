@@ -4,7 +4,8 @@ import math
 import statistics
 
 from brass_ai.learning.contracts import digest, require
-from brass_ai.step5.policy import COTTON_EXPLORATION, COTTON_PROBABILITIES, FAMILY_WEIGHTS
+from brass_ai.step5.policy import (COTTON_DEVELOP_ONLY, COTTON_EXPLORATION, COTTON_PROBABILITIES, FAMILY_WEIGHTS,
+                                   LIMITED_COTTON_PROBABILITY)
 
 GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
 FIXED_ENTROPY = dict(contract='fixed-group-entropy/1.0.0',
@@ -252,11 +253,14 @@ def effective_alphas(config,state):
 
 def check_behavior(b, phase, *, branch_move=False):
     cotton = COTTON_EXPLORATION in b
+    develop_only = COTTON_DEVELOP_ONLY in b
     components = ('branch_move',) if branch_move else ('policy','exploration','cotton') if cotton else ('policy','exploration')
     require(set(b)=={'kind','policy_id','probability','temperature','exploration','exploration_version',
-        'component','action_decision'} | ({COTTON_EXPLORATION} if cotton else set())
+        'component','action_decision'} | ({COTTON_EXPLORATION} if cotton else set()) | ({COTTON_DEVELOP_ONLY} if develop_only else set())
         and (not cotton or (not branch_move and phase in ('action','continuation') and
                            b[COTTON_EXPLORATION] in COTTON_PROBABILITIES))
+        and (not develop_only or (cotton and b[COTTON_EXPLORATION] == LIMITED_COTTON_PROBABILITY and
+                                 phase == 'action' and b[COTTON_DEVELOP_ONLY] is True))
         and b['kind']=='model' and type(b['exploration_version']) is int and
         b['exploration_version']==3 and type(b['exploration']) in (float,int) and
         math.isfinite(b['exploration']) and 0<=b['exploration']<=.5 and

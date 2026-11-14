@@ -42,13 +42,14 @@ def configure(config):
     search = phase['search_value']
     value = config['value_phase']
     adopted = applied(config)
+    cotton = (ordinary_cotton.LIMITED if teacher.cotton_only(config) else
+              dict(ordinary_cotton.SETTINGS, probability=.10 if adopted else .15))
     require(teacher.seated_cotton(config) and phase['mode'] == 'on' and dedicated_holdout(search)
             and value['max_epochs'] == 1 and config['branching']['rate_per_decision'] == 0,
             'Opening sampling revision requires the seated teacher-on recipe and one-epoch PPG')
     require(config['opening'] == (exploration.THREE_T2_OPENING if adopted else exploration.THREE_OPENING)
             and config['update']['opening_objective'] == (opening_objective.T2_THREE if adopted else opening_objective.FORK_T15)
-            and config['table_plan'].get(ordinary_cotton.KEY) == dict(ordinary_cotton.SETTINGS,
-                                                                     probability=.10 if adopted else .15)
+            and config['table_plan'].get(ordinary_cotton.KEY) == cotton
             and value['beta_clone_min'] == search['schedule']['ppg_beta_floor_after_stage_b'] == (.5 if adopted else .25),
             'Opening sampling revision needs the complete preceding or revised recipe')
     if adopted:

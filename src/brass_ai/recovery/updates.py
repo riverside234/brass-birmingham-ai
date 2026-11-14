@@ -11,7 +11,7 @@ from torch.nn import functional as F
 from brass_ai.learning.batching import collate, model_id
 from brass_ai.learning.contracts import require
 from brass_ai.learning.replay import terminal_targets, validate_teacher
-from brass_ai.step5.policy import COTTON_EXPLORATION, cotton_candidates, exploration_distribution
+from brass_ai.step5.policy import COTTON_DEVELOP_ONLY, COTTON_EXPLORATION, cotton_candidates, exploration_distribution
 from brass_ai.step5.updates import bounded_batches
 from .encoding import PreparedEncoder
 from .telemetry import Timings, profile_window, memory
@@ -126,7 +126,7 @@ class ExplorationMixture:
             else:
                 value=exploration_distribution(row['choices'],row['intent'],b.get('exploration_version',2),phase).astype(np.float32)
             if cotton:
-                candidates=cotton_candidates(row['choices'],phase)
+                candidates=cotton_candidates(row['choices'],phase,builds=not b.get(COTTON_DEVELOP_ONLY,False))
                 require(candidates,'Cotton PPO row lacks eligible choices')
                 # Combine the baseline and cotton exploration components.
                 base=(1-cotton)*b['exploration']

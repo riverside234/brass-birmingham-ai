@@ -59,8 +59,8 @@ def binding(job, producer, *, generation, model_id, config, scope='ordinary'):
             and proof['spec'] == producer['signature'] and proof['learner_behavior']['model_id'] == model_id,
             'Frozen ordinary job/signature/learner differs')
     from brass_ai.recovery import ordinary_cotton
-    cotton = (ordinary_cotton.assignment(proof['ordinary_game_index'], job['sampling_seed'],
-                  probability=config['table_plan'][ordinary_cotton.KEY]['probability'])
+    cotton = (ordinary_cotton.planned_assignment(config['table_plan'][ordinary_cotton.KEY],
+                                                proof['ordinary_game_index'], job['sampling_seed'])
               if ordinary_cotton.enabled(config) and proof['kind'] == 'selfplay' else None)
     require(proof.get(ordinary_cotton.KEY) == cotton and (cotton is None or
             (proof['sampling_seed'] == job['sampling_seed'] and not job.get('branching') and

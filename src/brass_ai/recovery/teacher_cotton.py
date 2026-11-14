@@ -2,28 +2,34 @@
 import math
 from collections import Counter
 from brass_ai.learning.contracts import require
+from brass_ai.step5.policy import cotton_build_available, has_unflipped_cotton
 
 CONTRACT='teacher-cotton-exploration/1.0.0'
 DEVELOP_CONTRACT='teacher-cotton-exploration/2.0.0'
 MIXED_CONTRACT='teacher-cotton-exploration/3.0.0'
 MIXED_25_CONTRACT='teacher-cotton-exploration/4.0.0'
 SEATED_CONTRACT='teacher-cotton-exploration/5.0.0'
+SINGLE_SEAT_CONTRACT='teacher-cotton-exploration/6.0.0'
 SEATS='cotton_seats'
 PROBABILITY=.2
 DEVELOP_PROBABILITY=.25
 MIXED_PROBABILITY=.3
 CAP=3
 MIXED_CONTRACTS=(MIXED_CONTRACT,MIXED_25_CONTRACT)
+SEATED_CONTRACTS=(SEATED_CONTRACT, SINGLE_SEAT_CONTRACT)
 PROBABILITIES={CONTRACT:PROBABILITY, DEVELOP_CONTRACT:DEVELOP_PROBABILITY, MIXED_CONTRACT:MIXED_PROBABILITY,
-               MIXED_25_CONTRACT:DEVELOP_PROBABILITY, SEATED_CONTRACT:MIXED_PROBABILITY}
+               MIXED_25_CONTRACT:DEVELOP_PROBABILITY, **dict.fromkeys(SEATED_CONTRACTS, MIXED_PROBABILITY)}
 
 
 def settings(*, develop=False, mixed=False, contract=None):
     if contract is None:
         contract = MIXED_CONTRACT if mixed else (DEVELOP_CONTRACT if develop else CONTRACT)
-    return dict(contract=contract, probability=PROBABILITIES[contract], max_per_seat_era=CAP,
+    value = dict(contract=contract, probability=PROBABILITIES[contract], max_per_seat_era=CAP,
         long_candidates=2, short_candidates=1, pause_unflipped=True,
-        scope='train-and-heldout' if contract in (*MIXED_CONTRACTS, SEATED_CONTRACT) else 'train')
+        scope='train-and-heldout' if contract in (*MIXED_CONTRACTS, *SEATED_CONTRACTS) else 'train')
+    if contract == SINGLE_SEAT_CONTRACT:
+        value.update(minimum_build_level=2, short_window='all-actions')
+    return value
 
 
 def job_settings(job):
@@ -34,23 +40,33 @@ def enabled(job):
     return job_settings(job) is not None
 
 
-def validate_label(label, choices):
+def validate_label(label, choices, *, view=None):
     """Reuse already validated legal order/counts. The improved-policy target is untouched."""
     e=label.get('cotton_exploration')
     if e is None:return
-    require(isinstance(e,dict) and set(e)=={'contract','targeted','probability','used_before',
-        'cotton_visits','total_visits','covered_locations'} and type(e['contract']) is str and e['contract'] in PROBABILITIES,
+    require(isinstance(e,dict) and type(e.get('contract')) is str and e['contract'] in PROBABILITIES,
+            'Invalid cotton exploration contract')
+    single = e['contract'] == SINGLE_SEAT_CONTRACT
+    fields = {'contract','targeted','probability','used_before','cotton_visits','total_visits','covered_locations'}
+    require(set(e) == (fields | {'planned_action'} if single else fields),
         'Invalid cotton exploration metadata')
     require(label.get('explored') is True and type(e['targeted']) is bool and
         type(e['used_before']) is int and 0<=e['used_before']<CAP,'Invalid cotton exploration allowance')
     total=sum(label['counts']);cotton=0;locations=set();played=None
     develop = e['contract'] != CONTRACT
     mixture = PROBABILITIES[e['contract']]
+    builds = True
+    if single:
+        require(view is not None and not has_unflipped_cotton(view, label['seat'])
+                and any(c['id'] == e['planned_action'] for c in choices), 'Invalid teacher cotton eligibility or plan')
+        builds = cotton_build_available(view, label['seat'])
+    def targeted(c):
+        return c.get('industry')=='CottonMill' and (builds and c['kind']=='build' or develop and c['kind']=='develop')
     for c,n in zip(choices,label['counts']):
-        is_cotton=c.get('industry')=='CottonMill' and (c['kind']=='build' or develop and c['kind']=='develop')
+        is_cotton=targeted(c)
         if n and is_cotton:cotton+=n;locations.add((c['kind'], c.get('target')))
         if c['id']==label['played_action']:played=(n,is_cotton)
-    require(total>0 and cotton>0 and played is not None and played[0]>0,
+    require(total>0 and cotton>0 and played is not None and (single or played[0]>0),
             'Cotton exploration needs visited legal actions')
     require(all(type(e[k]) is int for k in ('cotton_visits','total_visits','covered_locations')) and
         (e['cotton_visits'],e['total_visits'],e['covered_locations'])==(cotton,total,len(locations)),
@@ -59,11 +75,13 @@ def validate_label(label, choices):
     if label.get('sampling_temperature') == 2.:
         weights = [math.sqrt(count) for count in label['counts']]
         total = sum(weights)
-        cotton = sum(w for c,w in zip(choices,weights) if c.get('industry')=='CottonMill'
-                     and (c['kind']=='build' or develop and c['kind']=='develop'))
+        cotton = sum(w for c,w in zip(choices,weights) if targeted(c))
         n = math.sqrt(n)
-    probability=(1-mixture)*n/total+(mixture*n/cotton if is_cotton else 0.)
-    require((not e['targeted'] or is_cotton) and type(e['probability']) in (int,float) and
+    planned = single and label['played_action'] == e['planned_action']
+    base = float(planned) if single else n/total
+    probability=(1-mixture)*base+(mixture*n/cotton if is_cotton else 0.)
+    require((is_cotton and n > 0 if e['targeted'] else not single or planned) and
+        type(e['probability']) in (int,float) and
         math.isfinite(e['probability']) and abs(e['probability']-probability)<=1e-12,
         'Cotton exploration behavior probability differs')
 
@@ -127,7 +145,7 @@ def aggregate(metrics):
     contract = receipts[0]['contract']
     require(all(r['contract']==contract for r in receipts), 'Mixed cotton exploration settings')
     result=dict(contract=contract, tables=len(receipts), settings=settings(contract=contract))
-    if contract == SEATED_CONTRACT:
+    if contract in SEATED_CONTRACTS:
         counts = Counter(len(r[SEATS]) for r in receipts)
         result.update(one_seat_tables=counts[1], two_seat_tables=counts[2])
     for profile in ('long','short'):

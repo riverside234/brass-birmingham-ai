@@ -80,7 +80,7 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
         assigned = [policies[(s-job.get('rotation',0))%4] for s in range(4)]
         from brass_ai.recovery import ordinary_cotton
         proof = job['provenance']
-        cotton_seats, cotton_probability = ordinary_cotton.validate_assignment(proof)
+        cotton = ordinary_cotton.TableExploration(proof)
         group = digest(dict(rules='steam-brass-patch-1.1.0',setup_seed=job['seed']))
         game_id = job.get('stable_game_id') or digest(dict(job=job_id, seed=job['seed']))
         game = dict(game_id=game_id,setup_group=group,players=4,split=split_for(group),
@@ -140,8 +140,9 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
                 _,intent=p.context_features(view,rng)
                 if p.exploration_version==3: chosen,probability,teacher=p.sample_training(view,choices,rng,np.ones(1),intent)
                 else: rng.choices([0],weights=[1.],k=1); chosen,probability,teacher=0,1.,None
-            elif seat in cotton_seats:
-                chosen,probability,teacher=p.select_batch([(view,choices,rng)],cotton_probability=cotton_probability)[0]
+            elif seat in cotton.seats:
+                rate, builds = cotton.options(view, choices)
+                chosen,probability,teacher=p.select_batch([(view,choices,rng)],cotton_probability=rate,cotton_builds=builds)[0]
             else: chosen,probability,teacher=p.select_batch([(view,choices,rng)])[0]
             style,intent=p.context_features(view,rng)
             behavior=dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=getattr(p,'temperature',1.))
@@ -170,6 +171,8 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
                             submit_branch(packet)
             if compare: compare(row,encoded,lane)
             t=time.monotonic(); lane.append(row,evidence,allow_forced=neural); timings['native_step_seconds']+=time.monotonic()-t
+            if cotton.limited:
+                cotton.commit(view, behavior)
         if raw_export:
             t=time.monotonic();receipt,pages,features=lane.completed_export()
             timings['combined_completion_export_seconds']+=time.monotonic()-t

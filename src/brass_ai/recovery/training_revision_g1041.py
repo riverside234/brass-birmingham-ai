@@ -13,7 +13,7 @@ def mixed(config):return config.get('table_plan',{}).get('contract')==TABLE_CONT
 
 
 def validate_mix(config):
-    from .ordinary_cotton import COTTON_PROBABILITIES, KEY, SETTINGS, enabled
+    from .ordinary_cotton import KEY, LIMITED, PROBABILITIES, SETTINGS, enabled
     plan=config['table_plan']
     require(set(plan)==set(TABLE_PLAN)|{'contract','origin_generation','origin_games'}|({KEY} if enabled(config) else set()) and
         plan['contract']==TABLE_CONTRACT and plan['quotas']==QUOTAS and
@@ -27,9 +27,9 @@ def validate_mix(config):
         '70/30 curriculum must preserve the previous schedule through its committed origin')
     require(config.get('v4_history') is not None,'70/30 requires v4 already moved into history')
     if enabled(config):
-        require(plan[KEY] in (dict(SETTINGS, probability=rate) for rate in COTTON_PROBABILITIES)
+        require(plan[KEY] in (LIMITED, *(dict(SETTINGS, probability=rate) for rate in PROBABILITIES))
                 and config.get('branching', {}).get('rate_per_decision') == 0,
-                'Ordinary cotton self-play uses the 50/20/30 recipe with branching disabled')
+                'Ordinary cotton self-play requires a reviewed mix with branching disabled')
     return plan
 
 
@@ -55,7 +55,7 @@ def configure(config,state):
     return result
 
 
-def exposure(plan, *, cotton=False):
+def exposure(plan, *, cotton=None):
     """PFSP p is conditional on a frozen opponent seat, never a loss weight."""
     rows=[dict(model_id=r['model_id'],conditional_probability=r['p'],
         expected_opponent_seats=192*r['p'],all_seat_probability=.15*r['p']) for r in plan['members']]
@@ -65,9 +65,10 @@ def exposure(plan, *, cotton=False):
         scope='PFSP probabilities normalized within history; marginal exposure is 30% tables x 2/4 opponent seats. '
               'Recorded comparison counts and PPO per-row means are not multiplied by the mix again.')
     if cotton:
-        from .ordinary_cotton import SETTINGS
-        standard = 320 * SETTINGS['standard_selfplay'] // 100
-        targeted = 320 * SETTINGS['cotton_selfplay'] // 100
+        from .ordinary_cotton import LIMITED_CONTRACT
+        standard = 320 * cotton['standard_selfplay'] // 100
+        targeted = 320 * cotton['cotton_selfplay'] // 100
+        two = 0 if cotton['contract'] == LIMITED_CONTRACT else targeted//2
         result['selfplay_exploration'] = dict(standard_tables=standard, cotton_tables=targeted,
-                                            one_cotton_seat_tables=targeted//2, two_cotton_seat_tables=targeted//2)
+                                            one_cotton_seat_tables=targeted-two, two_cotton_seat_tables=two)
     return result

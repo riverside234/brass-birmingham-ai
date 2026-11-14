@@ -497,6 +497,7 @@ pub struct Revision {
     job: Value,
     short_labels: bool,
     opening_actions: u32,
+    normal_sampling: bool,
     tempered_opening: bool,
     long_search: bool,
     cotton: Option<CottonMode>,
@@ -587,12 +588,14 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
     let weight = block.get(TEACHER_SEARCH_HEAD_WEIGHT);
     let seats = block.get(COTTON_SEATS);
     let game_opening = e.get("game_opening");
+    let normal_sampling = e.get("normal_sampling");
     let ordinary_table = job["h2h"] != true && job["shadow_probe"] != true;
     check(
         block["contract"] == REVISION_CONTRACT
             && block.as_object().is_some_and(|o| o.len() == 3 + usize::from(weight.is_some()) + usize::from(seats.is_some()))
             && block["short_labels"].is_boolean()
-            && e.as_object().is_some_and(|o| o.len() == 4 + usize::from(e.get("cotton").is_some()) + usize::from(game_opening.is_some()))
+            && e.as_object().is_some_and(|o| o.len() == 4 + usize::from(e.get("cotton").is_some())
+                + usize::from(game_opening.is_some()) + usize::from(normal_sampling.is_some()))
             && e["contract"] == EXPLORATION_CONTRACT
             && e["temperature"].as_f64() == Some(1.0)
             && e["long_search"].is_boolean()
@@ -609,13 +612,18 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         check(seats.is_some() && opening == &json!({"temperature":2.0,"actions_per_seat":3}),
             "unreviewed teacher opening temperature")?;
     }
+    if let Some(normal) = normal_sampling {
+        check(normal == false && seats.is_some() && game_opening.is_some(), "unreviewed teacher sampling mode")?;
+    }
+    let single = normal_sampling.is_some();
     if let Some(weight) = weight {
         check(matches!(weight.as_u64(), Some(0 | 1)) && weight.as_f64() == job["search_value"]["w"].as_f64(),
             "teacher job search-head weight differs")?;
     }
     let cotton_seats = if let Some(seats) = seats {
         let seats = seats.as_array().ok_or("teacher cotton seats must be an array")?;
-        check(seats.len() <= 2 && (!seats.is_empty()) == e.get("cotton").is_some(),
+        let limit = if single { 1 } else { 2 };
+        check(seats.len() <= limit && (!seats.is_empty()) == e.get("cotton").is_some(),
             "teacher cotton seat count differs")?;
         let mut mask = 0u8;
         for seat in seats {
@@ -631,8 +639,9 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
     let cotton = match e.get("cotton") {
         None => None,
         Some(settings) if seats.is_some() => {
-            check(settings == &CottonMode::Seated.settings(), "unreviewed seated cotton exploration")?;
-            Some(CottonMode::Seated)
+            let mode = if single { CottonMode::SingleSeat } else { CottonMode::Seated };
+            check(settings == &mode.settings(), "unreviewed seated cotton exploration")?;
+            Some(mode)
         }
         Some(settings) if weight.is_some() => Some([CottonMode::Mixed, CottonMode::Mixed25]
             .into_iter().find(|mode| settings == &mode.settings()).ok_or("unreviewed mixed cotton exploration")?),
@@ -650,6 +659,7 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         job: block.clone(),
         short_labels: block["short_labels"] == true,
         opening_actions: opening as u32,
+        normal_sampling: !single,
         tempered_opening: game_opening.is_some(),
         long_search: e["long_search"] == true,
         cotton,
@@ -701,7 +711,7 @@ fn game_opening(era: Era, round: u8) -> bool {
 pub fn teacher_tempered_opening(view: &Observation) -> bool {
     let c = &view.context;
     c.phase == Phase::Action && game_opening(c.era, c.round) && REVISION.with(|cell| {
-        cell.borrow().as_ref().is_some_and(|(r, _)| r.tempered_opening)
+        cell.borrow().as_ref().is_some_and(|(r, _)| r.normal_sampling && r.tempered_opening)
     })
 }
 
@@ -730,11 +740,15 @@ pub fn teacher_explore(
             return Ok((planned, false));
         }
         check(actual.actor < 4, "invalid acting seat")?;
-        let index = state.action(actual.actor, c.era, c.round, c.actions_remaining);
         let profile = usize::from(fast);
         state.decisions[profile] += 1;
-        let eligible = index <= revision.opening_actions || (!fast && revision.long_search);
-        let Some(counts) = counts.filter(|_| eligible && actual.actions.len() > 1) else {
+        if !revision.normal_sampling && !state.cotton.eligible() {
+            return Ok((planned, false));
+        }
+        let index = state.action(actual.actor, c.era, c.round, c.actions_remaining);
+        let window = index <= revision.opening_actions || !fast && revision.long_search;
+        let ordinary = revision.normal_sampling;
+        let Some(counts) = counts.filter(|_| (!ordinary || window) && actual.actions.len() > 1) else {
             if revision.cotton.is_some() { state.cotton.no_evidence(); }
             return Ok((planned, false));
         };
@@ -747,7 +761,9 @@ pub fn teacher_explore(
         let weights = (revision.tempered_opening && game_opening(c.era, c.round))
             .then(|| counts.iter().map(|&n| (n as f64).sqrt()).collect::<Vec<_>>());
         let tempered = weights.as_deref().map(|w| (w, w.iter().sum::<f64>()));
-        let base = if let Some((weights, mass)) = tempered {
+        let base = if !ordinary {
+            actual.actions.iter().position(|action| action == &planned).ok_or("missing planned teacher action")?
+        } else if let Some((weights, mass)) = tempered {
             let draw = mix(seed ^ mix(decision ^ 0x1491_0000_0000_0000));
             sample_weights(weights.iter().copied().enumerate(), mass, draw)?
         } else {
@@ -756,6 +772,9 @@ pub fn teacher_explore(
         let index = if revision.cotton.is_some() {
             state.cotton.sample(base, &actual.key.choices, counts, total, tempered, seed, decision)?
         } else { base };
+        if !ordinary && state.cotton.selection.is_none() {
+            return Ok((planned, false));
+        }
         let choice = actual.actions[index].clone();
         state.sampled[profile] += 1;
         if choice != planned {
@@ -767,19 +786,20 @@ pub fn teacher_explore(
 
 /// Pure admission before the search; the matching core root alone gets coverage.
 /// A cached continuation keeps its existing evidence and never launches extra work.
-pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fast: bool) -> (usize, bool) {
+pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fast: bool) -> (usize, bool, bool) {
     REVISION.with(|cell| {
         let mut guard=cell.borrow_mut();
-        let Some((revision,state))=guard.as_mut() else {return (0, false);};
-        let Some(cotton) = revision.cotton else {return (0, false);};
+        let Some((revision,state))=guard.as_mut() else {return (0, false, true);};
+        let Some(cotton) = revision.cotton else {return (0, false, true);};
         let c=&view.context;
         let index = match c.phase {
             Phase::Action => state.action(actual.actor,c.era,c.round,c.actions_remaining),
             Phase::Continuation if cotton.develop() => state.count[actual.actor],
             _ => 0,
         };
-        let window = index > 0 && (index <= revision.opening_actions || !fast && revision.long_search);
-        (state.cotton.prepare(view,&actual.key.choices,fast,window), cotton.develop())
+        let window = index > 0 && (cotton == CottonMode::SingleSeat || index <= revision.opening_actions || !fast && revision.long_search);
+        let limit = state.cotton.prepare(view,&actual.key.choices,fast,window);
+        (limit, cotton.develop(), state.cotton.builds())
     })
 }
 
@@ -1759,14 +1779,14 @@ mod tests {
             let state=initial();let (input,_)=root(&state);
             let info=Brass::new(input.clone(),false).unwrap().root().unwrap();
             let view=input.view.clone();
-            assert_eq!(teacher_cotton_prepare(&view,&info,false),(2,false));
+            assert_eq!(teacher_cotton_prepare(&view,&info,false),(2,false,true));
             let identity=Identity {game_instance:"cotton".into(),generation:1,export_sha256:"a".repeat(64)};
             let mut settings=Settings::default();settings.search=Config {k:4,simulations:16,seed:7,..Config::default()};
             let mut owner=Session::new(identity.clone(),&input,settings,SearchBudget {started_ns:0,work_deadline_ns:10_000_000_000,
                 deadline_ns:11_000_000_000,reserve_ns:1_000_000_000}).unwrap();
             owner.enable_teacher_exports().unwrap();
             let mut context=input.view.context.clone();if stale {context.revision+=1;}
-            owner.set_teacher_cotton(&context,coverage,false).unwrap();
+            owner.set_teacher_cotton(&context,coverage,false,true).unwrap();
             let out=crate::teacher::decide_turn(&mut owner,&identity,1,input,Mode::Count,&clock,&mut LowCotton).unwrap();
             let e=owner.take_teacher_export().unwrap();
             assert_eq!(out.completed,16);assert_eq!(e.stats.count.iter().sum::<u64>(),16);

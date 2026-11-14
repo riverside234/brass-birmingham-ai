@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "0973a102d1133b55bf14cd313d989bacd06cb62dacef9ac3ce906a5d11bcfd1b",
+  "execution_implementation": "80c66f87ad027ba67545609c8c94e068c5d7b2dbba1aa24e308b8d22d15f6451",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -591,6 +591,11 @@
       "replay_location_review": "cc50be97d02aa00019192e9e47b05e570ca7ae0b8433532401ef3bbc60c1f91b"
     },
     {
+      "implementation": "0973a102d1133b55bf14cd313d989bacd06cb62dacef9ac3ce906a5d11bcfd1b",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "5a13c5d863ff089f374101ea6b1618520a81a85a7350df965c75c5258f0083dd"
+    },
+    {
       "implementation": "1a4683f397c6162cbc8208e326d31dd0b864a790e3ec7b1ada752b0cc1cd9aed",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "8b8ed2818a627f51be867a2d478e98f6f841c296a16af4afff46cb3bead2cabf"
@@ -1044,6 +1049,10 @@
   },
   "rust_collection_performance": {
     "scope": "Reuse native CPU tensors in place. Batch and verify all teacher logits before table publication while queued search proceeds. Keep deterministic jobs and split ordering. Prepare fresh native PPO replay from the same independently validated publisher-owned family after durable publication, and retain cold replay validation. Preserve the existing game quotas, learning behavior, labels, model, optimizer state, and replay formats.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2240_cotton_sampling": {
+    "scope": "At a committed teacher-on boundary, use one fixed random cotton seat per targeted table. Ordinary tables use a 60/10/30 mix and a 20% cotton component. Teacher tables target cotton in one quarter of each split, with short-search targeting across the whole era and normal root sampling off. Only level two and higher builds enter either cotton component. Both cap targeting at three per era and pause for an unflipped mill. Ordinary replay and PPO reconstruct the same marginal. Keep checkpoint, stage, reward and the existing teacher label and value windows. Archive interrupted pre-change collection without changing the committed boundary.",
     "qualified_implementation_unchanged": true
   }
 }

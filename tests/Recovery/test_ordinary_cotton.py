@@ -13,10 +13,60 @@ from brass_ai.recovery import ordinary_cotton as cotton
 from brass_ai.recovery.exploration import check_behavior
 from brass_ai.recovery.ppo_preparation import Preparation, prepare, view
 from brass_ai.recovery.updates import Dataset, ExplorationMixture, row_probabilities
-from brass_ai.step5.policy import NeuralPolicy, cotton_candidates, exploration_distribution
+from brass_ai.step5.policy import COTTON_DEVELOP_ONLY, NeuralPolicy, cotton_candidates, exploration_distribution
 
 
 class OrdinaryCotton(unittest.TestCase):
+    def test_single_seat_quota_and_stateful_cotton_mixture(self):
+        start = 2240*320
+        assignments = [(i, cotton.planned_assignment(cotton.LIMITED, i, 9187+i)) for i in range(start, start+320)]
+        targeted = [(i, a) for i, a in assignments if a]
+        self.assertEqual(len(targeted), 32)
+        self.assertTrue(all(len(a['seats']) == 1 and a['probability'] == .20 for _, a in targeted))
+        index, assignment = targeted[0]
+        proof = dict(kind='selfplay', purpose='training', ordinary_game_index=index,
+                     sampling_seed=9187+index, **{cotton.KEY: assignment})
+        actor, replay = cotton.TableExploration(proof), cotton.TableExploration(proof)
+        seat = actor.seats[0]
+        view = dict(seat=seat, context=dict(phase='action', era='CanalEra'), slots=[],
+                    players=[dict(mat=[dict(type='CottonMill', tiles=[dict(level=1)])]) for _ in range(4)])
+        choices = [dict(kind='build', industry='CottonMill'), dict(kind='develop', industry='CottonMill'), dict(kind='loan')]
+        raw = np.array([.2,.3,.5])
+        policy = NeuralPolicy(None, evaluator=SimpleNamespace(model_id='learner'), exploration=0., exploration_version=3)
+        for i in range(3):
+            if i == 1:
+                # Recheck after the first develop and use the same era allowance.
+                view['context']['phase'] = 'continuation'
+                choices[2] = dict(kind='finish')
+            rate, builds = actor.options(view, choices)
+            self.assertEqual(rate, .20)
+            for seed in range(50):
+                rng = random.Random(seed)
+                chosen, probability, _ = policy.sample_training(view, choices, rng, raw, None,
+                                                               cotton_probability=rate, cotton_builds=builds)
+                behavior = dict(policy.last_behavior[rng], kind='model', policy_id=policy.policy_id, probability=probability)
+                if behavior['component'] == 'cotton':
+                    break
+            self.assertEqual(behavior['component'], 'cotton')
+            self.assertEqual(chosen, 1)
+            self.assertAlmostEqual(probability, .44)
+            self.assertEqual(behavior.get(COTTON_DEVELOP_ONLY), True if i == 0 else None)
+            check_behavior(behavior, view['context']['phase'])
+            row = dict(view=view, seat=seat, behavior=behavior, choices=choices, chosen=chosen, intent=None)
+            np.testing.assert_array_equal(ExplorationMixture([row])[0], [0., 1., 0.])
+            self.assertEqual(replay.check(row), [1])
+            actor.commit(view, behavior)
+        self.assertEqual(actor.options(view, choices)[0], 0.)
+        with self.assertRaisesRegex(ValueError, 'eligibility'):
+            replay.check(row)
+        view['context'].update(era='RailEra', phase='action')
+        view['players'][seat]['mat'][0]['tiles'][0]['level'] = 2
+        self.assertEqual(actor.options(view, choices), (.20, True))
+        view['slots'] = [dict(tile=dict(seat=seat, type='CottonMill', flipped=False))]
+        self.assertEqual(actor.options(view, choices)[0], 0.)
+        view['slots'][0]['tile']['flipped'] = True
+        self.assertEqual(actor.options(view, choices), (.20, True))
+
     def test_quota_and_frozen_seats(self):
         start = 2080*320
         assignments = [cotton.assignment(i, 9187+i, probability=.10) for i in range(start,start+320)]

@@ -208,7 +208,7 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
     from collections import deque
     from . import ordinary_cotton
     proof = job['provenance']
-    cotton_seats, cotton_probability = ordinary_cotton.validate_assignment(proof)
+    cotton = ordinary_cotton.TableExploration(proof)
     buffered=deque();decision=None;branch_packet=None;eligible_count=0
     for step in range(len(game['records']),max_decisions):
         if context['terminal']: break
@@ -253,8 +253,9 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
                 else:
                     rngs[seat].choices([0],weights=[1.0],k=1)
                     chosen,probability,teacher=0,1.0,None
-            elif seat in cotton_seats:
-                chosen,probability,teacher=p.select_batch([(view,choices,rngs[seat])],cotton_probability=cotton_probability)[0]
+            elif seat in cotton.seats:
+                rate, builds = cotton.options(view, choices)
+                chosen,probability,teacher=p.select_batch([(view,choices,rngs[seat])],cotton_probability=rate,cotton_builds=builds)[0]
             else: chosen,probability,teacher=p.select_batch([(view,choices,rngs[seat])])[0]
         require(type(chosen) is int and 0<=chosen<len(choices),'Actor returned an illegal choice')
         style,intent=p.context_features(view,rngs[seat]) if hasattr(p,'context_features') else ([0.0]*4,[0.0]*8)
@@ -287,6 +288,8 @@ def _run_turns(host,job,assigned,timings,max_decisions,context,game,rngs,encoded
                 decision=reply['decision'];buffered.extend(reply['forced'])
                 context=buffered[0]['before']['context'] if buffered else decision['context']
             else:context=host.apply(context,choices[chosen])
+        if cotton.limited:
+            cotton.commit(view, game['records'][-1]['behavior'])
         if hasattr(p,'finish_teacher_turn') and (context['terminal'] or context['actor']!=seat or
                 turn_key(context)!=turn_key(view['context']) or context['phase']=='debt'):
             p.finish_teacher_turn(rngs[seat])

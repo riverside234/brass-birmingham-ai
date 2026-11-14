@@ -66,7 +66,7 @@ def inference_choice(args):
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
-            update_opening_sampling=False):
+            update_opening_sampling=False,update_cotton_sampling=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -119,9 +119,13 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if teacher_search_head_weight is not None:
             config=g1491.configure_teacher_games(config,teacher_search_head_weight)
         from brass_ai.recovery import training_revision_g2090 as g2090
+        from brass_ai.recovery import training_revision_g2240 as g2240
         if update_opening_sampling:
             from brass_ai.recovery.config import validate_config
             config=validate_config(g2090.configure(config))
+        if update_cotton_sampling:
+            from brass_ai.recovery.config import validate_config
+            config=validate_config(g2240.configure(config))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -191,9 +195,15 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 if g2090.applied(before):
                     prior_prefix=prior_prefix.replace('-share', '-opening-t2-cotton10-share')
                 stages.append(prior_prefix)
+                if g2240.applied(before):
+                    stages.append(prior_prefix.replace('-opening-t2-cotton10-share', '-cotton-g2240-share'))
             prefix=prefix.replace('-share', '-opening-t2-cotton10-share')
             stages.append(prefix)
+        if g2240.applied(config):
+            prefix=prefix.replace('-opening-t2-cotton10-share', '-cotton-g2240-share')
+            stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
+        adopting_cotton=g2240.applied(config) and not g2240.applied(before)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (root/'configs/step5'/(run.name+name+tag+'.json') for name in reversed(stages[:-1])) if p.exists()),None)
@@ -213,7 +223,23 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         config=configured(config,settings)
         if recipe(config)!=before and not diagnostic_only:
             target=dict(state['signature'],config=recipe(config))
-            if preserves_pending(state,target):
+            if adopting_cotton:
+                # Journal the prepared boundary so a retry cannot archive work
+                # that already belongs to the revised recipe.
+                from brass_ai.recovery.retention import safe
+                directory=safe(run, run/'configuration-history'/f"cotton-sampling-{state['iteration']:04d}")
+                marker=safe(run, directory/'recipe.json')
+                from brass_ai.learning.contracts import digest
+                adoption=dict(checkpoint=entry, config_sha256=digest(recipe(config)))
+                if marker.exists():
+                    require(read(marker)==adoption,'Interrupted cotton recipe differs from the prepared continuation')
+                else:
+                    from brass_ai.recovery.utility_width_upgrade import archive_pending as archive_iteration
+                    archived=archive_iteration(run,directory,state)
+                    write_json(marker,adoption)
+                    if archived:
+                        print(f'Preserved {len(archived)} interrupted paths at {directory}.', flush=True)
+            elif preserves_pending(state,target):
                 require(not list(run.glob(f"generation-{state['iteration']+1:04d}.pt*")),
                     'Uncommitted checkpoint exists; recover it before enabling teacher training')
             else:archive_pending(root,run,state)
@@ -287,6 +313,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         teacher_weight=getattr(args,'teacher_search_head_weight',None)
         if teacher_weight is not None:kwargs['teacher_search_head_weight']=teacher_weight
         if getattr(args,'update_opening_sampling',False):kwargs['update_opening_sampling']=True
+        if getattr(args,'update_cotton_sampling',False):kwargs['update_cotton_sampling']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -318,9 +345,14 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g2090.applied(options):
             from brass_ai.recovery.ordinary_cotton import KEY
             opening=options['opening']
-            probability=options['table_plan'][KEY]['probability']
-            print(f'PPO and teacher opening temperature {opening["temperature"]:g} for the first '
-                  f'{opening["action_decisions_per_seat"]} actions per seat. PPO cotton targeting {probability:.0%}.', flush=True)
+            cotton=options['table_plan'][KEY]
+            opening_scope='PPO and teacher cotton sampling' if g1491.cotton_only(options) else 'PPO and teacher'
+            print(f'{opening_scope} opening temperature {opening["temperature"]:g} for the first '
+                  f'{opening["action_decisions_per_seat"]} actions per seat. PPO cotton targeting {cotton["probability"]:.0%}.', flush=True)
+            if g1491.cotton_only(options):
+                fraction=g1491.cotton_settings(options)['table_fraction']
+                print(f'Teacher cotton tables {fraction:.0%}; normal teacher sampling off. '
+                      f'PPO cotton self-play {cotton["cotton_selfplay"]}% of all PPO tables.', flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
         if is_revised(options):
             r=options['reward'];cost=options['insolvency']

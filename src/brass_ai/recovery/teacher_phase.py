@@ -9,11 +9,11 @@ from brass_ai.step5.league import seeds_for
 from brass_ai.step5.policy import cotton_seats
 from .teacher_phase_config import CONTRACT, SCHEDULE, SOURCE, validate, buffer_identity
 from .teacher_buffer import TeacherBuffer
-from .teacher_cotton import SEATED_CONTRACT, SEATS
+from .teacher_cotton import SEATS
 from .teacher_labels import PHASES
 from .teacher_term import TeacherTerm, heldout_measure, summary
 from .search_value_schedule import validation_plan
-from .training_revision_g1491 import count_search, job_block, seated_cotton, teacher_search_head_weight
+from .training_revision_g1491 import count_search, cotton_only, cotton_settings, job_block, seated_cotton, teacher_search_head_weight
 from .training_revision_g2090 import teacher_weight as opening_revision_weight
 from .teacher_vp import summarize as summarize_vp
 
@@ -71,6 +71,9 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
     if not isinstance(progress, dict): progress = state.get('search_value', {})
     stage = progress.get('stage', c['search_value']['stage']) if c.get('seating') == 'all-seat-search' else None
     seated = seated_cotton(config)
+    single = cotton_only(config)
+    cotton = cotton_settings(config)
+    spacing = round(1 / cotton.get('table_fraction', .5))
     for split, partition, count in (('train', 'train', c['tables']['train']), ('heldout', 'validation', c['tables']['held_out'])):
         seeds, cursor = seeds_for(cursor, count, partition=partition)
         # Reserve the same independent seed stream, but create no held-out jobs
@@ -80,11 +83,12 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
             identity = dict(contract=CONTRACT, generation=generation, split=split, seed=seed, model_id=model_id,
                             profile=profile)
             job_id = digest(identity); sampling = int(job_id[:8], 16)
-            # Alternate within each split. Keep setup and sampling streams stable when switching the blend.
-            cotton_table = (index + generation) % 2 == 0
+            # Interleave cotton tables independently within training and held-out seeds.
+            cotton_table = (index + generation) % spacing == 0
             seats = None
             if seated and cotton_table:
-                seats = cotton_seats(sampling, 1 + (index//2 + generation) % 2, SEATED_CONTRACT)
+                count = 1 if single else 1 + (index//2 + generation) % 2
+                seats = cotton_seats(sampling, count, cotton['contract'])
             revision = job_block(config, split=split, cotton_table=cotton_table, stage=stage, seats=seats)
             if teacher_weight is not None:
                 job_id = digest(dict(identity, teacher_revision=revision))

@@ -34,12 +34,15 @@ def check_turn(label, row_round, job):
     """Long labels belong to the reserved turns; short labels only to the other turns of a g1491 job."""
     reserved = row_round == job['reservations'][str(label['seat'])][label['phase']]
     revision = job.get('teacher_revision') or {}
-    opening = revision.get('exploration', {}).get('game_opening')
+    exploration = revision.get('exploration', {})
+    opening = exploration.get('game_opening')
     tempered = opening and label.get('explored') is True and label['phase']=='canal_early' and row_round<=2
     require(label.get('sampling_temperature') == (opening['temperature'] if tempered else None),
             'Teacher label opening temperature differs from its job')
     if TEACHER_SEARCH_HEAD_WEIGHT in revision or SEATS in revision:
         require(label.get('search_value') == job['search_value'], 'Teacher label search-head weight differs')
+    if exploration.get('normal_sampling') is False and label.get('explored') is True:
+        require(label.get('cotton_exploration') is not None, 'Normal teacher exploration is disabled')
     if label.get('cotton_exploration') is not None:
         cotton = job_settings(job)
         split = job.get('split')
@@ -85,7 +88,7 @@ def improved_policy(logits, counts, means, value, c1=50, c2=.1):
     return target, float(mixed)
 
 
-def validate_improved_policy(label, choices):
+def validate_improved_policy(label, choices, *, view=None):
     """Validate mathematical/ordered-legal contract; return None for no evidence."""
     require(isinstance(label, dict) and label.get('source') == LABEL_SOURCE
             and label.get('method') == 'search_v1' and label.get('algorithm') == ALGORITHM
@@ -133,7 +136,7 @@ def validate_improved_policy(label, choices):
             and bool(label['gumbel_draw_id']), 'Missing teacher played-action provenance')
     if 'cotton_exploration' in label:
         from .teacher_cotton import validate_label
-        validate_label(label, choices)
+        validate_label(label, choices, view=view)
     return None if len(ids) == 1 or not sum(label['counts']) or label['cancelled'] else target
 
 
@@ -172,7 +175,7 @@ def validate_row(row, expected, history, admitted_sources):
     require(label['phase'] == phase, 'Teacher phase differs from observation')
     require(row.get('style', [0.] * 4) == [0.] * 4 and row.get('intent', [0.] * 8) == [0.] * 8,
             'Teacher policy requires neutral context')
-    return validate_improved_policy(label, row['choices'])
+    return validate_improved_policy(label, row['choices'], view=view)
 
 
 def admit_rows(rows, *, model, expected, history, admitted_sources):
