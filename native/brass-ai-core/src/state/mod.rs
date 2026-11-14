@@ -124,6 +124,13 @@ impl HistoryState {
         })
     }
     fn export(&self) -> History {
+        History {
+            seat: self.seat,
+            era: self.era,
+            choice: self.export_choice(),
+        }
+    }
+    fn export_choice(&self) -> Choice {
         let mut choice = Choice {
             id: String::new(),
             kind: self.kind,
@@ -138,11 +145,7 @@ impl HistoryState {
             }),
         };
         choice.id = choice.semantic_id();
-        History {
-            seat: self.seat,
-            era: self.era,
-            choice,
-        }
+        choice
     }
 }
 #[derive(Debug, Clone, Copy)]

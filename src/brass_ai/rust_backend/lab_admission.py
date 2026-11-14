@@ -221,7 +221,8 @@ def _assemble(family, admission, *, checked=None, arrays=None, owned=False):
     return parent
 
 
-def publish(path, family, admission, *, cache=True, validation_receipt=False, timings=None, coverage=None, _owned_family=False):
+def publish(path, family, admission, *, cache=True, validation_receipt=False, timings=None, coverage=None,
+            _owned_family=False, _published_game=None):
     """Exclusive, one-family publication. Retrying requires the identical receipt."""
     began=time.perf_counter();timings={} if timings is None else timings
     if coverage is not None:
@@ -258,6 +259,7 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False, ti
             from . import lab_features
             receipt['features']=lab_features.write(path,[game]+game.get('branches',[]),receipt['replay_sha256'],_owned=owned_pack)
         if validation_receipt:_attest(receipt,coverage=coverage)
+        if _published_game is not None:_published_game(game)
         return record(path, game, admission, receipt)
     temp = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
     began=time.perf_counter()
@@ -283,6 +285,7 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False, ti
         receipt['features']=lab_features.write(path,[game]+game.get('branches',[]),replay_hash,_owned=owned_pack)
     timings['feature_cache_seconds']=time.perf_counter()-began
     if validation_receipt:_attest(receipt,coverage=coverage)
+    if _published_game is not None:_published_game(game)
     return record(path, game, admission, receipt)
 
 

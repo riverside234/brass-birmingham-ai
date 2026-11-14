@@ -97,7 +97,10 @@ class RoutedPool:
         self.last_collection_report=None
         self.backend=validate_state(state)
         self._ordinary_build=None
-    def collect(self,jobs,*,on_records=None,core_plan=None):
+    def collect(self,jobs,*,on_records=None,core_plan=None,ingress=None):
+        if ingress is not None:
+            require(on_records is None,'Replay ingress already has a callback')
+            on_records=ingress.submit
         training=all(j['provenance'].get('purpose')=='training' for j in jobs)
         if not self.backend or self.backend['mode']=='reference':
             result=self.reference.collect(jobs,on_records=on_records)
@@ -127,7 +130,8 @@ class RoutedPool:
         else:build=accept_cached_cpu_work(self.root,build)
         with NativePool(self.root,self.service,self.execution,build,
                         self.config,digest(collection_signature(self.state['signature'])),mono=self.mono,cpu=cpu,core_plan=core_plan) as pool:
-            result=pool.collect(jobs,on_records=on_records)
+            result=(pool.collect(jobs,on_records=on_records) if ingress is None or cpu is None else
+                    pool.collect(jobs,ingress=ingress))
             self.last_collection_report=pool.last_collection_report
             return result
     def __enter__(self):self.reference.__enter__();return self

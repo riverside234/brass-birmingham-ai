@@ -213,10 +213,10 @@ def logit_tolerance(label):
     return (2e-4, 2e-4) if backend == 'cpu-ort' else (2e-5, 1e-5)
 
 
-def check_logits(model, accepted):
+def check_logits(model, accepted, *, batches=None, timings=None):
     from .teacher_term import policy_logits
-    actual = policy_logits(model, accepted) if accepted else []
-    for row, logits in zip(accepted, actual):
+    actual = policy_logits(model, accepted, batches=batches, timings=timings) if accepted else []
+    for row, logits in zip(accepted, actual, strict=True):
         atol, rtol = logit_tolerance(row.label)
         require(np.allclose(logits, row.label['logits'], atol=atol, rtol=rtol),
                 'Teacher logits parity failed')

@@ -11,7 +11,7 @@ use brass_ai_core::{
     features::{ACTION_DIM, STATE_DIM},
 };
 use ort::{
-    session::{builder::GraphOptimizationLevel, Session},
+    session::{builder::GraphOptimizationLevel, Session, SessionOutputs},
     tensor::TensorElementType,
     value::{TensorRef, ValueType},
 };
@@ -166,9 +166,10 @@ impl CpuEvaluator {
                 remaining: &remaining,
                 descriptors: &d,
             };
-            let (raw, _) = run(&mut result.session, a, None)?;
+            let (outputs, _) = run(&mut result.session, a, None)?;
+            let raw = outputs_f32(&outputs, 1, 1)?;
             require(
-                raw.iter().flatten().all(|x| x.is_finite()),
+                raw.into_iter().flatten().all(|x| x.is_finite()),
                 "nonfinite warm-up output",
             )?;
         }
@@ -183,11 +184,11 @@ impl CpuEvaluator {
             "cached_models":1,"load_ns":self.load_ns,"warmup_ns":self.warmup_ns,"mechanical_only":true,"live_ready":false})
     }
 }
-fn run(
-    session: &mut Session,
+fn run<'s>(
+    session: &'s mut Session,
     a: Arrays<'_>,
     control: Option<&Control>,
-) -> Result<(Vec<Vec<f32>>, EvaluationStats)> {
+) -> Result<(SessionOutputs<'s>, EvaluationStats)> {
     let start = Instant::now();
     let states = TensorRef::from_array_view(([a.b, STATE_DIM], a.states)).map_err(ort_error)?;
     let actions =
@@ -216,21 +217,26 @@ fn run(
     if let Some(c) = control {
         c.check()?;
     }
-    let start = Instant::now();
-    let mut raw = Vec::with_capacity(5);
+    Ok((outputs, stats))
+}
+
+fn outputs_f32<'a>(
+    outputs: &'a SessionOutputs<'_>,
+    batch: usize,
+    width: usize,
+) -> Result<[&'a [f32]; 5]> {
+    let mut raw = [&[][..]; 5];
     for (i, name) in OUTPUTS.iter().enumerate() {
         let (shape, values) = outputs[*name]
             .try_extract_tensor::<f32>()
             .map_err(ort_error)?;
         require(
-            **shape == [a.b as i64, if i == 0 { a.n as i64 } else { 4 }],
+            **shape == [batch as i64, if i == 0 { width as i64 } else { 4 }],
             "ONNX response shape mismatch",
         )?;
-        stats.output_copy_bytes += values.len() * 4;
-        raw.push(values.to_vec());
+        raw[i] = values;
     }
-    stats.output_copy_ns = nanos(start);
-    Ok((raw, stats))
+    Ok(raw)
 }
 impl Evaluator for CpuEvaluator {
     fn manifest(&self) -> &Manifest {
@@ -274,10 +280,11 @@ impl Evaluator for CpuEvaluator {
             }
         };
         let result = (|| {
-            let (raw, mut stats) = run(&mut self.session, a, Some(control))?;
+            let (outputs, mut stats) = run(&mut self.session, a, Some(control))?;
             stats.packing_ns = packing_ns;
             stats.input_copy_bytes = copied;
             let copy_start = Instant::now();
+            let raw = outputs_f32(&outputs, inputs.len(), n)?;
             let mut rows = Vec::with_capacity(inputs.len());
             for (i, input) in inputs.iter().enumerate() {
                 let count = input.choices.len();

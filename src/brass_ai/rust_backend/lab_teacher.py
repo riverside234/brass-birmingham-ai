@@ -1,6 +1,6 @@
 """Opt-in B04 native teacher collection; returns no ordinary replay records."""
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 import copy
 import json
 from pathlib import Path
@@ -228,6 +228,7 @@ class TeacherCollector:
         self.core_plan = core_plan
         self.verifier = None
         self.failures = []
+        self.finalization = {}
 
     def collect(self, jobs, *, on_result=None):
         if not jobs:return []
@@ -236,7 +237,7 @@ class TeacherCollector:
         producer=source_fingerprint()
         for job in jobs:_validate_job(job,producer)
         require(self.model is not None, 'Frozen independent model required for bounded turn verification')
-        from .lab_teacher_finalization import TurnVerifier
+        from .lab_teacher_finalization import TableLogitBatcher, TurnVerifier
         from .lab_cpu_runtime import count_search_limits
         from brass_ai.recovery.collector_runtime import teacher_job_budget
         self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel,search_limits=count_search_limits(self.inference))
@@ -251,20 +252,58 @@ class TeacherCollector:
                     and digest(j['search']) == c['profile'] for j in jobs),'Teacher round is not frozen')
         count = min(self.lanes,len(jobs))
         lease = None if self.inference is not None else self.service.channels(count)
-        endpoints = queue.Queue()
         owned = [_CpuLane(self.cores[i] if i < len(self.cores) else None) for i in range(count)] if lease is None else [lease.acquire() for _ in range(count)]
-        for e in owned:endpoints.put(e)
         failure_lock = threading.Lock(); first_failure = []; self.failures = []
-        unstarted = len(jobs)
-        defer_logits = (self.core_plan is not None and self.inference is not None and len(jobs) == count and
+        work = iter(enumerate(jobs))
+        results = [None] * len(jobs)
+        defer_logits = (self.inference is not None and
                         self.inference['budget']['mode'] == 'count' and all(j.get('teacher_revision') for j in jobs))
+        batcher = TableLogitBatcher(self.verifier, len(jobs), pending=2*count) if defer_logits else None
+        began = time.monotonic()
+        search_ended = 0.
+        self.finalization = {}
         calibration_id = digest(c)
-        def one(job):
-            nonlocal unstarted
-            endpoint = None; worker = None
+
+        def release_core(endpoint):
+            core = getattr(endpoint, 'cpu', None)
+            if self.core_plan is not None and core is not None:
+                self.core_plan.release(core)
+
+        def failed(job, worker, error):
+            # Record the initiating exception before waking sibling work.
+            with failure_lock:
+                primary = not first_failure
+                self.failures.append(dict(job_id=job['expected']['job_id'],split=job['split'],seed=job['seed'],
+                    error=str(error),type=type(error).__name__,traceback=traceback.format_exc(),
+                    worker=getattr(worker,'failure',None),primary=primary))
+                if primary:first_failure.append((error,error.__traceback__))
+                self.cancel.set()
+            if primary and self.core_plan is not None:self.core_plan.fail(error)
+
+        def complete(job, result):
+            require(not self.cancel.is_set(), 'Teacher collection cancelled before publication')
+            if on_result is not None:
+                result['metrics']['shadow_cache_seconds'] = on_result(result,job)
+            return result
+
+        def finalize(job, worker, result, checked):
             try:
-                endpoint = endpoints.get(timeout=30)
-                with failure_lock:unstarted -= 1
+                checked.result()
+                return complete(job, result)
+            except BaseException as error:
+                failed(job, worker, error)
+                raise
+            finally:
+                batcher.release()
+
+        def claim():
+            with failure_lock:
+                return next(work, None)
+
+        def one(job, endpoint, reserved):
+            nonlocal search_ended
+            worker = None
+            try:
                 from brass_ai.recovery.telemetry import Timings
                 timings=Timings()
                 with self.service.cpu.acquire(1,timings):
@@ -283,47 +322,60 @@ class TeacherCollector:
                     worker = Worker(self.executable,request,client,self.cancel,cpu=getattr(endpoint,'cpu',None))
                     result = worker.collect(job['expected'],self.core_source,verifier=self.verifier,
                                             **({'defer_logits': True} if defer_logits else {}))
-                # Search has released the CPU admission ticket and shut down the
-                # native process. GPU parity and gzip publication don't need its core.
-                with failure_lock:finished_queue = unstarted == 0
-                core = getattr(endpoint,'cpu',None)
-                if self.core_plan is not None and core is not None and finished_queue:
-                    self.core_plan.release(core)
-                if defer_logits:self.verifier.settle(job['expected']['job_id'])
-                require(not self.cancel.is_set(),'Teacher collection cancelled before publication')
-                if on_result is not None:
-                    result['metrics']['shadow_cache_seconds']=on_result(result,job)
+                with failure_lock:
+                    search_ended = max(search_ended, time.monotonic())
+                following = claim()
+                if following is None:
+                    release_core(endpoint)
                 result['metrics']['mono_bootstrap_seconds'] = mono_seconds
                 result['metrics']['python_gpu_wait_seconds'] = client.wait_seconds
                 result['metrics']['cpu_admission'] = timings.report()
-                return result
+                if batcher is None:
+                    return complete(job, result), following
+                checked = batcher.submit(job['expected']['job_id'])
+                pending = finalizers.submit(finalize, job, worker, result, checked)
+                reserved = False
+                return pending, following
             except BaseException as error:
-                # Publish the initiating exception BEFORE cancellation. pool.map
-                # yields in job order, so a cancelled earlier lane can otherwise
-                # mask the actual failure of a later lane.
-                with failure_lock:
-                    primary = not first_failure
-                    self.failures.append(dict(job_id=job['expected']['job_id'],split=job['split'],seed=job['seed'],
-                        error=str(error),type=type(error).__name__,traceback=traceback.format_exc(),
-                        worker=getattr(worker,'failure',None),primary=primary))
-                    if primary:first_failure.append((error,error.__traceback__))
-                    self.cancel.set()
-                if primary and self.core_plan is not None:self.core_plan.fail(error)
+                failed(job, worker, error)
                 raise
             finally:
-                if endpoint is not None:
-                    endpoints.put(endpoint)
+                if reserved:
+                    batcher.release()
+
+        def lane(endpoint):
+            item = claim()
+            try:
+                while item is not None and not self.cancel.is_set():
+                    if batcher is not None:
+                        batcher.reserve()
+                    index, job = item
+                    results[index], item = one(job, endpoint, batcher is not None)
+            finally:
+                release_core(endpoint)
+
         try:
             try:
                 from .lab_families import _failure_scope
-                with ThreadPoolExecutor(max_workers=len(owned),thread_name_prefix='rust-teacher') as pool, _failure_scope(self.cancel,None):
-                    results = list(pool.map(one,jobs))
+                finalization_pool = (ThreadPoolExecutor(max_workers=min(4,count),thread_name_prefix='teacher-publish')
+                                     if batcher is not None else nullcontext())
+                with batcher or nullcontext(), finalization_pool as finalizers, \
+                        ThreadPoolExecutor(max_workers=len(owned),thread_name_prefix='rust-teacher') as pool, \
+                        _failure_scope(self.cancel,None):
+                    list(pool.map(lane,owned))
+                    require(not self.cancel.is_set() and all(r is not None for r in results),
+                            'Teacher collection cancelled before publication')
+                    if batcher is not None:
+                        results = [future.result() for future in results]
             except BaseException as interruption:
                 if isinstance(interruption,Exception) and first_failure:
                     error,tb=first_failure[0]
                     raise error.with_traceback(tb)
                 raise
             require(not self.cancel.is_set(),'Teacher collection cancelled before publication')
+            if batcher is not None:
+                self.finalization = dict(batcher.metrics, last_search_seconds=search_ended-began,
+                                         tables_published_seconds=time.monotonic()-began)
             return results
         finally:
             close_errors = []

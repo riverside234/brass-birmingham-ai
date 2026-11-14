@@ -164,7 +164,7 @@ class Publisher:
         admission._attest(issued,coverage=record['native_admission'].get('validation',{}).get('coverage'))
         return dict(record,native_admission=issued)
 
-    def publish(self,job,parent,child,*,validation=None):
+    def publish(self,job,parent,child,*,validation=None,preparation=None,published=None):
         from brass_ai.recovery import replay_binding
         checks_before=replay_binding.report()
         began=time.perf_counter();parts=self.directory/'parts';timings={}
@@ -182,8 +182,10 @@ class Publisher:
         # In diagnostic scope still enforce the unchanged natural branch draw.
         if self.scope=='diagnostic':admission.branch_trigger(value,job,False)
         began=time.perf_counter()
+        live=[]
         record=admission.publish(self.path(job),value,self.binding(job),validation_receipt=True,timings=timings,
-                                 coverage=lab_perf.coverage(validation,child=child is not None) if validation else None,_owned_family=True)
+                                 coverage=lab_perf.coverage(validation,child=child is not None) if validation else None,
+                                 _owned_family=True,_published_game=live.append if preparation is not None else None)
         record['publication_seconds']=time.perf_counter()-began
         record['publication_phases']=timings
         record['binding_checks']=replay_binding.since(checks_before)
@@ -205,6 +207,11 @@ class Publisher:
             # already detached/independently admitted by the publisher.
             require(path.parent==parts.resolve() and not path.is_symlink(),'Retired native part changed')
             path.unlink()
+        if preparation is not None:
+            from brass_ai.recovery.ingress import _prepare_inner
+            published()
+            del value, parent, child
+            return record, _prepare_inner(([record],*preparation),_published_game=live[0])
         return record
 
 
@@ -220,9 +227,12 @@ def _writer(connection, directory, producer, config, scope, cpu, stop, selected_
         command=connection.recv()
         if command is None:return
         try:
+            options={}
+            if command.get('validation') is not None:options['validation']=command['validation']
+            if command.get('preparation') is not None:
+                options.update(preparation=command['preparation'],published=lambda:connection.send(dict(published=True)))
             with cpu.acquire(1,Timings()):
-                result=getattr(publisher,command['op'])(*command['args'],**(
-                    dict(validation=command['validation']) if command.get('validation') is not None else {}))
+                result=getattr(publisher,command['op'])(*command['args'],**options)
             connection.send(dict(result=result))
         except BaseException:
             connection.send(dict(error=traceback.format_exc()));return
@@ -426,7 +436,7 @@ class NativePool:
         producers=[dict(self.producer,build_sha256=p) for p in previous]
         self.previous_producer=producers if len(producers)>1 else (producers[0] if producers else None)
 
-    def receive(self,connection,*,submit=None,timeout=120,shared_allocate=None,on_ready=None):
+    def receive(self,connection,*,submit=None,timeout=120,shared_allocate=None,on_ready=None,on_published=None):
         if not hasattr(self,'health_lock'):self.health_lock=threading.Lock();self.health_due=0.
         end=time.monotonic()+timeout
         while time.monotonic()<end:
@@ -437,12 +447,17 @@ class NativePool:
                 require('error' not in message,message.get('error',''))
                 if on_ready is not None and message.get('ready') is True:
                     on_ready(message);continue  # A lane that started working before it finished starting.
+                if message.get('published') is True:
+                    require(on_published is not None,'Unexpected fresh publication acknowledgement')
+                    on_published();on_published=None
+                    continue
                 if 'shared_allocate' in message:
                     require(shared_allocate is not None,'Unexpected shared allocation')
                     connection.send(dict(shared_lease=shared_allocate(message['shared_allocate']['size'])))
                     continue
                 if 'branch' in message:
                     require(submit is not None,'Unexpected branch reply');submit(message['branch']);continue
+                require(on_published is None,'Fresh preparation returned before durable publication')
                 return message
             require(self.service.error is None,'Native inference service failed: '+str(self.service.error))
             now=time.monotonic()
@@ -456,8 +471,11 @@ class NativePool:
                         self.health_due=now+5.
         raise TimeoutError('Native worker timed out; partial family cannot train')
 
-    def collect(self,jobs,*,on_records=None):
+    def collect(self,jobs,*,on_records=None,ingress=None):
         require(jobs and not self.processes,'Use a fresh native pool collection')
+        if ingress is not None:
+            require(on_records is None,'Replay ingress already has a callback')
+            on_records=ingress.submit
         self.stop=self.mp.Event()
         self.shared=lab_shared.Registry(self.stop)
         jobs=copy.deepcopy(jobs)
@@ -500,21 +518,27 @@ class NativePool:
                     writers_ready.add(connection)
             writer_startup=time.perf_counter()-began;callback_lock=threading.Lock();owner=self
             class Store:
-                def call(self,op,*args,validation=None):
+                def call(self,op,*args,validation=None,preparation=None,on_published=None):
                     writer=publishers.get(timeout=120)
                     try:
                         if writer not in writers_ready:
                             require(owner.receive(writer).get('ready') is True,'Native publisher startup failed')
                             writers_ready.add(writer)
-                        writer.send(dict(op=op,args=args,validation=validation));return owner.receive(writer)['result']
+                        command=dict(op=op,args=args,validation=validation)
+                        if preparation is not None:command['preparation']=preparation
+                        writer.send(command)
+                        response=(owner.receive(writer) if on_published is None else
+                                  owner.receive(writer,on_published=on_published))
+                        return response['result']
                     except BaseException as error:fail(error);raise
                     finally:publishers.put(writer)
-                def notify(self,record):
+                def notify(self,record,prepared=None):
                     try:
                         # Preserve the coordinator's original serialized callback
                         # contract while independent families publish in parallel.
                         with callback_lock:
-                            if record and on_records:on_records([record])
+                            if prepared is not None:ingress.submit([record],prepared=prepared)
+                            elif record and on_records:on_records([record])
                     except BaseException as error:fail(error);raise
                 def load(self,job):
                     record=self.call('load',job)
@@ -524,12 +548,20 @@ class NativePool:
                     require(not owner.stop.is_set(),'Native publication canceled')
                     handles=[h for h in (parent,child) if h and h.get('format')==lab_shared.FORMAT]
                     for handle in handles:owner.shared.verify(handle)
-                    try:record=self.call('publish',job,parent,child,validation=validations[job['index']])
-                    finally:
-                        for handle in handles:owner.shared.release(handle)
+                    def release():
+                        while handles:owner.shared.release(handles.pop())
+                    prepared=None
+                    try:
+                        if preparation is not None and handles and route(job)[0]=='rust':
+                            record,prepared=self.call('publish',job,parent,child,validation=validations[job['index']],
+                                preparation=preparation,on_published=release)
+                        else:
+                            record=self.call('publish',job,parent,child,validation=validations[job['index']])
+                    finally:release()
                     require(not owner.stop.is_set(),'Native publication canceled')
-                    self.notify(record)
+                    self.notify(record,prepared)
                     return record
+            preparation=ingress.arguments if ingress is not None and self.cpu is not None else None
             store=Store();recovery_began=time.perf_counter()
             cached=recover_cached(candidates,store.load,workers=publisher_count,cancel=self.stop,on_error=fail)
             recovery_seconds=time.perf_counter()-recovery_began

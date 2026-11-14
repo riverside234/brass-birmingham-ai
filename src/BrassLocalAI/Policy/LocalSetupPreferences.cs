@@ -62,7 +62,7 @@ namespace BrassLegacyAI
                     Family = family == "nn" ? AiFamily.AlphaTest : AiFamily.V4,
                     PlayerCount = count, Introductory = (bool)value["introductory"],
                     SearchK = k == null || (int)k == 32 ? 16 : (int)k,
-                    Temperature = temperature == null ? 1.0 : (double)temperature,
+                    Temperature = OpeningTemperature(temperature),
                     NeuralChoice = model == null ? "alpha-test" : (string)model,
                     Seats = new Seat[seats.Count]
                 };
@@ -84,7 +84,7 @@ namespace BrassLegacyAI
                         (seatT != null && ((seatT.Type != JTokenType.Float && seatT.Type != JTokenType.Integer) || !Native.NativePackage.ValidTemperature((double)seatT)))) return null;
                     result.Seats[i] = new Seat { Human = (bool)seat["human"], Style = (string)seat["style"], Difficulty = (string)seat["difficulty"],
                         Family = seatFamily == "nn" ? AiFamily.AlphaTest : AiFamily.V4, NeuralChoice = seatModel,
-                        SearchK = seatK == null || (int)seatK == 32 ? 16 : (int)seatK, Temperature = seatT == null ? 1.0 : (double)seatT,
+                        SearchK = seatK == null || (int)seatK == 32 ? 16 : (int)seatK, Temperature = OpeningTemperature(seatT),
                         // Menu defaults now offer only the neutral NN. Retain
                         // the remaining settings when reading a former tag choice.
                         NeuralFocus = "neutral" };
@@ -94,6 +94,12 @@ namespace BrassLegacyAI
             } catch (Exception e) when (e is Newtonsoft.Json.JsonException || e is ArgumentException || e is FormatException || e is InvalidCastException || e is OverflowException) {
                 return null;
             }
+        }
+
+        static double OpeningTemperature(JToken token)
+        {
+            double temperature = (double?)token ?? 1.0;
+            return temperature == Native.NativePackage.LegacyOpeningTemperature ? 1.0 : temperature;
         }
     }
 }

@@ -276,6 +276,8 @@ class ShadowCollector:
                     return admit_teacher_rows(result['rows'],job=job,model=model,history=state['history'])
             phase.admit_collection(results,model,verifier=MixedVerifier())
         if cpu_metrics is not None:phase.metrics['cpu_inference']=cpu_metrics
+        if getattr(collector, 'finalization', None):
+            phase.metrics['finalization'] = collector.finalization
         if actions := phase.metrics.get('teacher_actions'):
             totals=actions['total']
             print(f"Teacher games (w={actions['search_head_weight']}, {totals['tables']} tables) "

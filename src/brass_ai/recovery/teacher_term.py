@@ -28,18 +28,35 @@ def policy_context(model):
         finally: model.train(was_training)
 
 
-def forward_policy(model, rows):
-    states, actions, mask, _ = collate([r.encoded for r in rows], next(model.parameters()).device)
+def _score_policy(model, states, actions, mask):
     # Do not construct any descriptor, outcome, utility or auxiliary graph.
     encoded = model.encode_state(states)
     return model.score_prepared(actions, model.prepare_candidates(encoded)).masked_fill(~mask, -torch.inf)
 
 
-def policy_logits(model, rows):
+def forward_policy(model, rows):
+    states, actions, mask, _ = collate([r.encoded for r in rows], next(model.parameters()).device)
+    return _score_policy(model, states, actions, mask)
+
+
+def policy_logits(model, rows, *, batches=None, timings=None):
     values = []
+    if batches is None:
+        batches = (rows[start:start + 64] for start in range(0, len(rows), 64))
     with policy_context(model), torch.no_grad():
-        for start in range(0, len(rows), 64):
-            part = rows[start:start + 64]; logits = forward_policy(model, part).float().cpu().numpy()
+        for part in batches:
+            if timings is None:
+                logits = forward_policy(model, part).float().cpu().numpy()
+            else:
+                began = time.perf_counter()
+                states, actions, mask, _ = collate([r.encoded for r in part], next(model.parameters()).device)
+                staged = time.perf_counter()
+                output = _score_policy(model, states, actions, mask).float()
+                launched = time.perf_counter()
+                logits = output.cpu().numpy()
+                timings['collate_seconds'] += staged - began
+                timings['forward_dispatch_seconds'] += launched - staged
+                timings['transfer_and_device_wait_seconds'] += time.perf_counter() - launched
             for r, l in zip(part, logits):
                 l = l[:len(r.label['legal_ids'])].copy()
                 require(np.isfinite(l).all(), 'Non-finite teacher policy logits')

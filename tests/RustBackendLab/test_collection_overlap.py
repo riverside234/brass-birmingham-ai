@@ -18,6 +18,16 @@ from brass_ai.rust_backend.lab_teacher_overlay import CONTRACT
 
 
 class Plan(unittest.TestCase):
+    def test_physical_cores_precede_their_smt_siblings(self):
+        from pathlib import Path
+        from brass_ai.rust_backend import lab_cpu_runtime as CPU
+        def topology(path):
+            cpu = int(path.parents[1].name.removeprefix('cpu'))
+            return str(cpu//4) if path.name=='physical_package_id' else f'{cpu//2*2}-{cpu//2*2+1}'
+        with mock.patch.object(CPU.os,'sched_getaffinity',return_value=set(range(8)),create=True), \
+                mock.patch.object(Path,'read_text',autospec=True,side_effect=topology):
+            self.assertEqual(CPU.core_allocation(8),[0,4,2,6,1,5,3,7])
+
     def test_small_ordinary_batches_prefer_free_cpus(self):
         from pathlib import Path
         from brass_ai.rust_backend import lab_cpu_runtime as CPU
@@ -307,13 +317,20 @@ class Tables(unittest.TestCase):
         collector = T.TeacherCollector('binary', 'core', ['bootstrap'], service, calibration, lanes=lanes, model=object(), history=[],
                                        inference=dict(budget=dict(mode='count', full=64, fast=24)), cores=(10, 11, 12)[:lanes], core_plan=plan)
         settled = threading.Event()
-        def settle(_):settled.wait(10)
+        def check(*args, **kwargs):settled.wait(10)
+        def verifier(model, history, jobs, cancel, **kwargs):
+            from contextlib import nullcontext
+            from types import SimpleNamespace
+            row = SimpleNamespace(label={'legal_ids': ['pass']})
+            return SimpleNamespace(cache={job['expected']['job_id']: dict(deferred=[row]) for job in jobs},
+                                   cancel=cancel, model=model, _policy_lock=nullcontext, _check_model=lambda: None)
         # The worker threads outlive this method, so the fakes must stay installed.
         for patcher in (mock.patch.object(T, 'Worker', Worker), mock.patch.object(T, 'Pipe', Bootstrap),
                         mock.patch.object(T, '_validate_job', lambda job, source: None), mock.patch.object(T, 'source_fingerprint', lambda: producer),
                         mock.patch.object(T, 'Client', lambda *args: SimpleNamespace(wait_seconds=0.)),
+                        mock.patch('brass_ai.rust_backend.lab_teacher_finalization.check_logits', check),
                         mock.patch('brass_ai.rust_backend.lab_teacher_finalization.TurnVerifier',
-                                   lambda *args, **kwargs: SimpleNamespace(settle=settle))):
+                                   verifier)):
             patcher.start();self.addCleanup(patcher.stop)
         result = []
         thread = threading.Thread(target=lambda: result.extend(collector.collect(jobs)))
@@ -358,6 +375,54 @@ class Tables(unittest.TestCase):
             settled.set()
             thread.join(10)
         self.assertEqual(len(result), 1)
+
+    def test_queued_search_reuses_its_cpu_while_verification_waits(self):
+        thread, gates, released, result, settled = self.collect(2, 1, defer=True)
+        try:
+            gates['0'].set()
+            gates['1'].set()
+            self.wait_for(released, 1)
+            self.assertTrue(thread.is_alive())
+            self.assertEqual(result, [])
+        finally:
+            settled.set()
+            thread.join(10)
+        self.assertEqual([item['job_id'] for item in result], ['0', '1'])
+
+
+class LogitBatching(unittest.TestCase):
+    def run_verification(self, error=None):
+        from contextlib import nullcontext
+        from brass_ai.rust_backend import lab_teacher_finalization as F
+        rows = {str(i):[SimpleNamespace(label=dict(legal_ids=list(range(width)))) for width in (8,20,129)]
+                for i in range(2)}
+        records = {key:dict(deferred=value) for key,value in rows.items()}
+        verifier = SimpleNamespace(cache=records,cancel=threading.Event(),model=object(),
+                                   _policy_lock=nullcontext,_check_model=lambda:None)
+        with mock.patch.object(F,'check_logits',side_effect=error) as verify:
+            batcher = F.TableLogitBatcher(verifier,2,pending=4)
+            batcher.FLUSH_SECONDS = .2
+            with batcher:
+                futures = [batcher.submit(key) for key in rows]
+                for future in futures:
+                    if error is None:
+                        future.result(timeout=3)
+                    else:
+                        self.assertIs(future.exception(timeout=3),error)
+            self.assertFalse(batcher.thread.is_alive())
+        return rows,records,verify
+
+    def test_both_tables_are_checked_and_settled_in_one_batch(self):
+        rows,records,verify = self.run_verification()
+        verify.assert_called_once()
+        _, checked = verify.call_args.args
+        self.assertCountEqual(map(id,checked),[id(row) for value in rows.values() for row in value])
+        self.assertEqual([len(r.label['legal_ids']) for r in checked],[8,8,20,20,129,129])
+        self.assertEqual([record['settled']['rows'] for record in records.values()],[3,3])
+
+    def test_failed_batch_settles_no_table_and_wakes_both_waiters(self):
+        _,records,_ = self.run_verification(ValueError('teacher logits differ'))
+        self.assertTrue(all('settled' not in record for record in records.values()))
 
 
 class CScale(unittest.TestCase):

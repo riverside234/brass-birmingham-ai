@@ -13,6 +13,8 @@ from brass_ai.learning.contracts import SOURCE_ROOT, digest, require
 CONTRACT = 'brass-lab-cpu-overlay/1.0.0'
 OVERLAY_DIR = 'lab-native-cpu'
 ORT = 'ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }'
+TEACHER_CORE_FILES = tuple('brass-ai-core/src/' + name for name in
+                           ('state/mod.rs', 'state/choices.rs', 'search/brass.rs'))
 
 PATCHES = {
     'Cargo.toml': (
@@ -46,7 +48,7 @@ PATCHES = {
          '                        serde_json::from_value(r["context"].clone())?;\n'
          '                    let model = context.model_id.clone();\n'
          '                    let l = lane.as_mut().ok_or("missing lane")?;\n'
-         '                    let (mut meta, _) = l.feature_arrays(token, revision as u32, context)?;\n'
+         '                    let mut meta = l.encode_features(token, revision as u32, context)?;\n'
          '                    let (bytes, forward_ns) = cpu.infer(&model, l.feature_tensors()?)?;\n'
          '                    meta["wire"] = json!("ordinary-infer/1");\n'
          '                    meta["bytes"] = json!(bytes.len());\n'
@@ -55,6 +57,39 @@ PATCHES = {
          '                    Ok(meta)\n'
          '                }\n'
          '                "checkpoint" => {\n'),
+    ),
+    'src/collection_wire.rs': (
+        ('    pub fn feature_arrays(\n',
+         '    pub fn feature_arrays(\n'
+         '        &mut self, token: &str, revision: u32, context: FeatureContext,\n'
+         '    ) -> Result<(Value, Vec<u8>)> {\n'
+         '        let mut meta = self.encode_features(token, revision, context)?;\n'
+         '        let bytes = self.tensor_bytes()?;\n'
+         '        meta["bytes"] = json!(bytes.len());\n'
+         '        Ok((meta, bytes))\n'
+         '    }\n\n'
+         '    pub fn encode_features(\n'),
+        ('    ) -> Result<(Value, Vec<u8>)> {\n'
+         '        check(self.pending.is_empty(), "forced acknowledgements pending")?;\n',
+         '    ) -> Result<Value> {\n'
+         '        check(self.pending.is_empty(), "forced acknowledgements pending")?;\n'),
+        ('        let t = self.encoder.tensors().ok_or("missing tensors")?;\n'
+         '        check(t.legal_mask.iter().all(|x| *x), "ordinary candidate mask")?;\n'
+         '        let mut bytes = Vec::with_capacity((t.state.len() + t.actions.len()) * 4 + 32);\n'
+         '        for x in t.state.iter().chain(&t.actions) {\n'
+         '            bytes.extend_from_slice(&x.to_le_bytes());\n'
+         '        }\n'
+         '        for x in &t.stable_to_relative {\n'
+         '            bytes.extend_from_slice(&x.to_le_bytes());\n'
+         '        }\n'
+         '        Ok((\n'
+         '            json!({"wire":"ordinary-arrays/1",',
+         '        Ok(json!({"wire":"ordinary-arrays/1",'),
+        ('            "choice_ids":choices.iter().map(|x| &x.id).collect::<Vec<_>>(),"context":context,\n'
+         '            "bytes":bytes.len()}),\n'
+         '            bytes,\n'
+         '        ))\n',
+         '            "choice_ids":choices.iter().map(|x| &x.id).collect::<Vec<_>>(),"context":context}))\n'),
     ),
     'src/teacher.rs': (
         # The g1190 restart schedule's Stage B moves w in .02 steps (fifty collections):
@@ -218,7 +253,18 @@ def fingerprint(root=SOURCE_ROOT):
     from .lab_cotton_overlay import PATCHES as cotton_patches
     return digest(dict(contract=CONTRACT, patches=PATCHES, cotton_patches=cotton_patches,
         base={name: _normalized(root/'lab-native'/name) for name in names},
-        overlay={p.relative_to(root/OVERLAY_DIR).as_posix(): _normalized(p) for p in overlay_files(root)}))
+        overlay={p.relative_to(root/OVERLAY_DIR).as_posix(): _normalized(p) for p in overlay_files(root)},
+        teacher_core={name: _normalized(root/'native'/name) for name in TEACHER_CORE_FILES}))
+
+
+def apply_teacher_performance(directory, root=SOURCE_ROOT):
+    """Add only the measured rules/search changes to the detached CPU teacher."""
+    from .lab_contract import native_fingerprint
+    directory, root = Path(directory).resolve(), Path(root).resolve()
+    require(directory != root/'native', 'Teacher performance overlay requires a detached core')
+    for name in TEACHER_CORE_FILES:
+        (directory/name).write_bytes((root/'native'/name).read_bytes().replace(b'\r\n', b'\n'))
+    return native_fingerprint(directory)
 
 
 def apply(directory, root=SOURCE_ROOT):

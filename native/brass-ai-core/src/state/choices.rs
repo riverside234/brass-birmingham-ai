@@ -462,15 +462,21 @@ impl NativeState {
         Ok(choices)
     }
     pub(super) fn legal_native(&self) -> Result<Vec<(String, HistoryState)>, CoreError> {
+        self.sorted_choices(|c| (c.export_choice().id, c), |c| &c.0)
+    }
+    pub fn legal_choices(&self) -> Result<Vec<Choice>, CoreError> {
+        self.sorted_choices(|c| c.export_choice(), |c| &c.id)
+    }
+    fn sorted_choices<T>(
+        &self,
+        export: impl FnMut(HistoryState) -> T,
+        id: impl Fn(&T) -> &str,
+    ) -> Result<Vec<T>, CoreError> {
         crate::work::checkpoint(crate::work::Stage::Generation)?;
-        let mut choices: Vec<_> = self
-            .staged_choices()?
-            .into_iter()
-            .map(|c| (c.export().choice.id, c))
-            .collect();
-        choices.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut choices: Vec<_> = self.staged_choices()?.into_iter().map(export).collect();
+        choices.sort_by(|a, b| id(a).cmp(id(b)));
         require(
-            !choices.windows(2).any(|w| w[0].0 == w[1].0),
+            !choices.windows(2).any(|w| id(&w[0]) == id(&w[1])),
             "duplicate semantic choice",
         )?;
         require(
@@ -478,12 +484,5 @@ impl NativeState {
             "decision dead end",
         )?;
         Ok(choices)
-    }
-    pub fn legal_choices(&self) -> Result<Vec<Choice>, CoreError> {
-        Ok(self
-            .legal_native()?
-            .into_iter()
-            .map(|(_, c)| c.export().choice)
-            .collect())
     }
 }

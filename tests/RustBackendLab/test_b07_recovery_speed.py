@@ -150,6 +150,41 @@ class RecoverySpeed(unittest.TestCase):
         bad=copy.deepcopy(record);bad['sha256']='0'*64
         with self.assertRaisesRegex(ValueError,'receipt differs'):I._prepare_inner(([bad],*task[1:]))
 
+    def test_publisher_prepares_identical_rows_without_rereading_its_files(self):
+        from brass_ai.recovery import ingress
+        family,_,config=family_fixture()
+        part=family['parent']
+        job=family['frozen_job']
+        kind={part['game']['setup_group']:job['provenance']['kind']}
+        arguments=(job['provenance']['learner_behavior']['policy_id'],kind,config.get('insolvency'),reward_spec(config))
+        directory=self.temporary()
+        handle=P.part_write(directory/'parts',part)
+        publisher=P.Publisher(directory,family['producer'],config,'ordinary')
+        published=[]
+        with patch.object(A,'read',side_effect=AssertionError('publisher reread its own replay')):
+            record,prepared=publisher.publish(job,handle,None,preparation=arguments,
+                published=lambda:published.append(publisher.path(job).with_name(publisher.path(job).name+'.record.json').is_file()))
+        self.assertEqual(published,[True])
+        cold=ingress._prepare_inner(([record],*arguments))
+        self.assertEqual(prepared[0],cold[0])
+        self.assertEqual(prepared[2],cold[2])
+        for left,right in zip(prepared[1],cold[1],strict=True):
+            np.testing.assert_equal(left[0],right[0])
+            np.testing.assert_equal(left[1],right[1])
+            self.assertEqual(left[2],right[2])
+            for field in ('state','actions','stable_to_relative'):
+                np.testing.assert_array_equal(getattr(left[3],field),getattr(right[3],field))
+        self.assertEqual(prepared[3]['publisher_prepared_shards'],1)
+        with ingress.StreamingCollection(None,1,*arguments) as stream:
+            stream.submit([record],prepared=prepared)
+            with self.assertRaisesRegex(ValueError,'Repeated streaming shard'):
+                stream.submit([record],prepared=prepared)
+            metrics={}
+            games,data,_=stream.finish([record],metrics)
+            self.assertEqual(len(games),1)
+            self.assertEqual(len(data),len(cold[1]))
+            self.assertEqual(metrics['publisher_prepared_shards'],1)
+
     def test_exact_predecessor_execution_can_resume_but_mutations_and_unknown_code_fail(self):
         review=json.loads(R.REVIEW.read_text());old=review['predecessor_executions'][-1]
         self.assertTrue(R.accepts_execution(old));self.assertTrue(R.accepts_execution(R.execution()))

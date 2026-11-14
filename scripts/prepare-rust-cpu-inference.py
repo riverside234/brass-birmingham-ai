@@ -61,6 +61,7 @@ def compile_worker(out,*,teacher,zero_cost,toolchain,offline,focused=False):
     from brass_ai.learning.contracts import require
     from brass_ai.rust_backend.lab_contract import SOURCE,extract_new,native_fingerprint
     from brass_ai.rust_backend.lab_cpu_overlay import apply as apply_cpu
+    from brass_ai.rust_backend.lab_cpu_overlay import apply_teacher_performance
     from brass_ai.rust_backend.lab_teacher_overlay import apply as apply_teacher
     base=module('qualify-rust-lab.py');b02=module('qualify-rust-lab-b02.py')
     env=dict(base.python_environment())
@@ -81,7 +82,8 @@ def compile_worker(out,*,teacher,zero_cost,toolchain,offline,focused=False):
     execution_core=core
     if teacher:
         from brass_ai.rust_backend.lab_cotton_overlay import apply as apply_cotton
-        execution_core=apply_cotton(out/'checkout/native')['execution_core']
+        apply_cotton(out/'checkout/native')
+        execution_core=apply_teacher_performance(out/'checkout/native')
     overlay=apply_cpu(out/'checkout/lab-native')
     b02.check_shared_dependencies(out/'checkout/native/Cargo.lock',out/'checkout/lab-native/Cargo.lock')
     cargo=['cargo','+'+toolchain];version=subprocess.check_output(['rustc','+'+toolchain,'-vV'],text=True,env=env,timeout=15)
@@ -121,7 +123,7 @@ def prepare(args,evidence):
     from brass_ai.rust_backend.lab_backend import check_build,validate_state
     from brass_ai.rust_backend.lab_contract import pin
     from brass_ai.rust_backend.lab_cpu_overlay import fingerprint
-    from brass_ai.rust_backend.lab_cpu_runtime import BUILD,CONTRACT,SELECTOR,resolve
+    from brass_ai.rust_backend.lab_cpu_runtime import BUILD,CONTRACT,SELECTOR,predecessor_builds,resolve
     from brass_ai.rust_backend.lab_perf_runtime import resolve as resolve_ordinary
     from brass_ai.rust_backend.lab_reward_runtime import ZERO_CORE
     from brass_ai.rust_backend.lab_shadow import teacher_build
@@ -160,6 +162,14 @@ def prepare(args,evidence):
             collector_core=collector['core'],teacher_core=worker['core'],teacher_execution_core=worker['execution_core'],tests=pin(tests),build_log=pin(logs),
             rustc=worker['rustc'],regressions=None if args.skip_regressions else pin(evidence/'regressions.log'),
             training_changed=False)
+        if selected.is_file():
+            from brass_ai.rust_backend.lab_backend import checked_pin
+            previous_pin=pin(selected)
+            previous=checked_pin(previous_pin)
+            if (previous.get('contract')==BUILD and previous.get('inference')==CONTRACT
+                    and previous.get('collector_core')==collector['core']):
+                value['previous_collectors']=list(dict.fromkeys(
+                    (*predecessor_builds(previous),previous_pin['sha256'])))
         write_json(selected,value)
         result=resolve(root,teacher_core=teacher['core_source'])
     return dict(reused=False,runtime=result['receipt'],generation=state['iteration'],training_changed=False)

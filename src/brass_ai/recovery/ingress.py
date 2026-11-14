@@ -66,7 +66,7 @@ def _prepare(task):
     with _admission.acquire(1,timings):return _prepare_inner(task)
 
 
-def _prepare_inner(task):
+def _prepare_inner(task, *, _published_game=None):
     from . import replay_binding
     before_checks=replay_binding.report()
     began=time.perf_counter();cpu_began=time.process_time()
@@ -86,8 +86,15 @@ def _prepare_inner(task):
                 'Native collection reward/learner differs from preparation')
         # read_native hashes the exact bytes it decodes and checks the feature
         # receipt. Avoid a separate full-file hash and gzip/header parse first.
-        games=[read_native(path,native)]
+        if _published_game is None:
+            games=[read_native(path,native)]
+        else:
+            # The publisher owns the same checked game that produced this
+            # durable receipt. No game or validation capability crosses IPC.
+            require(_published_game.native_admission==native['admission'], 'Live publisher receipt differs')
+            games=[replay_binding.seal_game(_published_game,_owned=True)]
     else:
+        require(_published_game is None, 'Reference replay cannot reuse a native publication')
         games=read_shards([path],partition='train',receipts={path:first.get('features')},
                           _expected_hashes={path:first['sha256']})
     require(all(g['split']=='train' for g in games),'Held-out PPO data')
@@ -138,6 +145,7 @@ def _prepare_inner(task):
     metrics=dict(worker_cpu_seconds=time.process_time()-cpu_began,worker_elapsed_seconds=ended-began,
         read_validate_seconds=loaded-began,diagnostics_seconds=diagnosed-loaded,
         prepare_seconds=prepared_at-diagnosed,compact_seconds=ended-prepared_at,
+        publisher_prepared_shards=int(_published_game is not None),
         binding_checks=replay_binding.since(before_checks))
     return headers,compact,diagnostics,metrics
 
@@ -153,7 +161,7 @@ def load_collection(records,policy_id,kinds,*,executor=None,workers=1,telemetry=
     parts=[None]*len(tasks);log=Progress(f'self-play prepare (CPU, {min(workers,len(tasks))} readers)',len(tasks),'shards')
     if stream is not None:
         for i,task in enumerate(tasks):parts[i]=stream.result(task);log(i+1)
-        require(set(stream.futures)==set(by_path),'Streaming replay membership differs')
+        require(set(stream.sealed)==set(by_path),'Streaming replay membership differs')
     elif executor is None:
         for i,task in enumerate(tasks):parts[i]=_prepare(task);log(i+1)
     else:
@@ -183,9 +191,10 @@ def load_collection(records,policy_id,kinds,*,executor=None,workers=1,telemetry=
             readers=min(workers,len(tasks)) if executor is not None or (stream is not None and stream.executor is not None) else 1,
             worker_average_cores=totals['worker_cpu_seconds']/max(interval,1e-9),
             max_shard_seconds=max(p[3]['worker_elapsed_seconds'] for p in parts),
-            scope='Reader-task CPU excludes process startup and result serialization; worker elapsed phases overlap across readers. Wall is the final join/merge; average cores uses the full streaming interval when enabled.')
+            scope='Preparation CPU includes fresh publishers and replay readers, excluding process startup and result serialization. Worker spans overlap. Wall is the final join/merge.')
         if stream is not None:
             telemetry.update(streaming=True,stream_elapsed_seconds=interval,
+                             prepared_before_ingress_join=stream.ready_before_finish,
                              prepared_before_collection_end=stream.ready_before_finish)
     return result
 
@@ -213,42 +222,56 @@ class StreamingCollection:
         self.sealed={};self.sealer=ThreadPoolExecutor(max_workers=4,thread_name_prefix='replay-seal')
         self.slots=threading.Semaphore(max(1,2*workers));self.began=time.perf_counter();self.ready_before_finish=0
 
-    def submit(self,records):
+    def submit(self,records,*,prepared=None):
         from concurrent.futures import Future
         from brass_ai.learning.contracts import digest
         groups={}
         for r in records:groups.setdefault(r['path'],[]).append(r)
+        require(prepared is None or (len(groups)==len(records)==1
+                and len(prepared)==4 and prepared[0] and prepared[0][0]['game_id']==records[0]['game_id']),
+                'Fresh publisher preparation differs from its receipt')
         for path,group in groups.items():
             group=sorted(group,key=lambda r:r['job']);identity=digest(group)
             self.slots.acquire()
             try:
                 with self.lock:
-                    require(path not in self.futures,'Repeated streaming shard')
+                    require(path not in self.sealed,'Repeated streaming shard')
                     task=(group,*self.arguments)
-                    if self.executor is None:
+                    if prepared is not None:
+                        future=Future()
+                        future.set_result(prepared)
+                    elif self.executor is None:
                         future=Future()
                         try:future.set_result(_prepare(task))
                         except BaseException as e:future.set_exception(e)
                     else:future=self.executor.submit(_prepare,task)
                     self.futures[path]=future;self.identities[path]=identity
-                    future.add_done_callback(lambda _:self.slots.release())
-                    self.sealed[path]=self.sealer.submit(_seal_part,future)
+                    sealed=self.sealer.submit(_seal_part,future)
+                    self.sealed[path]=sealed
+                sealed.add_done_callback(lambda _, path=path:self.retire_source(path))
             except BaseException:self.slots.release();raise
+
+    def retire_source(self,path):
+        with self.lock:
+            self.futures.pop(path,None)
+        self.slots.release()
 
     def result(self,task):
         from brass_ai.learning.contracts import digest
         group=task[0];path=group[0]['path']
-        require(path in self.futures and self.identities[path]==digest(group),'Changed streaming receipt')
+        require(path in self.sealed and self.identities[path]==digest(group),'Changed streaming receipt')
         return self.sealed[path].result()
 
     def finish(self,records,telemetry):
-        self.ready_before_finish=sum(f.done() for f in self.futures.values())
+        self.ready_before_finish=sum(f.done() for f in self.sealed.values())
         policy,kinds,insolvency,reward=self.arguments
         return load_collection(records,policy,kinds,workers=self.workers,telemetry=telemetry,
                                insolvency=insolvency,reward=reward,stream=self)
 
     def __enter__(self):return self
     def __exit__(self,kind,*_):
-        self.sealer.shutdown(wait=kind is None,cancel_futures=kind is not None)
         if kind is not None:
-            for future in self.futures.values():future.cancel()
+            with self.lock:
+                pending=list(self.futures.values())
+            for future in pending:future.cancel()
+        self.sealer.shutdown(wait=kind is None,cancel_futures=kind is not None)

@@ -4,6 +4,7 @@ Nothing here changes a frozen job, checkpoint, reward or optimizer. Absent or
 unselected, every lane keeps today's GPU path and its original binaries.
 """
 import copy
+from itertools import zip_longest
 import os
 from pathlib import Path
 import threading
@@ -19,6 +20,15 @@ COUNT_CAP_PER_TRAJECTORY_NS = 60_000_000  # Must equal the constant in lab-nativ
 
 def selector(root):
     return Path(root)/SELECTOR
+
+
+def predecessor_builds(value):
+    previous = value.get('previous_collectors', [])
+    require(type(previous) is list and
+            all(type(key) is str and len(key)==64 and all(c in '0123456789abcdef' for c in key) for key in previous) and
+            len(set(previous))==len(previous),
+            'Invalid CPU collector predecessor receipts')
+    return tuple(previous)
 
 
 def resolve(root, *, teacher_core=None):
@@ -37,6 +47,7 @@ def resolve(root, *, teacher_core=None):
             'CPU teacher was built for a different search core; rerun scripts/prepare-rust-cpu-inference.py')
     require(isinstance(value.get('teacher_execution_core'),str) and len(value['teacher_execution_core'])==64,
             'CPU teacher coverage core is missing; rerun scripts/prepare-rust-cpu-inference.py')
+    predecessor_builds(value)
     return dict(value, receipt=receipt)
 
 
@@ -44,7 +55,7 @@ def ordinary_build(root, gpu):
     """Same producer shape as the GPU build, with its own runtime identity."""
     value = resolve(root)
     previous = gpu.get('_previous_build_sha256s', ())
-    allowed = tuple(dict.fromkeys((gpu['_receipt_sha256'], *previous)))
+    allowed = tuple(dict.fromkeys((gpu['_receipt_sha256'], *previous, *predecessor_builds(value))))
     result = dict(copy.deepcopy({k: v for k, v in gpu.items() if not k.startswith('_')}),
                   collector=value['collector'], _receipt_sha256=value['receipt']['sha256'])
     result['_previous_build_sha256s'] = allowed
@@ -60,29 +71,42 @@ def accept_cached_cpu_work(root, build):
     path = selector(root)
     if not path.is_file():
         return build
+    from .lab_backend import checked_pin
+    receipt = pin(path)
+    value = checked_pin(receipt)
+    require(value.get('contract')==BUILD and value.get('inference')==CONTRACT,
+            'Unknown CPU collector receipt')
     previous = build.get('_previous_build_sha256s',
                          (build['_previous_build_sha256'],) if '_previous_build_sha256' in build else ())
-    return dict(build, _previous_build_sha256s=tuple(dict.fromkeys((*previous, pin(path)['sha256']))))
+    return dict(build, _previous_build_sha256s=tuple(dict.fromkeys(
+        (*previous, receipt['sha256'], *predecessor_builds(value)))))
 
 
 def core_allocation(count, *, held=None):
-    """Spread workers evenly across sockets; empty where affinity is unavailable."""
+    """Spread workers across sockets, preferring one CPU per physical core."""
     if not hasattr(os, 'sched_getaffinity'):
         return []
     cpus = sorted(os.sched_getaffinity(0))
     sockets = {}
+    siblings = {}
     for cpu in cpus:
+        topology = Path(f'/sys/devices/system/cpu/cpu{cpu}/topology')
         try:
-            value = Path(f'/sys/devices/system/cpu/cpu{cpu}/topology/physical_package_id').read_text().strip()
+            socket = (topology/'physical_package_id').read_text().strip()
         except OSError:
-            value = '0'
-        sockets.setdefault(value, []).append(cpu)
+            socket = '0'
+        try:
+            core = (topology/'thread_siblings_list').read_text().strip()
+        except OSError:
+            core = str(cpu)
+        key = (socket, core)
+        rank = siblings.get(key, 0)
+        siblings[key] = rank+1
+        sockets.setdefault(socket, {}).setdefault(rank, []).append(cpu)
     ordered = []
-    pools = [sockets[k] for k in sorted(sockets)]
-    while any(pools):
-        for pool in pools:
-            if pool:
-                ordered.append(pool.pop(0))
+    for rank in range(max(siblings.values(), default=0)):
+        pools = [sockets[key].get(rank, ()) for key in sorted(sockets)]
+        ordered.extend(cpu for wave in zip_longest(*pools) for cpu in wave if cpu is not None)
     if held is not None:
         # Small retries should use available CPUs even when the first cores
         # in topology order are all running teacher tables.

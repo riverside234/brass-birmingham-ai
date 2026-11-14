@@ -3,7 +3,8 @@
 The cache is private to one frozen collection. It cannot authorize persisted
 rows or a changed model/job. The ordinary shard boundary still seals bytes.
 """
-from collections import Counter
+from collections import Counter, deque
+from concurrent.futures import Future
 from contextlib import contextmanager
 import copy
 import time
@@ -16,6 +17,103 @@ from brass_ai.recovery.search_value_config import FAST_POST_SECONDS
 from .lab_admission import admit_teacher_rows
 from .lab_admission import teacher_sources
 from brass_ai.recovery.teacher_labels import prepare_rows, check_logits
+
+
+class TableLogitBatcher:
+    """One verifier for immutable, completed tables of a frozen collection."""
+    MAX_ROWS = 64
+    MAX_CELLS = 16_384
+    FLUSH_SECONDS = .002
+
+    def __init__(self, verifier, count, *, pending):
+        self.verifier, self.count = verifier, count
+        self.pending = threading.BoundedSemaphore(pending)
+        self.condition = threading.Condition()
+        self.queue = deque()
+        self.keys = set()
+        self.closed = False
+        self.error = None
+        self.thread = threading.Thread(target=self._run, name='teacher-logits')
+        self.metrics = Counter()
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *_):
+        with self.condition:
+            self.closed = True
+            self.condition.notify_all()
+        self.thread.join()
+
+    def reserve(self):
+        # Search workers wait before taking a new table, outside CPU admission.
+        while not self.pending.acquire(timeout=.05):
+            require(not self.verifier.cancel.is_set(), 'Teacher logit verification cancelled')
+
+    def release(self):
+        self.pending.release()
+
+    def submit(self, key):
+        record = self.verifier.cache[key]
+        future = Future()
+        with self.condition:
+            if self.error is not None:
+                raise self.error
+            require(not self.closed and not self.verifier.cancel.is_set(), 'Teacher logit verification cancelled')
+            require(key not in self.keys and 'settled' not in record, 'Repeated teacher logit verification')
+            self.keys.add(key)
+            self.queue.append((record, future, time.monotonic()))
+            self.condition.notify()
+        return future
+
+    def _run(self):
+        group = []
+        try:
+            while True:
+                with self.condition:
+                    while not self.queue and not self.closed:
+                        self.condition.wait()
+                    if not self.queue:
+                        return
+                    until = self.queue[0][2] + self.FLUSH_SECONDS
+                    while not self.closed and len(self.keys) < self.count and len(self.queue) < 2:
+                        delay = until - time.monotonic()
+                        if delay <= 0:
+                            break
+                        self.condition.wait(delay)
+                    group = [self.queue.popleft() for _ in range(min(len(self.queue), 4))]
+                self._verify(group)
+                group = []
+        except BaseException as error:
+            with self.condition:
+                self.error = error
+                group.extend(self.queue)
+                self.queue.clear()
+            for _, future, _ in group:
+                if not future.done():
+                    future.set_exception(error)
+
+    def _verify(self, group):
+        from brass_ai.recovery.teacher_term import chunks
+        require(not self.verifier.cancel.is_set(), 'Teacher logit verification cancelled')
+        began = time.monotonic()
+        rows = [row for record, _, _ in group for row in record['deferred']]
+        parts = [[rows[i] for i in part] for part in chunks(rows, self.MAX_ROWS, self.MAX_CELLS)]
+        if rows:
+            with self.verifier._policy_lock():
+                self.verifier._check_model()
+                check_logits(self.verifier.model, [row for part in parts for row in part],
+                             batches=parts, timings=self.metrics)
+        require(not self.verifier.cancel.is_set(), 'Teacher logit verification cancelled')
+        ended = time.monotonic()
+        self.metrics.update(groups=1, tables=len(group), rows=len(rows), batches=len(parts),
+                            check_seconds=ended-began)
+        for record, future, queued in group:
+            count = len(record['deferred'])
+            record['settled'] = dict(rows=count, seconds=ended-queued, queue_seconds=began-queued,
+                                     check_seconds=ended-began) if count else {}
+            future.set_result(None)
 
 
 class TurnVerifier:

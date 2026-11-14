@@ -8,7 +8,8 @@ use std::sync::{
 };
 
 pub(crate) fn validate(temperature: f64) -> Result<()> {
-    if [1.0, 1.3, 1.5].contains(&temperature) {
+    // A saved game may still request the former T1.3 opening.
+    if [1.0, 1.3, 1.5, 2.0].contains(&temperature) {
         Ok(())
     } else {
         Err(brass_ai_inference::invalid(
@@ -131,6 +132,18 @@ mod tests {
         assert!(hotter.probabilities[0] < r.probabilities[0] && r.probabilities[0] < peak_at_one);
     }
     #[test]
+    fn temperature_two_softens_policy_more_than_one_point_five() {
+        validate(2.0).unwrap();
+        let mut r = row(vec![3., 1.5, 0.]);
+        let mut cooler = r.clone();
+        apply(&mut cooler, 1.5).unwrap();
+        apply(&mut r, 2.0).unwrap();
+        assert_eq!(r.logits, vec![1.5, 0.75, 0.]);
+        assert!(r.probabilities[0] < cooler.probabilities[0]);
+        assert_eq!(r.utility, cooler.utility);
+        assert_eq!(r.choice_ids, cooler.choice_ids);
+    }
+    #[test]
     fn singleton_ties_and_extreme_logits_remain_finite() {
         for logits in [vec![12.], vec![0., 0.], vec![f32::MAX, -f32::MAX]] {
             let mut r = row(logits);
@@ -141,7 +154,7 @@ mod tests {
     }
     #[test]
     fn unsupported_or_nonfinite_temperatures_are_rejected() {
-        for temperature in [0., -1., 1.1, 2., f64::NAN, f64::INFINITY] {
+        for temperature in [0., -1., 1.1, 2.1, f64::NAN, f64::INFINITY] {
             assert!(validate(temperature).is_err());
         }
         let mut r = row(vec![0., 1.]);

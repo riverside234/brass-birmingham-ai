@@ -27,6 +27,7 @@ class Registry:
 
     def allocate(self, size):
         require(type(size) is int and 0 < size <= min(self.budget, LIMIT), 'Shared part exceeds bound')
+        began=time.perf_counter()
         with self.condition:
             if self.used + size > self.budget:
                 self.waiting += 1
@@ -37,6 +38,7 @@ class Registry:
                 finally:self.waiting -= 1
             require(not self.cancel.is_set(), 'Shared allocation canceled')
             self.used += size; self.peak = max(self.peak, self.used)
+        admitted=time.perf_counter()
         owners = []
         try:
             for start in range(0, size, CHUNK):
@@ -44,7 +46,8 @@ class Registry:
             handle = dict(format=FORMAT, lease=uuid.uuid4().hex, size=size,
                           chunks=[dict(name=s.name, size=s.size) for s in owners])
             with self.condition:self.leases[handle['lease']] = (handle, owners)
-            return handle
+            return dict(handle, capacity_wait_seconds=admitted-began,
+                        mapping_setup_seconds=time.perf_counter()-admitted)
         except BaseException:
             for s in owners:
                 s.close(); s.unlink()
@@ -56,7 +59,8 @@ class Registry:
         with self.condition:
             require(handle.get('lease') in self.leases, 'Unknown shared lease')
             expected, _ = self.leases[handle['lease']]
-            require({k:v for k,v in handle.items() if k not in ('sha256', 'chunk_hashes', 'branch_expected', 'transfer_timings')}
+            require({k:v for k,v in handle.items() if k not in ('sha256', 'chunk_hashes', 'branch_expected', 'transfer_timings',
+                                                              'capacity_wait_seconds', 'mapping_setup_seconds')}
                     == expected, 'Shared lease identity changed')
 
     def release(self, handle):
@@ -104,7 +108,9 @@ def write(part, allocate, *, admit=None, cancel=None):
     values = [struct.pack('<I', len(header)), header,
               *(raw for _, raw in part.records), *part.features]
     size = sum(map(len, values))
-    queued=time.perf_counter(); handle = allocate(size); allocated=time.perf_counter()
+    queued=time.perf_counter(); handle = dict(allocate(size)); allocated=time.perf_counter()
+    capacity_wait=handle.pop('capacity_wait_seconds',None)
+    mapping_setup=handle.pop('mapping_setup_seconds',None)
     from contextlib import nullcontext
     sources = iter(values); source = memoryview(next(sources)); hashes = []; total = hashlib.sha256()
     # Capacity waits happen outside CPU admission, so a full buffer cannot
@@ -128,6 +134,8 @@ def write(part, allocate, *, admit=None, cancel=None):
                 branch_expected=part.metadata['branch_expected'],
                 transfer_timings=dict(shared_write_seconds=time.perf_counter()-began,
                                       shared_allocate_wait_seconds=allocated-queued,
+                                      shared_capacity_wait_seconds=capacity_wait,
+                                      shared_mapping_setup_seconds=mapping_setup,
                                       shared_bytes=size, temporary_payload_write_bytes=0))
 
 

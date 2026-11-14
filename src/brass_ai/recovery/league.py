@@ -536,7 +536,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         shadow_seconds+=finish_teacher();teacher_run=None
                     if revised and config['overlap_pools'] and normal and legacy:
                         with ThreadPoolExecutor(max_workers=2) as coordinators:
-                            pending=[coordinators.submit(ordinary.collect,normal,on_records=prepared_collection.submit),
+                            pending=[coordinators.submit(ordinary.collect,normal,ingress=prepared_collection),
                                      coordinators.submit(heavy.collect,legacy,on_records=prepared_collection.submit)]
                             try:
                                 for future in as_completed(pending):records+=future.result()
@@ -548,7 +548,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                                 raise
                     else:
                         try:
-                            if normal: records+=ordinary.collect(normal,on_records=prepared_collection.submit,
+                            if normal: records+=ordinary.collect(normal,ingress=prepared_collection,
                                 **({} if teacher_run is None else dict(core_plan=teacher_run.core_plan)))
                             if legacy: records+=heavy.collect(legacy,on_records=prepared_collection.submit)
                         except BaseException:

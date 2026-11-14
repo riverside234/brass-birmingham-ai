@@ -6,16 +6,15 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'patch-install-common.ps1')
 $repo=Split-Path -Parent $PSScriptRoot
 $study=Join-Path $repo 'artifacts/nn-opening-temperature'
-$build=Join-Path $study 'release-1.4.58'
+$build=Join-Path $study 'release-1.4.59'
 $game=(Resolve-Path -LiteralPath $GameRoot).Path
 $record=Join-Path $game 'artifacts/patch-installation.json'
 $intent=Join-Path $game 'artifacts/nn-opening-temperature.pending.json'
 $backupRoot=Join-Path $game 'artifacts/patch-recovery'
-$openingVersion='1.4.57-rust-local'
-$version='1.4.58-rust-local'
+$baseVersion='1.4.58-rust-local'
+$version='1.4.59-rust-local'
 $managed='BrassBirminghamUnity_Data/Managed'
-$labelPaths=@("$managed/BrassLegacyAI.dll")
-$changedPaths=$labelPaths
+$changedPaths=@("$managed/BrassLegacyAI.dll")
 foreach($model in 'alpha-g890','beta-g1290','beta2-g1190','il-v11-2'){
  foreach($name in 'brass-ai-local.exe','native-source.zip','build.json'){$changedPaths+="BrassNative/$model/$name"}
 }
@@ -77,7 +76,7 @@ if($Action -eq 'Rollback'){
 $m=Read-BrassJson (Join-Path $build 'build-manifest.json')
 $q=Read-BrassJson (Join-Path $build 'qualification.json')
 if(-not $q.passed -or $q.format -ne 'brass-nn-opening-temperature-release/1.0.0' -or $q.manifest_sha256 -ne (Hash (Join-Path $build 'build-manifest.json')) -or
- $prior.version -notin @('1.4.56-rust-local',$openingVersion) -or $m.baseVersion -ne $prior.version -or $m.version -ne $version -or $prior.stockSha256 -ne $m.stockSha256){throw 'Qualified opening-temperature candidate and exact installed base required.'}
+ $prior.version -ne $baseVersion -or $m.baseVersion -ne $prior.version -or $m.version -ne $version -or $prior.stockSha256 -ne $m.stockSha256){throw 'Qualified opening-temperature candidate and exact installed base required.'}
 if($game -eq $repo -and (Hash $record) -ne $m.installedBaselineReceiptSha256){throw 'Installed baseline receipt changed.'}
 Verify $m.sourcePins $repo
 Verify (RuntimePins $m.baseFiles $m.baseNative) $game
@@ -92,8 +91,7 @@ $changes=@(foreach($pin in $candidate){
  if(-not $old.ContainsKey($pin.path)){throw ('Unexpected runtime member: '+$pin.path)}
  if($old[$pin.path] -ne $pin.sha256){@{path=$pin.path;old=$old[$pin.path];new=$pin.sha256}}
 })
-$expectedPaths=if($prior.version -eq $openingVersion){$labelPaths}else{$changedPaths}
-if((($changes.path|Sort-Object) -join '|') -ne (($expectedPaths|Sort-Object) -join '|')){throw 'Unexpected opening-temperature patch scope.'}
+if((($changes.path|Sort-Object) -join '|') -ne (($changedPaths|Sort-Object) -join '|')){throw 'Unexpected opening-temperature patch scope.'}
 $backup=Inside (Join-Path $backupRoot ('nn-opening-temperature-'+[Guid]::NewGuid().ToString('N'))) $game
 foreach($f in $changes){
  $saved=Inside (Join-Path $backup $f.path) $backup

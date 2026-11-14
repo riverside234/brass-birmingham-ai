@@ -20,9 +20,10 @@ def read(path):return json.loads(Path(path).read_text(encoding='utf-8-sig'))
 def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 class Worker:
-    def __init__(self,package=PACKAGE):
+    def __init__(self,package=PACKAGE,*,policy='policy.json'):
         env=dict(os.environ,PYTHONPATH='',PATH=str(package))
-        self.p=subprocess.Popen([str(package/'brass-ai-local.exe'),str(package/'policy.json'),sha(package/'policy.json')],
+        policy=package/policy
+        self.p=subprocess.Popen([str(package/'brass-ai-local.exe'),str(policy),sha(policy)],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,cwd=package)
         self.output=queue.Queue();self.id=0
         def reader():

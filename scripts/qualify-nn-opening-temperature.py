@@ -9,7 +9,7 @@ from pathlib import Path
 H = runpy.run_path(str(Path(__file__).with_name('build-nn-opening-temperature.py')))
 ROOT, STUDY, OUT, MANAGED, PACKAGES, sha, read, write, pins = (
     H[key] for key in ('ROOT', 'STUDY', 'OUT', 'MANAGED', 'PACKAGES', 'sha', 'read', 'write', 'pins'))
-EVIDENCE = STUDY / 'beta-plus'
+EVIDENCE = STUDY / OUT.name.removeprefix('release-')
 PLAYER = EVIDENCE / 'player'
 FORMAT = 'brass-nn-opening-temperature-release/1.0.0'
 
@@ -33,7 +33,7 @@ def native(game):
             ticket = dict(game_instance='opening-qualification', game_id='fixture', revision=inp['view']['context']['revision'],
                 actor=inp['view']['seat'], profile=inp['context']['profile_id'], source_sha256=ready['build']['source_sha256'])
             observed = []
-            for generation, selected in ((1, 1.3), (1, 1.5), (2, 1.5), (3, None)):
+            for generation, selected in ((1, 2.0), (1, 1.5), (2, 1.5), (3, None), (4, 1.3)):
                 operation = dict(op='search', input=inp, ticket=dict(ticket, generation=generation), allowance_ms=4000, remaining_ms=2000)
                 if selected is not None:
                     operation['policy_temperature'] = selected

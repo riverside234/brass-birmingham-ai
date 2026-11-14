@@ -261,8 +261,7 @@ impl Brass {
                 && information.observation.chance.is_none(),
             "unsupported actor view",
         )?;
-        let mut choices = state.legal_choices()?;
-        choices.sort_by(|a, b| a.id.cmp(&b.id));
+        let choices = state.legal_choices()?;
         let actions = choices
             .iter()
             .map(|c| c.id.clone())
