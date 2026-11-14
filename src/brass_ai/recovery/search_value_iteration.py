@@ -72,9 +72,9 @@ class SearchValueIteration:
     def _require_mutable(self):
         require(self._publication is None, 'Search value checkpoint publication is pending')
 
-    def admit(self, tables, jobs, *, post_spent=0.):
+    def admit(self, tables, jobs, *, post_spent=0., value_verifier=None):
         self._require_mutable()
-        if jobs: self.phase.admit(tables,jobs,self.generation,post_spent=post_spent)
+        if jobs: self.phase.admit(tables,jobs,self.generation,post_spent=post_spent,value_verifier=value_verifier)
 
     def prepare_ppg(self, phases, generation, *, ordinary=None, annealing=False):
         self._require_mutable()

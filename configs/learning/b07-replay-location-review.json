@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "80c66f87ad027ba67545609c8c94e068c5d7b2dbba1aa24e308b8d22d15f6451",
+  "execution_implementation": "2d6ce0648be6c4eb7dda29ebc95d9a2815c094eabddae64282a9a7bb2e6371fe",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -596,6 +596,11 @@
       "replay_location_review": "5a13c5d863ff089f374101ea6b1618520a81a85a7350df965c75c5258f0083dd"
     },
     {
+      "implementation": "80c66f87ad027ba67545609c8c94e068c5d7b2dbba1aa24e308b8d22d15f6451",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "ac5c0256c1fb7a2e659496204c097cce575ed311fb08d5a128c549b20d3e75a0"
+    },
+    {
       "implementation": "1a4683f397c6162cbc8208e326d31dd0b864a790e3ec7b1ada752b0cc1cd9aed",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "8b8ed2818a627f51be867a2d478e98f6f841c296a16af4afff46cb3bead2cabf"
@@ -1053,6 +1058,10 @@
   },
   "g2240_cotton_sampling": {
     "scope": "At a committed teacher-on boundary, use one fixed random cotton seat per targeted table. Ordinary tables use a 60/10/30 mix and a 20% cotton component. Teacher tables target cotton in one quarter of each split, with short-search targeting across the whole era and normal root sampling off. Only level two and higher builds enter either cotton component. Both cap targeting at three per era and pause for an unflipped mill. Ordinary replay and PPO reconstruct the same marginal. Keep checkpoint, stage, reward and the existing teacher label and value windows. Archive interrupted pre-change collection without changing the committed boundary.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2250_teacher_scales_and_performance": {
+    "scope": "Stream fixed-count CPU teacher turns through bounded independent verification without a per-turn ACK. Reuse live immutable root validation at return admission. Keep turn, value and final logit checks required for admission. Apply retention hashes once before quarantine and once before deletion. Keep rating history and teacher VP in the compact archive while omitting duplicate per-turn teacher traces. Adopt long C_scale 0.10 and short C_scale 0.70 for all teacher tables. Retire stale teacher policy labels and search-value training returns. Keep dedicated final-utility validation, the search head, stage, optimizer and ordinary replay. Request one teacher-on beta remeasurement with fresh gradient moving averages.",
     "qualified_implementation_unchanged": true
   }
 }

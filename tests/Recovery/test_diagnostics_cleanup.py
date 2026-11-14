@@ -124,6 +124,22 @@ class CleanupOptimization(unittest.TestCase):
         self.assertTrue(retention.settled(read(Path(result['manifest']))))
         self.assertEqual(retention.purge(root,run,cfg)['permanently_deleted_files'],0)
 
+    def test_compact_teacher_history_preserves_vp_and_legacy_fallback(self):
+        from brass_ai.recovery.history import compact
+        from brass_ai.recovery.teacher_vp import _earlier_tables, summarize
+
+        rows=[{}, {'cpu_inference':{'revision':{'cotton':{'used':3}}}, 'turns':[{'trace':'x'*5000}]}]
+        collection=dict(tables={'train':2},post_admission_per_table_seconds={'a':1.,'b':2.},
+                        collection_metrics=rows, wall_seconds=103.)
+        report=dict(summary_version=6,actor=dict(reward_spec=dict(vp=.001,vp_cap=180)),
+                    teacher_phase=dict(collection=collection))
+        reduced=compact(report)
+        self.assertEqual(_earlier_tables(reduced), _earlier_tables(report))
+        self.assertEqual(compact(reduced),reduced)
+        collection['vp']=summarize([('train',False,[1,2,3,4]),('train',True,[5,6,7,8])])
+        current=compact(report)['teacher_phase']['collection']
+        self.assertEqual(current, {k:v for k,v in collection.items() if k!='collection_metrics'})
+
     def test_interrupted_move_reconciles_mixed_batch_and_rescues_new_pin(self):
         root,run,cfg=self.fixture(8);replace=Path.replace;count=0
         def fail(source,target):

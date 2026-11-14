@@ -22,6 +22,7 @@ from .lab_transport import Pipe
 LIMIT = 64*1024**2
 COUNT_TABLE_SECONDS = 1800
 COUNT_TURN_SECONDS = 120
+STREAM_TURNS = 'verified-stream/1'
 
 
 def validate_job(job):
@@ -68,6 +69,7 @@ class Worker:
         self.job = request.get('job', {})
         # A fixed-count table runs to its quota; only a stall should stop it.
         self.counted = request.get('inference', {}).get('budget', {}).get('mode') == 'count'
+        self.stream_turns = request.get('turn_handoff') == STREAM_TURNS
         self.process = subprocess.Popen([str(runtime_path(executable))], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, bufsize=0, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         if cpu is not None:
@@ -75,11 +77,13 @@ class Worker:
             pin_child(self.process.pid,cpu)
         self.events = queue.Queue(2); self.stop = threading.Event(); self.stderr = bytearray()
         def read(n):
-            data = bytearray()
-            while len(data) < n:
-                part = self.process.stdout.read(n-len(data)); require(part,'Native teacher closed output')
-                data.extend(part)
-            return bytes(data)
+            data = bytearray(n)
+            remaining = memoryview(data)
+            while remaining:
+                got = self.process.stdout.readinto(remaining)
+                require(got, 'Native teacher closed output')
+                remaining = remaining[got:]
+            return data
         def pump():
             try:
                 while not self.stop.is_set():
@@ -87,7 +91,7 @@ class Worker:
                     data = read(n); size = struct.unpack('<I',data[:4])[0]
                     require(0 < size <= n-4,'Teacher metadata bound')
                     received = time.monotonic()
-                    event = (json.loads(data[4:4+size]),data[4+size:],received)
+                    event = (json.loads(data[4:4+size]),memoryview(data)[4+size:].toreadonly(),received)
                     while not self.stop.is_set():
                         try:self.events.put(event,timeout=.1);break
                         except queue.Full:pass
@@ -115,7 +119,7 @@ class Worker:
 
     def collect(self, expected, core_source, *, calibration=False, verifier=None, turn_probe=False, defer_logits=False):
         rows = []; values = []; hello = False; started = last = time.monotonic()
-        meta = None; self.failure = None; verified_turns = 0
+        meta = None; self.failure = None; verified_turns = 0; stream_turns = False
         try:
             while True:
                 require(not self.cancel.is_set(),'Teacher table cancelled; discard unpublished labels')
@@ -134,9 +138,13 @@ class Worker:
                     require(not hello and not payload and meta['contract'] == CONTRACT and meta['job'] == expected
                         and meta['core']['source_sha256'] == core_source and meta['method'] == 'search_v1'
                         and meta['v205_enabled'] is False,'Native teacher handshake differs')
+                    stream_turns = meta.get('turn_handoff') == STREAM_TURNS
+                    require(not stream_turns or getattr(self, 'stream_turns', False), 'Unexpected streamed teacher turns')
                     hello = True;continue
                 require(hello,'Missing teacher handshake')
-                if kind == 'evaluate':self.send(self.client.evaluate(meta,payload));continue
+                if kind == 'evaluate':
+                    require(not stream_turns, 'Streamed CPU teacher requested remote inference')
+                    self.send(self.client.evaluate(meta,payload));continue
                 require(not payload,'Unexpected teacher binary payload')
                 if kind == 'turn':
                     # Long labels: 16 reserved turns, two actions each. A g1491 job
@@ -145,12 +153,11 @@ class Worker:
                     require(not calibration and verifier is not None and
                             len(rows)+len(meta['rows']) <= (128 if revision else 32),
                             'Unexpected/unverified/excess teacher turn')
-                    if counted:
-                        # A fixed-count search never reads its clock, so the worker may
-                        # search its next turn while this one is verified. It holds a CPU
-                        # ticket while it waits, and under overlap that wait was a third
-                        # of each table. A failed check still stops the table: events are
-                        # handled in order, so no later turn or result is accepted.
+                    if stream_turns:
+                        verifier.verify(meta,received)
+                    elif counted:
+                        # Older binaries require an ACK before the next search.
+                        # Verify in order before any table can be admitted.
                         self.send(dict(job=meta['job'],index=meta['index'],status='ok'))
                         verifier.verify(meta,received)
                     else:self.send(verifier.verify(meta,received))
@@ -175,7 +182,15 @@ class Worker:
                             and meta['metrics']['labels'] == len(rows) and meta['metrics']['reserved_turns'] == (64 if getattr(self,'job',{}).get('h2h') else 16),
                             'Incomplete/misrouted teacher table')
                     require(not self.cancel.is_set(),'Teacher table cancelled before publication')
-                    require(meta.get('value_rows', []) == values, 'Changed root value stream')
+                    if stream_turns:
+                        require(meta['value_rows']==[] and type(meta['value_count']) is int and meta['value_count']==len(values),
+                                'Incomplete streamed root values')
+                        expected_turns = 64 if self.job.get('seating') == 'all-seat-search' else 16
+                        require(verified_turns==meta['metrics']['searched_turns']==expected_turns and
+                                (len(values)==64 if expected_turns==64 else not values),
+                                'Incomplete streamed teacher table')
+                    else:
+                        require(meta.get('value_rows', []) == values, 'Changed root value stream')
                     revision = getattr(self, 'job', {}).get('teacher_revision')
                     # The worker echoes the revision it ran; a stale binary would label nothing short.
                     require(revision is None or
@@ -318,6 +333,8 @@ class TeacherCollector:
                         table_budget = teacher_job_budget(budget, job)
                         request['inference'] = (self.inference if table_budget is budget else
                                                 dict(self.inference, budget=table_budget))
+                        if table_budget['mode'] == 'count':
+                            request['turn_handoff'] = STREAM_TURNS
                     client = Client(endpoint,job['expected'],self.cancel,job.get('search_value'),job.get('seat_values'))
                     worker = Worker(self.executable,request,client,self.cancel,cpu=getattr(endpoint,'cpu',None))
                     result = worker.collect(job['expected'],self.core_source,verifier=self.verifier,

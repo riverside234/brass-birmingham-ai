@@ -92,6 +92,49 @@ PATCHES = {
          '            "choice_ids":choices.iter().map(|x| &x.id).collect::<Vec<_>>(),"context":context}))\n'),
     ),
     'src/teacher.rs': (
+        ('    let ack: Value = serde_json::from_slice(&read_frame(&mut peer.input)?)?;\n'
+         '    let after = peer.clock.now_ns();\n'
+         '    check(ack["job"] == peer.expected && ack["index"] == index && ack["status"] == "ok",\n'
+         '          "stale/rejected turn verification")?;\n',
+         '    if !peer.stream_turns {\n'
+         '        let ack: Value = serde_json::from_slice(&read_frame(&mut peer.input)?)?;\n'
+         '        check(ack["job"] == peer.expected && ack["index"] == index && ack["status"] == "ok",\n'
+         '              "stale/rejected turn verification")?;\n'
+         '    }\n'
+         '    let after = peer.clock.now_ns();\n'),
+        ('    root_stats: Option<Statistics>,\n', '    root_stats: Option<Statistics>,\n    stream_turns: bool,\n'),
+        ('search_value:None,root_watch:None,root_stats:None,',
+         'search_value:None,root_watch:None,root_stats:None,stream_turns:false,'),
+        ('search_value:None,root_watch:Some(info.clone()),root_stats:None };',
+         'search_value:None,root_watch:Some(info.clone()),root_stats:None,stream_turns:false };'),
+        ('    let initial: StateDto =',
+         '    let stream_turns = request["turn_handoff"] == "verified-stream/1";\n'
+         '    let initial: StateDto ='),
+        ('        root_watch: None, root_stats: None,\n    };',
+         '        root_watch: None, root_stats: None, stream_turns,\n    };'),
+        ('    let calibration = request["op"] == "calibrate";\n',
+         '    crate::cpu_eval::teacher_install(&request, &expected, reward.insolvency.max_cost)?;\n'
+         '    check(!stream_turns || (request["op"] == "run" && crate::cpu_eval::teacher_count_mode()),\n'
+         '          "streamed turn verification requires a CPU count table")?;\n'
+         '    let calibration = request["op"] == "calibrate";\n'),
+        ('    let mut values = Vec::new();\n',
+         '    let mut values = Vec::new();\n'
+         '    let mut value_count = 0;\n'
+         '    let mut count_root = |row: &Option<Value>| {\n'
+         '        if let Some(value) = row {\n'
+         '            value_count += 1;\n'
+         '            if !stream_turns { values.push(value.clone()); }\n'
+         '        }\n'
+         '    };\n'),
+        ('                if let Some(value) = &turn_work.value_row { values.push(value.clone()); }\n',
+         '                count_root(&turn_work.value_row);\n'),
+        ('        if let Some(value) = &turn_work.value_row { values.push(value.clone()); }\n'
+         '        turn_reports.push(finish_turn',
+         '        count_root(&turn_work.value_row);\n'
+         '        turn_reports.push(finish_turn'),
+        ('searched_turns == 64 && values.len() == 64', 'searched_turns == 64 && value_count == 64'),
+        ('"value_rows":values,"final_spent":ledger.spent,',
+         '"value_rows":values,"value_count":value_count,"final_spent":ledger.spent,'),
         # The g1190 restart schedule's Stage B moves w in .02 steps (fifty collections):
         # a 1/100 grid keeps every earlier 1/20 weight valid.
         ('            && (w * 20. - (w * 20.).round()).abs() < 1e-8\n',
@@ -126,11 +169,9 @@ PATCHES = {
          '        };\n'),
         ('        let choice = if let Some(owner) = &mut session {\n',
          '        let choice = if let Some(owner) = session.as_mut().filter(|_| !unsearchable) {\n'),
-        ('    let calibration = request["op"] == "calibrate";\n',
-         '    crate::cpu_eval::teacher_install(&request, &expected, reward.insolvency.max_cost)?;\n'
-         '    let calibration = request["op"] == "calibrate";\n'),
         ('"verification_policy":"sampled-unbounded-verification/3"}),',
          '"verification_policy":"sampled-unbounded-verification/3",\n'
+         '        "turn_handoff":if stream_turns {"verified-stream/1"} else {"turn-ack/1"},\n'
          '        "inference":crate::cpu_eval::teacher_receipt()}),'),
         ('    fast: bool,\n}\n\n#[derive(Default,serde::Serialize)]',
          '    fast: bool,\n    c_scale: f64,\n}\n\n#[derive(Default,serde::Serialize)]'),

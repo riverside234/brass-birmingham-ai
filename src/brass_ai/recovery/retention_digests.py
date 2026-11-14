@@ -31,13 +31,16 @@ class PlanDigests:
         self.read_bytes=0;self.reused_bytes=0;self.hits=0;self.lock=Lock()
 
     def digest(self,path):
+        return self.measure(path)[0]
+
+    def measure(self,path):
         before=stamp(path)
         value=sha(path);after=stamp(path)
         require(after==before,'Artifact changed while hashing cleanup plan')
         with self.lock:self.read_bytes+=after[2]
-        return value
+        return value,after[2]
 
-    def report(self):
-        return dict(plan_and_move_read_bytes=self.read_bytes,reused_read_bytes=self.reused_bytes,
+    def report(self, *, archived_bytes=0):
+        return dict(plan_and_move_read_bytes=self.read_bytes+archived_bytes,reused_read_bytes=self.reused_bytes,
             reuse_hits=self.hits,metadata_reuse_supported=METADATA_REUSE,final_delete_rehash=True,
-            scope='Content rehashed for plan, move and final deletion; metadata is not a content version')
+            scope='Apply hashes before moving and rehashes before deletion. Report archival hashes the same bytes it parses.')

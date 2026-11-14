@@ -208,26 +208,28 @@ class CleanupDigests(unittest.TestCase):
             with patch('brass_ai.recovery.retention_digests.sha',side_effect=changed):
                 with self.assertRaisesRegex(ValueError,'while hashing'):PlanDigests().digest(path)
 
-    def test_prune_rehashes_before_move_and_final_delete(self):
+    def test_prune_hashes_once_before_move_and_again_before_final_delete(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)
             path=run/'orphan.pt';path.write_bytes(b'cleanup fixture')
-            def plan(root,run,config,*,_digests):
+            def plan(root,run,config,*,_hash_entries):
+                self.assertFalse(_hash_entries)
                 return dict(format='retention-plan/1.0.0',run=str(run),created=0,generation=0,
-                    entries=[dict(path=path.name,sha256=_digests.digest(path),bytes=path.stat().st_size,reason='fixture')],
+                    entries=[dict(path=path.name,bytes=path.stat().st_size,reason='fixture')],
                     reclaimable_bytes=path.stat().st_size,protected=[])
             with patch.object(retention,'plan',side_effect=plan),patch.object(retention,'sha',wraps=sha) as final_hash:
                 result=retention.prune(root,run,dict(RETENTION,quarantine_hours=0),apply=True)
             self.assertEqual(result['hash_reuse']['reuse_hits'],int(METADATA_REUSE))
+            self.assertEqual(result['hash_reuse']['plan_and_move_read_bytes'],len(b'cleanup fixture'))
             self.assertTrue(any('.retention-trash' in str(c.args[0]) for c in final_hash.call_args_list))
             self.assertEqual(result['permanently_deleted_files'],1);self.assertFalse(path.exists())
 
-    def test_prune_rejects_same_size_changed_file_before_quarantine(self):
+    def test_prune_rejects_same_size_change_after_an_explicit_content_pin(self):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)
             path=run/'orphan.pt';path.write_bytes(b'abcd')
-            def plan(root,run,config,*,_digests):
-                expected=_digests.digest(path)
+            def plan(root,run,config,*,_hash_entries):
+                expected=sha(path)
                 path.write_bytes(b'efgh')
                 return dict(format='retention-plan/1.0.0',run=str(run),created=0,generation=0,
                     entries=[dict(path=path.name,sha256=expected,bytes=4,reason='fixture')],

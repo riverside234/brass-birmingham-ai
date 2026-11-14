@@ -12,11 +12,12 @@ import threading
 
 from brass_ai.learning.batching import model_id
 from brass_ai.learning.contracts import digest, require
+from brass_ai.recovery.admitted_inputs import _freeze
 from brass_ai.recovery.teacher_phase_config import TIMING
 from brass_ai.recovery.search_value_config import FAST_POST_SECONDS
 from .lab_admission import admit_teacher_rows
 from .lab_admission import teacher_sources
-from brass_ai.recovery.teacher_labels import prepare_rows, check_logits
+from brass_ai.recovery.teacher_labels import prepare_rows, check_logits, check_turn
 
 
 class TableLogitBatcher:
@@ -126,6 +127,7 @@ class TurnVerifier:
         self.jobs = {j['expected']['job_id']: copy.deepcopy(j) for j in jobs}
         require(all(j['expected']['model_id'] == self.model_id for j in jobs), 'Verifier model differs')
         self.cache = {}
+        self.value_tables = {}
         self.lock = threading.Lock()
         self.diagnostic = diagnostic
         self.sources = teacher_sources(jobs) if not diagnostic else set()
@@ -175,19 +177,19 @@ class TurnVerifier:
                 and type(meta['search_ns']) is int and 0 <= meta['search_ns'] <= search_ns,
                 'Invalid post-search timing metadata')
         if meta.get('value_row') is not None:
-            from brass_ai.recovery.search_value_rows import validate_root
+            from brass_ai.recovery.search_value_rows import freeze_root, validate_root
             validate_root(meta['value_row'], job)
             require(meta['value_row']['index'] == meta['index'] and meta['value_row']['profile'] == meta['profile'], 'Root turn differs')
+            meta['value_row'] = freeze_root(meta['value_row'])
         def check():
             require(not self.cancel.is_set(), 'Turn verification cancelled')
         check()
         record = self.cache.setdefault(identity, dict(raw=[], accepted=[], rejected=Counter(), timings=[], last=0,
-                                                      sampled_profiles=set(), deferred=[]))
+                                                      sampled_profiles=set(), deferred=[], values=[]))
         require(meta['index'] == record['last'] + 1 and len(meta['rows']) <= 2,
                 'Duplicate/out-of-order/excess teacher turn')
         sampled = profile not in record['sampled_profiles'] or meta['index'] % 64 == 0
         began = time.monotonic() if sampled else None
-        from brass_ai.recovery.admitted_inputs import _freeze
         # A single detached immutable owner, shared by the admitted LabelRows.
         # deepcopy(FrozenDict) is identity; cold/mutable callers retain copies.
         frozen = [_freeze(row) for row in meta['rows']]
@@ -223,7 +225,6 @@ class TurnVerifier:
                     locked = time.monotonic() if sampled else None
                     check_logits(self.model,accepted)
         if not self.diagnostic:
-            from brass_ai.recovery.teacher_labels import check_turn
             for row in accepted: check_turn(row.label, row.row['view']['context']['round'], job)
         check()
         # Publish only after identity, legality, target and independent batched
@@ -237,6 +238,7 @@ class TurnVerifier:
         accepted = [LabelRow(_freeze(row.row),row.encoded) for row in accepted]
         check()
         record['raw'].extend(meta['rows'])
+        if meta.get('value_row') is not None:record['values'].append(meta['value_row'])
         record['accepted'].extend(accepted); record['rejected'].update(rejected)
         batched = fast or revised
         if batched: record['deferred'].extend(accepted)
@@ -308,12 +310,25 @@ class TurnVerifier:
                 'Incomplete turn verification')
         settled = self.settle(key)
         if settled: result['metrics']['deferred_logit_check'] = dict(settled)
+        if record.get('values'):
+            self.value_tables[key] = record['values']
         # A verified table can cross the phase boundary exactly once. Fresh
         # loads always use full sealed-shard validation instead of this cache.
         del self.cache[key]
         result['metrics']['verification'] = record['timings']
         result['metrics']['verified_reuse_seconds'] = time.monotonic()-began
         return record['accepted'], dict(record['rejected'])
+
+    def take_value_rows(self, result, job):
+        """Reuse completed root validation only for the live immutable rows."""
+        require(not self.cancel.is_set(), 'Teacher value admission cancelled')
+        key = job['expected']['job_id']
+        expected = self.value_tables.pop(key, None)
+        if expected is None:
+            return False
+        rows = result['value_rows']
+        return job == self.jobs[key] and result['job_id'] == key and len(rows) == len(expected) and all(
+            actual is checked for actual, checked in zip(rows, expected, strict=True))
 
     def compare_previous_barrier(self, results):
         """Qualification-only audit of the former one-batch table verifier.

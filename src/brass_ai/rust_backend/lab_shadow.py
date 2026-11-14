@@ -245,7 +245,7 @@ class ShadowCollector:
         """Everything after the tables exist: labels, buffers and evidence, in one order."""
         cached.update({r['job_id']:r for r in live})
         results=[cached[j['expected']['job_id']] for j in jobs]
-        from brass_ai.recovery.training_revision_g1491 import count_search
+        from brass_ai.recovery.training_revision_g1491 import UPDATED_SEARCH, count_search
         from brass_ai.recovery.collector_runtime import teacher_c_scale, teacher_job_budget
         profile=count_search(state['signature']['config'])
         if profile is not None:
@@ -256,7 +256,7 @@ class ShadowCollector:
                         all(row['teacher']['c2']==expected['c_scale'] and
                             row['teacher']['requested_k']==expected['full_k'] for row in result['rows']),
                         'Teacher table used another long-search K or c_scale')
-                if 'cotton_c_scale' in profile:
+                if 'cotton_c_scale' in profile or profile == UPDATED_SEARCH:
                     require(all(search.get('c_scale') == teacher_c_scale(expected, fast=search['profile']=='fast')
                                 for search in result['metrics']['searches'] if search['frozen_n'] > 0),
                             'Teacher search used another long- or short-search c_scale')
@@ -274,6 +274,8 @@ class ShadowCollector:
                 def take(self,result,job,model):
                     if job['expected']['job_id'] in verifier.cache:return verifier.take(result,job,model)
                     return admit_teacher_rows(result['rows'],job=job,model=model,history=state['history'])
+                def take_value_rows(self,result,job):
+                    return verifier.take_value_rows(result,job)
             phase.admit_collection(results,model,verifier=MixedVerifier())
         if cpu_metrics is not None:phase.metrics['cpu_inference']=cpu_metrics
         if getattr(collector, 'finalization', None):

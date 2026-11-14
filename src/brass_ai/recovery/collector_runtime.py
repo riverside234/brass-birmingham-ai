@@ -16,7 +16,7 @@ RUNTIME_KEYS = frozenset(DEFAULTS) | frozenset(OPTIONAL)
 MODES = ('production_fast', 'strict', 'profile')
 CPU_CONTRACT = 'brass-lab-cpu-inference/1.0.0'
 DEFAULT_C_SCALE = .1
-C_SCALES = (DEFAULT_C_SCALE, .15, .2, .5, 1.)
+C_SCALES = (DEFAULT_C_SCALE, .15, .2, .5, .7, 1.)
 FULL_K = (8, 16)
 TEACHER_BUDGET = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=DEFAULT_C_SCALE)
 _current = None

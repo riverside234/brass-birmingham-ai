@@ -73,10 +73,28 @@ def evaluation_evidence(report):
     return out
 
 
+def _teacher_summary(value):
+    if not isinstance(value,dict):return value
+    collection=value.get('collection')
+    if not isinstance(collection,dict) or 'collection_metrics' not in collection:return value
+    if collection.get('vp') is not None:
+        # The live report and teacher table cache carry the full traces. The
+        # compact archive keeps VP, action totals, and collection timings.
+        return dict(value,collection={k:v for k,v in collection.items() if k!='collection_metrics'})
+    # Historical VP reconstruction uses only the cotton group of each table.
+    rows=[{'cpu_inference': {'revision': {'cotton': True}}}
+          if 'cotton' in (m.get('cpu_inference') or {}).get('revision',{}) else {}
+          for m in collection['collection_metrics']]
+    return dict(value,collection=dict(collection,collection_metrics=rows))
+
+
 def compact(report):
     # Old compact summaries cannot recover fields that were already discarded.
     # Preserve their version and missingness instead of relabelling as v5.
-    if report.get('summary_version') in (2,3,4,5,6):return report
+    if report.get('summary_version') in (2,3,4,5,6):
+        if 'teacher_phase' not in report:return report
+        teacher=_teacher_summary(report['teacher_phase'])
+        return report if teacher is report['teacher_phase'] else dict(report,teacher_phase=teacher)
     out=scalars(report,('format','iteration','games_done','cumulative_games','incoming_model_id','post_update_model_id',
                        'incoming_policy_id','elapsed_seconds','games','failed_games','promotion_eligible'))
     out['summary_version']=6 if report.get('value_phase') is not None or 'gae' in report.get('actor',{}) else 5
@@ -88,11 +106,13 @@ def compact(report):
     for key in ('il_kl_limit','policy_anchor','anchor_transition','rating_coverage','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics',
                 'exploration_rollout','entropy_control','entropy_schedule','entropy_measurement','entropy_floor_transition','exploration_metrics','seat_contexts','temperature_rating','context_evaluation','v4_share_gate','panel_gates','teacher_phase','cleanup'):
         if key in report:out[key]=report[key]
+    if 'teacher_phase' in out:out['teacher_phase']=_teacher_summary(out['teacher_phase'])
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
                                   if 'health_counts' in v}
     if report.get('format') in ('step5-evaluation-report/1.0.0','four-player-champion/1.0.0'):
         out['evaluation_evidence']=evaluation_evidence(report)
     out['timings']=scalars(report.get('timings',{}),('collection_seconds','replay_load_seconds','ppo_seconds',
+        'teacher_collection_seconds','shadow_collection_seconds',
         'sampling_seconds','rehearsal_prepare_seconds','rehearsal_cleanup_seconds',
         'anchor_probe_seconds','entropy_probe_seconds','auxiliary_diagnostics_seconds','pool_admission_seconds',
         'post_ppo_diagnostics_seconds','final_diagnostics_seconds',

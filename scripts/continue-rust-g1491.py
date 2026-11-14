@@ -107,6 +107,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     migrations.add_argument('--split-teacher-c-scale', action='store_true',
         help='Use long C_scale=0.20 on standard tables and 0.10 on cotton tables with 25%% cotton exploration. '
              'Refill the search buffers and re-measure beta with teaching on.')
+    migrations.add_argument('--update-teacher-scales', action='store_true',
+        help='Use long C_scale=0.10 and short C_scale=0.70 for all teacher tables and refill their training buffers.')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -127,6 +129,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         profile = g1491.RETUNED_SEARCH
     elif args.split_teacher_c_scale:
         profile = g1491.COTTON_SPLIT_SEARCH
+    elif args.update_teacher_scales:
+        profile = g1491.UPDATED_SEARCH
     elif args.retune_teacher_search and profile is None:
         profile = g1491.RETUNED_SEARCH
     args.teacher_count_search = profile
@@ -147,9 +151,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     if args.reset_search_head:
         from brass_ai.recovery.search_head_refresh import prepare
         state=prepare(ROOT,run,expected_generation=generation,adaptive_beta=args.adaptive_teacher_beta,reset=True)
-    if args.retune_teacher_search or args.split_teacher_c_scale:
+    if args.retune_teacher_search or args.split_teacher_c_scale or args.update_teacher_scales:
         from brass_ai.recovery.teacher_search_retune import prepare
-        state=prepare(ROOT,run,expected_generation=generation,split_c_scale=args.split_teacher_c_scale)
+        options = dict(update_scales=True) if args.update_teacher_scales else dict(split_c_scale=args.split_teacher_c_scale)
+        state=prepare(ROOT,run,expected_generation=generation,**options)
     end = generation+args.iterations
     if not g1491.applied(state['signature']['config']) and interrupted(run, generation):
         # Its tables were collected under the current recipe and the earlier short-search

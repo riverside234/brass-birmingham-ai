@@ -288,7 +288,8 @@ class TeacherPhase:
             self.metrics['deferred_sealing_seconds'] = self.admission_seconds
             self.metrics['post_admission_per_table_seconds']=post_spent
         if self.search_value is not None:
-            self.search_value.admit(results,self.jobs,post_spent=post_spent if verifier is not None else 0.)
+            values = verifier if hasattr(verifier,'take_value_rows') else None
+            self.search_value.admit(results,self.jobs,post_spent=post_spent if verifier is not None else 0.,value_verifier=values)
 
     def prepare(self, model):
         self.pre = heldout_measure(model, self.heldout)

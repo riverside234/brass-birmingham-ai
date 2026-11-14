@@ -160,6 +160,8 @@ class TeacherTerm:
         self.beta_report = {}
         if self.mode == 'on':
             self.beta = adaptive.accepted(self.beta, self.remeasurement, target)
+            if self.remeasure_pending:
+                self.shadow, self.outside = [], 0
             if self.adaptive_enabled:
                 basis = self.beta_basis()
                 prior_basis = None
@@ -168,7 +170,8 @@ class TeacherTerm:
                     # committed basis still owns the running beta and norms.
                     prior_basis = [old_target, (saved_qualification or {}).get('sha256'), basis[2]]
                     self.outside = 0
-                self.adaptive = adaptive.restore(self.state.get(adaptive.KEY), self.beta, basis, prior_basis=prior_basis)
+                saved_adaptive = None if self.remeasure_pending else self.state.get(adaptive.KEY)
+                self.adaptive = adaptive.restore(saved_adaptive, self.beta, basis, prior_basis=prior_basis)
                 self.beta = self.adaptive['beta']
         self.beta_used = 1. if self.mode == 'shadow' else self.beta
         self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.

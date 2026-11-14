@@ -202,6 +202,9 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if g2240.applied(config):
             prefix=prefix.replace('-opening-t2-cotton10-share', '-cotton-g2240-share')
             stages.append(prefix)
+            if profile == g1491.UPDATED_SEARCH:
+                prefix=prefix.replace('-teacher-k8-c015-', '-teacher-k8-c010-c070-')
+                stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         adopting_cotton=g2240.applied(config) and not g2240.applied(before)
         existing=read(output) if output.exists() else state['signature']['config']
@@ -333,7 +336,8 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
              f'qualification={calibration} iterations; teacher gradients are diagnostic only.'),flush=True)
         from brass_ai.recovery.search_value_schedule import validation_plan
         if g2090.applied(options) and validation_plan(options,state).get('forced_by_beta_remeasurement'):
-            print('Teacher beta will be re-measured with teaching on and four held-out tables.',flush=True)
+            print('Teacher beta will be re-measured with teaching on and four held-out tables. '
+                  'Adaptive moving averages start fresh.',flush=True)
         if revised:
             schedule=report['stage_schedule'];a=schedule['stage_a_iterations'];b=schedule['stage_b_iterations'];c=schedule['stage_c_iterations']
             floor_stage = 'B' if 'ppg_beta_floor_after_stage_b' in schedule else 'A'

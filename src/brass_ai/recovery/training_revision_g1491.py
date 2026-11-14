@@ -45,6 +45,7 @@ WIDE_RESTART = 'g1190-branch-restart-256-rows'
 SEARCH_REFRESH = 'g1190-search-head-refresh-96-rows'
 RETUNED_SEARCH = dict(full_k=8, c_scale=.15, fast_c_scale=.5)
 COTTON_SPLIT_SEARCH = dict(RETUNED_SEARCH, c_scale=.20, cotton_c_scale=.10)
+UPDATED_SEARCH = dict(RETUNED_SEARCH, c_scale=.10, fast_c_scale=.70)
 TEACHER_SEARCH_HEAD_WEIGHT = 'teacher_search_head_weight'
 RESTARTS = (RESTART, WIDE_RESTART, SEARCH_REFRESH)
 # Exact values of each reviewed variant; None is the in-run g1491 adoption.
@@ -132,7 +133,7 @@ def cotton_only_marker(marker):
 def configure_teacher_games(config, weight, *, seated=False):
     """Set the teacher-only blend and split cotton exploration within each partition."""
     require(type(weight) is int and weight in (0, 1), 'Teacher search-head weight must be 0 or 1')
-    require(variant_of(config) == SEARCH_REFRESH and count_search(config) in (RETUNED_SEARCH, COTTON_SPLIT_SEARCH),
+    require(variant_of(config) == SEARCH_REFRESH and count_search(config) in (RETUNED_SEARCH, COTTON_SPLIT_SEARCH, UPDATED_SEARCH),
             'Teacher game settings require the retuned g1190 recipe')
     phase = config['teacher_phase']
     revision = (dict(phase[KEY], **{TEACHER_SEARCH_HEAD_WEIGHT: weight}) if cotton_only(config)
@@ -169,7 +170,9 @@ def validate(config):
                     _mixed_tables(retuned, 0, seated=True), _mixed_tables(retuned, 1, seated=True))
         opening = dict(retuned, exploration=dict(retuned['exploration'], game_opening=GAME_OPENING))
         allowed += tuple(_mixed_tables(opening, weight, seated=True) for weight in (0, 1))
-        allowed += tuple(cotton_only_marker(_mixed_tables(opening, weight, seated=True)) for weight in (0, 1))
+        for profile in (RETUNED_SEARCH, UPDATED_SEARCH):
+            seated = dict(opening, count_search=profile)
+            allowed += tuple(cotton_only_marker(_mixed_tables(seated, weight, seated=True)) for weight in (0, 1))
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',

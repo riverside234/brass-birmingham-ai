@@ -233,6 +233,23 @@ class FailureLogs(unittest.TestCase):
             result=worker.collect(expected,'core',verifier=verifier)
         self.assertEqual(result['job_id'],'frozen');worker.close.assert_called_once()
 
+    def test_streamed_worker_rejects_a_bad_turn_before_accepting_finished(self):
+        from brass_ai.rust_backend.lab_teacher import STREAM_TURNS, Worker
+        from brass_ai.rust_backend.lab_teacher_overlay import CONTRACT
+        worker=Worker.__new__(Worker);worker.cancel=threading.Event();worker.events=queue.Queue()
+        worker.send=Mock();worker.close=Mock();worker.job={};worker.counted=True;worker.stream_turns=True
+        expected=dict(job_id='frozen')
+        worker.events.put((dict(event='hello',job=expected,contract=CONTRACT,core={'source_sha256':'core'},
+            method='search_v1',v205_enabled=False,turn_handoff=STREAM_TURNS),b''))
+        worker.events.put((dict(event='turn',rows=[]),b''))
+        worker.events.put((dict(event='finished',job=expected),b''))
+        verifier=Mock();verifier.verify.side_effect=ValueError('bad turn')
+        with self.assertRaisesRegex(ValueError,'bad turn'):
+            worker.collect(expected,'core',verifier=verifier)
+        worker.send.assert_not_called()
+        worker.close.assert_called_once()
+        self.assertEqual(worker.events.qsize(),1)
+
 
 class RuntimePreparation(unittest.TestCase):
     def setUp(self):

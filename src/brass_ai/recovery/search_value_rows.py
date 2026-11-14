@@ -12,6 +12,7 @@ from brass_ai.learning.contracts import digest, require
 from brass_ai.learning.search_value import validate_binding
 from brass_ai.learning.reward import terminal_utility
 from brass_ai.step5.league import write_json
+from .admitted_inputs import FrozenDict, FrozenList, _freeze
 
 CONTRACT = 'search-value-buffer/1.0.0'
 
@@ -32,7 +33,8 @@ def validate_root(row, job):
             row['mapping'] == [(s - row['seat']) % 4 for s in range(4)], 'Root seat mapping differs')
     value = job.get('seat_values', [job['search_value']] * 4)[row['seat']]
     require(row['search_value'] == value, 'Root value source differs')
-    validate_binding(row['search_value'])
+    binding = row['search_value']
+    validate_binding(dict(binding) if type(binding) is FrozenDict else binding)
     require(type(row['index']) is int and 1 <= row['index'] <= 64 and type(row['n']) is int and row['n'] >= 0,
             'Root watermark differs')
     require(all(type(n) is int and n >= 0 for n in row['counts']) and sum(row['counts']) == row['n'], 'Root counts differ')
@@ -49,6 +51,14 @@ def validate_root(row, job):
     require(np.min(row['spent']) >= 0 and np.max(row['spent']) <= cap + 1e-9 and
             np.allclose(np.asarray(row['spent']) + row['remaining'], cap, atol=1e-9), 'Root budget differs')
     return row
+
+
+def freeze_root(row):
+    """Detach the flat state vector in bulk and freeze the nested bindings."""
+    values = row['state']
+    if not set(map(type,values)) <= {float,int,str,bool,type(None)}:
+        return _freeze(row)
+    return FrozenDict((key, FrozenList(value) if key == 'state' else _freeze(value)) for key, value in row.items())
 
 
 def targets(rows, result, final_spent, reward, lam):
@@ -70,9 +80,14 @@ def targets(rows, result, final_spent, reward, lam):
 
 
 def complete_game(rows, result, final_spent, job, *, lam=1.):
+    for row in rows: validate_root(row, job)
+    return complete_admitted_game(rows,result,final_spent,job,lam=lam)
+
+
+def complete_admitted_game(rows, result, final_spent, job, *, lam=1.):
+    """Finish game-level validation for roots verified at the live turn boundary."""
     require(len(rows) == 64 and [r['index'] for r in rows] == list(range(1, 65)), 'Incomplete all-seat value game')
     require(len({tuple(r['turn_key']) for r in rows}) == 64, 'Repeated value turn')
-    for row in rows: validate_root(row, job)
     require(sum(r['profile'] == 'full' for r in rows) == 16, 'Reserved full profile count differs')
     g, u = targets(rows, result, final_spent, job['search']['reward'], lam)
     from brass_ai.learning.reward_timing import teacher_payments

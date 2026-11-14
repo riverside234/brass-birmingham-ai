@@ -426,7 +426,7 @@ fn budget_k(value: &Value, name: &str, default: usize) -> Result<usize> {
 fn budget_c_scale(value: &Value) -> Result<f64> {
     let c_scale = value.as_f64().ok_or("invalid teacher c_scale")?;
     check(
-        [DEFAULT_C_SCALE, 0.15, 0.20, 0.5, 1.0].contains(&c_scale),
+        [DEFAULT_C_SCALE, 0.15, 0.20, 0.5, 0.7, 1.0].contains(&c_scale),
         "teacher c_scale outside its bounds",
     )?;
     Ok(c_scale)

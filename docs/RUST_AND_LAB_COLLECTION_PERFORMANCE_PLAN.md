@@ -24,7 +24,17 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/profile-rust
 
 ## What the current measurements show
 
-The latest available export is **g2090**. Report numbers refer to the checkpoint entering each iteration. Both iterations collected 320 fresh Rust PPO games on a lab allocation of 64 logical CPUs. This export predates the T2 opening update. Repeat the baseline on the active recipe before estimating capacity.
+### Lab results through g2250
+
+The g2250 export includes one ordinary iteration and one with four held-outs and periodic maintenance. All 320 ordinary shards in each iteration used publisher-side preparation. Preparation worker CPU fell from roughly 471–473 seconds in the g2240 exports to 156–157 seconds. Combined collection took 90.82 and 108.40 seconds, compared with 107.55 and 108.67 seconds at g2240. The cotton and teacher sampling recipes also changed between exports. [g2240 reports](../results/joint7-v11-2-g1190-restart-3-g2240-20261114T060652073419Z), [g2250 reports](../results/joint7-v11-2-g1190-restart-3-g2250-20261114T075328979389Z).
+
+On iteration 2249, a median teacher game spent 38.2 seconds in native search and 57.1 seconds after search. Native post-search preparation accounted for about 0.8 seconds per game. The remainder mostly reflects the turn handoff and wait for the Python acknowledgement. The ordinary pool finished in 76.3 seconds, and the teacher barrier finished in 106.6 seconds. Cleanup added 78.0 seconds and evaluation added 63.2 seconds. [Teacher collection trace](../results/joint7-v11-2-g1190-restart-3-g2250-20261114T075328979389Z/iteration-2249/teacher-shadow/collection.json), [iteration report](../results/joint7-v11-2-g1190-restart-3-g2250-20261114T075328979389Z/iteration-2249/report.json).
+
+The CPU count worker now streams turns through bounded pipes while Python verifies them in order. Its final frame reports the count of value rows already delivered. A table still needs complete rows and independent logit parity before publication. Live immutable root records reuse their turn validation during return fitting, and recovered tables take the full validation path. Cleanup hashes each file just before quarantining it and again before deletion. The compact diagnostic archive keeps teacher VP and aggregate results and drops per-turn traces duplicated in the collection reports. On the g2250 archive this reduced uncompressed JSON from 398 MB to 135 MB. One matched six-table Windows probe reduced median post-search time per table from 2.02 to 1.80 seconds with identical training data, while total wall time rose from 53.2 to 57.4 seconds as native search took longer. A local 256 MiB cleanup fixture showed no wall-time gain. The net Linux timing remains to be measured. [Local teacher comparison](../artifacts/rust-cotton-g2250/perf-0d07ff16/teacher.json), [cleanup comparison](../artifacts/rust-cotton-g2250/perf-244b0aab/cleanup.json).
+
+### Earlier g2090 baseline
+
+Report numbers refer to the checkpoint entering each iteration. Both iterations collected 320 fresh Rust PPO games on a lab allocation of 64 logical CPUs. This export predates the T2 opening update.
 
 | Measure | Iteration 2088 → g2089 | Iteration 2089 → g2090 |
 | --- | ---: | ---: |

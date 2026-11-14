@@ -658,8 +658,8 @@ class NativeWorkers(unittest.TestCase):
         job['readiness'] = dict(ready=True, reward_id=job['expected']['reward_id'])
         return job
 
-    def run_all_seat(self, weight, budget, revision=None, *, split='train'):
-        from brass_ai.rust_backend.lab_teacher import Worker
+    def run_all_seat(self, weight, budget, revision=None, *, split='train', streamed=False):
+        from brass_ai.rust_backend.lab_teacher import STREAM_TURNS, Worker
         from brass_ai.rust_backend.lab_teacher_finalization import TurnVerifier
         native = Path(os.environ['BRASS_CPU_NATIVE'])
         state = json.loads((native/'brass-ai-core/tests/data/initial-state.json').read_text())
@@ -672,9 +672,42 @@ class NativeWorkers(unittest.TestCase):
         from brass_ai.rust_backend.lab_cpu_runtime import count_search_limits
         verifier = TurnVerifier(self.model, [dict(generation=10, model_id=self.identity)], [job], cancel,
                                 search_limits=count_search_limits(dict(budget=budget)))
-        worker = Worker(os.environ['BRASS_CPU_TEACHER'], self.teacher_request(job, state, budget), None, cancel)
+        request = self.teacher_request(job, state, budget)
+        if streamed:request['turn_handoff'] = STREAM_TURNS
+        worker = Worker(os.environ['BRASS_CPU_TEACHER'], request, None, cancel)
         result = worker.collect(job['expected'], os.environ['BRASS_CPU_CORE'], verifier=verifier)
         return job, result, verifier
+
+    def test_streamed_turns_preserve_both_search_profiles_and_admitted_data(self):
+        from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
+        from brass_ai.step5.policy import cotton_seats
+        budget = dict(mode='count', full=64, fast=24, fast_k=8, **G.UPDATED_SEARCH)
+        exploration = dict(G.COTTON_ONLY_EXPLORATION, cotton=C.settings(contract=C.SINGLE_SEAT_CONTRACT))
+        seed = self.all_seat_job(0.)['sampling_seed']
+        seats = cotton_seats(seed, 1, C.SINGLE_SEAT_CONTRACT)
+        revision = G._job_block(exploration, short_labels=False, cotton_table=True, seats=seats)
+        payloads = []
+        for streamed in (False, True):
+            job, result, verifier = self.run_all_seat(0., budget, revision, split='heldout', streamed=streamed)
+            rows = verifier.take(result, job, self.model)[0]
+            self.assertTrue(rows)
+            self.assertEqual(len(result['value_rows']), 64)
+            changed = dict(result,value_rows=[dict(row) for row in result['value_rows']])
+            if streamed:
+                self.assertTrue(verifier.take_value_rows(result,job))
+                self.assertFalse(verifier.take_value_rows(result,job))
+            else:
+                self.assertFalse(verifier.take_value_rows(changed,job))
+            from brass_ai.recovery.search_value_rows import complete_admitted_game, complete_game
+            incoming = (result['value_rows'],result['result'],result['final_spent'],job)
+            self.assertEqual(complete_admitted_game(*incoming,lam=.8),complete_game(*incoming,lam=.8))
+            self.assertEqual({(s['profile'],s['c_scale']) for s in result['metrics']['searches']},
+                             {('full',.1),('fast',.7)})
+            self.assertTrue(all(row['teacher']['c2'] == .1 for row in result['rows']))
+            labels = [dict(row,teacher={k:v for k,v in row['teacher'].items() if k!='overrun_seconds'})
+                      for row in result['rows']]
+            payloads.append((labels,result['value_rows'],result['result'],result['final_spent']))
+        self.assertEqual(*payloads)
 
     def root_heads(self, row):
         """The GPU path's float32 utility and search-head correction at one root."""

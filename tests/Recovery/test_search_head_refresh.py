@@ -79,6 +79,19 @@ class Beta(unittest.TestCase):
 
         next_term = term(1731, measured)
         adjusted = update(next_term)
+        requested = dict(adjusted, outside_streak=5, shadow_shares=[[99.]], **{
+            beta.REMEASUREMENT: dict(requested_generation=1732, previous_beta=adjusted['beta'])})
+        fresh = term(1732, requested)
+        self.assertEqual((fresh.shadow, fresh.outside, fresh.beta_used), ([], 0, adjusted['beta']))
+        self.assertEqual((fresh.adaptive['updates'],fresh.adaptive['actor_ema'],fresh.adaptive['teacher_ema']),
+                         (0,None,None))
+        fresh.qualification_context = context
+        fresh.steps = [dict(raw_share=2.,share=2.*fresh.beta_used,actor_norm=3.,raw_teacher_norm=6.)]
+        fresh_state = fresh.finish()
+        self.assertEqual(fresh_state[beta.REMEASUREMENT]['beta'], .025)
+        self.assertEqual(fresh_state[beta.KEY]['updates'],0)
+        fresh_next = update(term(1733,fresh_state))[beta.KEY]
+        self.assertEqual((fresh_next['updates'],fresh_next['actor_ema'],fresh_next['teacher_ema']),(1,3.,7.))
         self.assertEqual(next_term.beta_used, .05)
         self.assertNotEqual(adjusted['beta'], next_term.beta_used)
         report = next_term.report()[beta.KEY]
@@ -334,6 +347,62 @@ class SearchRefresh(unittest.TestCase):
 
     def test_mixed_scale_retune_retires_both_buffers_and_refills_in_stage_c(self):
         self.check_buffer_retune(split_c_scale=True)
+
+    def test_updated_scales_keep_dedicated_value_validation_and_checkpoint(self):
+        from collections import Counter
+        from brass_ai.recovery import teacher_search_retune as retune, training_revision_g1491 as G
+        from brass_ai.recovery import training_revision_g2090 as opening, training_revision_g2240 as seated
+        from brass_ai.recovery.collector_runtime import teacher_job_budget
+        from brass_ai.recovery.search_value_rows import ValueBuffer
+        from brass_ai.recovery.teacher_phase import plan_jobs
+        from brass_ai.recovery.teacher_phase_config import buffer_identity
+
+        run, _, state, _ = self.refreshed_checkpoint()
+        generation = state['iteration']
+        config = retune.configure(state['signature']['config'])
+        config = retune.configure(G.configure_teacher_games(config, 1), split_c_scale=True)
+        config = seated.configure(opening.configure(refresh.configure(config, reset=True)))
+        entry = state['history'][-1]
+        _, raw = load_checkpoint(ROOT/entry['path'])
+        training = raw['training']; search = training['search_value']
+        search['stage'].update(stage='C', w=1., scale=1., stage_a_iterations=100, stage_b_iterations=50)
+        values = ValueBuffer(run/'search-values', search['reward_id'])
+        for split in ('train', 'heldout'):
+            row = dict(generation=generation-1, split=split, game_id=split, index=1, reward_id=search['reward_id'])
+            values.publish(generation-1, split, [row], game_id=split)
+        search['buffer'] = values.payload()
+        training['teacher_phase']['buffer']['identity'] = buffer_identity(config)
+        backend = dict(state['native_backend'], config_sha256=digest(config), teacher=dict(
+            state['native_backend']['teacher'], stage_schedule=digest(config['teacher_phase']['search_value']['schedule']),
+            ppg_beta_floor=.5))
+        signature = dict(state['signature'],config=config)
+        training.update(signature=digest(signature), native_backend=backend)
+        torch.save(raw, ROOT/entry['path'])
+        entry = dict(entry,sha256=sha(ROOT/entry['path']))
+        state.update(signature=signature,native_backend=backend,teacher_phase=training['teacher_phase'],
+                     search_value=stamp(search),history=[*state['history'][:-1],entry],resume=[entry])
+        write_json(run/'state.json',state)
+
+        after = retune.prepare(ROOT, run, expected_generation=generation, update_scales=True)
+        self.assertEqual(retune.prepare(ROOT, run, expected_generation=generation, update_scales=True), after)
+        _, migrated = load_checkpoint(ROOT/after['history'][-1]['path'])
+        buf = migrated['training']['search_value']['buffer']
+        self.assertEqual([r['split'] for r in buf['receipts']], ['heldout'])
+        self.assertEqual([r['split'] for r in buf['retired']], ['train'])
+        self.assertEqual(after['search_value']['stage']['stage'], 'C')
+        self.assertEqual(after['search_value']['stage']['scale'], 1.)
+        for key in ('state_dict','optimizer','rng','cuda_rng'):
+            self.assertTrue(_same_payload(raw[key],migrated[key]))
+        config = after['signature']['config']
+        self.assertEqual(schedule.validation_plan(config,after)['reason'],'beta-remeasurement')
+        jobs,_ = plan_jobs(config,after,model_id=entry['model_id'],export_hash=after['history'][-1]['sha256'],
+                           epoch=generation,ready=True)
+        self.assertEqual(Counter((job['split'],cotton.enabled(job)) for job in jobs),
+                         {('train',False):24,('train',True):8,('heldout',False):3,('heldout',True):1})
+        budget = dict(mode='count', full=640, fast=96, fast_k=8, **G.UPDATED_SEARCH)
+        for job in jobs:
+            G.validate_job(job)
+            self.assertEqual(teacher_job_budget(budget,job),budget)
 
     def test_reset_a_trained_32_head_and_gate_teacher_override(self):
         from collections import Counter

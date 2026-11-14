@@ -9,7 +9,7 @@ import numpy as np
 
 from brass_ai.learning.contracts import digest, require
 from .search_value_config import validate
-from .search_value_rows import ValueBuffer, complete_game
+from .search_value_rows import ValueBuffer, complete_admitted_game, complete_game
 from .search_value_schedule import HELDOUT_ITERATIONS, dedicated_holdout
 from .search_value_training import Companion, StageMachine, clustered_gate, predict_rows, guarded_pass
 
@@ -42,7 +42,7 @@ class SearchValuePhase:
         if self.companion is None and self.trainable and self.options['stage']!='off':
             self.companion=Companion(self.model,hidden=self.options['head']['hidden'])
 
-    def admit(self, results, jobs, generation, *, post_spent=0.):
+    def admit(self, results, jobs, generation, *, post_spent=0., value_verifier=None):
         import time
         began = time.monotonic()
         by_id = {r['job_id']: r for r in results}
@@ -53,12 +53,16 @@ class SearchValuePhase:
                 for v in spent.values()), 'Invalid per-table post-search accounting')
         counts = defaultdict(int)
         timings, labels = {}, []
+        reused_roots = 0
         self.report.update(rows=counts,value_admission_per_table_seconds=timings)
         for job in jobs:
             table_began = time.monotonic()
             result = by_id[job['expected']['job_id']]
-            rows = complete_game(result['value_rows'], result['result'], result['final_spent'], job,
-                                 lam=self.machine.state['lam'] or 1.)
+            live = value_verifier is not None and value_verifier.take_value_rows(result, job)
+            complete = complete_admitted_game if live else complete_game
+            rows = complete(result['value_rows'], result['result'], result['final_spent'], job,
+                            lam=self.machine.state['lam'] or 1.)
+            if live:reused_roots += len(rows)
             if rows[0].get('vp_payments'):
                 self.report.setdefault('vp_payments_per_table',{})[job['expected']['game_id']]=rows[0]['vp_payments']
             # Keep the final utility so all eight ages can be retargeted exactly
@@ -80,6 +84,7 @@ class SearchValuePhase:
             self.label_ages.append(dict(generation=generation,reward_id=self.reward_id,rows=labels))
         self.report['rows'] = dict(counts)
         self.report['value_admission_seconds'] = time.monotonic()-began
+        self.report['live_root_checks_reused'] = reused_roots
         self.report['value_admission_per_table_seconds'] = timings
         self.report['verification_limit_seconds'] = None
 

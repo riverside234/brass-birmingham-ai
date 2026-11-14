@@ -62,6 +62,10 @@ make up 25% of training and held-outs, with normal teacher sampling disabled.
 PPO uses 60/10/30 with 20% targeting on the cotton tables. Both use one fixed
 random seat, target cotton builds from level two, and cap targeting at three
 per era. The new settings persist.
+
+--update-teacher-scales sets long C_scale=.10 and short C_scale=.70 for both
+teacher splits. It re-measures beta with teaching on, refills the search
+training buffers, and retains the dedicated held-out return games.
 """
 import importlib.util
 from pathlib import Path

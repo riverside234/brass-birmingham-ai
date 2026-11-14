@@ -4,6 +4,7 @@ Only known generated artifacts are eligible. Dataset sources, active populations
 unfinished jobs and formal evaluation evidence are dependencies, not garbage.
 """
 from contextlib import contextmanager
+from hashlib import sha256
 import json
 import os
 from pathlib import Path, PureWindowsPath
@@ -377,7 +378,7 @@ def preserve_available_companions(root,run,state):
         scope='All main state_dict heads retained. Exact companion bundles recovered only from available matching full generations; no fabricated historical weights. Old files remain immutable.')
 
 
-def plan(root,run,config=RETENTION,*,_digests=None):
+def plan(root,run,config=RETENTION,*,_hash_entries=True):
     root,run=owned(root,run);require(run.exists(),'Run does not exist')
     require(not active(run,allow_owner=True),'Cannot prune an active run')
     pins=references(root,run);state_path=run/'state.json';state=read(state_path) if state_path.exists() else {}
@@ -480,14 +481,11 @@ def plan(root,run,config=RETENTION,*,_digests=None):
     profiles=sorted(p for p in run.rglob('*.pt.trace.json') if '.retention-trash' not in p.parts)
     for p in profiles[:-config['profile_traces']]: candidate(p,'old profiler trace')
     from .retention_digests import hash_batch
-    file_digest=sha if _digests is None else _digests.digest
     selected=[(p,reason) for p,reason in sorted(candidates.items()) if p not in keep]
-    entries=[]
-    for start in range(0,len(selected),JOURNAL_BATCH):
-        batch=selected[start:start+JOURNAL_BATCH]
-        checksums=hash_batch([p for p,_ in batch],file_digest)
-        entries.extend(dict(path=p.relative_to(run).as_posix(),sha256=checksum,bytes=p.stat().st_size,reason=reason)
-                       for (p,reason),checksum in zip(batch,checksums,strict=True))
+    entries=[dict(path=p.relative_to(run).as_posix(),bytes=p.stat().st_size,reason=reason) for p,reason in selected]
+    if _hash_entries:
+        checksums=hash_batch([p for p,_ in selected],sha)
+        for entry,checksum in zip(entries,checksums,strict=True):entry['sha256']=checksum
     return dict(format='retention-plan/1.0.0',run=str(run),created=time.time(),
         generation=state.get('iteration',state.get('epoch',0)),entries=entries,
         reclaimable_bytes=sum(e['bytes'] for e in entries),
@@ -496,14 +494,23 @@ def plan(root,run,config=RETENTION,*,_digests=None):
 
 def prune(root,run,config=RETENTION,*,apply=False):
     from .retention_digests import PlanDigests,hash_batch
-    digests=PlanDigests()
-    began=time.perf_counter();root,run=owned(root,run);decision=plan(root,run,config,_digests=digests)
+    # In apply mode, hash as part of the journaled move rather than reading
+    # every candidate twice. Dry runs still return the complete digest plan.
+    began=time.perf_counter();root,run=owned(root,run);decision=plan(root,run,config,_hash_entries=not apply)
     planned=time.perf_counter()
     if not apply: return dict(decision,dry_run=True)
+    digests=PlanDigests()
     from .history import compact_history
     archived=[e for e in decision['entries'] if e['path'].endswith('/report.json') and e['reason'].startswith('archived')]
-    compact_history(run,((e['path'],e['sha256'],read(safe(run,run/e['path']))) for e in archived),
-                    config.get('history_reports',128))
+    def archived_reports():
+        for entry in archived:
+            source=safe(run,run/entry['path'])
+            data=source.read_bytes()
+            require(len(data)==entry['bytes'], 'Artifact changed during cleanup')
+            checksum=sha256(data).hexdigest()
+            require(entry.setdefault('sha256',checksum)==checksum, 'Artifact changed during cleanup')
+            yield entry['path'],checksum,json.loads(data.decode('utf-8-sig'))
+    compact_history(run,archived_reports(),config.get('history_reports',128))
     archived_at=time.perf_counter()
     if not decision['entries']:
         result=purge(root,run,config,automatic=True)
@@ -522,9 +529,9 @@ def prune(root,run,config=RETENTION,*,apply=False):
             source=safe(run,run/entry['path']);destination=safe(run,trash/entry['path'])
             require(not destination.exists(),'Quarantine would overwrite a file')
             paths.append((source,destination))
-        checksums=hash_batch([source for source,_ in paths],digests.digest)
-        for entry,(_,destination),checksum in zip(batch,paths,checksums,strict=True):
-            require(checksum==entry['sha256'],'Artifact changed during cleanup')
+        measured=hash_batch([source for source,_ in paths],digests.measure)
+        for entry,(_,destination),(checksum,size) in zip(batch,paths,measured,strict=True):
+            require(size==entry['bytes'] and checksum==entry.setdefault('sha256',checksum),'Artifact changed during cleanup')
             entry['quarantine']=destination.relative_to(run).as_posix();entry['moving']=True
         # All intents reach disk before the first rename. An interrupted batch
         # may contain moved and unmoved entries; purge/restore handle both.
@@ -539,7 +546,7 @@ def prune(root,run,config=RETENTION,*,apply=False):
         report=read(report_path);report.update(raw_records_pruned=True,promotion_eligible=False)
         report['retention_manifest']=manifest.relative_to(root).as_posix();write_json(report_path,report)
     moved=time.perf_counter();result=purge(root,run,config,automatic=True)
-    return dict(decision,manifest=str(manifest),**result,hash_reuse=digests.report(),timings=dict(plan_seconds=planned-began,
+    return dict(decision,manifest=str(manifest),**result,hash_reuse=digests.report(archived_bytes=sum(e['bytes'] for e in archived)),timings=dict(plan_seconds=planned-began,
         archive_move_seconds=moved-planned,history_seconds=archived_at-planned,purge_seconds=time.perf_counter()-moved))
 
 
@@ -585,14 +592,15 @@ def purge(root,run,config=RETENTION,*,automatic=False):
     from .retention_digests import hash_batch
     root,run=owned(root,run);require(not active(run,allow_owner=True),'Cannot purge an active run')
     state=read(run/'state.json') if (run/'state.json').exists() else {};generation=state.get('iteration',state.get('epoch',0))
-    count=0;rescued=0;deleted_bytes=0;pins=None
+    count=0;rescued=0;deleted_bytes=0;pins=None;completed=[]
     for manifest in sorted((run/'.retention').glob('cleanup-*.json')):
         data=read(manifest)
+        if settled(data):
+            completed.append((data['created'],manifest));continue
         if time.time()-data['created']<data['quarantine_hours']*3600: continue
         # Zero-hour mode is safe immediately AFTER a committed state. Delayed
         # quarantine keeps its previous-generation guard.
         if automatic and data['quarantine_hours'] and generation<=data['generation']: continue
-        if settled(data):continue
         if pins is None:pins=references(root,run)
         for start in range(0,len(data['entries']),JOURNAL_BATCH):
             actions=[];empty_paths=[];changed=False
@@ -643,15 +651,12 @@ def purge(root,run,config=RETENTION,*,automatic=False):
                 remove_empty_parents(run,parents[parent])
         if data.get('status')!='quarantined':
             data['status']='quarantined';write_json(manifest,data,compact=True)
+        if settled(data):completed.append((data['created'],manifest))
     # Bound the cleanup journal too; unsettled receipts remain recoverable.
-    # With only two completed receipts, no fresh dependency scan is necessary.
-    if pins is None:
-        if len(list((run/'.retention').glob('cleanup-*.json')))<=2:
-            return dict(permanently_deleted_files=0,permanently_deleted_bytes=0,rescued_dependencies=0)
-        pins=references(root,run)
-    completed=sorted((p for p in (run/'.retention').glob('cleanup-*.json') if settled(read(p)) and p.resolve() not in pins),
-                     key=lambda p:read(p)['created'])
-    for path in completed[:-2]:safe(run,path).unlink()
+    if len(completed)>2:
+        if pins is None:pins=references(root,run)
+        unpinned=[(created,path) for created,path in completed if path.resolve() not in pins]
+        for _,path in sorted(unpinned)[:-2]:safe(run,path).unlink()
     return dict(permanently_deleted_files=count,permanently_deleted_bytes=deleted_bytes,rescued_dependencies=rescued)
 
 
