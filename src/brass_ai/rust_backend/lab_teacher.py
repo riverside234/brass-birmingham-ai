@@ -233,14 +233,17 @@ class TeacherCollector:
     gated by B05/B07; this class is also the exact two-table qualification path.
     """
     def __init__(self, executable, core_source, bootstrap, service, calibration, *, lanes=2, cancel=None,
-                 model=None, history=(), inference=None, cores=(), core_plan=None):
+                 model=None, history=(), inference=None, cores=(), core_plan=None, row_workers=0):
         self.executable, self.core_source, self.bootstrap = executable,core_source,bootstrap
         self.service, self.calibration = service, calibration
         require(type(lanes) is int and 1 <= lanes <= 256,'Invalid teacher lanes')
+        require(type(row_workers) is int and 0 <= row_workers <= 16,'Invalid teacher row workers')
         self.lanes = lanes;self.cancel = cancel or threading.Event()
         self.model,self.history = model,history
         self.inference,self.cores = inference,tuple(cores)
         self.core_plan = core_plan
+        # Helper processes for labelled-row validation and encoding (fixed-count CPU tables only).
+        self.row_workers = row_workers
         self.verifier = None
         self.failures = []
         self.finalization = {}
@@ -255,7 +258,12 @@ class TeacherCollector:
         from .lab_teacher_finalization import TableLogitBatcher, TurnVerifier
         from .lab_cpu_runtime import count_search_limits
         from brass_ai.recovery.collector_runtime import teacher_job_budget
-        self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel,search_limits=count_search_limits(self.inference))
+        row_pool = None
+        if self.row_workers and self.inference is not None and self.inference['budget']['mode'] == 'count':
+            from .lab_teacher_rows import shared
+            row_pool = shared(self.row_workers)
+        self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel,search_limits=count_search_limits(self.inference),
+                                     row_pool=row_pool)
         c = self.calibration
         require(c['contract'] == CONTRACT and c['source'] == producer and c['core_source'] == self.core_source
                 and c['model_id'] == jobs[0]['expected']['model_id'] and c['export_hash'] == jobs[0]['expected']['export_hash']
@@ -393,6 +401,8 @@ class TeacherCollector:
             if batcher is not None:
                 self.finalization = dict(batcher.metrics, last_search_seconds=search_ended-began,
                                          tables_published_seconds=time.monotonic()-began)
+                if row_pool is not None:
+                    self.finalization['row_preparation'] = self.verifier.rows.report()
             return results
         finally:
             close_errors = []

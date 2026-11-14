@@ -597,6 +597,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             config['rehearsal_sampling'],seed=config['seed'],iteration=iteration,device=device,
                             workers=config['audit_workers'],executor=readers))
                     ppo_began=time.monotonic();rehearsal_seconds=ppo_began-sampling_finished
+                    # The value phase opens last iteration's replay age; read it ahead while PPO runs.
+                    if phases is not None and hasattr(phases,'prefetch'):phases.prefetch()
                     update=ppo_update(model,optimizer,all_games,behavior,config['update'],
                         profile=directory/'profile-ppo' if config['profile_steps'] else None,
                         profile_steps=config['profile_steps'],

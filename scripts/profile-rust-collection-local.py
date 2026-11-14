@@ -140,7 +140,7 @@ def run_arm(args, output, binaries, common, *, candidate):
     cores = CorePlan(())
     teacher = TeacherCollector(worker,core,[str(args.bootstrap)],service,count_calibration(core,teachers[0]),
                                lanes=args.teacher_lanes,model=model,history=[dict(generation=10,model_id=model_id(model))],
-                               inference=inference,core_plan=cores)
+                               inference=inference,core_plan=cores,row_workers=args.row_workers)
     table_cache = TableCache(output,output/'teacher',teachers)
     use_candidate = nullcontext() if candidate else old_teacher_check(lab_teacher_finalization)
     accepted = []
@@ -183,13 +183,13 @@ def main():
     for arg in ('before','after','bootstrap','runtime','out'):
         parser.add_argument('--'+arg,type=Path,required=True)
     for key, default in (('ordinary-games',12),('teacher-games',4),('ordinary-lanes',3),('teacher-lanes',2),
-                         ('cpu-slots',8),('readers',2),('full',64),('fast',24),('repetitions',2)):
+                         ('cpu-slots',8),('readers',2),('full',64),('fast',24),('repetitions',2),('row-workers',0)):
         parser.add_argument('--'+key,type=int,default=default)
     args=parser.parse_args()
     for key in ('before','after','bootstrap','runtime','out'):
         setattr(args,key,getattr(args,key).resolve())
     if not 0 < args.teacher_lanes <= args.teacher_games <= 32 or min(
-            args.ordinary_games,args.ordinary_lanes,args.cpu_slots,args.readers,args.repetitions) <= 0:
+            args.ordinary_games,args.ordinary_lanes,args.cpu_slots,args.readers,args.repetitions) <= 0 or args.row_workers < 0:
         parser.error('Use positive job, lane and repetition counts, with at most 32 fixture tables')
     args.out.mkdir(parents=True,exist_ok=False)
     import torch

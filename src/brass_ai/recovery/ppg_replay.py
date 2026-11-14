@@ -407,6 +407,28 @@ class Buffer:
             packed_generations=sum('packing' in x for x in self.pending),
             scope=f'{self.window} trainable ages; pre-commit disk peak includes unexpired old age and new-generation packing scratch. Mmap features; bounded minibatch transfers; no historical PPO admission.')
 
+    def prefetch(self):
+        """Ask the kernel to read the committed ages the next value phase opens.
+
+        A page-cache hint only (Linux posix_fadvise), issued from a background
+        thread while PPO runs. Opening an age reads small columns across every
+        row of its critic file, so an evicted file otherwise costs a full disk
+        read (about 10 s for 1.6 GB) at the start of the value phase.
+        """
+        import os,threading
+        if not hasattr(os,'posix_fadvise') or self.window<2 or not self.receipts:return None
+        paths=[self.path(r['generation'],ext) for r in self.receipts[-(self.window-1):] for ext in r['files']
+               if not ext.endswith('.json') and ext not in ('actions.npy','policy-actions.npy')]
+        def warm():
+            for path in paths:
+                try:
+                    with open(path,'rb') as stream:os.posix_fadvise(stream.fileno(),0,0,os.POSIX_FADV_WILLNEED)
+                except OSError:
+                    continue
+        self.prefetching=threading.Thread(target=warm,name='ppg-prefetch',daemon=True)
+        self.prefetching.start()
+        return len(paths)
+
     @contextmanager
     def datasets(self,device,*,policy=True):
         require(self.pending is not None,'No staged PPG cache')

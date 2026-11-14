@@ -206,6 +206,10 @@ class ShadowCollector:
                 if block is not None and block['teacher']=='cpu-ort':
                     from .lab_cpu_runtime import teacher_plan,core_allocation
                     from .lab_teacher import calibrate_cpu,count_calibration
+                    from .lab_teacher_rows import WORKERS as ROW_WORKERS,shared as row_pool
+                    # Labelled-row validation runs in helper processes; start them while the tables are planned.
+                    row_workers=ROW_WORKERS if counted else 0
+                    if row_workers:row_pool(row_workers)
                     lanes=min(len(missing),service.cpu.capacity,block['workers'])
                     plan=teacher_plan(self.root,build,service,missing,block)
                     cores=core_allocation(lanes) if block['pinning']=='one-lane-per-cpu' else []
@@ -217,7 +221,8 @@ class ShadowCollector:
                     overlap=overlap and counted
                     if overlap:core_plan=CorePlan(cores)
                     collector=TeacherCollector(plan['binary'],plan['core_source'],bootstrap,service,calibration,
-                        lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores,core_plan=core_plan)
+                        lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores,core_plan=core_plan,
+                        row_workers=row_workers)
                     cpu_metrics=dict(receipt=plan['receipt'],budget=plan['inference']['budget'],
                         exported_bundles=plan['exported_bundles'],lanes=lanes,cores=len(cores),pinning=block['pinning'])
                 else:

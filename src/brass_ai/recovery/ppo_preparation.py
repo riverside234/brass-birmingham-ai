@@ -4,6 +4,11 @@ Input arrays are copied once to a private mapped file, never to each worker.
 Only small row descriptors cross the task queue. Output files are bounded by
 the prefetch width and removed after consumption. No model, CUDA tensor or RNG
 enters a worker. Sampling and gradient accumulation stay in the main process.
+
+On Linux the private files live in RAM-backed /dev/shm when it has room. A PPO
+pass writes about 37 GB through them (staged inputs plus padded batches), and a
+disk-backed page cache under writeback made consuming each batch wait for the
+disk. The bytes, order and checks are the same in either place.
 """
 from collections import deque
 from contextlib import contextmanager,ExitStack
@@ -12,6 +17,7 @@ import multiprocessing
 from multiprocessing.shared_memory import SharedMemory
 import os
 from pathlib import Path
+import shutil
 import tempfile
 import time
 
@@ -42,6 +48,69 @@ def write_array(stream,array):
 def view(buffer,spec):
     offset,shape,dtype=spec
     return np.ndarray(shape,dtype=dtype,buffer=buffer,offset=offset)
+
+
+RAM_DIRECTORY=Path('/dev/shm')
+# A PPO pass stages about 8 GB of inputs; keep generous headroom in RAM and tmpfs.
+RAM_MIN_FREE=32*1024**3
+PREFIX='brass-ppo-'
+
+
+def available_memory():
+    try:
+        with open('/proc/meminfo') as stream:
+            for line in stream:
+                if line.startswith('MemAvailable:'):return int(line.split()[1])*1024
+    except (OSError,ValueError,IndexError):pass
+    return None
+
+
+def reap_stale(directory):
+    """Remove transport folders left by killed trainer processes of this user."""
+    for path in directory.glob(PREFIX+'*'):
+        try:
+            pid=int(path.name[len(PREFIX):].split('-',1)[0])
+            if pid==os.getpid() or path.stat().st_uid!=os.getuid():continue
+            os.kill(pid,0)
+        except ProcessLookupError:
+            shutil.rmtree(path,ignore_errors=True)
+        except (ValueError,IndexError,OSError):
+            continue
+
+
+def roomy(free,memory):
+    """Use RAM only with ample free tmpfs space and available memory."""
+    return free is not None and memory is not None and free>=RAM_MIN_FREE and memory>=RAM_MIN_FREE
+
+
+def transport_directory(fallback):
+    """RAM-backed tmpfs when Linux offers it with room to spare, else the given folder."""
+    # getuid/kill(pid, 0) are POSIX-only; on Windows kill(pid, 0) would send Ctrl+C.
+    if os.name!='posix' or not hasattr(os,'getuid') or not RAM_DIRECTORY.is_dir() or not os.access(RAM_DIRECTORY,os.W_OK|os.X_OK):
+        return Path(fallback),'disk'
+    try:
+        reap_stale(RAM_DIRECTORY)
+        free=shutil.disk_usage(RAM_DIRECTORY).free
+    except OSError:
+        return Path(fallback),'disk'
+    return (RAM_DIRECTORY,'ram') if roomy(free,available_memory()) else (Path(fallback),'disk')
+
+
+_TORCH_DTYPES={}
+
+
+def owned_tensor(array,*,pinned):
+    """One copy out of the transport buffer; CUDA batches copy straight into pinned memory.
+
+    The pinned block returns to the caching host allocator only after its
+    asynchronous transfer has completed, as with Tensor.pin_memory().
+    """
+    if not pinned:return torch.from_numpy(array.copy())
+    dtype=_TORCH_DTYPES.get(array.dtype)
+    if dtype is None:dtype=_TORCH_DTYPES.setdefault(array.dtype,torch.from_numpy(np.empty(0,dtype=array.dtype)).dtype)
+    result=torch.empty(array.shape,dtype=dtype,pin_memory=True)
+    result.numpy()[...]=array
+    return result
 
 
 def prepare(path,size,rows,indices,output):
@@ -139,7 +208,8 @@ class Preparation:
 
     def __enter__(self):
         # TemporaryDirectory owns this new path. Never place replay or checkpoints inside it.
-        self.temp=tempfile.TemporaryDirectory(prefix='brass-ppo-',dir=self.directory)
+        directory,self.metrics['transport']=transport_directory(self.directory)
+        self.temp=tempfile.TemporaryDirectory(prefix=f'{PREFIX}{os.getpid()}-',dir=directory)
         self.path=Path(self.temp.name);self.input_path=self.path/'inputs.bin'
         self.stream=self.input_path.open('w+b',buffering=1024*1024)
         return self
@@ -230,8 +300,8 @@ class Preparation:
                 mapped=self.shared[output].buf if sources is not None else np.memmap(record['path'],dtype=np.uint8,mode='r')
                 try:
                     # Own buffers before releasing the file; CUDA pins are independent snapshots.
-                    host=tuple(torch.from_numpy(view(mapped,s).copy()) for s in record['layout'])
-                    if torch.device(dataset.device).type=='cuda':host=tuple(t.pin_memory() for t in host)
+                    pinned=torch.device(dataset.device).type=='cuda'
+                    host=tuple(owned_tensor(view(mapped,s),pinned=pinned) for s in record['layout'])
                     tensors=tuple(t.to(dataset.device,non_blocking=True) for t in host)
                 finally:
                     if sources is not None:self.free_shared.append(output)
@@ -262,4 +332,5 @@ class Preparation:
         return dict(self.metrics,worker_pids=sorted(self.pids),
             scope='Ordered CPU-only process collation; RNG and sampling in main process. '
                   'PPO uses private mapped staging; dense PPG reads sealed mmaps directly and uses at most one shared result slot per worker. Owned files/shared buffers are released before return. '
+                  'transport is ram (Linux /dev/shm) or disk (the given folder). '
                   'peak_output_bytes is a conservative bound, not process RSS.')

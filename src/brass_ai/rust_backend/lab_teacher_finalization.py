@@ -118,7 +118,7 @@ class TableLogitBatcher:
 
 
 class TurnVerifier:
-    def __init__(self, model, history, jobs, cancel, *, diagnostic=False, search_limits=None):
+    def __init__(self, model, history, jobs, cancel, *, diagnostic=False, search_limits=None, row_pool=None):
         self.model, self.history, self.cancel = model, copy.deepcopy(history), cancel
         self.search_limits = search_limits  # Fixed-count searches may run past the job's own allowance.
         self.model_id = model_id(model)
@@ -133,6 +133,11 @@ class TurnVerifier:
         self.sources = teacher_sources(jobs) if not diagnostic else set()
         self.encoders = threading.local()
         self.handoff_model_checked = False
+        # Schema validation and encoding of labelled rows may run in helper processes.
+        self.rows = None
+        if row_pool is not None and not diagnostic:
+            from .lab_teacher_rows import RowSession
+            self.rows = RowSession(row_pool, self.history, self.sources, cancel)
 
     def _binding(self):
         # No GPU synchronization or weight copy. The collection is exclusive
@@ -208,10 +213,16 @@ class TurnVerifier:
         else:
             require(all(not row.get('diagnostic',False) for row in frozen), 'Calibration probes cannot enter the teacher buffer')
             self._check_model()
-            from brass_ai.recovery.encoding import PreparedEncoder
-            if not hasattr(self.encoders,'value'):self.encoders.value = PreparedEncoder()
-            accepted,rejected = prepare_rows(frozen, expected=job['expected'], history=self.history,
-                                             admitted_sources=self.sources, encoder=self.encoders.value)
+            # Helper processes prepare identical rows; if they died, this collection continues in process.
+            rows = getattr(self, 'rows', None)
+            prepared_rows = rows.prepare(identity, job['expected'], frozen) if rows is not None else None
+            if prepared_rows is not None:
+                accepted,rejected = prepared_rows
+            else:
+                from brass_ai.recovery.encoding import PreparedEncoder
+                if not hasattr(self.encoders,'value'):self.encoders.value = PreparedEncoder()
+                accepted,rejected = prepare_rows(frozen, expected=job['expected'], history=self.history,
+                                                 admitted_sources=self.sources, encoder=self.encoders.value)
             prepared = time.monotonic() if sampled else None
             if fast or revised:
                 # A g1491 table labels every turn, four times as many as before, and its

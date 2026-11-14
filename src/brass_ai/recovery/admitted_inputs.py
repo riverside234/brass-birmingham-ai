@@ -92,11 +92,19 @@ class Admission:
     canonical: tuple | None = None
 
 
+_SCALARS=frozenset((str,int,float,bool,type(None)))
+_FROZEN=frozenset((FrozenDict,FrozenList,OwnedDict,OwnedList))
+
+
 def _freeze(value):
-    if type(value) in (FrozenDict,FrozenList,OwnedDict,OwnedList):return value
-    if type(value) is dict:return FrozenDict((k,_freeze(v)) for k,v in value.items())
-    if type(value) is list:return FrozenList(_freeze(v) for v in value)
-    if type(value) in (str,int,float,bool,type(None)):return value
+    # Scalar leaves and all-scalar lists (logits, counts, vectors) are copied
+    # without a call per element; the frozen result is the same structure.
+    kind=type(value)
+    if kind is dict:return FrozenDict((k,v if type(v) in _SCALARS else _freeze(v)) for k,v in value.items())
+    if kind is list:
+        if set(map(type,value))<=_SCALARS:return FrozenList(value)
+        return FrozenList(v if type(v) in _SCALARS else _freeze(v) for v in value)
+    if kind in _FROZEN or kind in _SCALARS:return value
     # Called only after wire admission; never normalize custom wire types.
     raise TypeError('Only admitted JSON containers can be frozen')
 

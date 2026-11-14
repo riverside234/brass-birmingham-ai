@@ -191,9 +191,20 @@ def admit_rows(rows, *, model, expected, history, admitted_sources):
 
 def prepare_rows(rows, *, expected, history, admitted_sources, encoder):
     """Independent row/target/schema/feature admission, without model mutation."""
+    accepted, rejected = prepare_indexed(rows, expected=expected, history=history,
+                                         admitted_sources=admitted_sources, encoder=encoder)
+    return [value for _, value in accepted], rejected
+
+
+def prepare_indexed(rows, *, expected, history, admitted_sources, encoder, private=False):
+    """prepare_rows with each accepted row's input position.
+
+    ``private`` rows were decoded by this caller alone (a helper process), so
+    nothing else can alias them and the defensive copy is skipped.
+    """
     accepted = []; seen = set(); rejected = dict(no_evidence=0, forced=0, cancelled=0)
-    for raw in rows:
-        row = copy.deepcopy(raw)
+    for index, raw in enumerate(rows):
+        row = raw if private else copy.deepcopy(raw)
         target = validate_row(row, expected, history, admitted_sources)
         if target is None:
             reason = 'cancelled' if row['teacher']['cancelled'] else 'forced' if len(row['choices']) == 1 else 'no_evidence'
@@ -201,7 +212,7 @@ def prepare_rows(rows, *, expected, history, admitted_sources, encoder):
             continue
         value = LabelRow(row, encoder.encode(row['view'], row['choices'], [0.] * 4, [0.] * 8))
         require(value.identity not in seen, 'Duplicate teacher decision')
-        seen.add(value.identity); accepted.append(value)
+        seen.add(value.identity); accepted.append((index, value))
     return accepted, rejected
 
 

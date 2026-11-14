@@ -608,6 +608,11 @@ class TrainingPhases:
                 if dcpg_config.active(self.options['value_phase']) else
                 ppg_phasic.rate_receipt(ppo_rate,self.state['generation']+1,'ppo-last-applied',ppo_steps)) if ppo_steps else None)
 
+    def prefetch(self):
+        """Warm the page cache for the committed replay ages the next value phase opens."""
+        buffer=getattr(self,'buffer',None)
+        return buffer.prefetch() if hasattr(buffer,'prefetch') else None
+
     def floor_options(self):
         """The value-phase options with the search-head schedule's beta floor, if one applies."""
         floor=getattr(self,'beta_floor',None)

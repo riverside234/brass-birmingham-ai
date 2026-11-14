@@ -24,6 +24,37 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/profile-rust
 
 ## What the current measurements show
 
+### Lab results through g2280
+
+The g2280 export carries compact summaries for iterations 2150–2277 plus full reports for 2278 and 2279. The trainer restarted at 2150, 2240 and 2250 (CPU preparation worker PIDs). [g2280 reports](../results/joint7-v11-2-g1190-restart-3-g2280-20261114T181904011113Z).
+
+**PPO.** Every iteration runs 46 optimizer steps, and the update itself takes 20–25 s. The variable part is `cpu_preparation.transfer_seconds`, the main-thread consumption of prepared batches.
+
+| PPO transfer | Iterations | PPO time |
+| --- | --- | ---: |
+| 3.2–4.3 s | 2150–2164, 2241–2246, 2263–2264, roughly a third of 2165–2240 | 33–47 s |
+| 20–33 s | most iterations since 2165, before and after the revision | 55–79 s |
+| 185.5, 189.7, 232.0 s | 2274, 2269, 2273 | 241.9, 240.7, 276.9 s |
+
+Each pass staged 8.3 GB of inputs and wrote 28.7 GB of padded batches as files under `artifacts/` on the lab's data disk. Each consumed batch was then read back, copied, pinned and unlinked. Under writeback, unlinking a file waits for its pages to reach the disk, so consuming 28.7 GB ran at disk speed: about 1 GB/s typically and 120–155 MB/s in the three outliers. Staging doubled from about 9 s to 17–23 s in the same way. The pattern started at 2165, before the collection revision, and the revision didn't change this path.
+
+The fix keeps these transport files in RAM-backed `/dev/shm` when tmpfs and available memory both have at least 32 GiB free, and in the previous folder otherwise. It removes the folders of dead trainers, and copies each batch once straight into pinned memory. The bytes, order and checks are unchanged. The expected PPO time is about 33–37 s with no disk-speed outliers.
+
+**Collection.** Ordinary collection improved: the ordinary pool took 67.3 and 70.9 s at 2278/2279, against 87.2 and 94.6 s at 2238/2239. Replay preparation CPU fell from about 470 to 156–161 worker-seconds. Teacher collection did not: its wall time stayed about 107 s, so ordinary collection plus the teacher wait is still about 107 s (106.0/107.1 s at 2238/2239, 106.9/107.9 s at 2278/2279).
+
+| Per teacher table, median | 2238/2239 | 2278/2279 |
+| --- | ---: | ---: |
+| Native search | 64–66 s | 38 s |
+| ONNX forward | 27–28 s | 15 s |
+| After search | 23–28 s | 58–61 s |
+| Table | 89–92 s | 97–99 s |
+
+After the native speedup, the tables wait on Python instead of searching. Individual long-search label turns waited 26–36 s after their search, almost all of them 10–80 s into the table, while ordinary collection was also running in the trainer process. A labelled turn costs about 40–100 ms of trainer CPU: row validation, the JSON-schema wire check and feature encoding, plus freezing. With 36 tables those checks hold one interpreter lock for about 55–65 s per iteration, on top of ordinary coordination and table publication.
+
+The fix runs label-row validation, schema checks and encoding for streamed fixed-count tables in four persistent spawned helper processes. Each table always goes to the same helper, so its validation cache stays warm. The trainer keeps its frozen rows, turn, identity and lineage checks, the batched logit parity check and publication. Freezing also copies scalar leaves and all-scalar lists without a call per element, about half the cost. On a local fixture table the helper path produced byte-identical encoded rows, and trainer-side work per labelled turn roughly halved, with the encoding off the interpreter lock entirely. With the lock free, tables should end close to their 38–40 s native search, and the ordinary pool can claim their released CPUs. The combined lab gain is still to be measured.
+
+**PPG.** Matched by optimizer steps, the PPG value phase is not slower: training takes 3.5–4 s at 0 steps, about 8 s at 16 and about 15 s at 58–59, as before the revision. The search-value phase takes 3.2–5.4 s, against 5.2–6.4 s at 2238/2239. The higher recent values come from more scheduled steps (59 at both 2278 and 2279) and from `replay_open_and_index_seconds` spikes. These spikes take 9–15 s instead of about 1 s and hit about one iteration in four both before and after the revision, including 2277–2279. Opening the previous age reads small `role`, `table` and `game` columns across every row of its 1.6 GB `critic.npy`. When that file has left the page cache, this becomes a full disk read. The value phase now asks the kernel to read that age ahead (`posix_fadvise` WILLNEED) from a background thread while PPO runs.
+
 ### Lab results through g2250
 
 The g2250 export includes one ordinary iteration and one with four held-outs and periodic maintenance. All 320 ordinary shards in each iteration used publisher-side preparation. Preparation worker CPU fell from roughly 471–473 seconds in the g2240 exports to 156–157 seconds. Combined collection took 90.82 and 108.40 seconds, compared with 107.55 and 108.67 seconds at g2240. The cotton and teacher sampling recipes also changed between exports. [g2240 reports](../results/joint7-v11-2-g1190-restart-3-g2240-20261114T060652073419Z), [g2250 reports](../results/joint7-v11-2-g1190-restart-3-g2250-20261114T075328979389Z).
