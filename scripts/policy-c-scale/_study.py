@@ -353,7 +353,7 @@ def compare_roots(sampler, rows, probes, targets, compare, scales, lanes):
     return valid, attempts
 
 
-def main(kind, default_scales, compare, summarize, *, candidate_n):
+def main(kind, default_scales, compare, summarize, *, candidate_n, default_targets=TARGETS):
     parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study')
     parser.add_argument('--run', default=RUN)
     parser.add_argument('--generation', type=int, default=int(os.getenv('GEN', str(DEFAULT_GENERATION))),
@@ -363,10 +363,10 @@ def main(kind, default_scales, compare, summarize, *, candidate_n):
     parser.add_argument('--lanes', type=int, default=int(os.getenv('LANES', str(DEFAULT_LANES))),
                         help=f'Concurrent CPU workers (default: {DEFAULT_LANES} or LANES)')
     parser.add_argument('--ref-scale', type=float, choices=(0.1, 1.0), default=float(os.getenv('REF_SCALE', '0.1')))
-    parser.add_argument('--normal-positions', type=int, default=TARGETS['normal'],
-                        help=f'Normal position target (default: {TARGETS["normal"]})')
-    parser.add_argument('--cotton-positions', type=int, default=TARGETS['cotton'],
-                        help=f'Cotton position target (default: {TARGETS["cotton"]})')
+    parser.add_argument('--normal-positions', type=int, default=default_targets['normal'],
+                        help=f'Normal position target (default: {default_targets["normal"]})')
+    parser.add_argument('--cotton-positions', type=int, default=default_targets['cotton'],
+                        help=f'Cotton position target (default: {default_targets["cotton"]})')
     parser.add_argument('--limit', type=int, default=os.getenv('LIMIT'),
                         help='Cap the combined normal/cotton position targets, or 0 for all available positions')
     parser.add_argument('--scales', type=float, nargs='+', default=default_scales)
