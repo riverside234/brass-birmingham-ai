@@ -7,7 +7,7 @@ import numpy as np
 
 from _study import REF_N, SHORT_N, completed_q, main
 
-SCALES = (0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+SCALES = (0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 HEADER = 'short_scale  match_long_move  differs_from_policy  mean_Q_gap  miss_Q_gap  Q_supported_misses'
 
 
@@ -55,4 +55,5 @@ def summarize(valid, scales):
 
 
 if __name__ == '__main__':
-    main('short', SCALES, compare, summarize, candidate_n=SHORT_N)
+    main('short', SCALES, compare, summarize, candidate_n=SHORT_N,
+         default_targets={'normal': 400, 'cotton': 100})

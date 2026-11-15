@@ -111,15 +111,15 @@ def interleave(groups):
     return (case for pair in zip_longest(*groups) for case in pair if case is not None)
 
 
-def sample_targets(rows, limit):
+def sample_targets(rows, limit, targets=TARGETS):
     if limit == 0:
         return {group: len(positions) for group, positions in rows.items()}
-    if limit is None or limit >= sum(TARGETS.values()):
-        return TARGETS.copy()
+    if limit is None or limit >= sum(targets.values()):
+        return targets.copy()
     # An explicit small smoke run sees both groups before either quota fills.
-    groups = ([group] * target for group, target in TARGETS.items())
+    groups = ([group] * target for group, target in targets.items())
     selected = Counter(islice(interleave(groups), limit))
-    return {group: selected[group] for group in TARGETS}
+    return {group: selected[group] for group in targets}
 
 
 def prepare_origins(sampler, rows):
@@ -327,7 +327,7 @@ def compare_roots(sampler, rows, probes, targets, compare, scales, lanes):
     return valid, attempts
 
 
-def main(kind, default_scales, compare, summarize, *, candidate_n):
+def main(kind, default_scales, compare, summarize, *, candidate_n, default_targets=TARGETS):
     parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study')
     parser.add_argument('--run', default=RUN)
     parser.add_argument('--generation', type=int, default=int(os.getenv('GEN', str(DEFAULT_GENERATION))),
@@ -337,7 +337,8 @@ def main(kind, default_scales, compare, summarize, *, candidate_n):
                         help=f'Concurrent CPU workers (default: {DEFAULT_LANES} or LANES)')
     parser.add_argument('--ref-scale', type=float, choices=(0.1, 1.0), default=float(os.getenv('REF_SCALE', '0.1')))
     parser.add_argument('--limit', type=int, default=os.getenv('LIMIT'),
-                        help='Cap the default 200 normal + 50 cotton positions, or 0 for all')
+                        help=f'Cap the default {default_targets["normal"]} normal + '
+                             f'{default_targets["cotton"]} cotton positions, or 0 for all')
     parser.add_argument('--scales', type=float, nargs='+', default=default_scales)
     parser.add_argument('--sampler', default=os.getenv('BRASS_NATIVE_WORKER'))
     parser.add_argument('--toolchain', default='1.99.1')
@@ -366,7 +367,7 @@ def main(kind, default_scales, compare, summarize, *, candidate_n):
     saved = raw['training']['search_value']
     job = diagnostic_job(state['signature']['config'], state, entry, saved, raw['training'].get('utility_calibration'))
     rows = source_roots(run, incoming, saved, job['expected']['reward_id'])
-    targets = sample_targets(rows, args.limit)
+    targets = sample_targets(rows, args.limit, default_targets)
     build = lab_cpu_runtime.resolve(ROOT)
     core = build['teacher_execution_core']
     lab_cpu_runtime.raise_open_file_limit()
