@@ -39,8 +39,10 @@ namespace BrassLegacyAI
                 row["kind"] = "native"; row["strategy"] = model.Key; row["backend"] = model.Backend;
                 row["profile"] = model.Profile("neutral"); row["nn_focus"] = "neutral";
                 row["model_id"] = model.Model; row["export_sha256"] = model.Export;
-                row["nn_search_k"] = searchK(player); row["nn_temperature"] = temperature(player);
-                NativeGameState.SearchK(row); NativeGameState.Temperature(row);
+                double openingTemperature = temperature(player);
+                if (!NativePackage.ValidTemperature(openingTemperature)) throw new InvalidDataException("Unsupported NN temperature.");
+                row["nn_search_k"] = searchK(player); row["nn_temperature"] = openingTemperature;
+                NativeGameState.SearchK(row);
             }
             state["format"] = Format; state["runtime"] = Runtime; state["family"] = "per-seat";
             state["assignment_sha256"] = AssignmentHash(state);

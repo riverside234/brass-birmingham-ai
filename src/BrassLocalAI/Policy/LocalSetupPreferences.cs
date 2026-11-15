@@ -55,7 +55,7 @@ namespace BrassLegacyAI
                 var model = value["nn_model"];
                 if(model!=null && (model.Type!=JTokenType.String || !Native.NativeModel.ValidChoice((string)model)))return null;
                 if (temperature != null && ((temperature.Type != JTokenType.Integer && temperature.Type != JTokenType.Float) ||
-                    !Native.NativePackage.ValidTemperature((double)temperature))) return null;
+                    !Native.NativePackage.ValidTemperature(OpeningTemperature(temperature)))) return null;
                 if ((family != "v4" && family != "nn") || count < 2 || count > 4 || seats == null ||
                     seats.Count < count || seats.Count > 4) return null;
                 var result = new LocalSetupPreferences {
@@ -81,7 +81,7 @@ namespace BrassLegacyAI
                     if ((seatFamily != "v4" && seatFamily != "nn") || !Native.NativeModel.ValidChoice(seatModel) ||
                         (version == 3 && (seatK == null || seatT == null)) ||
                         (seatK != null && (seatK.Type != JTokenType.Integer || !Native.NativePackage.ValidSearchK((int)seatK))) ||
-                        (seatT != null && ((seatT.Type != JTokenType.Float && seatT.Type != JTokenType.Integer) || !Native.NativePackage.ValidTemperature((double)seatT)))) return null;
+                        (seatT != null && ((seatT.Type != JTokenType.Float && seatT.Type != JTokenType.Integer) || !Native.NativePackage.ValidTemperature(OpeningTemperature(seatT))))) return null;
                     result.Seats[i] = new Seat { Human = (bool)seat["human"], Style = (string)seat["style"], Difficulty = (string)seat["difficulty"],
                         Family = seatFamily == "nn" ? AiFamily.AlphaTest : AiFamily.V4, NeuralChoice = seatModel,
                         SearchK = seatK == null || (int)seatK == 32 ? 16 : (int)seatK, Temperature = OpeningTemperature(seatT),
@@ -98,8 +98,7 @@ namespace BrassLegacyAI
 
         static double OpeningTemperature(JToken token)
         {
-            double temperature = (double?)token ?? 1.0;
-            return temperature == Native.NativePackage.LegacyOpeningTemperature ? 1.0 : temperature;
+            return Native.NativePackage.UpgradeOpeningTemperature((double?)token ?? 1.0);
         }
     }
 }

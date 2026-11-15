@@ -24,10 +24,10 @@ import time
 import numpy as np
 import torch
 
-from brass_ai.learning.batching import _pack_admitted
+from brass_ai.learning.batching import collate
 from brass_ai.learning.contracts import require,SOURCE_ROOT
 from brass_ai.learning.features import Encoded
-from .batch_cache import InputAudit, array_digest
+from .batch_cache import array_digest
 from .replay_binding import checked_encoded
 
 
@@ -113,53 +113,17 @@ def owned_tensor(array,*,pinned):
     return result
 
 
-def batch_layout(rows):
-    """Small descriptors only; arrays are packed directly into a reusable slot."""
-    n=len(rows);state,actions,seats,_,_=rows[0]
-    width=max(r[1][1][0] for r in rows)
-    shapes=((n,), (n,*state[1]), (n,width,actions[1][1]), (n,width), (n,*seats[1]), (n,width))
-    dtypes=('<i8',state[2],'<f4','|b1',seats[2],'<f4')
-    layout=[];offset=0
-    for shape,dtype in zip(shapes,dtypes):
-        offset=(offset+63)//64*64
-        layout.append((offset,shape,dtype));offset+=int(np.prod(shape))*np.dtype(dtype).itemsize
-    return layout,offset
-
-
-def pack_shared(mapped,rows,indices,output):
-    shared=SharedMemory(name=output['shared'])
-    try:
-        arrays=[view(shared.buf,spec) for spec in output['layout']]
-        ix,states,actions,mask,seats,mixture=arrays
-        ix[:]=indices
-        for i,(state,action,mapping,q,_) in enumerate(rows):
-            a=view(mapped,action);count=len(a)
-            states[i]=view(mapped,state);seats[i]=view(mapped,mapping)
-            actions[i,:count]=a;actions[i,count:]=0
-            mask[i,:count]=True;mask[i,count:]=False
-            mixture[i]=0
-            if q is not None:mixture[i,:count]=view(mapped,q)
-        return dict(output)
-    finally:
-        shared.close()
-
-
 def prepare(path,size,rows,indices,output):
     """Pure deterministic worker; NumPy mmap avoids multi-GB queue pickles."""
     began=time.perf_counter();cpu=time.process_time()
     mapped=np.memmap(path,dtype=np.uint8,mode='r',shape=(size,))
     encoded=[];distributions=[]
     try:
-        if isinstance(output,dict):
-            result=pack_shared(mapped,rows,indices,output)
-            return dict(result,seconds=time.perf_counter()-began,cpu_seconds=time.process_time()-cpu,pid=os.getpid())
         for state,actions,seats,q,version in rows:
             a=view(mapped,actions)
-            encoded.append(Encoded(view(mapped,state),a,view(mapped,seats),range(len(a)),version))
+            encoded.append(Encoded(view(mapped,state),a,view(mapped,seats),tuple(range(len(a))),version))
             distributions.append(view(mapped,q) if q is not None else None)
-        # These exact private bytes were admitted once by _rows before writing.
-        # Rechecking selectors here scanned the same actions in every PPO pass.
-        tensors=_pack_admitted(encoded)
+        tensors=collate(encoded)
         mixture=np.zeros(tensors[2].shape,dtype=np.float32)
         for i,q in enumerate(distributions):
             if q is not None:mixture[i,:len(q)]=q
@@ -264,38 +228,32 @@ class Preparation:
             self.shared.clear();self.free_shared.clear()
             self.stream.close();self.cache.clear();self.temp.cleanup()
 
-    def _shared_slot(self,count,*,size=None):
+    def _shared_slot(self,count):
         from .value_buffer import row_dtype
         # The complete row contains more fields than the transport, plus an
         # index/mask/mixture. The worker checks every write against this bound.
-        if size is None:size=count*(row_dtype().itemsize+64)
+        size=count*(row_dtype().itemsize+64)
         if self.free_shared:
             name=self.free_shared.pop();shared=self.shared[name]
             if shared.size>=size:return name
             shared.close();shared.unlink();del self.shared[name]
-        require(len(self.shared)<self.pool.workers,'Shared prefetch exceeds worker bound')
+        require(len(self.shared)<self.pool.workers,'PPG shared prefetch exceeds worker bound')
         shared=SharedMemory(create=True,size=size);self.shared[shared.name]=shared
         return shared.name
 
     def _rows(self,dataset,part,exploration,value_only):
         began=time.perf_counter();result=[]
-        if not hasattr(self,'input_audit'):self.input_audit=InputAudit()
         cotton=getattr(dataset,'cotton_rows',())
         for index,row in zip(part,dataset._batch_rows(part,value_only)):
             q=dataset.q[index] if not value_only and (exploration or index in cotton) else None
             arrays=(row.state,row.actions,row.stable_to_relative)
             if q is not None and q.flags.writeable:q.setflags(write=False)
-            # Sealed rows are bytes-backed and immutable and were fully admitted
-            # (shapes, finite arrays, action selectors) when sealed. A value-only
-            # row is a view of its sealed source row, so it inherits both. Hashing
-            # or re-admitting them here on the main thread cannot find anything;
-            # it cost ~7 s of serial staging per PPO pass after g2400.
-            sealed=checked_encoded(dataset.encoded[index] if value_only else row)
-            seal=None if sealed else tuple(array_digest(a) for a in arrays)+(array_digest(q) if q is not None else None,)
+            # Sealed rows are bytes-backed and immutable, so hashing them again
+            # cannot find anything. Other inputs are still rechecked on reuse.
+            seal=None if checked_encoded(row) else tuple(array_digest(a) for a in arrays)+(array_digest(q) if q is not None else None,)
             key=(id(dataset),index,bool(exploration),value_only)
             cached=self.cache.get(key)
             if cached is None:
-                if not sealed:self.input_audit.check(row)
                 specs=[write_array(self.stream,a) for a in arrays]
                 spec=(*specs,write_array(self.stream,q) if q is not None else None,row.feature_version)
                 self.cache[key]=(dataset,seal,spec) # keep owner alive; object IDs cannot be reused
@@ -319,7 +277,6 @@ class Preparation:
         parts=iter(parts);pending=deque()
         sources=dataset.preparation_source() if value_only and hasattr(dataset,'preparation_source') else None
         require(sources is None or not exploration,'Critic preparation cannot alter behavior probabilities')
-        shared_output=sources is not None or self.metrics['transport']=='ram'
         def submit():
             part=next(parts,None)
             if part is None:return
@@ -327,15 +284,9 @@ class Preparation:
                 output=self._shared_slot(len(part))
                 future=self.pool.pool.submit(prepare_critic,sources,part,output)
             else:
+                output=str(self.path/f'batch-{self.serial}.bin');self.serial+=1
                 rows=self._rows(dataset,part,exploration,value_only)
-                if shared_output:
-                    layout,size=batch_layout(rows)
-                    output=self._shared_slot(len(part),size=size)
-                    destination=dict(shared=output,layout=layout,bytes=size)
-                else:
-                    output=str(self.path/f'batch-{self.serial}.bin');self.serial+=1
-                    destination=output
-                future=self.pool.pool.submit(prepare,str(self.input_path),self.stream.tell(),rows,part,destination)
+                future=self.pool.pool.submit(prepare,str(self.input_path),self.stream.tell(),rows,part,output)
             self.futures.add(future);pending.append((part,future,output))
             self.metrics['peak_inflight']=max(self.metrics['peak_inflight'],len(pending))
         for _ in range(self.pool.workers):submit()
@@ -346,14 +297,14 @@ class Preparation:
                 self.metrics['wait_seconds']+=time.perf_counter()-began
                 self._record(record)
                 began=time.perf_counter()
-                mapped=self.shared[output].buf if shared_output else np.memmap(record['path'],dtype=np.uint8,mode='r')
+                mapped=self.shared[output].buf if sources is not None else np.memmap(record['path'],dtype=np.uint8,mode='r')
                 try:
                     # Own buffers before releasing the file; CUDA pins are independent snapshots.
                     pinned=torch.device(dataset.device).type=='cuda'
                     host=tuple(owned_tensor(view(mapped,s),pinned=pinned) for s in record['layout'])
                     tensors=tuple(t.to(dataset.device,non_blocking=True) for t in host)
                 finally:
-                    if shared_output:self.free_shared.append(output)
+                    if sources is not None:self.free_shared.append(output)
                     else:mapped._mmap.close();Path(record['path']).unlink()
                 self.metrics['transfer_seconds']+=time.perf_counter()-began
                 submit()
@@ -374,12 +325,12 @@ class Preparation:
                     pass
                 finally:
                     self.futures.discard(future)
-                    if shared_output:self.free_shared.append(output)
+                    if sources is not None:self.free_shared.append(output)
                     else:Path(output).unlink(missing_ok=True)
 
     def report(self):
         return dict(self.metrics,worker_pids=sorted(self.pids),
             scope='Ordered CPU-only process collation; RNG and sampling in main process. '
-                  'PPO uses private mapped staging and reuses shared results on RAM transport; dense PPG reads sealed mmaps directly. At most one shared result slot per worker. Owned files/shared buffers are released before return. '
+                  'PPO uses private mapped staging; dense PPG reads sealed mmaps directly and uses at most one shared result slot per worker. Owned files/shared buffers are released before return. '
                   'transport is ram (Linux /dev/shm) or disk (the given folder). '
                   'peak_output_bytes is a conservative bound, not process RSS.')

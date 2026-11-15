@@ -6,13 +6,13 @@ $ErrorActionPreference='Stop'
 . (Join-Path $PSScriptRoot 'patch-install-common.ps1')
 $repo=Split-Path -Parent $PSScriptRoot
 $study=Join-Path $repo 'artifacts/nn-opening-temperature'
-$build=Join-Path $study 'release-1.4.59'
+$build=Join-Path $study 'release-1.4.60'
 $game=(Resolve-Path -LiteralPath $GameRoot).Path
 $record=Join-Path $game 'artifacts/patch-installation.json'
 $intent=Join-Path $game 'artifacts/nn-opening-temperature.pending.json'
 $backupRoot=Join-Path $game 'artifacts/patch-recovery'
-$baseVersion='1.4.58-rust-local'
-$version='1.4.59-rust-local'
+$baseVersion='1.4.59-rust-local'
+$version='1.4.60-rust-local'
 $managed='BrassBirminghamUnity_Data/Managed'
 $changedPaths=@("$managed/BrassLegacyAI.dll")
 foreach($model in 'alpha-g890','beta-g1290','beta2-g1190','il-v11-2'){

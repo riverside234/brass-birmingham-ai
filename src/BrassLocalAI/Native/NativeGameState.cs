@@ -73,9 +73,11 @@ namespace BrassLegacyAI.Native
         {
             var temperature=state["nn_temperature"];
             if(temperature==null)return 1.0;
-            if((temperature.Type!=JTokenType.Integer && temperature.Type!=JTokenType.Float) || !NativePackage.ValidTemperature((double)temperature))
+            if(temperature.Type!=JTokenType.Integer && temperature.Type!=JTokenType.Float)
                 throw new InvalidDataException("Unsupported saved NN temperature");
-            return (double)temperature;
+            double effective=NativePackage.UpgradeOpeningTemperature((double)temperature);
+            if(!NativePackage.ValidTemperature(effective))throw new InvalidDataException("Unsupported saved NN temperature");
+            return effective;
         }
         public static JObject Create(GameMetadata metadata,Func<PlayerMetadata,string> difficulty,int searchK,double temperature)
         { return Create(metadata,difficulty,searchK,temperature,p=>"neutral"); }

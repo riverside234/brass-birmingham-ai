@@ -33,7 +33,7 @@ def native(game):
             ticket = dict(game_instance='opening-qualification', game_id='fixture', revision=inp['view']['context']['revision'],
                 actor=inp['view']['seat'], profile=inp['context']['profile_id'], source_sha256=ready['build']['source_sha256'])
             observed = []
-            for generation, selected in ((1, 2.0), (1, 1.5), (2, 1.5), (3, None), (4, 1.3)):
+            for generation, selected in ((1, 1.3), (1, 1.5), (2, 1.5), (3, 2.0), (4, 1.0), (5, None)):
                 operation = dict(op='search', input=inp, ticket=dict(ticket, generation=generation), allowance_ms=4000, remaining_ms=2000)
                 if selected is not None:
                     operation['policy_temperature'] = selected
@@ -43,6 +43,9 @@ def native(game):
                 data = reply['data']
                 if generation == 1 and selected == 1.5:
                     assert reply['status'] == 'error' and 'turn policy temperature changed' in data['error'], reply
+                    continue
+                if selected == 2.0:
+                    assert reply['status'] == 'error' and 'unsupported local NN temperature' in data['error'], reply
                     continue
                 assert reply['status'] == 'ok' and data['retired'] and data['actions'], reply
                 assert data['policy_temperature'] == (1.0 if selected is None else selected), reply

@@ -7,13 +7,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STUDY = ROOT / 'artifacts/nn-opening-temperature'
-BASE_VERSION = '1.4.58-rust-local'
-BASE = STUDY / 'release-1.4.58'
-VERSION = '1.4.59-rust-local'
-OUT = STUDY / 'release-1.4.59'
+BASE_VERSION = '1.4.59-rust-local'
+BASE = STUDY / 'release-1.4.59'
+VERSION = '1.4.60-rust-local'
+OUT = STUDY / 'release-1.4.60'
 PACKAGES = {'alpha-g890': None, 'beta-g1290': 'local-beta', 'beta2-g1190': 'local-beta2', 'il-v11-2': 'local-il'}
 MANAGED = 'BrassBirminghamUnity_Data/Managed'
-MANAGED_SCOPE = ['src/BrassLocalAI/Native/NativePackage.cs', 'src/BrassLocalAI/Policy/LocalSetupPreferences.cs']
+MANAGED_SCOPE = ['src/BrassLocalAI/Native/NativePackage.cs', 'src/BrassLocalAI/Native/NativeGameState.cs',
+                 'src/BrassLocalAI/Policy/LocalSetupPreferences.cs', 'src/BrassLocalAI/Policy/MixedGameState.cs']
 NATIVE_SCOPE = ['native/brass-ai-worker/src/local_temperature.rs']
 HELPERS = runpy.run_path(str(ROOT / 'scripts/fix-sell-replay-speed.py'))
 sha, read, write, pins = (HELPERS[key] for key in ('sha', 'read', 'write', 'pins'))
@@ -22,7 +23,7 @@ sha, read, write, pins = (HELPERS[key] for key in ('sha', 'read', 'write', 'pins
 def build_workers():
     support = runpy.run_path(str(ROOT / 'scripts/qualify-rust-scaffold.py'))
     env, cargo = support['tool_environment']()
-    out = STUDY / 'native-build-1.4.59'
+    out = STUDY / 'native-build-1.4.60'
     checkout = out / 'n'
     checkout.mkdir(parents=True)
     original = ROOT / 'BrassNative/beta2-g1190/native-source.zip'
@@ -69,7 +70,13 @@ def build():
     baseline = read(BASE / 'build-manifest.json')
     base_native = pins(ROOT / 'BrassNative')
     assert sha(BASE / 'qualification.json') == installed['nnOpeningTemperatureQualificationSha256'].lower()
-    assert baseline['nativeFiles'] == base_native
+    expected_native = {pin['path']: pin['sha256'] for pin in baseline['nativeFiles']}
+    # This installation can include the previously verified native performance rollout.
+    for pin in installed.get('rustPerformance', {}).get('nativeFiles', []):
+        name = pin['path'].removeprefix('BrassNative/')
+        assert expected_native[name] == pin['old'], name
+        expected_native[name] = pin['new']
+    assert {pin['path']: pin['sha256'] for pin in base_native} == expected_native
     for file in installed['files']:
         name = file['name']
         assert sha(ROOT / MANAGED / name) == file['sha256'].lower() == sha(BASE / 'Managed' / name)
@@ -114,7 +121,7 @@ def build():
         stockSha256=installed['stockSha256'], baseFiles=installed['files'], files=files,
         baseNative=base_native, nativeFiles=native, installedBaselineReceiptSha256=receipt_hash,
         nativeSourceSha256=source_hash, nativeTestsSha256=native_tests, sourcePins=source_pins,
-        openingTemperatureChoices=[1.0, 1.5, 2.0], openingMovesPerSeat=3, regularTemperature=1.0, cScale=0.1))
+        openingTemperatureChoices=[1.0, 1.3, 1.5], openingMovesPerSeat=3, regularTemperature=1.0, cScale=0.1))
     print('Built', OUT, flush=True)
 
 

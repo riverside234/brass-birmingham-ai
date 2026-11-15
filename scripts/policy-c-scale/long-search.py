@@ -59,4 +59,4 @@ def summarize(valid, scales):
 
 
 if __name__ == '__main__':
-    main('long', SCALES, compare, summarize, candidate_n=LONG_N, default_targets=TARGETS)
+    main('long', SCALES, compare, summarize, candidate_n=LONG_N, default_targets=TARGETS, default_weight=0)

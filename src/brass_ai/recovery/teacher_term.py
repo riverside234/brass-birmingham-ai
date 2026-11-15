@@ -34,18 +34,9 @@ def _score_policy(model, states, actions, mask):
     return model.score_prepared(actions, model.prepare_candidates(encoded)).masked_fill(~mask, -torch.inf)
 
 
-def forward_policy(model, rows, *, audit=None):
-    states, actions, mask, _ = collate([r.encoded for r in rows], next(model.parameters()).device, audit=audit)
+def forward_policy(model, rows):
+    states, actions, mask, _ = collate([r.encoded for r in rows], next(model.parameters()).device)
     return _score_policy(model, states, actions, mask)
-
-
-def target_tensor(rows, logits):
-    """One host-to-device transfer, replacing one transfer per teacher row."""
-    target = np.zeros(tuple(logits.shape), dtype=np.float32)
-    for i, row in enumerate(rows):
-        values = row.label['target']
-        target[i, :len(values)] = values
-    return torch.as_tensor(target, device=logits.device)
 
 
 def policy_logits(model, rows, *, batches=None, timings=None):
@@ -117,13 +108,14 @@ def chunks(rows, max_rows=512, max_cells=131072):
     return result
 
 
-def weighted_gradients(model, rows, weights, parameters, *, audit=None, max_cells=131072):
+def weighted_gradients(model, rows, weights, parameters):
     """Exact gradients of sum_i w_i KL(target_i || policy_i), accumulated over chunks."""
     sums = [None] * len(parameters); total = 0.; per_row = [0.] * len(rows)
-    for part in chunks(rows, max_cells=max_cells):
+    for part in chunks(rows):
         selected = [rows[i] for i in part]
-        logits = forward_policy(model, selected, audit=audit).float()
-        target = target_tensor(selected, logits)
+        logits = forward_policy(model, selected).float()
+        target = torch.zeros_like(logits)
+        for j, r in enumerate(selected): target[j, :len(r.label['target'])] = target.new_tensor(r.label['target'])
         logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
         losses = (torch.special.xlogy(target, target) - target * logp).sum(-1)
         loss = (losses * losses.new_tensor([weights[i] for i in part])).sum()
@@ -183,8 +175,6 @@ class TeacherTerm:
                 self.beta = self.adaptive['beta']
         self.beta_used = 1. if self.mode == 'shadow' else self.beta
         self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.
-        from .batch_cache import InputAudit
-        self.input_audit = InputAudit()
         self.presentations = Counter(); self.used = set(); self.improvement_by_phase = {}
         from .training_revision_g1491 import KEY as REVISION
         # g1491: L = a mean(L_long) + (1-a) mean(L_short); None keeps one long-only pool
@@ -246,18 +236,16 @@ class TeacherTerm:
         parameters = tuple(p for n, p in model.named_parameters() if n.startswith(ACTOR_PREFIXES) and p.requires_grad)
         with policy_context(model):
             if self.long_weight is None:
-                # One padded forward per step, however wide the rows. Splitting wide
-                # steps into 32k-cell chunks (g2400) repeated the launch-bound
-                # encoder forward/backward per chunk: 20-30 s per PPO pass, not 1-3 s.
-                logits = forward_policy(model, rows, audit=self.input_audit).float()
-                target = target_tensor(rows, logits)
+                logits = forward_policy(model, rows).float()
+                target = torch.zeros_like(logits)
+                for i, r in enumerate(rows): target[i, :len(r.label['target'])] = target.new_tensor(r.label['target'])
                 logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
                 loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
                 gradients = torch.autograd.grad(loss, parameters, allow_unused=True)
             else:
                 # 2048 rows do not fit one forward: exact gradient sums over PPO-sized chunks.
-                total, gradients, per_row = weighted_gradients(model, rows, row_weights, parameters, audit=self.input_audit)
+                total, gradients, per_row = weighted_gradients(model, rows, row_weights, parameters)
                 loss = torch.tensor(total)
                 mean = lambda values: float(np.mean(values)) if values else None
                 mix = dict(long_rows=long_count, short_rows=len(rows) - long_count,

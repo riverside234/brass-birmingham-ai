@@ -34,9 +34,7 @@ from brass_ai.rust_backend.lab_paths import runtime_path
 from brass_ai.step5.league import write_json
 
 RUN = 'artifacts/step5/joint7-v11-2-g1190-restart-3'
-DEFAULT_GENERATION = 2600
 DEFAULT_LANES = 60
-WEIGHT = 1.0
 STUDY_OPENING = dict(GAME_OPENING, temperature=1.3)
 SOURCE_ITERATIONS = 3
 K = 8
@@ -164,16 +162,16 @@ def completed_q(label):
     return np.where(np.asarray(label['counts']) > 0, label['mean_returns'], label['v_mix'])
 
 
-def diagnostic_job(config, state, entry, saved, utility_calibration):
+def diagnostic_job(config, state, entry, saved, utility_calibration, *, weight):
     generation = entry['generation']
     jobs, _ = plan_jobs(config, dict(state, iteration=generation, search_value=saved),
                         model_id=entry['model_id'], export_hash=entry['sha256'], epoch=generation,
                         ready=True, native_source=lab_teacher.source_fingerprint())
-    job = dict(next(j for j in jobs if not j.get('shadow_probe')), split='heldout', search_value=binding(WEIGHT))
+    job = dict(next(j for j in jobs if not j.get('shadow_probe')), split='heldout', search_value=binding(weight))
     # The diagnostic binary uses the native visit sampler only inside game_opening.
     # All source groups use the same job recipe and an empty set of cotton seats.
     job['teacher_revision'] = _job_block(dict(EXPLORATION, game_opening=GAME_OPENING),
-                                         short_labels=False, search_head_weight=int(WEIGHT), seats=[])
+                                         short_labels=False, search_head_weight=weight, seats=[])
     job['readiness'], _ = readiness(None, utility_calibration, job['expected']['reward_id'], skip=True)
     lab_teacher.validate_job(job)
     # Validate the training recipe first. Only the isolated probe worker accepts the study temperature.
@@ -232,7 +230,7 @@ class Probes:
         probe_row = labels[0]
         label = probe_row['teacher']
         require(probe_row['view'] == row['view'] and probe_row['diagnostic'] is True
-                and label['legal_ids'] == archived['legal_ids'] and label['search_value'] == binding(WEIGHT)
+                and label['legal_ids'] == archived['legal_ids'] and label['search_value'] == trial['search_value']
                 and label['requested_k'] == K and label['frozen_n'] == label['completed_trajectories'] == n
                 and label['c2'] == scale, 'Probe root or settings differ')
         context = row['view']['context']
@@ -278,17 +276,31 @@ def study_worker(binary, scratch, toolchain, core):
         path.write_text(code, encoding='utf-8', newline='\n')
 
     temperature = STUDY_OPENING['temperature']
+    opening = f'opening == &json!({{"temperature":{temperature},"actions_per_seat":3}})'
+    cpu_eval = (destination / 'lab-native/src/cpu_eval.rs').read_text(encoding='utf-8')
+    if 'fn tempered_visits(' in cpu_eval:
+        # The newer worker already computes and reports the configured temperature.
+        # Its production T1.3 recipe disables normal sampling. The probe restricts
+        # normal visit sampling to the opening via the window below.
+        opening_edits = [
+            ('(opening == &json!({"temperature":2.0,"actions_per_seat":3})\n'
+             '            || opening == &json!({"temperature":1.3,"actions_per_seat":3}) && normal_sampling == Some(&json!(false)))',
+             opening),
+        ]
+    else:
+        opening_edits = [
+            ('opening == &json!({"temperature":2.0,"actions_per_seat":3})', opening),
+            ('(n as f64).sqrt()', f'(n as f64).powf(1.0 / {temperature})'),
+            ('teacher["sampling_temperature"] = json!(2.0);',
+             f'teacher["sampling_temperature"] = json!({temperature});'),
+        ]
     patch('cpu_eval.rs', [
         ('        let index = state.action(actual.actor, c.era, c.round, c.actions_remaining);\n'
          '        let window = index <= revision.opening_actions || !fast && revision.long_search;',
          '        state.action(actual.actor, c.era, c.round, c.actions_remaining);\n'
          '        let window = revision.tempered_opening && game_opening(c.era, c.round);'),
         ('        check(!fast || revision.short_labels, "short-search label without short labels")?;\n', ''),
-        ('opening == &json!({"temperature":2.0,"actions_per_seat":3})',
-         f'opening == &json!({{"temperature":{temperature},"actions_per_seat":3}})'),
-        ('(n as f64).sqrt()', f'(n as f64).powf(1.0 / {temperature})'),
-        ('teacher["sampling_temperature"] = json!(2.0);',
-         f'teacher["sampling_temperature"] = json!({temperature});'),
+        *opening_edits,
     ], patterns=[(r'(?m)^        \[DEFAULT_C_SCALE,[^\r\n]*\]\.contains\(&c_scale\),$',
                    '        c_scale.is_finite() && c_scale > 0. && c_scale <= 1.,')])
     patch('teacher.rs', [
@@ -353,16 +365,18 @@ def compare_roots(sampler, rows, probes, targets, compare, scales, lanes):
     return valid, attempts
 
 
-def main(kind, default_scales, compare, summarize, *, candidate_n, default_targets=TARGETS):
+def main(kind, default_scales, compare, summarize, *, candidate_n, default_targets=TARGETS, default_weight=1):
     parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study')
     parser.add_argument('--run', default=RUN)
-    parser.add_argument('--generation', type=int, default=int(os.getenv('GEN', str(DEFAULT_GENERATION))),
-                        help=f'Frozen checkpoint (default: g{DEFAULT_GENERATION} or GEN)')
+    parser.add_argument('--generation', type=int, default=os.getenv('GEN'),
+                        help='Frozen checkpoint (default: GEN or the latest committed generation in the run)')
     parser.add_argument('--collected-generation', '--collected-generations', type=int, nargs='+',
                         help=f'Archived source generations to pool (default: the preceding {SOURCE_ITERATIONS} iterations)')
     parser.add_argument('--lanes', type=int, default=int(os.getenv('LANES', str(DEFAULT_LANES))),
                         help=f'Concurrent CPU workers (default: {DEFAULT_LANES} or LANES)')
     parser.add_argument('--ref-scale', type=float, choices=(0.1, 1.0), default=float(os.getenv('REF_SCALE', '0.1')))
+    parser.add_argument('--w', type=int, choices=(0, 1), default=default_weight,
+                        help=f'Search head weight for reference and candidate searches (default: {default_weight})')
     parser.add_argument('--normal-positions', type=int, default=default_targets['normal'],
                         help=f'Normal position target (default: {default_targets["normal"]})')
     parser.add_argument('--cotton-positions', type=int, default=default_targets['cotton'],
@@ -373,9 +387,14 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     parser.add_argument('--sampler', default=os.getenv('BRASS_NATIVE_WORKER'))
     parser.add_argument('--toolchain', default='1.99.1')
     args = parser.parse_args()
+    run = project_path(ROOT, args.run)
+    state = read_json(run / 'state.json')
+    if args.generation is None:
+        args.generation = state['iteration']
     referenced = (list(range(args.generation - SOURCE_ITERATIONS, args.generation))
                   if args.collected_generation is None else sorted(args.collected_generation))
-    if not (len(set(referenced)) == len(referenced) and all(0 <= g < args.generation for g in referenced)
+    if not (0 <= args.generation <= state['iteration']
+            and len(set(referenced)) == len(referenced) and all(0 <= g < args.generation for g in referenced)
             and args.lanes > 0 and (args.limit is None or args.limit >= 0)
             and args.normal_positions > 0 and args.cotton_positions > 0
             and args.ref_scale in (0.1, 1.0)
@@ -385,8 +404,6 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     import torch
     from brass_ai.learning.checkpoint import load_checkpoint
 
-    run = project_path(ROOT, args.run)
-    state = read_json(run / 'state.json')
     entry = generation_entry(state, args.generation)
     incoming = [generation_entry(state, generation) for generation in referenced]
     checkpoint = project_path(ROOT, entry['path'])
@@ -398,7 +415,8 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     require(raw['step'] == args.generation and raw['model_id'] == entry['model_id']
             and hasattr(model, 'search_value_head'), 'Expected checkpoint with a search value head')
     saved = raw['training']['search_value']
-    job = diagnostic_job(state['signature']['config'], state, entry, saved, raw['training'].get('utility_calibration'))
+    job = diagnostic_job(state['signature']['config'], state, entry, saved,
+                         raw['training'].get('utility_calibration'), weight=args.w)
     rows, source_counts = pooled_roots(run, incoming, saved, job['expected']['reward_id'])
     targets = sample_targets(rows, args.limit, dict(normal=args.normal_positions, cotton=args.cotton_positions))
     build = lab_cpu_runtime.resolve(ROOT)
@@ -408,7 +426,7 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     lab_teacher.COUNT_TURN_SECONDS = max(lab_teacher.COUNT_TURN_SECONDS, cap_seconds + 30)
     sources = ', '.join(f'g{generation}' for generation in referenced)
     print(f'g{args.generation} | {sources} positions | targets {targets} | '
-          f'{args.lanes} lanes | w={WEIGHT:g} | reference K{K}/{REF_N} C_scale={args.ref_scale:g} | '
+          f'{args.lanes} lanes | w={args.w:g} | reference K{K}/{REF_N} C_scale={args.ref_scale:g} | '
           f'opening T={STUDY_OPENING["temperature"]:g}',
           flush=True)
 
@@ -446,7 +464,7 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     if len(referenced) == 1:
         source_context['collected_generation'] = referenced[0]
     print_and_save(kind, dict(run=str(run), generation=args.generation, **source_context,
-                              checkpoint=entry, w=WEIGHT, k=K, ref_scale=args.ref_scale, ref_n=REF_N,
+                              checkpoint=entry, w=args.w, k=K, ref_scale=args.ref_scale, ref_n=REF_N,
                               candidate_n=candidate_n, method='native-scale-sweep', game_opening=STUDY_OPENING,
                               lanes=args.lanes, scales=args.scales, worker_sha256=worker_sha, core_sha256=core),
                    groups)
