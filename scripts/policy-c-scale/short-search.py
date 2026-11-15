@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run K8/96 searches at each scale against a K8/2560 reference."""
+"""Run K8/96 searches at each scale against a K8/3000 reference."""
 
 from statistics import mean
 
