@@ -107,6 +107,22 @@ def source_roots(run, incoming, saved, reward_id):
     return groups
 
 
+def pooled_roots(run, entries, saved, reward_id):
+    groups = {group: [] for group in GROUPS[1:]}
+    source_counts = {}
+    for entry in entries:
+        rows = source_roots(run, entry, saved, reward_id)
+        source_counts[entry['generation']] = {group: len(values) for group, values in rows.items()}
+        for group, values in rows.items():
+            groups[group].extend(values)
+    if len(entries) > 1:
+        # Shuffle the whole pool so a filled quota does not favor the first age.
+        rng = random.Random(digest(['policy-c-scale-sources', [entry['generation'] for entry in entries]]))
+        for values in groups.values():
+            rng.shuffle(values)
+    return groups, source_counts
+
+
 def interleave(groups):
     return (case for pair in zip_longest(*groups) for case in pair if case is not None)
 
@@ -332,22 +348,28 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     parser.add_argument('--run', default=RUN)
     parser.add_argument('--generation', type=int, default=int(os.getenv('GEN', str(DEFAULT_GENERATION))),
                         help=f'Frozen checkpoint (default: g{DEFAULT_GENERATION} or GEN)')
-    parser.add_argument('--collected-generation', type=int, help='Source of archived positions (default: generation - 1)')
+    parser.add_argument('--collected-generation', '--collected-generations', type=int, nargs='+',
+                        help='One or more archived generations to pool (default: generation - 1)')
     parser.add_argument('--lanes', type=int, default=int(os.getenv('LANES', str(DEFAULT_LANES))),
                         help=f'Concurrent CPU workers (default: {DEFAULT_LANES} or LANES)')
     parser.add_argument('--ref-scale', type=float, choices=(0.1, 1.0), default=float(os.getenv('REF_SCALE', '0.1')))
+    parser.add_argument('--normal-positions', type=int, default=default_targets['normal'],
+                        help=f'Normal position target (default: {default_targets["normal"]})')
+    parser.add_argument('--cotton-positions', type=int, default=default_targets['cotton'],
+                        help=f'Cotton position target (default: {default_targets["cotton"]})')
     parser.add_argument('--limit', type=int, default=os.getenv('LIMIT'),
-                        help=f'Cap the default {default_targets["normal"]} normal + '
-                             f'{default_targets["cotton"]} cotton positions, or 0 for all')
+                        help='Cap the combined normal/cotton position targets, or 0 for all available positions')
     parser.add_argument('--scales', type=float, nargs='+', default=default_scales)
     parser.add_argument('--sampler', default=os.getenv('BRASS_NATIVE_WORKER'))
     parser.add_argument('--toolchain', default='1.99.1')
     args = parser.parse_args()
-    referenced = args.generation - 1 if args.collected_generation is None else args.collected_generation
-    if not (0 <= referenced < args.generation and args.lanes > 0 and (args.limit is None or args.limit >= 0)
+    referenced = [args.generation - 1] if args.collected_generation is None else sorted(args.collected_generation)
+    if not (len(set(referenced)) == len(referenced) and all(0 <= g < args.generation for g in referenced)
+            and args.lanes > 0 and (args.limit is None or args.limit >= 0)
+            and args.normal_positions > 0 and args.cotton_positions > 0
             and args.ref_scale in (0.1, 1.0)
             and len(set(args.scales)) == len(args.scales) and all(0 < scale <= 1 for scale in args.scales)):
-        parser.error('Use committed source positions, a positive lane count, and distinct C_scale values in (0, 1].')
+        parser.error('Use distinct committed source generations, positive lane/position counts, and distinct C_scale values in (0, 1].')
 
     import torch
     from brass_ai.learning.checkpoint import load_checkpoint
@@ -355,7 +377,7 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     run = project_path(ROOT, args.run)
     state = read_json(run / 'state.json')
     entry = generation_entry(state, args.generation)
-    incoming = generation_entry(state, referenced)
+    incoming = [generation_entry(state, generation) for generation in referenced]
     checkpoint = project_path(ROOT, entry['path'])
     require(checkpoint.is_file() and sha(checkpoint) == entry['sha256'],
             f'Missing or changed checkpoint g{args.generation}: {checkpoint}')
@@ -366,14 +388,15 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
             and hasattr(model, 'search_value_head'), 'Expected checkpoint with a search value head')
     saved = raw['training']['search_value']
     job = diagnostic_job(state['signature']['config'], state, entry, saved, raw['training'].get('utility_calibration'))
-    rows = source_roots(run, incoming, saved, job['expected']['reward_id'])
-    targets = sample_targets(rows, args.limit, default_targets)
+    rows, source_counts = pooled_roots(run, incoming, saved, job['expected']['reward_id'])
+    targets = sample_targets(rows, args.limit, dict(normal=args.normal_positions, cotton=args.cotton_positions))
     build = lab_cpu_runtime.resolve(ROOT)
     core = build['teacher_execution_core']
     lab_cpu_runtime.raise_open_file_limit()
     cap_seconds = REF_N * lab_cpu_runtime.COUNT_CAP_PER_TRAJECTORY_NS / 1e9
     lab_teacher.COUNT_TURN_SECONDS = max(lab_teacher.COUNT_TURN_SECONDS, cap_seconds + 30)
-    print(f'g{args.generation} | g{referenced} positions | targets {targets} | '
+    sources = ', '.join(f'g{generation}' for generation in referenced)
+    print(f'g{args.generation} | {sources} positions | targets {targets} | '
           f'{args.lanes} lanes | w={WEIGHT:g} | reference K{K}/{REF_N} C_scale={args.ref_scale:g} | '
           f'opening T={GAME_OPENING["temperature"]:g}',
           flush=True)
@@ -408,7 +431,10 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
         groups[group] = dict(roots=attempts[group], valid=len(valid), requested=targets[group], **summarize(valid, args.scales))
         if len(valid) < targets[group]:
             print(f'{group}: {len(valid)}/{targets[group]} requested valid positions after exhausting the archived roots', flush=True)
-    print_and_save(kind, dict(run=str(run), generation=args.generation, collected_generation=referenced,
+    source_context = dict(collected_generations=referenced, source_positions=source_counts)
+    if len(referenced) == 1:
+        source_context['collected_generation'] = referenced[0]
+    print_and_save(kind, dict(run=str(run), generation=args.generation, **source_context,
                               checkpoint=entry, w=WEIGHT, k=K, ref_scale=args.ref_scale, ref_n=REF_N,
                               candidate_n=candidate_n, method='native-scale-sweep', game_opening=GAME_OPENING,
                               lanes=args.lanes, scales=args.scales, worker_sha256=worker_sha, core_sha256=core),
