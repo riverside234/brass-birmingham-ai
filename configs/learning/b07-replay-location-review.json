@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "5e55cfbcce9f9a0e954c8b134a55a85257d6635ec27e384543efa7e703944e8a",
+  "execution_implementation": "77d8459751fff0bcd901dfdf839ffc60408f846b4e5a6787606002e46de6aa63",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -814,6 +814,11 @@
       "implementation": "2d6ce0648be6c4eb7dda29ebc95d9a2815c094eabddae64282a9a7bb2e6371fe",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "2f9c181bce37af1cb8c7ce94da20644dbd2b0d4599168f94beee66dd29ead661"
+    },
+    {
+      "implementation": "5e55cfbcce9f9a0e954c8b134a55a85257d6635ec27e384543efa7e703944e8a",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "0c089ca9af7149a6c97825c6fe44879d6c430814755bd34d6191a4c7fff18d29"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1071,6 +1076,10 @@
   },
   "g2280_ppo_teacher_ppg_performance": {
     "scope": "Performance-only changes after the g2280 export, with identical training data. PPO CPU preparation keeps its private staging and batch files in RAM-backed /dev/shm on Linux when tmpfs and available memory both have at least 32 GiB free (else the previous folder), reaps folders of dead trainers of the same user, and copies each prepared batch once into pinned memory instead of copying and then pinning it. Streamed fixed-count CPU teacher turns prepare their label rows (row validation, wire schema and feature encoding) in four persistent spawned helper processes, one table per helper, over the same JSON rows; the trainer keeps its own frozen rows, turn/identity/lineage checks, batched logit parity and publication, and diagnostic or GPU tables stay in process. Admitted-input freezing copies scalar leaves and all-scalar lists without a call per element, with the same frozen structure and the same refusal of non-JSON values. The value phase asks the kernel to read the committed PPG replay age ahead (posix_fadvise WILLNEED) from a background thread while PPO runs.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2400_cotton_network_and_ppg": {
+    "scope": "One cotton network per seat and era, separate from three build/develop targets; 15 percent teacher cotton tables in training; heldouts retain three standard and one cotton game; ordinary PPG cap two, search value cap one. Preserve models, optimizers, beta, RNG and compatible buffers. Reuse private PPO shared result slots, admit inputs once, batch teacher targets and bound teacher padding. Report heldout utility and corrected search EV from existing predictions.",
     "qualified_implementation_unchanged": true
   }
 }

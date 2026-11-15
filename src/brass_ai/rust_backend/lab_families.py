@@ -23,7 +23,7 @@ from brass_ai.recovery.branch_scheduler import ReadyWork
 from brass_ai.recovery.replay import check_game
 from brass_ai.recovery.local_scoring_targets import validate_receipt
 from brass_ai.recovery import ordinary_cotton
-from brass_ai.step5.policy import COTTON_DEVELOP_ONLY, exploration_distribution,context_for,sample_cotton
+from brass_ai.step5.policy import COTTON_CANDIDATES, COTTON_DEVELOP_ONLY, exploration_distribution,context_for,sample_cotton
 from .lab_collection import frozen_id, route, branch_opening
 from .lab_contract import SOURCE
 
@@ -94,7 +94,7 @@ def validate_part(part, job, *, child=False, arrays=None, semantic=True):
         spec=job['policies'][(seat-job.get('rotation',0))%4]
         require(row['behavior']['policy_id']==spec['policy_id'],'Changed frozen policy assignment')
         if seat not in audited_seats:
-            require(ordinary_cotton.KEY not in row['behavior'] and COTTON_DEVELOP_ONLY not in row['behavior'] and
+            require(ordinary_cotton.KEY not in row['behavior'] and COTTON_DEVELOP_ONLY not in row['behavior'] and COTTON_CANDIDATES not in row['behavior'] and
                     row['behavior'].get('component') != 'cotton',
                     'Unexpected ordinary cotton behavior')
             if child and index==0:

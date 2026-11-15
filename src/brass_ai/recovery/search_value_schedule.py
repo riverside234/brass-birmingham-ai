@@ -209,5 +209,9 @@ def diagnostics(rows,main,delta):
     target=np.asarray([r['u'] for r in rows]);base=float(np.mean((main-target)**2))
     corrected=float(np.mean((main+delta-target)**2))
     require(np.isfinite([base,corrected]).all(),'Nonfinite held-out residual diagnostic')
+    variance=float(np.var(target,dtype=np.float64))
+    def ev(prediction):
+        return float(1-np.var(target-prediction,dtype=np.float64)/variance) if variance>1e-12 else None
     return dict(recorded=True,games=4,rows=len(rows),main_mse=base,
-        corrected_mse=corrected,improvement=base-corrected,scope='diagnostic-only')
+        corrected_mse=corrected,main_ev=ev(main),corrected_ev=ev(main+delta),
+        target_variance=variance,improvement=base-corrected,scope='diagnostic-only')

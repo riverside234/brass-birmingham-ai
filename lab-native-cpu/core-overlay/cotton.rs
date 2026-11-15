@@ -10,9 +10,11 @@ pub struct Coverage {
     pub limit: usize,
     pub develop: bool,
     pub build: bool,
+    pub networks: Vec<String>,
 }
 
-fn cotton(choice: &Choice, develop: bool, build: bool) -> bool {
+fn cotton(choice: &Choice, develop: bool, build: bool, networks: &[String]) -> bool {
+    choice.kind == Kind::Network && choice.target.as_ref().is_some_and(|t| networks.contains(t)) ||
     choice.industry == Some(Industry::CottonMill)
         && (build && choice.kind == Kind::Build || develop && choice.kind == Kind::Develop)
 }
@@ -29,6 +31,11 @@ pub fn candidates(
     develop: bool,
     build: bool,
 ) -> Result<Vec<usize>> {
+    network_candidates(logits, gumbels, choices, selected, limit, develop, build, &[])
+}
+
+pub fn network_candidates(logits: &[f64], gumbels: &[f64], choices: &[Choice], selected: &[usize],
+    limit: usize, develop: bool, build: bool, networks: &[String]) -> Result<Vec<usize>> {
     check(
         logits.len() == choices.len()
             && logits.len() == gumbels.len()
@@ -42,7 +49,7 @@ pub fn candidates(
     let mut required = Vec::with_capacity(3);
     // Retain an ordinary comparator, even if the original top K was all cotton.
     let ordinary = (0..choices.len())
-        .filter(|i| !cotton(&choices[*i], develop, build))
+        .filter(|i| !cotton(&choices[*i], develop, build, networks))
         .max_by(|a, b| {
             (logits[*a] + gumbels[*a])
                 .total_cmp(&(logits[*b] + gumbels[*b]))
@@ -55,15 +62,20 @@ pub fn candidates(
         let prefer_develop = develop && slot == 0 && slots == 2;
         let best = (0..choices.len())
             .filter(|i| {
-                cotton(&choices[*i], develop, build)
+                cotton(&choices[*i], develop, build, networks)
                     && !required.iter().any(|j: &usize| {
                         choices[*j].kind == choices[*i].kind
                             && choices[*j].target == choices[*i].target
                     })
             })
             .max_by(|a, b| {
-                (prefer_develop && choices[*a].kind == Kind::Develop)
+                // Include a legal cotton network even when its initial prior is low.
+                // It uses one of the existing slots, never additional trajectories.
+                (slot == 0 && !networks.is_empty() && choices[*a].kind == Kind::Network)
+                    .cmp(&(slot == 0 && !networks.is_empty() && choices[*b].kind == Kind::Network))
+                    .then_with(|| (prefer_develop && choices[*a].kind == Kind::Develop)
                     .cmp(&(prefer_develop && choices[*b].kind == Kind::Develop))
+                    )
                     .then_with(|| logits[*a].total_cmp(&logits[*b]))
                     .then(b.cmp(a))
             });
@@ -180,5 +192,16 @@ mod tests {
             candidates(&logits, &[0.; 4], &c, &[0, 1], 2, true, false).unwrap(),
             vec![0, 3]
         );
+    }
+
+    #[test]
+    fn network_is_covered_inside_existing_k_even_with_a_low_prior() {
+        let mut network = choice("network", "link", false);
+        network.kind = Kind::Network;
+        network.industry = None;
+        let c = vec![choice("ordinary","A",false),choice("build","B",true),network];
+        let l = [4.,2.,-20.];
+        assert_eq!(network_candidates(&l,&[0.;3],&c,&[0,1],1,true,true,&["link".into()]).unwrap(),vec![0,2]);
+        assert_eq!(network_candidates(&l,&[0.;3],&c,&[0,1],1,true,true,&[]).unwrap(),vec![0,1]);
     }
 }

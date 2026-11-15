@@ -224,8 +224,8 @@ def rate_factor(step,total,config):
 
 def validate(c):
     default=KL_STOP_DEFAULT if c.get('contract')==KL_STOP_CONTRACT else TEACHER_FLOOR_DEFAULT if c.get('contract')==TEACHER_FLOOR_CONTRACT else EVERY_ITER_DEFAULT if c.get('contract')==EVERY_ITER_CONTRACT else TWO_ITER_DEFAULT if two_iteration(c) else EARLY_DEFAULT if c.get('contract')==EARLY_CONTRACT else QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
-    if default is KL_STOP_DEFAULT and c.get('max_epochs') == 1:
-        default = dict(default, max_epochs=1)
+    if default is KL_STOP_DEFAULT and c.get('max_epochs') in (1, 2):
+        default = dict(default, max_epochs=c['max_epochs'])
         if c.get('beta_clone_min') == .5:
             default['beta_clone_min'] = .5
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
@@ -365,6 +365,10 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             adopting_kl_stop=config['value_phase']['contract']==KL_STOP_CONTRACT and saved['options']['value_phase']['contract']==TEACHER_FLOOR_CONTRACT
             if adopting_kl_stop:options_match=kl_stop_options(saved['options'])==phases.options
             saved_value = saved['options']['value_phase']
+            from .training_revision_g2400 import applied as cotton_networks
+            if (cotton_networks(config) and saved_value['max_epochs']==1 and
+                    config['value_phase']['max_epochs']==2):
+                options_match = dict(saved['options'], value_phase=dict(saved_value, max_epochs=2)) == phases.options
             raising_floor = (saved_value['contract'] == config['value_phase']['contract'] == KL_STOP_CONTRACT
                 and saved_value['beta_clone_min'] == .25 and config['value_phase']['beta_clone_min'] == .5
                 and dict(saved['options'], value_phase=dict(saved_value, beta_clone_min=.5)) == phases.options)

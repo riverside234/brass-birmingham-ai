@@ -4,7 +4,7 @@ import math
 import statistics
 
 from brass_ai.learning.contracts import digest, require
-from brass_ai.step5.policy import (COTTON_DEVELOP_ONLY, COTTON_EXPLORATION, COTTON_PROBABILITIES, FAMILY_WEIGHTS,
+from brass_ai.step5.policy import (COTTON_CANDIDATES, COTTON_DEVELOP_ONLY, COTTON_EXPLORATION, COTTON_PROBABILITIES, FAMILY_WEIGHTS,
                                    LIMITED_COTTON_PROBABILITY)
 
 GROUPS = ('canal_action', 'canal_other', 'rail_action', 'rail_other')
@@ -254,9 +254,13 @@ def effective_alphas(config,state):
 def check_behavior(b, phase, *, branch_move=False):
     cotton = COTTON_EXPLORATION in b
     develop_only = COTTON_DEVELOP_ONLY in b
+    targeted = COTTON_CANDIDATES in b
     components = ('branch_move',) if branch_move else ('policy','exploration','cotton') if cotton else ('policy','exploration')
     require(set(b)=={'kind','policy_id','probability','temperature','exploration','exploration_version',
         'component','action_decision'} | ({COTTON_EXPLORATION} if cotton else set()) | ({COTTON_DEVELOP_ONLY} if develop_only else set())
+        | ({COTTON_CANDIDATES} if targeted else set())
+        and (not targeted or (cotton and not develop_only and isinstance(b[COTTON_CANDIDATES],list)
+                              and b[COTTON_CANDIDATES] and all(type(i) is int and i>=0 for i in b[COTTON_CANDIDATES])))
         and (not cotton or (not branch_move and phase in ('action','continuation') and
                            b[COTTON_EXPLORATION] in COTTON_PROBABILITIES))
         and (not develop_only or (cotton and b[COTTON_EXPLORATION] == LIMITED_COTTON_PROBABILITY and

@@ -521,7 +521,10 @@ class NativeWorkers(unittest.TestCase):
     def test_single_seat_ordinary_cotton_game_replays_exact_mixed_likelihood(self):
         self.check_ordinary_cotton_game(limited=True)
 
-    def check_ordinary_cotton_game(self, *, limited):
+    def test_cotton_network_game_replays_the_full_ppo_probability(self):
+        self.check_ordinary_cotton_game(limited=True,network=True)
+
+    def check_ordinary_cotton_game(self, *, limited, network=False):
         from brass_ai.recovery import ordinary_cotton as cotton
         from brass_ai.recovery.exploration import THREE_T2_OPENING
         from brass_ai.recovery.opening_objective import Reference, T2_THREE
@@ -544,6 +547,7 @@ class NativeWorkers(unittest.TestCase):
         rate = .20 if limited else .10
         config_with_cotton = cotton.configure(dict(update=dict(config()['update'], opening_objective=T2_THREE),
                                                   table_plan={}), probability=rate, limited=limited)
+        if network:config_with_cotton['table_plan'][cotton.KEY]=dict(cotton.NETWORK)
         assignment = cotton.planned_assignment(config_with_cotton['table_plan'][cotton.KEY], index, 31)
         opening = config_with_cotton['update']['opening_objective']
         signature = 'a'*64
@@ -562,7 +566,16 @@ class NativeWorkers(unittest.TestCase):
         self.assertTrue(all(r['behavior'][cotton.KEY] == rate for r in targeted))
         self.assertEqual({r['seat'] for r in targeted}, set(assignment['seats']))
         self.assertTrue(any(r['behavior']['component']=='cotton' for r in targeted))
-        if limited:
+        if network:
+            from brass_ai.step5.policy import COTTON_CANDIDATES
+            forced=[r for r in targeted if r['behavior']['component']=='cotton']
+            networks=[r for r in forced if r['choices'][r['chosen']]['kind']=='network']
+            industry=[r for r in forced if r['choices'][r['chosen']]['kind']!='network']
+            self.assertTrue(networks)
+            self.assertTrue(all(n<=1 for n in Counter(r['view']['context']['era'] for r in networks).values()))
+            self.assertTrue(all(n<=3 for n in Counter(r['view']['context']['era'] for r in industry).values()))
+            self.assertTrue(all(COTTON_CANDIDATES in r['behavior'] for r in targeted))
+        elif limited:
             from brass_ai.step5.policy import COTTON_DEVELOP_ONLY
             forced = [r for r in targeted if r['behavior']['component']=='cotton']
             self.assertTrue(all(n<=cotton.CAP for n in Counter(r['view']['context']['era'] for r in forced).values()))
@@ -844,6 +857,25 @@ class NativeWorkers(unittest.TestCase):
                 context = row['view']['context']
                 opening = context['era']=='CanalEra' and context['round']<=2 and row['teacher'].get('explored')
                 self.assertEqual(row['teacher'].get('sampling_temperature'), 2. if opening else None)
+
+    def test_cotton_network_teacher_and_heldout_admission(self):
+        from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
+        from brass_ai.step5.policy import cotton_seats
+        budget=dict(mode='count',full=64,fast=24,fast_k=8,**G.UPDATED_SEARCH)
+        exploration=dict(G.COTTON_ONLY_EXPLORATION,cotton=C.settings(contract=C.NETWORK_CONTRACT))
+        seed=self.all_seat_job(0.)['sampling_seed']
+        seats=cotton_seats(seed,1,C.NETWORK_CONTRACT)
+        revision=G._job_block(exploration,short_labels=False,cotton_table=True,seats=seats,search_head_weight=0)
+        for split in ('train','heldout'):
+            job,result,verifier=self.run_all_seat(0.,budget,revision,split=split,streamed=True)
+            G.validate_job(job)
+            self.assertTrue(verifier.take(result,job,self.model)[0])
+            receipt=result['metrics']['cpu_inference']['revision']['cotton']
+            C.validate_receipt(receipt,job,result['rows'])
+            self.assertGreater(sum(map(sum,receipt['network_targeted_by_era_seat'])),0)
+            self.assertTrue(all(n<=1 for era in receipt['network_targeted_by_era_seat'] for n in era))
+            self.assertTrue(all(n<=3 for era in receipt['targeted_by_era_seat'] for n in era))
+            for row in result['rows']:C.validate_label(row['teacher'],row['choices'],view=row['view'])
 
     def test_single_seat_teacher_cotton_without_normal_exploration(self):
         from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G

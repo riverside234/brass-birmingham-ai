@@ -227,8 +227,8 @@ PATCHES = {
          '            && !h2h && job["shadow_probe"] != true {\n'),
         # g1491: the played action may be sampled from the decision root's visit counts.
         ('        let mut evidence = None;\n        let mut supported = false;\n',
-         '        let (cotton_limit, cotton_develop, cotton_build) = crate::cpu_eval::teacher_cotton_prepare(&view, &actual, turn_work.fast);\n'
-         '        if let Some(owner) = &mut session { owner.set_teacher_cotton(&view.context, cotton_limit, cotton_develop, cotton_build)?; }\n'
+         '        let (cotton_limit, cotton_develop, cotton_build, cotton_networks) = crate::cpu_eval::teacher_cotton_prepare(&view, &actual, turn_work.fast);\n'
+         '        if let Some(owner) = &mut session { owner.set_teacher_cotton(&view.context, cotton_limit, cotton_develop, cotton_build, cotton_networks)?; }\n'
          '        let mut evidence = None;\n        let mut supported = false;\n        let mut explored = false;\n'),
         ('            supported = out.actions.first().is_some_and(|a| a.support >= 2);\n'
          '            out.action_ids\n'

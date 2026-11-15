@@ -2,7 +2,7 @@
 import math
 from collections import Counter
 from brass_ai.learning.contracts import require
-from brass_ai.step5.policy import cotton_build_available, has_unflipped_cotton
+from brass_ai.step5.policy import cotton_build_available, cotton_network_targets, has_unflipped_cotton
 
 CONTRACT='teacher-cotton-exploration/1.0.0'
 DEVELOP_CONTRACT='teacher-cotton-exploration/2.0.0'
@@ -10,13 +10,14 @@ MIXED_CONTRACT='teacher-cotton-exploration/3.0.0'
 MIXED_25_CONTRACT='teacher-cotton-exploration/4.0.0'
 SEATED_CONTRACT='teacher-cotton-exploration/5.0.0'
 SINGLE_SEAT_CONTRACT='teacher-cotton-exploration/6.0.0'
+NETWORK_CONTRACT='teacher-cotton-exploration/7.0.0'
 SEATS='cotton_seats'
 PROBABILITY=.2
 DEVELOP_PROBABILITY=.25
 MIXED_PROBABILITY=.3
 CAP=3
 MIXED_CONTRACTS=(MIXED_CONTRACT,MIXED_25_CONTRACT)
-SEATED_CONTRACTS=(SEATED_CONTRACT, SINGLE_SEAT_CONTRACT)
+SEATED_CONTRACTS=(SEATED_CONTRACT, SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT)
 PROBABILITIES={CONTRACT:PROBABILITY, DEVELOP_CONTRACT:DEVELOP_PROBABILITY, MIXED_CONTRACT:MIXED_PROBABILITY,
                MIXED_25_CONTRACT:DEVELOP_PROBABILITY, **dict.fromkeys(SEATED_CONTRACTS, MIXED_PROBABILITY)}
 
@@ -27,8 +28,10 @@ def settings(*, develop=False, mixed=False, contract=None):
     value = dict(contract=contract, probability=PROBABILITIES[contract], max_per_seat_era=CAP,
         long_candidates=2, short_candidates=1, pause_unflipped=True,
         scope='train-and-heldout' if contract in (*MIXED_CONTRACTS, *SEATED_CONTRACTS) else 'train')
-    if contract == SINGLE_SEAT_CONTRACT:
+    if contract in (SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT):
         value.update(minimum_build_level=2, short_window='all-actions')
+    if contract == NETWORK_CONTRACT:
+        value['network_max_per_seat_era'] = 1
     return value
 
 
@@ -46,12 +49,17 @@ def validate_label(label, choices, *, view=None):
     if e is None:return
     require(isinstance(e,dict) and type(e.get('contract')) is str and e['contract'] in PROBABILITIES,
             'Invalid cotton exploration contract')
-    single = e['contract'] == SINGLE_SEAT_CONTRACT
+    network = e['contract'] == NETWORK_CONTRACT
+    single = network or e['contract'] == SINGLE_SEAT_CONTRACT
     fields = {'contract','targeted','probability','used_before','cotton_visits','total_visits','covered_locations'}
+    if network:fields.add('network_used_before')
     require(set(e) == (fields | {'planned_action'} if single else fields),
         'Invalid cotton exploration metadata')
     require(label.get('explored') is True and type(e['targeted']) is bool and
-        type(e['used_before']) is int and 0<=e['used_before']<CAP,'Invalid cotton exploration allowance')
+        type(e['used_before']) is int and 0<=e['used_before']<=(CAP if network else CAP-1), 'Invalid cotton exploration allowance')
+    if network:
+        require(type(e['network_used_before']) is int and 0<=e['network_used_before']<=1,
+                'Invalid cotton network allowance')
     total=sum(label['counts']);cotton=0;locations=set();played=None
     develop = e['contract'] != CONTRACT
     mixture = PROBABILITIES[e['contract']]
@@ -60,8 +68,11 @@ def validate_label(label, choices, *, view=None):
         require(view is not None and not has_unflipped_cotton(view, label['seat'])
                 and any(c['id'] == e['planned_action'] for c in choices), 'Invalid teacher cotton eligibility or plan')
         builds = cotton_build_available(view, label['seat'])
+    industry = not network or e['used_before'] < CAP
+    links = cotton_network_targets(view) if network and e['network_used_before'] < 1 else ()
     def targeted(c):
-        return c.get('industry')=='CottonMill' and (builds and c['kind']=='build' or develop and c['kind']=='develop')
+        return (c['kind']=='network' and c.get('target') in links or
+                industry and c.get('industry')=='CottonMill' and (builds and c['kind']=='build' or develop and c['kind']=='develop'))
     for c,n in zip(choices,label['counts']):
         is_cotton=targeted(c)
         if n and is_cotton:cotton+=n;locations.add((c['kind'], c.get('target')))
@@ -98,11 +109,18 @@ def validate_receipt(receipt, job, rows):
         require(receipt.get(SEATS) == seats, 'Teacher cotton receipt seats differ')
     used=receipt['targeted_by_era_seat'];built=receipt['builds_by_era_seat']
     developed=receipt['develops_by_era_seat'] if contract!=CONTRACT else [[0]*4 for _ in range(2)]
+    network = contract == NETWORK_CONTRACT
+    networks = receipt['networks_by_era_seat'] if network else [[0]*4 for _ in range(2)]
+    network_used = receipt['network_targeted_by_era_seat'] if network else [[0]*4 for _ in range(2)]
+    if network:
+        require(len(networks)==len(network_used)==2 and all(len(x)==4 for x in (*networks,*network_used)) and
+                all(type(u) is int and 0<=u<=1 and type(n) is int and n>=u
+                    for us,ns in zip(network_used,networks) for u,n in zip(us,ns)), 'Cotton network receipt differs')
     require(len(used)==len(built)==len(developed)==2 and all(len(x)==4 for x in (*used,*built,*developed)), 'Cotton receipt shape')
     # With long-search labels only (the g1490 restart), short searches still explore and
     # spend allowance between labels: the labelled sequence may skip, never go back.
     every=(job.get('teacher_revision') or {}).get('short_labels') is True
-    observed=[[0]*4 for _ in range(2)];labelled=0
+    observed=[[0]*4 for _ in range(2)];observed_network=[[0]*4 for _ in range(2)];labelled=0
     for row in rows:
         l=row['teacher'];e=l.get('cotton_exploration')
         if not e:continue
@@ -111,8 +129,13 @@ def validate_receipt(receipt, job, rows):
         require(seats is None or seat in seats, 'Cotton label from an unassigned teacher seat')
         require(e['used_before']==observed[era][seat] if every and contract==CONTRACT else e['used_before']>=observed[era][seat],
                 'Cotton exploration allowance sequence differs')
-        observed[era][seat]=e['used_before']+int(e['targeted']);labelled+=int(e['targeted'])
+        is_network = network and next(c for c in row['choices'] if c['id']==l['played_action'])['kind']=='network'
+        observed[era][seat]=e['used_before']+int(e['targeted'] and not is_network);labelled+=int(e['targeted'])
+        if network:
+            require(observed_network[era][seat]<=e['network_used_before'], 'Cotton network allowance sequence differs')
+            observed_network[era][seat]=e['network_used_before']+int(e['targeted'] and is_network)
     continuation = sum(receipt[p].get('continuation_targets', 0) for p in ('long', 'short'))
+    continuation += sum(receipt[p].get('continuation_network_targets', 0) for p in ('long', 'short'))
     labelled_triggers = receipt['long']['triggers'] + (receipt['short']['triggers'] if every else 0)
     quota_matches = used == observed if every and contract==CONTRACT else all(
         u>=o for us,os in zip(used,observed) for u,o in zip(us,os))
@@ -120,19 +143,26 @@ def validate_receipt(receipt, job, rows):
             all(type(n) is int and 0<=n<=CAP for a in used for n in a),
             'Cotton committed quota differs from labels')
     if seats is not None:
-        require(all(n == 0 for a in used for seat, n in enumerate(a) if seat not in seats),
+        require(all(n == 0 for a in (*used,*network_used) for seat, n in enumerate(a) if seat not in seats),
                 'Unassigned teacher seat used cotton exploration')
     require(all(type(b) is int and type(d) is int and min(b,d)>=0 and b+d>=u
         for bs,ds,us in zip(built,developed,used) for b,d,u in zip(bs,ds,us)), 'Cotton action counts differ')
-    require(sum(receipt[p]['triggers'] for p in ('long','short')) + continuation==sum(map(sum,used)) and
+    require(sum(receipt[p]['triggers'] for p in ('long','short')) + continuation==sum(map(sum,used))+sum(map(sum,network_used)) and
         sum(receipt[p]['actual_builds'] for p in ('long','short'))==sum(map(sum,built)) and
         sum(receipt[p].get('actual_develops',0) for p in ('long','short'))==sum(map(sum,developed)),
         'Cotton action totals differ')
+    if network:
+        require(all(u>=o for us,os in zip(network_used,observed_network) for u,o in zip(us,os)) and
+                sum(receipt[p].get('targeted_networks',0) for p in ('long','short'))==sum(map(sum,network_used)) and
+                sum(receipt[p].get('actual_networks',0) for p in ('long','short'))==sum(map(sum,networks)),
+                'Cotton network totals differ')
     for profile in ('long','short'):
         c=receipt[profile]
         d, extra = c.get('targeted_develops',0), c.get('continuation_targets',0)
+        n, network_extra = c.get('targeted_networks',0), c.get('continuation_network_targets',0)
         require(0<=extra<=d<=c.get('actual_develops',0) and 0<=c['targeted_builds']<=c['actual_builds'] and
-            c['triggers']==c['targeted_builds']+d-extra<=c['covered_decisions']<=c['eligible_decisions']<=c['legal_decisions']<=c['action_decisions']
+            0<=network_extra<=n<=c.get('actual_networks',0) and
+            c['triggers']==c['targeted_builds']+d-extra+n-network_extra<=c['covered_decisions']<=c['eligible_decisions']<=c['legal_decisions']<=c['action_decisions']
             and c['covered_decisions']+c['no_evidence']+c['no_cotton_visits']==c['eligible_decisions'],
             'Cotton exploration counters differ')
 

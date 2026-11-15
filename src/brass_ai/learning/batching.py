@@ -67,6 +67,11 @@ def collate(encoded, device='cpu', *, audit=None):
             check_encoded(row);check_action_selectors(row.actions)
         else:
             audit.check(row)
+    return _pack_admitted(encoded, device)
+
+
+def _pack_admitted(encoded, device='cpu'):
+    """Pack inputs already admitted by collate or the private PPO staging writer."""
     count, maximum = len(encoded), max(len(x.choice_ids) for x in encoded)
     require(maximum > 0, 'No legal choices')
     actions = np.zeros((count, maximum, encoded[0].actions.shape[-1]), dtype=np.float32)

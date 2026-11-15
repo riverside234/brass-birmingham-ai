@@ -24,6 +24,16 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/profile-rust
 
 ## What the current measurements show
 
+### Lab results through g2400
+
+The 120 iterations since g2280 have median PPO time **47.11 s**. The largest outlier, iteration 2392, took **136.96 s**: waiting for CPU batches took **55.34 s**, compared with a median **7.78 s**, and the teacher term took **38.95 s**, compared with **3.01 s**. Prepared-batch transfer stayed at **6.34 s**, close to its **5.90 s** median. This isolates the remaining stalls to preparation and teacher work; the earlier disk-transfer stall is absent in this sample. [g2400 export](../results/joint7-v11-2-g1190-restart-3-g2400-20261115T022541658333Z).
+
+Each iteration still generated roughly **28.7 GB** of padded output across 1,156 batches. The RAM path now packs directly into up to four reusable shared result buffers, avoiding intermediate padded tensors and repeated output-file allocation, copying and unlinking. The staging writer admits each input before publication; workers no longer repeat selector scans on these private, immutable bytes. The disk fallback retains its previous transport. Teacher targets now upload in one transfer per batch, and wide long-label batches use bounded padding with the same weighted mean gradient.
+
+A paired Windows benchmark with 64 rows and 12,800 legal candidates measured **47.3 ms → 40.8 ms** median packing time (**1.16×**) with exact output parity. The control copied into `BytesIO` to simulate RAM output and exclude disk speed. Full lab PPO timing and elimination of the outliers remain to be measured; the existing logs cannot identify OS scheduling or allocation stalls separately. [Packing evidence](../artifacts/rust-cotton-g2400/packing-benchmark.json).
+
+The g2400 continuation keeps 32 teacher training games. Their cotton fraction is 15% over time (four or five of 32); every held-out set stays three standard games plus one cotton game. Cotton PPO/teacher seats get a separate one-per-era network allowance to a city with an empty cotton slot, alongside the existing three build/develop allowance. Ordinary PPG caps at two epochs; search-value PPG stays at one. Held-out `main_ev` and `corrected_ev` use the same outcome targets and predictions as the existing MSE; no new forwards are needed. EV is `1 - Var(target - prediction) / Var(target)` over the same rows/seats, with null for a constant target.
+
 ### Lab results through g2280
 
 The g2280 export carries compact summaries for iterations 2150–2277 plus full reports for 2278 and 2279. The trainer restarted at 2150, 2240 and 2250 (CPU preparation worker PIDs). [g2280 reports](../results/joint7-v11-2-g1190-restart-3-g2280-20261114T181904011113Z).

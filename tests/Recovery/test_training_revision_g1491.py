@@ -346,7 +346,7 @@ class Term(unittest.TestCase):
             expected = torch.autograd.grad(formula, parameters, allow_unused=True)
         original = M.chunks
         try:
-            M.chunks = lambda rows: original(rows, max_rows=2)
+            M.chunks = lambda rows, **kwargs: original(rows, max_rows=2, **kwargs)
             model.zero_grad(set_to_none=True)
             term.apply(model, TrunkGradients(model), 2)
         finally:

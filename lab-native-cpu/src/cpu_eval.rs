@@ -639,7 +639,9 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
     let cotton = match e.get("cotton") {
         None => None,
         Some(settings) if seats.is_some() => {
-            let mode = if single { CottonMode::SingleSeat } else { CottonMode::Seated };
+            let mode = if settings == &CottonMode::Network.settings() { CottonMode::Network }
+                else if single { CottonMode::SingleSeat } else { CottonMode::Seated };
+            check(mode != CottonMode::Network || single, "cotton network requires the single-seat recipe")?;
             check(settings == &mode.settings(), "unreviewed seated cotton exploration")?;
             Some(mode)
         }
@@ -786,20 +788,21 @@ pub fn teacher_explore(
 
 /// Pure admission before the search; the matching core root alone gets coverage.
 /// A cached continuation keeps its existing evidence and never launches extra work.
-pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fast: bool) -> (usize, bool, bool) {
+pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fast: bool) -> (usize, bool, bool, Vec<String>) {
     REVISION.with(|cell| {
         let mut guard=cell.borrow_mut();
-        let Some((revision,state))=guard.as_mut() else {return (0, false, true);};
-        let Some(cotton) = revision.cotton else {return (0, false, true);};
+        let Some((revision,state))=guard.as_mut() else {return (0, false, true, Vec::new());};
+        let Some(cotton) = revision.cotton else {return (0, false, true, Vec::new());};
         let c=&view.context;
         let index = match c.phase {
             Phase::Action => state.action(actual.actor,c.era,c.round,c.actions_remaining),
             Phase::Continuation if cotton.develop() => state.count[actual.actor],
             _ => 0,
         };
-        let window = index > 0 && (cotton == CottonMode::SingleSeat || index <= revision.opening_actions || !fast && revision.long_search);
+        let window = index > 0 && (matches!(cotton, CottonMode::SingleSeat | CottonMode::Network) || index <= revision.opening_actions || !fast && revision.long_search);
         let limit = state.cotton.prepare(view,&actual.key.choices,fast,window);
-        (limit, cotton.develop(), state.cotton.builds())
+        let (develop, build, networks) = state.cotton.coverage();
+        (limit, develop, build, networks)
     })
 }
 
@@ -1779,14 +1782,14 @@ mod tests {
             let state=initial();let (input,_)=root(&state);
             let info=Brass::new(input.clone(),false).unwrap().root().unwrap();
             let view=input.view.clone();
-            assert_eq!(teacher_cotton_prepare(&view,&info,false),(2,false,true));
+            assert_eq!(teacher_cotton_prepare(&view,&info,false),(2,false,true,vec![]));
             let identity=Identity {game_instance:"cotton".into(),generation:1,export_sha256:"a".repeat(64)};
             let mut settings=Settings::default();settings.search=Config {k:4,simulations:16,seed:7,..Config::default()};
             let mut owner=Session::new(identity.clone(),&input,settings,SearchBudget {started_ns:0,work_deadline_ns:10_000_000_000,
                 deadline_ns:11_000_000_000,reserve_ns:1_000_000_000}).unwrap();
             owner.enable_teacher_exports().unwrap();
             let mut context=input.view.context.clone();if stale {context.revision+=1;}
-            owner.set_teacher_cotton(&context,coverage,false,true).unwrap();
+            owner.set_teacher_cotton(&context,coverage,false,true,vec![]).unwrap();
             let out=crate::teacher::decide_turn(&mut owner,&identity,1,input,Mode::Count,&clock,&mut LowCotton).unwrap();
             let e=owner.take_teacher_export().unwrap();
             assert_eq!(out.completed,16);assert_eq!(e.stats.count.iter().sum::<u64>(),16);

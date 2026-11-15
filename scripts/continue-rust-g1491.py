@@ -102,6 +102,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'Re-measure beta once with teaching on.')
     migrations.add_argument('--update-cotton-sampling', action='store_true',
         help='Adopt the single-seat cotton mix and disable normal teacher sampling at the committed boundary.')
+    migrations.add_argument('--update-cotton-network', action='store_true',
+        help='Add one cotton network per era, use 15%% cotton teacher tables and cap ordinary PPG at two epochs.')
     migrations.add_argument('--retune-teacher-search', action='store_true',
         help='Use long K=8 with C_scale=0.15 and short C_scale=0.5, re-measure beta with teaching on and refill the search buffers')
     migrations.add_argument('--split-teacher-c-scale', action='store_true',

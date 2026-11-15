@@ -66,6 +66,12 @@ per era. The new settings persist.
 --update-teacher-scales sets long C_scale=.10 and short C_scale=.70 for both
 teacher splits. It re-measures beta with teaching on, refills the search
 training buffers, and retains the dedicated held-out return games.
+
+--update-cotton-network adds one targeted cotton-city network per era, separate
+from the three cotton build/develop allowance, for both PPO and teacher cotton
+seats. Teacher training tables use 15% cotton over time (4/5 of 32); each held-out
+set stays three standard plus one cotton. Ordinary PPG caps at two epochs;
+search-value PPG stays at one. Both keep the current .5 beta floor and buffers.
 """
 import importlib.util
 from pathlib import Path

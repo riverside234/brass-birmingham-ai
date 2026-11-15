@@ -110,8 +110,8 @@ def seated_cotton(config):
 
 
 def cotton_only(config):
-    from .teacher_cotton import SINGLE_SEAT_CONTRACT
-    return cotton_settings(config).get('contract') == SINGLE_SEAT_CONTRACT
+    from .teacher_cotton import SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT
+    return cotton_settings(config).get('contract') in (SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT)
 
 
 def _mixed_tables(marker, weight, *, seated=False):
@@ -124,9 +124,9 @@ def _mixed_tables(marker, weight, *, seated=False):
     return dict(marker, exploration=dict(marker['exploration'], cotton=cotton), **{TEACHER_SEARCH_HEAD_WEIGHT: weight})
 
 
-def cotton_only_marker(marker):
-    from .teacher_cotton import SINGLE_SEAT_CONTRACT, settings
-    cotton = dict(settings(contract=SINGLE_SEAT_CONTRACT), table_fraction=.25)
+def cotton_only_marker(marker, *, network=False):
+    from .teacher_cotton import SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT, settings
+    cotton = dict(settings(contract=NETWORK_CONTRACT if network else SINGLE_SEAT_CONTRACT), table_fraction=.15 if network else .25)
     return dict(marker, exploration=dict(COTTON_ONLY_EXPLORATION, cotton=cotton))
 
 
@@ -173,6 +173,7 @@ def validate(config):
         for profile in (RETUNED_SEARCH, UPDATED_SEARCH):
             seated = dict(opening, count_search=profile)
             allowed += tuple(cotton_only_marker(_mixed_tables(seated, weight, seated=True)) for weight in (0, 1))
+            allowed += tuple(cotton_only_marker(_mixed_tables(seated, weight, seated=True), network=True) for weight in (0, 1))
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',
@@ -327,7 +328,7 @@ def validate_job(job):
     split = job.get('split')
     require(isinstance(revision, dict) and job.get('seating') == 'all-seat-search' and
             not job.get('h2h') and not job.get('shadow_probe'), 'Unreviewed g1491 teacher job revision')
-    from .teacher_cotton import SEATED_CONTRACT, SINGLE_SEAT_CONTRACT, SEATS, settings as cotton_options
+    from .teacher_cotton import SEATED_CONTRACT, SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT, SEATS, settings as cotton_options
     weight = revision.get(TEACHER_SEARCH_HEAD_WEIGHT)
     if TEACHER_SEARCH_HEAD_WEIGHT in revision:
         from brass_ai.learning.search_value import binding
@@ -338,6 +339,9 @@ def validate_job(job):
         seats = revision[SEATS]
         cotton_only = revision.get('exploration', {}).get('normal_sampling') is False
         contract, limit = (SINGLE_SEAT_CONTRACT, 1) if cotton_only else (SEATED_CONTRACT, 2)
+        if revision.get('exploration', {}).get('cotton', {}).get('contract') == NETWORK_CONTRACT:
+            require(cotton_only, 'Cotton networks require single-seat exploration')
+            contract = NETWORK_CONTRACT
         require(split in ('train', 'heldout') and type(seats) is list and len(seats) <= limit and
                 all(type(seat) is int for seat in seats) and
                 seats == cotton_seats(job['sampling_seed'], len(seats), contract),

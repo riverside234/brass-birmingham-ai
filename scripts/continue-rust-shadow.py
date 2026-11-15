@@ -66,7 +66,7 @@ def inference_choice(args):
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
-            update_opening_sampling=False,update_cotton_sampling=False):
+            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -126,6 +126,10 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if update_cotton_sampling:
             from brass_ai.recovery.config import validate_config
             config=validate_config(g2240.configure(config))
+        from brass_ai.recovery import training_revision_g2400 as g2400
+        if update_cotton_network:
+            from brass_ai.recovery.config import validate_config
+            config=validate_config(g2400.configure(config))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -186,7 +190,9 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             stages.append(prefix.replace('-teacher-k8-c015-cotton30-', '-teacher-k8-c020-cotton010-mix25-'))
             prefix=prefix.replace('-cotton30-', '-seated-cotton30-selfplay50-20-')
             stages.append(prefix)
-            if config['value_phase']['max_epochs'] == 1:
+            if config['value_phase']['max_epochs'] == 1 or g2400.applied(config):
+                # Retain the old recipe's full filename in the runtime lookup
+                # chain before choosing the new two-epoch filename below.
                 prefix=prefix.replace('-share', '-ppg-epoch1-share')
                 stages.append(prefix)
         if g2090.applied(config):
@@ -205,8 +211,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             if profile == g1491.UPDATED_SEARCH:
                 prefix=prefix.replace('-teacher-k8-c015-', '-teacher-k8-c010-c070-')
                 stages.append(prefix)
+        if g2400.applied(config):
+            prefix=prefix.replace('-ppg-epoch1-', '-ppg-epoch2-').replace('-share', '-cotton-network-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
-        adopting_cotton=g2240.applied(config) and not g2240.applied(before)
+        adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
+                         g2400.applied(config) and not g2400.applied(before))
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (root/'configs/step5'/(run.name+name+tag+'.json') for name in reversed(stages[:-1])) if p.exists()),None)
@@ -317,6 +326,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if teacher_weight is not None:kwargs['teacher_search_head_weight']=teacher_weight
         if getattr(args,'update_opening_sampling',False):kwargs['update_opening_sampling']=True
         if getattr(args,'update_cotton_sampling',False):kwargs['update_cotton_sampling']=True
+        if getattr(args,'update_cotton_network',False):kwargs['update_cotton_network']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)

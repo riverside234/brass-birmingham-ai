@@ -17,6 +17,7 @@ const MIXED_CONTRACT: &str = "teacher-cotton-exploration/3.0.0";
 const MIXED_25_CONTRACT: &str = "teacher-cotton-exploration/4.0.0";
 const SEATED_CONTRACT: &str = "teacher-cotton-exploration/5.0.0";
 const SINGLE_SEAT_CONTRACT: &str = "teacher-cotton-exploration/6.0.0";
+const NETWORK_CONTRACT: &str = "teacher-cotton-exploration/7.0.0";
 pub const CAP: u8 = 3;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -28,6 +29,7 @@ pub enum Mode {
     Mixed25,
     Seated,
     SingleSeat,
+    Network,
 }
 
 impl Mode {
@@ -43,6 +45,7 @@ impl Mode {
             Self::Mixed25 => MIXED_25_CONTRACT,
             Self::Seated => SEATED_CONTRACT,
             Self::SingleSeat => SINGLE_SEAT_CONTRACT,
+            Self::Network => NETWORK_CONTRACT,
         }
     }
 
@@ -50,7 +53,7 @@ impl Mode {
         match self {
             Self::Builds => (1, 5),
             Self::Develop | Self::Mixed25 => (1, 4),
-            Self::Mixed | Self::Seated | Self::SingleSeat => (3, 10),
+            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network => (3, 10),
         }
     }
 
@@ -58,18 +61,19 @@ impl Mode {
         match self {
             Self::Builds => 0.2,
             Self::Develop | Self::Mixed25 => 0.25,
-            Self::Mixed | Self::Seated | Self::SingleSeat => 0.3,
+            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network => 0.3,
         }
     }
 
     pub fn settings(self) -> Value {
-        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated | Self::SingleSeat) { "train-and-heldout" } else { "train" };
+        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated | Self::SingleSeat | Self::Network) { "train-and-heldout" } else { "train" };
         let mut settings = json!({"contract":self.contract(),"probability":self.probability(),"max_per_seat_era":CAP,
             "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":scope});
-        if self == Self::SingleSeat {
+        if matches!(self, Self::SingleSeat | Self::Network) {
             settings["minimum_build_level"] = json!(2);
             settings["short_window"] = json!("all-actions");
         }
+        if self == Self::Network { settings["network_max_per_seat_era"] = json!(1); }
         settings
     }
 }
@@ -80,8 +84,18 @@ pub fn cotton(c: &Choice) -> bool {
 fn develop_cotton(c: &Choice) -> bool {
     c.kind == Kind::Develop && c.industry == Some(Industry::CottonMill)
 }
-fn targeted(c: &Choice, develop: bool, build: bool) -> bool {
-    build && cotton(c) || develop && develop_cotton(c)
+fn targeted(c: &Choice, develop: bool, build: bool, networks: &[String]) -> bool {
+    build && cotton(c) || develop && develop_cotton(c) ||
+        c.kind == Kind::Network && c.target.as_ref().is_some_and(|t| networks.contains(t))
+}
+
+fn network_targets(view: &Observation, choices: &[Choice]) -> Vec<String> {
+    if !choices.iter().any(|c| c.kind == Kind::Network) { return Vec::new(); }
+    let cities: std::collections::HashSet<&str> = view.slots.iter()
+        .filter(|s| s.tile.is_none() && s.types.contains(&Industry::CottonMill))
+        .map(|s| s.id.split(':').next().unwrap()).collect();
+    view.links.iter().filter(|l| l.regions.iter().any(|r| cities.contains(r.as_str())))
+        .map(|l| l.id.clone()).collect()
 }
 fn is_zero(n: &u64) -> bool {
     *n == 0
@@ -129,6 +143,12 @@ pub struct Counts {
     pub actual_develops: u64,
     #[serde(skip_serializing_if = "is_zero")]
     pub continuation_targets: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub targeted_networks: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub actual_networks: u64,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub continuation_network_targets: u64,
     pub base_cotton_probability_sum: f64,
     pub mixed_cotton_probability_sum: f64,
 }
@@ -143,6 +163,7 @@ pub struct Selection {
     pub covered_locations: usize,
     pub choice: String,
     planned: Option<String>,
+    network_used_before: Option<u8>,
 }
 impl Selection {
     pub fn label(&self) -> Value {
@@ -152,6 +173,7 @@ impl Selection {
         if let Some(planned) = &self.planned {
             label["planned_action"] = json!(planned);
         }
+        if let Some(used) = self.network_used_before { label["network_used_before"] = json!(used); }
         label
     }
 }
@@ -161,12 +183,16 @@ pub struct State {
     pub used: [[u8; 4]; 2],
     pub built: [[u32; 4]; 2],
     developed: [[u32; 4]; 2],
+    network_used: [[u8; 4]; 2],
+    network_built: [[u32; 4]; 2],
     pub mode: Mode,
     pub seats: Option<u8>,
     current: Option<Binding>,
     committed: Option<Binding>,
     eligible: bool,
     builds: bool,
+    develops: bool,
+    networks: Vec<String>,
     profile: usize,
     pub selection: Option<Selection>,
     continuation_choice: Option<String>,
@@ -207,6 +233,7 @@ impl State {
         self.selection = None;
         self.continuation_choice = None;
         self.eligible = false;
+        self.networks.clear();
         self.profile = usize::from(fast);
         if self.seats.is_some_and(|mask| mask & (1 << binding.seat) == 0) {
             return 0;
@@ -218,21 +245,26 @@ impl State {
                 })
             })
         };
+        let industry = self.mode != Mode::Network || self.used[binding.era][binding.seat] < CAP;
+        self.develops = self.mode.develop() && industry;
+        self.builds = industry && (!matches!(self.mode, Mode::SingleSeat | Mode::Network) || view.players[binding.seat].mat.iter()
+            .find(|m| m.industry == Industry::CottonMill)
+            .and_then(|m| m.tiles.first()).is_some_and(|tile| tile.level > 1));
+        if self.mode == Mode::Network && self.network_used[binding.era][binding.seat] == 0 {
+            self.networks = network_targets(view, choices);
+        }
         if phase == Phase::Continuation {
             self.eligible = window
-                && self.used[binding.era][binding.seat] < CAP
+                && (self.used[binding.era][binding.seat] < CAP || !self.networks.is_empty())
                 && choices.len() > 1
-                && choices.iter().any(develop_cotton)
+                && choices.iter().any(|c| targeted(c, self.develops, false, &self.networks))
                 && !pause();
             return 0;
         }
-        let develop = self.mode.develop();
-        self.builds = self.mode != Mode::SingleSeat || view.players[binding.seat].mat.iter()
-            .find(|m| m.industry == Industry::CottonMill)
-            .and_then(|m| m.tiles.first()).is_some_and(|tile| tile.level > 1);
+        let develop = self.develops;
         let c = &mut self.counts[self.profile];
         c.action_decisions += 1;
-        if choices.len() < 2 || !choices.iter().any(|c| targeted(c, develop, self.builds)) {
+        if choices.len() < 2 || !choices.iter().any(|c| targeted(c, develop, self.builds, &self.networks)) {
             return 0;
         }
         c.legal_decisions += 1;
@@ -240,7 +272,7 @@ impl State {
             c.blocked_window += 1;
             return 0;
         }
-        if self.used[binding.era][binding.seat] >= CAP {
+        if self.used[binding.era][binding.seat] >= CAP && self.networks.is_empty() {
             c.blocked_cap += 1;
             return 0;
         }
@@ -263,6 +295,10 @@ impl State {
 
     pub fn builds(&self) -> bool {
         self.builds
+    }
+
+    pub fn coverage(&self) -> (bool, bool, Vec<String>) {
+        (self.develops, self.builds, self.networks.clone())
     }
 
     pub fn no_evidence(&mut self) {
@@ -289,7 +325,12 @@ impl State {
         decision: u64,
     ) -> String {
         if self.eligible && self.trigger(seed, decision) {
-            if let Some(choice) = choices.iter().find(|c| develop_cotton(c)) {
+            let candidates: Vec<_> = choices.iter().filter(|c| targeted(c, self.develops, false, &self.networks)).collect();
+            if !candidates.is_empty() {
+                let index = if self.mode == Mode::Network {
+                    ((u128::from(super::cpu_eval::mix(seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a02))) * candidates.len() as u128) >> 64) as usize
+                } else { 0 };
+                let choice = candidates[index];
                 self.continuation_choice = Some(choice.id.clone());
                 return choice.id.clone();
             }
@@ -317,14 +358,15 @@ impl State {
             counts.len() == choices.len() && base < choices.len() && total > 0,
             "cotton sampling shape",
         )?;
-        let develop = self.mode.develop();
+        let develop = self.develops;
         let builds = self.builds;
-        let planned = self.mode == Mode::SingleSeat;
+        let networks = &self.networks;
+        let planned = matches!(self.mode, Mode::SingleSeat | Mode::Network);
         let mut cotton_total = 0;
         let mut cotton_mass = 0.;
         let mut locations = Vec::with_capacity(2);
         for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
-            if *n > 0 && targeted(choice, develop, builds) {
+            if *n > 0 && targeted(choice, develop, builds, networks) {
                 cotton_total += n;
                 if let Some((weights, _)) = tempered {
                     cotton_mass += weights[i];
@@ -346,7 +388,7 @@ impl State {
         c.covered_locations += locations.len() as u64;
         c.cotton_visits += cotton_total;
         c.total_visits += total;
-        let base_p = if planned { f64::from(u8::from(targeted(&choices[base], develop, builds))) }
+        let base_p = if planned { f64::from(u8::from(targeted(&choices[base], develop, builds, networks))) }
                      else { tempered.map_or(cotton_total as f64 / total as f64, |(_, mass)| cotton_mass / mass) };
         c.base_cotton_probability_sum += base_p;
         c.mixed_cotton_probability_sum += (1. - mixture) * base_p + mixture;
@@ -354,13 +396,13 @@ impl State {
         if trigger {
             let z = super::cpu_eval::mix(seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a02));
             if let Some((weights, _)) = tempered {
-                let eligible = weights.iter().copied().enumerate().filter(|(i, _)| targeted(&choices[*i], develop, builds));
+                let eligible = weights.iter().copied().enumerate().filter(|(i, _)| targeted(&choices[*i], develop, builds, networks));
                 selected = super::cpu_eval::sample_weights(eligible, cotton_mass, z)?;
             } else {
                 let draw = ((u128::from(z) * u128::from(cotton_total)) >> 64) as u64;
                 let mut sum = 0;
                 for (i, (choice, n)) in choices.iter().zip(counts).enumerate() {
-                    if targeted(choice, develop, builds) {
+                    if targeted(choice, develop, builds, networks) {
                         sum += n;
                         if draw < sum {
                             selected = i;
@@ -377,7 +419,7 @@ impl State {
             |(weights, mass)| (weights[selected], mass, cotton_mass));
         let base_mass = if planned { f64::from(u8::from(selected == base)) } else { selected_mass / full_mass };
         let probability = (1. - mixture) * base_mass
-            + if targeted(&choices[selected], develop, builds) { mixture * selected_mass / cotton_mass } else { 0. };
+            + if targeted(&choices[selected], develop, builds, networks) { mixture * selected_mass / cotton_mass } else { 0. };
         self.selection = Some(Selection {
             contract: self.mode.contract(),
             targeted: trigger,
@@ -388,6 +430,7 @@ impl State {
             covered_locations: locations.len(),
             choice: choices[selected].id.clone(),
             planned: planned.then(|| choices[base].id.clone()),
+            network_used_before: (self.mode == Mode::Network).then_some(self.network_used[binding.era][binding.seat]),
         });
         Ok(selected)
     }
@@ -424,13 +467,20 @@ impl State {
         }
         if trigger {
             check(
-                targeted(choice, self.mode.develop(), self.builds) && self.used[binding.era][binding.seat] < CAP,
+                targeted(choice, self.develops, self.builds, &self.networks) &&
+                    (if choice.kind == Kind::Network { self.network_used[binding.era][binding.seat] < 1 }
+                     else { self.used[binding.era][binding.seat] < CAP }),
                 "cotton allowance exceeded",
             )?;
-            self.used[binding.era][binding.seat] += 1;
-            if cotton(choice) {
+            if choice.kind == Kind::Network {
+                self.network_used[binding.era][binding.seat] += 1;
+                self.counts[self.profile].targeted_networks += 1;
+                self.counts[self.profile].continuation_network_targets += u64::from(self.continuation_choice.is_some());
+            } else if cotton(choice) {
+                self.used[binding.era][binding.seat] += 1;
                 self.counts[self.profile].targeted_builds += 1;
             } else {
+                self.used[binding.era][binding.seat] += 1;
                 self.counts[self.profile].targeted_develops += 1;
                 self.counts[self.profile].continuation_targets +=
                     u64::from(self.continuation_choice.is_some());
@@ -444,6 +494,10 @@ impl State {
             self.developed[binding.era][binding.seat] += 1;
             self.counts[self.profile].actual_develops += 1;
         }
+        if self.mode == Mode::Network && choice.kind == Kind::Network {
+            self.network_built[binding.era][binding.seat] += 1;
+            self.counts[self.profile].actual_networks += 1;
+        }
         self.committed = Some(binding);
         Ok(())
     }
@@ -452,6 +506,10 @@ impl State {
             "targeted_by_era_seat":self.used,"builds_by_era_seat":self.built});
         if self.mode.develop() {
             receipt["develops_by_era_seat"] = json!(self.developed);
+        }
+        if self.mode == Mode::Network {
+            receipt["network_targeted_by_era_seat"] = json!(self.network_used);
+            receipt["networks_by_era_seat"] = json!(self.network_built);
         }
         receipt
     }
@@ -662,5 +720,47 @@ mod tests {
         v.context.revision += 1;
         assert_eq!(state.prepare(&v, &choices, true, true), 1);
         assert!(state.builds());
+    }
+
+    #[test]
+    fn network_has_a_separate_era_quota_and_continuations_recheck_it() {
+        let mut v = view();
+        let seat = v.seat as usize;
+        let mut choices = choices();
+        choices[1].kind = Kind::Network;
+        choices[1].industry = None;
+        let target = network_targets(&v, &choices).first().unwrap().clone();
+        choices[1].target = Some(target.clone());
+        choices[2].kind = Kind::Develop;
+        let mut state = State { mode: Mode::Network, seats: Some(1 << seat), ..State::default() };
+        state.used[0][seat] = CAP;
+        assert_eq!(state.prepare(&v, &choices, true, true), 1);
+        assert!(!state.builds && !state.develops);
+        assert_eq!(state.prepare(&v, &choices, true, true), 1);
+        let trigger = (0..100).find(|&d| state.trigger(7,d)).unwrap();
+        assert_eq!(state.sample(0,&choices,&[9,1,0],10,None,7,trigger).unwrap(),1);
+        let label = state.selection.as_ref().unwrap().label();
+        assert_eq!(label["used_before"],3);
+        assert_eq!(label["network_used_before"],0);
+        assert_eq!(label["probability"],0.3);
+        state.commit(&v,&choices[1],v.context.revision+1).unwrap();
+        assert_eq!(state.used[0][seat],3);
+        assert_eq!(state.network_used[0][seat],1);
+        v.context.revision += 1;
+        v.context.phase = Phase::Continuation;
+        assert_eq!(state.prepare(&v,&choices,true,true),0);
+        assert!(!state.eligible());
+        v.context.revision += 1;
+        v.context.era = Era::RailEra;
+        state.prepare(&v,&choices,true,true);
+        let picked = state.sample_continuation(choices[0].id.clone(), &choices[..2],7,trigger);
+        assert_eq!(picked,choices[1].id);
+        state.commit(&v,&choices[1],v.context.revision+1).unwrap();
+        assert_eq!(state.network_used[1][seat],1);
+        assert_eq!(state.used[1][seat],0);
+        assert_eq!(state.counts[1].continuation_network_targets,1);
+        // Occupying all cotton slots removes network targets, including mixed slots.
+        v.slots.retain(|s| !s.types.contains(&Industry::CottonMill));
+        assert!(network_targets(&v,&choices).is_empty());
     }
 }

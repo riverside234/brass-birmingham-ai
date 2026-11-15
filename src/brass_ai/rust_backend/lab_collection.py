@@ -142,7 +142,8 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
                 else: rng.choices([0],weights=[1.],k=1); chosen,probability,teacher=0,1.,None
             elif seat in cotton.seats:
                 rate, builds = cotton.options(view, choices)
-                chosen,probability,teacher=p.select_batch([(view,choices,rng)],cotton_probability=rate,cotton_builds=builds)[0]
+                chosen,probability,teacher=p.select_batch([(view,choices,rng)],cotton_probability=rate,cotton_builds=builds,
+                                                        cotton_targets=cotton.targets(view,choices))[0]
             else: chosen,probability,teacher=p.select_batch([(view,choices,rng)])[0]
             style,intent=p.context_features(view,rng)
             behavior=dict(kind=p.kind,policy_id=p.policy_id,probability=probability,temperature=getattr(p,'temperature',1.))
@@ -172,7 +173,7 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             if compare: compare(row,encoded,lane)
             t=time.monotonic(); lane.append(row,evidence,allow_forced=neural); timings['native_step_seconds']+=time.monotonic()-t
             if cotton.limited:
-                cotton.commit(view, behavior)
+                cotton.commit(view, behavior, choices[chosen])
         if raw_export:
             t=time.monotonic();receipt,pages,features=lane.completed_export()
             timings['combined_completion_export_seconds']+=time.monotonic()-t

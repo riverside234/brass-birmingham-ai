@@ -30,6 +30,7 @@ def inference_deadline(policies, deadline):
 FAMILY_WEIGHTS = dict(build=4, develop=4, network=4, loan=2, sell=2, scout=1)
 COTTON_EXPLORATION = 'cotton_exploration'
 COTTON_DEVELOP_ONLY = 'cotton_develop_only'
+COTTON_CANDIDATES = 'cotton_candidates'
 COTTON_PROBABILITY = .15
 LIMITED_COTTON_PROBABILITY = .20
 COTTON_PROBABILITIES = (COTTON_PROBABILITY, .10, LIMITED_COTTON_PROBABILITY)
@@ -56,6 +57,25 @@ def cotton_candidates(choices, phase, *, builds=True):
         return []
     kinds = ('build', 'develop') if phase == 'action' and builds else ('develop',)
     return [i for i, c in enumerate(choices) if c['kind'] in kinds and c.get('industry') == 'CottonMill']
+
+
+def cotton_network_targets(view):
+    """Public empty cotton slots; legality and affordability come from choices."""
+    cities = {s['id'].split(':')[0] for s in view['slots']
+              if not s.get('tile') and 'CottonMill' in s['types']}
+    return {link['id'] for link in view['links'] if any(city in cities for city in link['regions'])}
+
+
+def network_cotton_candidates(view, choices, *, industry=True, network=True):
+    phase = view['context']['phase']
+    if len(choices) <= 1 or phase not in ('action', 'continuation'):
+        return []
+    builds = industry and phase == 'action' and cotton_build_available(view, view['seat'])
+    links = cotton_network_targets(view) if network and any(c['kind'] == 'network' for c in choices) else ()
+    return [i for i, c in enumerate(choices)
+            if (c['kind'] == 'network' and c.get('target') in links) or
+            (industry and c.get('industry') == 'CottonMill' and
+             (c['kind'] == 'develop' or builds and c['kind'] == 'build'))]
 
 
 def sample_cotton(rng, selected, baseline, candidates, rate):
@@ -216,7 +236,7 @@ class NeuralPolicy:
         requests=self.prediction_requests(inputs)
         return self.prediction_outputs(requests,self.evaluator.predict(requests))
 
-    def select_batch(self, inputs, *, cotton_probability=0., cotton_builds=True):
+    def select_batch(self, inputs, *, cotton_probability=0., cotton_builds=True, cotton_targets=None):
         if self.exploration_version == 3:
             requests = self.prediction_requests(inputs)
             responses = self.evaluator.predict(requests)
@@ -226,7 +246,7 @@ class NeuralPolicy:
                 raw = np.asarray(response['probabilities'], dtype=np.float64)
                 raw /= raw.sum()
                 output.append(self.sample_training(view, choices, rng, raw, request.intent,
-                                                   cotton_probability=cotton_probability, cotton_builds=cotton_builds))
+                                                   cotton_probability=cotton_probability, cotton_builds=cotton_builds, cotton_targets=cotton_targets))
             return output
         output = []
         for (probabilities, _), (_, _, rng) in zip(self.predict(inputs), inputs):
@@ -234,7 +254,7 @@ class NeuralPolicy:
             output.append((selected, float(probabilities[selected]), None))
         return output
 
-    def sample_training(self, view, choices, rng, raw, intent, *, cotton_probability=0., cotton_builds=True):
+    def sample_training(self, view, choices, rng, raw, intent, *, cotton_probability=0., cotton_builds=True, cotton_targets=None):
         phase = view['context']['phase']
         count = self.action_counts.get(rng, 0)
         temperature = (self.opening['temperature'] if self.opening and phase == 'action' and
@@ -250,10 +270,14 @@ class NeuralPolicy:
             exploration_version=3, component='exploration' if explore else 'policy',
             action_decision=count if phase == 'action' else None)
         probability = mixed[selected]
-        if cotton_probability and (candidates := cotton_candidates(choices, phase, builds=cotton_builds)):
+        candidates = ((cotton_candidates(choices, phase, builds=cotton_builds) if cotton_targets is None else cotton_targets)
+                      if cotton_probability else ())
+        if cotton_probability and candidates:
             selected, probability, targeted = sample_cotton(rng, selected, mixed, candidates, cotton_probability)
             self.last_behavior[rng][COTTON_EXPLORATION] = cotton_probability
-            if not cotton_builds:
+            if cotton_targets is not None:
+                self.last_behavior[rng][COTTON_CANDIDATES] = list(candidates)
+            elif not cotton_builds:
                 self.last_behavior[rng][COTTON_DEVELOP_ONLY] = True
             if targeted:
                 self.last_behavior[rng]['component'] = 'cotton'

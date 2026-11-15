@@ -53,7 +53,8 @@ def previous(config):
     result['value_phase'].update(contract=P.TEACHER_FLOOR_CONTRACT)
     if result['value_phase']['beta_clone_min'] == .5:
         result['value_phase']['beta_clone_min'] = P.TEACHER_FLOOR_DEFAULT['beta_clone_min']
-    if result['value_phase']['max_epochs'] == 1:
+    from .training_revision_g2400 import applied as network_cotton
+    if result['value_phase']['max_epochs'] == 1 or network_cotton(config) and result['value_phase']['max_epochs'] == 2:
         result['value_phase']['max_epochs'] = P.TEACHER_FLOOR_DEFAULT['max_epochs']
     original=defaults()
     result['teacher_phase']['search_value'].update(steps_per_iteration=original['steps_per_iteration'])
