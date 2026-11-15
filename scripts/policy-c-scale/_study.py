@@ -34,15 +34,17 @@ from brass_ai.rust_backend.lab_paths import runtime_path
 from brass_ai.step5.league import write_json
 
 RUN = 'artifacts/step5/joint7-v11-2-g1190-restart-3'
-DEFAULT_GENERATION = 2400
+DEFAULT_GENERATION = 2600
 DEFAULT_LANES = 60
-WEIGHT = 0.0
+WEIGHT = 1.0
+STUDY_OPENING = dict(GAME_OPENING, temperature=1.3)
+SOURCE_ITERATIONS = 3
 K = 8
 SHORT_N = 96
 LONG_N = 640
 REF_N = 3000
 GROUPS = ('total', 'normal', 'cotton')
-TARGETS = {'normal': 200, 'cotton': 50}
+TARGETS = {'normal': 500, 'cotton': 100}
 
 
 def generation_entry(state, generation):
@@ -174,6 +176,8 @@ def diagnostic_job(config, state, entry, saved, utility_calibration):
                                          short_labels=False, search_head_weight=int(WEIGHT), seats=[])
     job['readiness'], _ = readiness(None, utility_calibration, job['expected']['reward_id'], skip=True)
     lab_teacher.validate_job(job)
+    # Validate the training recipe first. Only the isolated probe worker accepts the study temperature.
+    job['teacher_revision']['exploration']['game_opening'] = STUDY_OPENING.copy()
     return job
 
 
@@ -234,7 +238,7 @@ class Probes:
         context = row['view']['context']
         opening = context['era'] == 'CanalEra' and context['round'] <= 2
         require(label.get('explored', False) == opening
-                and label.get('sampling_temperature') == (GAME_OPENING['temperature'] if opening else None)
+                and label.get('sampling_temperature') == (STUDY_OPENING['temperature'] if opening else None)
                 and 'cotton_exploration' not in label, 'Probe opening sampling differs')
         return label
 
@@ -273,12 +277,18 @@ def study_worker(binary, scratch, toolchain, core):
             code = code.replace(before, after, 1)
         path.write_text(code, encoding='utf-8', newline='\n')
 
+    temperature = STUDY_OPENING['temperature']
     patch('cpu_eval.rs', [
         ('        let index = state.action(actual.actor, c.era, c.round, c.actions_remaining);\n'
          '        let window = index <= revision.opening_actions || !fast && revision.long_search;',
          '        state.action(actual.actor, c.era, c.round, c.actions_remaining);\n'
          '        let window = revision.tempered_opening && game_opening(c.era, c.round);'),
         ('        check(!fast || revision.short_labels, "short-search label without short labels")?;\n', ''),
+        ('opening == &json!({"temperature":2.0,"actions_per_seat":3})',
+         f'opening == &json!({{"temperature":{temperature},"actions_per_seat":3}})'),
+        ('(n as f64).sqrt()', f'(n as f64).powf(1.0 / {temperature})'),
+        ('teacher["sampling_temperature"] = json!(2.0);',
+         f'teacher["sampling_temperature"] = json!({temperature});'),
     ], patterns=[(r'(?m)^        \[DEFAULT_C_SCALE,[^\r\n]*\]\.contains\(&c_scale\),$',
                    '        c_scale.is_finite() && c_scale > 0. && c_scale <= 1.,')])
     patch('teacher.rs', [
@@ -343,27 +353,28 @@ def compare_roots(sampler, rows, probes, targets, compare, scales, lanes):
     return valid, attempts
 
 
-def main(kind, default_scales, compare, summarize, *, candidate_n, default_targets=TARGETS):
+def main(kind, default_scales, compare, summarize, *, candidate_n):
     parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study')
     parser.add_argument('--run', default=RUN)
     parser.add_argument('--generation', type=int, default=int(os.getenv('GEN', str(DEFAULT_GENERATION))),
                         help=f'Frozen checkpoint (default: g{DEFAULT_GENERATION} or GEN)')
     parser.add_argument('--collected-generation', '--collected-generations', type=int, nargs='+',
-                        help='One or more archived generations to pool (default: generation - 1)')
+                        help=f'Archived source generations to pool (default: the preceding {SOURCE_ITERATIONS} iterations)')
     parser.add_argument('--lanes', type=int, default=int(os.getenv('LANES', str(DEFAULT_LANES))),
                         help=f'Concurrent CPU workers (default: {DEFAULT_LANES} or LANES)')
     parser.add_argument('--ref-scale', type=float, choices=(0.1, 1.0), default=float(os.getenv('REF_SCALE', '0.1')))
-    parser.add_argument('--normal-positions', type=int, default=default_targets['normal'],
-                        help=f'Normal position target (default: {default_targets["normal"]})')
-    parser.add_argument('--cotton-positions', type=int, default=default_targets['cotton'],
-                        help=f'Cotton position target (default: {default_targets["cotton"]})')
+    parser.add_argument('--normal-positions', type=int, default=TARGETS['normal'],
+                        help=f'Normal position target (default: {TARGETS["normal"]})')
+    parser.add_argument('--cotton-positions', type=int, default=TARGETS['cotton'],
+                        help=f'Cotton position target (default: {TARGETS["cotton"]})')
     parser.add_argument('--limit', type=int, default=os.getenv('LIMIT'),
                         help='Cap the combined normal/cotton position targets, or 0 for all available positions')
     parser.add_argument('--scales', type=float, nargs='+', default=default_scales)
     parser.add_argument('--sampler', default=os.getenv('BRASS_NATIVE_WORKER'))
     parser.add_argument('--toolchain', default='1.99.1')
     args = parser.parse_args()
-    referenced = [args.generation - 1] if args.collected_generation is None else sorted(args.collected_generation)
+    referenced = (list(range(args.generation - SOURCE_ITERATIONS, args.generation))
+                  if args.collected_generation is None else sorted(args.collected_generation))
     if not (len(set(referenced)) == len(referenced) and all(0 <= g < args.generation for g in referenced)
             and args.lanes > 0 and (args.limit is None or args.limit >= 0)
             and args.normal_positions > 0 and args.cotton_positions > 0
@@ -398,7 +409,7 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     sources = ', '.join(f'g{generation}' for generation in referenced)
     print(f'g{args.generation} | {sources} positions | targets {targets} | '
           f'{args.lanes} lanes | w={WEIGHT:g} | reference K{K}/{REF_N} C_scale={args.ref_scale:g} | '
-          f'opening T={GAME_OPENING["temperature"]:g}',
+          f'opening T={STUDY_OPENING["temperature"]:g}',
           flush=True)
 
     with TemporaryDirectory(prefix='brass-policy-c-scale-', dir=ROOT / 'artifacts',
@@ -436,7 +447,7 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
         source_context['collected_generation'] = referenced[0]
     print_and_save(kind, dict(run=str(run), generation=args.generation, **source_context,
                               checkpoint=entry, w=WEIGHT, k=K, ref_scale=args.ref_scale, ref_n=REF_N,
-                              candidate_n=candidate_n, method='native-scale-sweep', game_opening=GAME_OPENING,
+                              candidate_n=candidate_n, method='native-scale-sweep', game_opening=STUDY_OPENING,
                               lanes=args.lanes, scales=args.scales, worker_sha256=worker_sha, core_sha256=core),
                    groups)
     require(groups['total']['valid'], 'No complete, supported reference pairs')

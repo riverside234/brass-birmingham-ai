@@ -55,5 +55,4 @@ def summarize(valid, scales):
 
 
 if __name__ == '__main__':
-    main('short', SCALES, compare, summarize, candidate_n=SHORT_N,
-         default_targets={'normal': 400, 'cotton': 100})
+    main('short', SCALES, compare, summarize, candidate_n=SHORT_N)
