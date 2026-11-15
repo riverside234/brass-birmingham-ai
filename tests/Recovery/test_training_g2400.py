@@ -140,35 +140,7 @@ class CottonNetwork(unittest.TestCase):
 
 
 class Diagnostics(unittest.TestCase):
-    def test_wide_teacher_chunks_keep_the_full_mean_gradient(self):
-        from test_b025 import config
-        from brass_ai.recovery import teacher_term as T
-        from brass_ai.recovery.teacher_labels import LabelRow
-        from brass_ai.recovery.value_preservation import TrunkGradients
-        class Model(torch.nn.Module):
-            def __init__(self):
-                super().__init__();self.state_encoder=torch.nn.Linear(2,1,bias=False)
-                with torch.no_grad():self.state_encoder.weight.zero_()
-        model=Model();rows=[];width=512
-        for i in range(96):
-            x=np.stack((np.linspace(-1,1,width),np.sin(np.arange(width)+i)),axis=-1).astype(np.float32)
-            target=np.exp(x[:,0]+x[:,1]*.2);target/=target.sum()
-            label=dict(target=target.tolist(),logits=[0.]*width,legal_ids=list(map(str,range(width))),phase='canal_early')
-            rows.append(LabelRow(dict(teacher=label),SimpleNamespace(choice_ids=label['legal_ids'],features=x)))
-        options=config()['teacher_phase'];options=dict(options,mode='on',term=dict(options['term'],rows_per_step=96))
-        cells=[]
-        def forward(net,part,**kwargs):
-            cells.append(len(part)*width)
-            return net.state_encoder(torch.as_tensor(np.stack([r.encoded.features for r in part]))).squeeze(-1)
-        with patch.object(T,'forward_policy',side_effect=forward):
-            term=T.TeacherTerm(model,options,[(0,r) for r in rows],seed=4,generation=2400,state=dict(beta=1.,calibrated=True))
-            logits=forward(model,rows);target=T.target_tensor(rows,logits)
-            loss=(torch.special.xlogy(target,target)-target*logits.log_softmax(-1)).sum(-1).mean()
-            expected=torch.autograd.grad(loss,tuple(model.parameters()))
-            cells.clear();term.apply(model,TrunkGradients(model),1)
-        self.assertEqual(cells,[32768,16384])
-        self.assertAlmostEqual(term.steps[0]['loss'],float(loss.detach()),places=6)
-        for p,want in zip(model.parameters(),expected):torch.testing.assert_close(p.grad,want,atol=1e-6,rtol=1e-5)
+    # The g2400 chunked teacher step was reverted at g2600 (test_training_g2600.Staging).
 
     def test_shared_process_batches_preserve_order_rng_and_cleanup(self):
         from test_throughput_g470 import probe_fixture

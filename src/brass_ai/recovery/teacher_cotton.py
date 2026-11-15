@@ -83,11 +83,15 @@ def validate_label(label, choices, *, view=None):
         (e['cotton_visits'],e['total_visits'],e['covered_locations'])==(cotton,total,len(locations)),
         'Cotton coverage counters differ from search evidence')
     n,is_cotton=played
-    if label.get('sampling_temperature') == 2.:
-        weights = [math.sqrt(count) for count in label['counts']]
+    temperature = label.get('sampling_temperature')
+    if temperature is not None:
+        # Visit counts raised to 1/T, exactly as the native sampler (sqrt for T=2).
+        require(temperature in (2., 1.3), 'Invalid teacher opening sampling temperature')
+        tempered = math.sqrt if temperature == 2. else (lambda count: count ** (1. / temperature))
+        weights = [tempered(count) for count in label['counts']]
         total = sum(weights)
         cotton = sum(w for c,w in zip(choices,weights) if targeted(c))
-        n = math.sqrt(n)
+        n = tempered(n)
     planned = single and label['played_action'] == e['planned_action']
     base = float(planned) if single else n/total
     probability=(1-mixture)*base+(mixture*n/cotton if is_cotton else 0.)

@@ -13,6 +13,7 @@ STANDARD = 'standard_exploration'
 GROUPS = (COTTON, STANDARD, 'all')
 SPLITS = ('train', 'heldout')
 MOVING_AVERAGE_ITERATIONS = 10
+FULL_HISTORY_START = 2269
 HISTORY_MAX_POINTS = 40
 RECENT_MAX_POINTS = 30
 
@@ -154,9 +155,11 @@ def marker_indices(observations, limit):
 
 
 def render(history, output, *, generation=None):
-    """Plot the three moving averages in the full history and latest 200 iterations."""
+    """Plot comparable teacher VP from g2269 and a recent 200-generation view."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import FancyBboxPatch
     from matplotlib.ticker import MaxNLocator
     import matplotlib
     from .rating_plot import RECENT_GENERATIONS, _ticks
@@ -165,72 +168,121 @@ def render(history, output, *, generation=None):
     rows = {r['generation']: r['scores'] for r in history['iterations'] if r['generation'] <= generation}
     if not rows:
         return None
-    means = moving_averages(rows)
+    # Start the moving average inside the comparable period as well as cutting the x-axis.
+    means = moving_averages({g: scores for g, scores in rows.items() if g >= FULL_HISTORY_START})
     generations = list(means)
+    # Archived reports before the change can still show their original recent window.
+    recent_means = means if generation >= FULL_HISTORY_START else moving_averages(rows)
     recent_start = max(1, generation-RECENT_GENERATIONS+1)
     recent = range(recent_start, generation+1)
-    recent_count = sum(g in means for g in recent)
-    paper, ink, muted = '#F7FAFA', '#18333B', '#49656C'
+    recent_count = sum(g in recent_means for g in recent)
+    latest = next(reversed(recent_means), None)
+    paper, ink, muted = '#F5F7FA', '#182C43', '#4E6175'
+    grid, border, window = '#E2E8F0', '#D4DEE9', '#EAF1F9'
+    series = (
+        (COTTON, 'Cotton exploration', '#AE4718', '-', 'D'),
+        (STANDARD, 'No cotton exploration', '#006CA7', (0, (3.2, 2.2)), 's'),
+        ('all', 'All tables', '#253550', '-', 'o'),
+    )
+    styles = {
+        group: dict(color=color, linestyle=dashes, marker=marker, markersize=3.8,
+                    linewidth=2.15 if group == 'all' else 1.75,
+                    markerfacecolor=color if group == 'all' else 'white',
+                    markeredgecolor='white' if group == 'all' else color,
+                    markeredgewidth=.8)
+        for group, _, color, dashes, marker in series
+    }
     with matplotlib.rc_context({'font.family': 'DejaVu Sans', 'svg.fonttype': 'none',
-                               'svg.hashsalt': 'teacher-vp', 'path.simplify': False}):
-        figure = Figure(figsize=(15.5, 5.4), facecolor=paper)
+                               'svg.hashsalt': 'teacher-vp', 'path.simplify': False,
+                               'lines.solid_capstyle': 'round', 'lines.dash_capstyle': 'round',
+                               'lines.solid_joinstyle': 'round', 'lines.dash_joinstyle': 'round'}):
+        figure = Figure(figsize=(17.5, 6.8), facecolor=paper)
         FigureCanvasAgg(figure)
-        figure.text(.07, .918, 'Teacher table VP', fontsize=23, color=ink, weight='bold')
-        figure.text(.07, .864, f'Final VP per seat · training and held-out tables · {MOVING_AVERAGE_ITERATIONS}-iteration moving average',
-                    fontsize=11, color=muted)
-        positions = range(len(generations))
-        overview_ticks = sorted({round(i*(len(generations)-1)/7) for i in range(8)})
+        figure.text(.055, .924, 'Teacher table VP', fontsize=25, color=ink, weight='bold')
+        figure.text(.055, .874, f'Final VP per seat · training and held-out tables · '
+                    f'trailing {MOVING_AVERAGE_ITERATIONS}-iteration mean', fontsize=11, color=muted)
+        figure.text(.945, .874, f'Latest moving averages · g{latest}' if latest is not None
+                    else 'No comparable VP recorded', ha='right', fontsize=10, color=muted)
 
-        def panel(rect, title, subtitle, x, values, marker_limit, *, recent_panel=False):
+        # Each series key also shows its exact latest moving average.
+        latest_values = recent_means.get(latest, {})
+        for left, (group, label, color, _, _) in zip((.055, .355, .655), series, strict=True):
+            figure.add_artist(FancyBboxPatch((left, .765), .29, .077,
+                boxstyle='round,pad=0,rounding_size=.009', transform=figure.transFigure,
+                facecolor='white', edgecolor=border, linewidth=.75, zorder=1))
+            figure.add_artist(Line2D([left+.015, left+.030, left+.045], [.803]*3,
+                transform=figure.transFigure, markevery=[1], **styles[group]))
+            figure.text(left+.055, .803, label, fontsize=10.5, color=ink, va='center')
+            value = latest_values.get(group, math.nan)
+            figure.text(left+.275, .803, f'{value:,.2f}' if math.isfinite(value) else '—',
+                        fontsize=19, color=color, va='center', ha='right', weight='bold')
+
+        def panel(rect, title, subtitle, x, values, data, marker_limit, prefix, empty_label):
             axes = figure.add_axes(rect, facecolor='white')
-            figure.text(rect[0], .751, title, fontsize=12, weight='bold', color=ink)
-            figure.text(rect[0], .714, subtitle, fontsize=9, color=muted)
-            for group, label, color, style in zip(GROUPS, ('Cotton exploration', 'Standard exploration', 'All tables'),
-                                                  ('#007D79', '#A75521', '#314E87'), ('-', '--', '-.'), strict=True):
-                y = [means[g][group] if g in means else math.nan for g in values]
-                line, = axes.plot(x, y, color=color, linestyle=style, marker='o', markersize=2.7,
-                                  markevery=marker_indices(y, marker_limit), linewidth=1.5, label=label)
-                prefix = 'teacher-vp-recent-' if recent_panel else 'teacher-vp-'
+            figure.text(rect[0], .705, title, fontsize=13, weight='bold', color=ink)
+            figure.text(rect[0], .667, subtitle, fontsize=9.5, color=muted)
+            finite = []
+            for group, label, _, _, _ in series:
+                y = [data[g][group] if g in data else math.nan for g in values]
+                finite.extend(value for value in y if math.isfinite(value))
+                line, = axes.plot(x, y, label=label, markevery=marker_indices(y, marker_limit), **styles[group])
                 line.set_gid(prefix + group.replace('_', '-'))
-            axes.set_xlabel('Committed generation', color=muted)
-            axes.set_ylabel('Mean VP', color=muted)
-            axes.yaxis.set_major_locator(MaxNLocator(nbins=6))
-            axes.grid(axis='y', color='#E0EBED', linewidth=.8)
+            axes.set_ylabel('Mean VP per seat', color=muted, fontsize=10, labelpad=9)
+            axes.yaxis.set_major_locator(MaxNLocator(nbins=5))
+            axes.grid(axis='y', color=grid, linewidth=.8)
+            axes.grid(axis='x', color=grid, linewidth=.65, alpha=.55)
             axes.set_axisbelow(True)
-            axes.spines[['right', 'top']].set_visible(False)
-            axes.spines[['left', 'bottom']].set_color('#ABC2C6')
-            axes.tick_params(colors=muted, labelsize=9)
+            axes.spines[['left', 'right', 'top']].set_visible(False)
+            axes.spines['bottom'].set_color(border)
+            axes.tick_params(colors=muted, labelsize=9, length=0, pad=7)
+            if finite:
+                low, high = min(finite), max(finite)
+                pad = max(.5, (high-low)*.08)
+                axes.set_ylim(low-pad, high+pad)
+            else:
+                axes.set_yticks([])
+                axes.text(.5, .5, empty_label, ha='center', va='center',
+                          transform=axes.transAxes, color=muted, fontsize=10)
             return axes
 
-        overview = panel((.07, .165, .49, .51), 'Full training history',
-                         f'{len(rows):,} recorded iterations · up to {HISTORY_MAX_POINTS} markers per curve',
-                         positions, generations, HISTORY_MAX_POINTS)
-        overview.set_xlim(-.6, len(generations)-.4)
+        positions = range(len(generations))
+        overview_ticks = sorted({round(i*(len(generations)-1)/7) for i in range(8)}) if generations else []
+        overview = panel((.073, .160, .458, .474), 'Full training history',
+                         f'From g{FULL_HISTORY_START} · {len(generations):,} recorded iterations',
+                         positions, generations, means, HISTORY_MAX_POINTS, 'teacher-vp-',
+                         f'No teacher VP recorded from g{FULL_HISTORY_START}')
+        pad = max(.6, (len(generations)-1)*.012)
+        overview.set_xlim(-pad, max(pad, len(generations)-1+pad))
         overview.set_xticks(overview_ticks, [str(generations[i]) for i in overview_ticks])
+        overview.set_xlabel('Generation · recorded iterations only', color=muted, fontsize=10, labelpad=9)
         first_recent = sum(g < recent_start for g in generations)
         if 0 < first_recent < len(generations):
-            overview.axvspan(first_recent-.5, len(generations)-.4,
-                             color='#314E87', alpha=.07, linewidth=0, zorder=0)
-        detail = panel((.648, .165, .32, .51), 'Recent 200 iterations',
-                       f'g{recent_start}–g{generation} · {recent_count:,} recorded · up to {RECENT_MAX_POINTS} markers per curve',
-                       recent, recent, RECENT_MAX_POINTS, recent_panel=True)
-        detail.set_xlim(recent_start-2, generation+2)
-        detail.set_xticks(sorted({recent_start, *_ticks(recent_start, generation, 5)}))
-        if not recent_count:
-            detail.set_yticks([])
-            detail.text(.5, .5, 'No teacher VP available in this window', ha='center', va='center',
-                        transform=detail.transAxes, color=muted, fontsize=9)
-        handles, labels = overview.get_legend_handles_labels()
-        figure.legend(handles, labels, loc='center left', bbox_to_anchor=(.066, .807), ncol=3,
-                      frameon=False, labelcolor=ink, fontsize=9)
+            overview.axvspan(first_recent-.5, overview.get_xlim()[1], facecolor=window, linewidth=0,
+                             zorder=0).set_gid('teacher-vp-recent-window')
+            figure.text(overview.get_position().x1, .667, 'Recent window', ha='right',
+                        fontsize=9, color=muted, bbox=dict(facecolor=window, edgecolor='none', pad=3))
+
+        detail = panel((.615, .160, .330, .474), f'Recent {RECENT_GENERATIONS} iterations',
+                       f'g{recent_start}–g{generation} · {recent_count:,} recorded · separate VP scale',
+                       recent, recent, recent_means, RECENT_MAX_POINTS, 'teacher-vp-recent-',
+                       'No teacher VP available in this window')
+        pad = max(2, (generation-recent_start)*.012)
+        detail.set_xlim(recent_start-pad, generation+pad)
+        # Keep the true range endpoints and avoid an adjacent grid tick crowding the first label.
+        min_gap = (generation-recent_start)*.10
+        ticks = [g for g in _ticks(recent_start, generation, 5) if g-recent_start >= min_gap or g == generation]
+        detail.set_xticks(sorted({recent_start, *ticks}))
+        detail.set_xlabel('Generation', color=muted, fontsize=10, labelpad=9)
+
         output = Path(output)
         figure.savefig(output, format='svg', metadata=dict(Date=None, Title='Teacher table VP',
             Description=f'Trailing {MOVING_AVERAGE_ITERATIONS}-iteration final VP per seat, pooled by table count '
                         'across training and held-out teacher tables. '
-                        'Series distinguish cotton-targeted tables, standard exploration, and all tables. '
-                        f'Full history plots all {len(rows)} recorded iterations with up to {HISTORY_MAX_POINTS} markers per curve. '
+                        'Series distinguish tables with cotton exploration, without cotton exploration, and all tables. '
+                        f'Full history starts at g{FULL_HISTORY_START} and plots {len(generations)} recorded iterations '
+                        f'with up to {HISTORY_MAX_POINTS} markers per curve. '
                         f'Recent detail spans g{recent_start}–g{generation} with {recent_count} recorded iterations, '
-                        f'actual generation spacing and up to {RECENT_MAX_POINTS} markers per curve.'))
+                        f'actual generation spacing, a separate VP scale and up to {RECENT_MAX_POINTS} markers per curve.'))
     output.write_text('\n'.join(line.rstrip() for line in output.read_text(encoding='utf-8').splitlines())+'\n',
                       encoding='utf-8', newline='\n')
     return output

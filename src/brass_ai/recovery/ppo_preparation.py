@@ -285,13 +285,17 @@ class Preparation:
             q=dataset.q[index] if not value_only and (exploration or index in cotton) else None
             arrays=(row.state,row.actions,row.stable_to_relative)
             if q is not None and q.flags.writeable:q.setflags(write=False)
-            # Sealed rows are bytes-backed and immutable, so hashing them again
-            # cannot find anything. Other inputs are still rechecked on reuse.
-            seal=None if checked_encoded(row) else tuple(array_digest(a) for a in arrays)+(array_digest(q) if q is not None else None,)
+            # Sealed rows are bytes-backed and immutable and were fully admitted
+            # (shapes, finite arrays, action selectors) when sealed. A value-only
+            # row is a view of its sealed source row, so it inherits both. Hashing
+            # or re-admitting them here on the main thread cannot find anything;
+            # it cost ~7 s of serial staging per PPO pass after g2400.
+            sealed=checked_encoded(dataset.encoded[index] if value_only else row)
+            seal=None if sealed else tuple(array_digest(a) for a in arrays)+(array_digest(q) if q is not None else None,)
             key=(id(dataset),index,bool(exploration),value_only)
             cached=self.cache.get(key)
             if cached is None:
-                self.input_audit.check(row)
+                if not sealed:self.input_audit.check(row)
                 specs=[write_array(self.stream,a) for a in arrays]
                 spec=(*specs,write_array(self.stream,q) if q is not None else None,row.feature_version)
                 self.cache[key]=(dataset,seal,spec) # keep owner alive; object IDs cannot be reused

@@ -404,6 +404,108 @@ class SearchRefresh(unittest.TestCase):
             G.validate_job(job)
             self.assertEqual(teacher_job_budget(budget,job),budget)
 
+    def test_g2600_recipe_clears_both_buffers_and_keeps_ppg_state(self):
+        from collections import Counter
+        from brass_ai.recovery import teacher_search_retune as retune, training_revision_g1491 as G
+        from brass_ai.recovery import training_revision_g2090 as opening, training_revision_g2240 as seated
+        from brass_ai.recovery import training_revision_g2400 as network, training_revision_g2600 as g2600
+        from brass_ai.recovery.actor_value import TrainingPhases
+        from brass_ai.recovery.collector_runtime import DEFAULTS, cpu_block, scope, teacher_job_budget
+        from brass_ai.recovery.exploration import THREE_OPENING
+        from brass_ai.recovery.opening_objective import FORK_T15
+        from brass_ai.recovery.resume import load_resume
+        from brass_ai.recovery.search_value_rows import ValueBuffer
+        from brass_ai.recovery.teacher_buffer import TeacherBuffer
+        from brass_ai.recovery.teacher_labels import IDENTITY, LabelRow
+        from brass_ai.recovery.teacher_phase import TeacherPhase, plan_jobs
+        from brass_ai.recovery.teacher_phase_config import buffer_identity
+
+        run, _, state, _ = self.refreshed_checkpoint()
+        generation = state['iteration']
+        config = retune.configure(state['signature']['config'])
+        config = retune.configure(G.configure_teacher_games(config, 0), split_c_scale=True)
+        config = seated.configure(opening.configure(refresh.configure(config, reset=True)))
+        pre_network = retune.configure(config, update_scales=True)
+        config = network.configure(pre_network)
+        entry = state['history'][-1]
+        _, raw = load_checkpoint(ROOT/entry['path'])
+        training = raw['training']; search = training['search_value']
+        search['stage'].update(stage='C', w=1., scale=1., stage_a_iterations=100, stage_b_iterations=50)
+        values = ValueBuffer(run/'search-values', search['reward_id'])
+        for split in ('train', 'heldout'):
+            row = dict(generation=generation-1, split=split, game_id=split, index=1, reward_id=search['reward_id'])
+            values.publish(generation-1, split, [row], game_id=split)
+        search['buffer'] = values.payload()
+        teacher = training['teacher_phase']
+        teacher['buffer']['identity'] = buffer_identity(config)
+        labels = TeacherBuffer(ROOT, run, teacher['buffer']['identity'])
+        label = dict.fromkeys(IDENTITY)
+        label.update(generation=generation-1, model_id=entry['model_id'], reward_id=search['reward_id'], c2=.1,
+                     seat=0, turn_key=[], revision=0, kind='root')
+        labels.publish(generation-1, 'train', [LabelRow(dict(teacher=label), None)],
+                       model_id=entry['model_id'], reward_id=search['reward_id'])
+        teacher['buffer'] = labels.payload()
+        ppg = training['actor_value_phases']
+        # A committed g2400 iteration saves its two-epoch, .5-floor PPG options.
+        training['actor_value_phases'] = dict(ppg, beta_clone=.75, options=dict(ppg['options'], value_phase=config['value_phase']))
+        backend = dict(state['native_backend'], config_sha256=digest(config), teacher=dict(
+            state['native_backend']['teacher'], stage_schedule=digest(config['teacher_phase']['search_value']['schedule']),
+            ppg_beta_floor=.5))
+        signature = dict(state['signature'], config=config)
+        training.update(signature=digest(signature), native_backend=backend)
+        torch.save(raw, ROOT/entry['path'])
+        entry = dict(entry, sha256=sha(ROOT/entry['path']))
+        state.update(signature=signature, native_backend=backend, teacher_phase=teacher,
+                     search_value=stamp(search), history=[*state['history'][:-1], entry], resume=[entry])
+        write_json(run/'state.json', state)
+
+        with self.assertRaisesRegex(ValueError, 'g2400 cotton-network'):
+            retune.configure(pre_network, g2600=True)
+        after = retune.prepare(ROOT, run, expected_generation=generation, g2600=True)
+        self.assertEqual(retune.prepare(ROOT, run, expected_generation=generation, g2600=True), after)
+        config = after['signature']['config']
+        self.assertTrue(g2600.applied(config) and network.applied(config) and opening.applied(config))
+        self.assertEqual((config['opening'], config['update']['opening_objective']), (THREE_OPENING, FORK_T15))
+        self.assertEqual(G.count_search(config), dict(full_k=8, c_scale=.2, fast_c_scale=.7))
+        self.assertEqual((config['value_phase']['max_epochs'], config['value_phase']['beta_clone_min']), (1, .25))
+        self.assertEqual(config['teacher_phase']['search_value']['schedule']['ppg_beta_floor_after_stage_b'], .25)
+        self.assertEqual(config['teacher_phase'][G.KEY]['exploration']['game_opening'], dict(temperature=1.3, actions_per_seat=3))
+        _, migrated = load_checkpoint(ROOT/after['history'][-1]['path'])
+        buf = migrated['training']['search_value']['buffer']
+        self.assertEqual((buf['receipts'], sorted(r['split'] for r in buf['retired'][-2:])), ([], ['heldout', 'train']))
+        self.assertEqual(migrated['training']['teacher_phase']['buffer']['receipts'], [])
+        self.assertEqual(after['search_value']['stage']['stage'], 'C')
+        self.assertEqual(after['search_value']['stage']['buffer_rebuild']['required_ages'], 8)
+        self.assertEqual(after['teacher_phase']['weight'][beta.REMEASUREMENT]['requested_generation'], generation)
+        self.assertEqual(after['native_backend']['teacher']['ppg_beta_floor'], .25)
+        moved = migrated['training']['actor_value_phases']
+        self.assertEqual(moved['options']['value_phase'], config['value_phase'])
+        saved = training['actor_value_phases']
+        self.assertTrue(_same_payload({k: v for k, v in saved.items() if k != 'options'},
+                                      {k: v for k, v in moved.items() if k != 'options'}))
+        for key in ('state_dict', 'optimizer', 'rng', 'cuda_rng'):
+            self.assertTrue(_same_payload(raw[key], migrated[key]))
+        receipt = after['teacher_g2600_revision']
+        self.assertEqual((receipt['retired_teacher_shards'], receipt['retired_value_shards'], receipt['ppg_beta']), (1, 2, .75))
+        current, converted, _ = load_resume(ROOT, run, after, after['signature'])
+        phases = TrainingPhases(current, config, raw=converted, generation=generation, root=ROOT, run=run)
+        self.assertEqual((phases.beta, phases.options['value_phase']['beta_clone_min']), (.75, .25))
+        block = cpu_block(teacher_budget=dict(cpu_block()['teacher_budget'], **G.G2600_SEARCH))
+        with scope(dict(DEFAULTS, native_inference=block)):
+            phase = TeacherPhase(ROOT, run, config, after, current, converted)
+        self.assertTrue(phase.ready)
+        self.assertEqual(phase.buffer.rows(generation), [])
+        jobs, _ = plan_jobs(config, after, model_id=entry['model_id'], export_hash=after['history'][-1]['sha256'],
+                            epoch=generation, ready=True)
+        counts = Counter((job['split'], cotton.enabled(job)) for job in jobs)
+        self.assertEqual((counts['train', True]+counts['train', False], counts['heldout', True], counts['heldout', False]), (32, 1, 3))
+        self.assertIn(counts['train', True], (4, 5))
+        budget = dict(mode='count', full=640, fast=96, fast_k=8, **G.G2600_SEARCH)
+        for job in jobs:
+            G.validate_job(job)
+            self.assertEqual(job['teacher_revision']['exploration']['game_opening'], g2600.GAME_OPENING)
+            self.assertEqual(teacher_job_budget(budget, job), budget)
+
     def test_reset_a_trained_32_head_and_gate_teacher_override(self):
         from collections import Counter
         from brass_ai.recovery import ppg_g210, teacher_search_retune as retune, training_revision_g1491 as revision

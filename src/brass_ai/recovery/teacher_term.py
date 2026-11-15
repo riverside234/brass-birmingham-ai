@@ -245,17 +245,16 @@ class TeacherTerm:
         rows = [self.rows[i] for i in indices]
         parameters = tuple(p for n, p in model.named_parameters() if n.startswith(ACTOR_PREFIXES) and p.requires_grad)
         with policy_context(model):
-            if self.long_weight is None and len(rows)*max(len(r.encoded.choice_ids) for r in rows)<=32768:
+            if self.long_weight is None:
+                # One padded forward per step, however wide the rows. Splitting wide
+                # steps into 32k-cell chunks (g2400) repeated the launch-bound
+                # encoder forward/backward per chunk: 20-30 s per PPO pass, not 1-3 s.
                 logits = forward_policy(model, rows, audit=self.input_audit).float()
                 target = target_tensor(rows, logits)
                 logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
                 loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
                 gradients = torch.autograd.grad(loss, parameters, allow_unused=True)
-            elif self.long_weight is None:
-                total, gradients, _ = weighted_gradients(model, rows, [1./len(rows)]*len(rows), parameters,
-                                                         audit=self.input_audit, max_cells=32768)
-                loss = torch.tensor(total)
             else:
                 # 2048 rows do not fit one forward: exact gradient sums over PPO-sized chunks.
                 total, gradients, per_row = weighted_gradients(model, rows, row_weights, parameters, audit=self.input_audit)

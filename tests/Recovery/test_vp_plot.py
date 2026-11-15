@@ -93,7 +93,10 @@ class VPProgress(unittest.TestCase):
         from brass_ai.recovery import teacher_vp as T
 
         scores = T.summarize([('train', True, [11]*4), ('heldout', False, [33]*4)])
-        history = dict(committed_generation=300, iterations=[dict(generation=g, scores=scores) for g in (1, 100, 101, 150, 300)])
+        offset = T.FULL_HISTORY_START-1
+        old_scores = T.summarize([('train', True, [200]*4), ('heldout', False, [200]*4)])
+        history = dict(committed_generation=offset+300, iterations=[dict(generation=offset, scores=old_scores),
+            *(dict(generation=offset+g, scores=scores) for g in (1, 100, 101, 150, 300))])
         seen = {}
         plot = Axes.plot
         def record(axes, x, y, *args, **kwargs):
@@ -102,12 +105,14 @@ class VPProgress(unittest.TestCase):
         with patch.object(Axes, 'plot', record):
             T.render(history, self.run/T.CHART)
         left, right = seen.values()
+        self.assertEqual(next(iter(seen)).get_xticklabels()[0].get_text(), str(T.FULL_HISTORY_START))
         self.assertEqual(left, ([0, 1, 2, 3, 4], [22.]*5, [0, 1, 2, 3, 4]))
-        self.assertEqual(right[0], list(range(101, 301)))
-        self.assertEqual([g for g, vp in zip(*right[:2], strict=True) if not math.isnan(vp)], [101, 150, 300])
-        self.assertEqual([right[0][i] for i in right[2]], [101, 150, 300])
+        self.assertEqual(right[0], list(range(offset+101, offset+301)))
+        recent_observations = [offset+g for g in (101, 150, 300)]
+        self.assertEqual([g for g, vp in zip(*right[:2], strict=True) if not math.isnan(vp)], recent_observations)
+        self.assertEqual([right[0][i] for i in right[2]], recent_observations)
 
-        history['iterations'] = [dict(generation=g, scores=scores) for g in range(1, 301)]
+        history['iterations'][1:] = [dict(generation=offset+g, scores=scores) for g in range(1, 301)]
         seen.clear()
         with patch.object(Axes, 'plot', record):
             T.render(history, self.run/T.CHART)
@@ -116,7 +121,7 @@ class VPProgress(unittest.TestCase):
         self.assertEqual((len(right[0]),len(right[2])), (200,30))
         self.assertEqual((left[2][0],left[2][-1]), (0,299))
         self.assertEqual((right[2][0],right[2][-1]), (0,199))
-        self.assertEqual((right[0][0], right[0][-1]), (101, 300))
+        self.assertEqual((right[0][0], right[0][-1]), (offset+101, offset+300))
 
     def test_teacher_moving_average_pools_seats_across_the_last_ten_generations(self):
         from brass_ai.recovery import teacher_vp as T

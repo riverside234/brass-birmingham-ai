@@ -208,11 +208,19 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if g2240.applied(config):
             prefix=prefix.replace('-opening-t2-cotton10-share', '-cotton-g2240-share')
             stages.append(prefix)
-            if profile == g1491.UPDATED_SEARCH:
+            if profile in (g1491.UPDATED_SEARCH, g1491.G2600_SEARCH):
                 prefix=prefix.replace('-teacher-k8-c015-', '-teacher-k8-c010-c070-')
                 stages.append(prefix)
         if g2400.applied(config):
             prefix=prefix.replace('-ppg-epoch1-', '-ppg-epoch2-').replace('-share', '-cotton-network-share');stages.append(prefix)
+        from brass_ai.recovery import training_revision_g2600 as g2600
+        if g2600.applied(config):
+            # The g2400 filename above (and its other blend) stays in the runtime lookup chain.
+            if weight is not None and previous_weight is not None and previous_weight != weight:
+                stages.append(prefix.replace(f'-w{weight}-', f'-w{previous_weight}-'))
+            prefix=(prefix.replace('-teacher-k8-c010-c070-', '-teacher-k8-c020-c070-').replace('-ppg-epoch2-', '-ppg-epoch1-')
+                    .replace('-share', '-g2600-opening13-floor025-share'))
+            stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before))
@@ -383,6 +391,10 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g1491.applied(options):
             report['g1491_revision']=g1491.summary(options)
             print('g1491 revision: '+str(report['g1491_revision']),flush=True)
+        from brass_ai.recovery import training_revision_g2600 as g2600
+        if g2600.applied(options):
+            report['g2600_revision']=g2600.summary(options)
+            print('g2600 revision: '+str(report['g2600_revision']),flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

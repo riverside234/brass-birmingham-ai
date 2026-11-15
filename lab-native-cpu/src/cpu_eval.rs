@@ -499,6 +499,8 @@ pub struct Revision {
     opening_actions: u32,
     normal_sampling: bool,
     tempered_opening: bool,
+    /// Game-opening sampling temperature: 2.0 (g2090), or 1.3 for single-seat jobs (g2600).
+    opening_temperature: f64,
     long_search: bool,
     cotton: Option<CottonMode>,
     cotton_seats: Option<u8>,
@@ -609,9 +611,13 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
             "unreviewed mixed teacher job")?;
     }
     if let Some(opening) = game_opening {
-        check(seats.is_some() && opening == &json!({"temperature":2.0,"actions_per_seat":3}),
+        // T1.3 only with normal sampling off: the policy fallback for unvisited roots
+        // (normal sampling only) stays at its reviewed T2.
+        check(seats.is_some() && (opening == &json!({"temperature":2.0,"actions_per_seat":3})
+            || opening == &json!({"temperature":1.3,"actions_per_seat":3}) && normal_sampling == Some(&json!(false))),
             "unreviewed teacher opening temperature")?;
     }
+    let opening_temperature = game_opening.and_then(|o| o["temperature"].as_f64()).unwrap_or(2.0);
     if let Some(normal) = normal_sampling {
         check(normal == false && seats.is_some() && game_opening.is_some(), "unreviewed teacher sampling mode")?;
     }
@@ -663,6 +669,7 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         opening_actions: opening as u32,
         normal_sampling: !single,
         tempered_opening: game_opening.is_some(),
+        opening_temperature,
         long_search: e["long_search"] == true,
         cotton,
         cotton_seats,
@@ -705,6 +712,11 @@ pub(crate) fn sample_weights(weights: impl Iterator<Item = (usize, f64)>, total:
     Err("tempered visit sample out of range".into())
 }
 
+/// A root visit count raised to 1/T; exactly sqrt at the original T=2.
+fn tempered_visits(n: u64, temperature: f64) -> f64 {
+    if temperature == 2.0 { (n as f64).sqrt() } else { (n as f64).powf(1.0 / temperature) }
+}
+
 fn game_opening(era: Era, round: u8) -> bool {
     // Four seats take one action in the first Canal round and two in the second.
     era == Era::CanalEra && round <= 2
@@ -713,7 +725,7 @@ fn game_opening(era: Era, round: u8) -> bool {
 pub fn teacher_tempered_opening(view: &Observation) -> bool {
     let c = &view.context;
     c.phase == Phase::Action && game_opening(c.era, c.round) && REVISION.with(|cell| {
-        cell.borrow().as_ref().is_some_and(|(r, _)| r.normal_sampling && r.tempered_opening)
+        cell.borrow().as_ref().is_some_and(|(r, _)| r.normal_sampling && r.tempered_opening && r.opening_temperature == 2.0)
     })
 }
 
@@ -761,7 +773,7 @@ pub fn teacher_explore(
             return Ok((planned, false));
         }
         let weights = (revision.tempered_opening && game_opening(c.era, c.round))
-            .then(|| counts.iter().map(|&n| (n as f64).sqrt()).collect::<Vec<_>>());
+            .then(|| counts.iter().map(|&n| tempered_visits(n, revision.opening_temperature)).collect::<Vec<_>>());
         let tempered = weights.as_deref().map(|w| (w, w.iter().sum::<f64>()));
         let base = if !ordinary {
             actual.actions.iter().position(|action| action == &planned).ok_or("missing planned teacher action")?
@@ -852,7 +864,7 @@ pub fn teacher_mark_label(row: &mut Value, fast: bool, explored: bool) -> Result
             teacher["explored"] = json!(true);
         }
         if tempered {
-            teacher["sampling_temperature"] = json!(2.0);
+            teacher["sampling_temperature"] = json!(revision.opening_temperature);
         }
         if revision.cotton.is_some() {
             if let Some(selection)=&state.cotton.selection {
@@ -1610,6 +1622,32 @@ mod tests {
         }
         assert_eq!(visit_sample(&counts, 100, 11, 5).unwrap(), visit_sample(&counts, 100, 11, 5).unwrap());
         assert!(visit_sample(&counts, 99, 11, 5).is_err());
+    }
+
+    #[test]
+    fn single_seat_teacher_opening_accepts_t13_and_tempers_visits() {
+        let mut job = revision_job(7, true);
+        job["split"] = json!("heldout");
+        job["teacher_revision"]["short_labels"] = json!(false);
+        job["teacher_revision"][COTTON_SEATS] = json!([]);
+        job["teacher_revision"]["exploration"]["game_opening"] = json!({"temperature":1.3,"actions_per_seat":3});
+        // Normal sampling keeps its reviewed T2 policy fallback, so T1.3 needs it off.
+        assert!(revision(&job).is_err());
+        job["teacher_revision"]["exploration"]["normal_sampling"] = json!(false);
+        let r = revision(&job).unwrap().unwrap();
+        assert!(r.tempered_opening && !r.normal_sampling && r.opening_temperature == 1.3);
+        for other in [1.5, 1.0] {
+            let mut changed = job.clone();
+            changed["teacher_revision"]["exploration"]["game_opening"]["temperature"] = json!(other);
+            assert!(revision(&changed).is_err());
+        }
+        let mut t2 = job.clone();
+        t2["teacher_revision"]["exploration"]["game_opening"]["temperature"] = json!(2.0);
+        assert_eq!(revision(&t2).unwrap().unwrap().opening_temperature, 2.0);
+        assert_eq!(tempered_visits(81, 2.0), 9.0);
+        assert_eq!(tempered_visits(0, 1.3), 0.0);
+        assert_eq!(tempered_visits(100, 1.3), 100f64.powf(1.0 / 1.3));
+        assert!((tempered_visits(100, 1.3) - 34.551).abs() < 1e-3);
     }
 
     #[test]

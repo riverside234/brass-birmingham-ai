@@ -111,6 +111,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'Refill the search buffers and re-measure beta with teaching on.')
     migrations.add_argument('--update-teacher-scales', action='store_true',
         help='Use long C_scale=0.10 and short C_scale=0.70 for all teacher tables and refill their training buffers.')
+    migrations.add_argument('--update-g2600-recipe', action='store_true',
+        help='Use opening temperature 1.3 for three actions in PPO and teacher games, long C_scale=0.20 on all '
+             'teacher tables, a .25 PPG beta floor and one-epoch ordinary PPG. Clears both teacher search buffers '
+             'and re-measures beta with teaching on.')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -133,6 +137,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         profile = g1491.COTTON_SPLIT_SEARCH
     elif args.update_teacher_scales:
         profile = g1491.UPDATED_SEARCH
+    elif args.update_g2600_recipe:
+        profile = g1491.G2600_SEARCH
     elif args.retune_teacher_search and profile is None:
         profile = g1491.RETUNED_SEARCH
     args.teacher_count_search = profile
@@ -153,9 +159,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     if args.reset_search_head:
         from brass_ai.recovery.search_head_refresh import prepare
         state=prepare(ROOT,run,expected_generation=generation,adaptive_beta=args.adaptive_teacher_beta,reset=True)
-    if args.retune_teacher_search or args.split_teacher_c_scale or args.update_teacher_scales:
+    if args.retune_teacher_search or args.split_teacher_c_scale or args.update_teacher_scales or args.update_g2600_recipe:
         from brass_ai.recovery.teacher_search_retune import prepare
-        options = dict(update_scales=True) if args.update_teacher_scales else dict(split_c_scale=args.split_teacher_c_scale)
+        options = (dict(g2600=True) if args.update_g2600_recipe else dict(update_scales=True) if args.update_teacher_scales
+                   else dict(split_c_scale=args.split_teacher_c_scale))
         state=prepare(ROOT,run,expected_generation=generation,**options)
     end = generation+args.iterations
     if not g1491.applied(state['signature']['config']) and interrupted(run, generation):

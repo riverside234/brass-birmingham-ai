@@ -24,6 +24,17 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/profile-rust
 
 ## What the current measurements show
 
+### Lab results through g2600
+
+Mean PPO time rose from **50.2 s** (2280–2399) to **57.1 s** (2470–2599); the median went from **47.1 s** to **52.6 s**. The teacher term explains it: it correlates 0.91 with PPO time and is bimodal, **1.4–3.6 s** in some iterations and **20–31 s** in others (before g2400: median **3.0 s**). The bounded-padding branch (one step over 32,768 cells, about 342 choices for 96 rows) split each step into width-sorted chunks and re-ran the launch-bound encoder forward/backward per chunk. Whether an iteration was fast or slow depended on whether its label pool held wide rows, which is why slow and fast iterations came in runs. The rest of PPO did not get slower: PPO minus the teacher term averaged **46.9 s** before and **45.6 s** after. Batch transport improved, with worker time **36 → 19 s**, wait **8.1 → 1.4 s** and transfer **5.9 → 1.4 s**. Main-thread staging grew **9.6 → 18.9 s** (median), because the new single admission re-hashed every sealed row's actions and re-checked selectors on each value-only view on the main thread. `freeze_values` rose **4.2 → 6.5 s** (median) for the same reason. [g2600 export](../results/joint7-v11-2-g1190-restart-3-g2600-20261115T165747002789Z).
+
+Fixes at g2600:
+- The teacher term goes back to one padded forward per step, keeping the single target upload and input audit.
+- Staging admits only unsealed rows. Sealed rows, and value-only views of sealed rows, were fully admitted (shapes, finite arrays, selectors) when sealed, so they skip both the re-hash and the per-pass digest.
+- Shared result slots, worker-side packing and the disk fallback are unchanged.
+
+Expect PPO near **40 s**, without the 65–80 s iterations.
+
 ### Lab results through g2400
 
 The 120 iterations since g2280 have median PPO time **47.11 s**. The largest outlier, iteration 2392, took **136.96 s**: waiting for CPU batches took **55.34 s**, compared with a median **7.78 s**, and the teacher term took **38.95 s**, compared with **3.01 s**. Prepared-batch transfer stayed at **6.34 s**, close to its **5.90 s** median. This isolates the remaining stalls to preparation and teacher work; the earlier disk-transfer stall is absent in this sample. [g2400 export](../results/joint7-v11-2-g1190-restart-3-g2400-20261115T022541658333Z).

@@ -13,12 +13,18 @@ from .teacher_phase_config import buffer_identity
 from .utility_width_upgrade import archive_pending
 
 
-def configure(config, *, split_c_scale=False, update_scales=False):
+def configure(config, *, split_c_scale=False, update_scales=False, g2600=False):
     from brass_ai.rust_backend.lab_teacher_activation import is_on
     from .config import validate_config
 
     require(is_on(config) and g1491.variant_of(config) == g1491.SEARCH_REFRESH,
             'Retuning needs the refreshed teacher-on recipe')
+    if g2600:
+        from . import training_revision_g2600 as revision
+        require(not (split_c_scale or update_scales), 'Choose one teacher search migration')
+        result = revision.configure(config)
+        validate_config(result)
+        return result
     if split_c_scale:
         require(g1491.count_search(config) == g1491.RETUNED_SEARCH and
                 g1491.teacher_search_head_weight(config) is not None,
@@ -41,9 +47,10 @@ def configure(config, *, split_c_scale=False, update_scales=False):
     return result
 
 
-def prepare(root, run, *, expected_generation, split_c_scale=False, update_scales=False):
+def prepare(root, run, *, expected_generation, split_c_scale=False, update_scales=False, g2600=False):
     from brass_ai.rust_backend.lab_backend import validate_state
     from brass_ai.rust_backend.lab_replay_compat import execution
+    from . import training_revision_g2600 as g2600_revision
     from .resume import load_resume
 
     root, run = owned(root, run)
@@ -53,11 +60,14 @@ def prepare(root, run, *, expected_generation, split_c_scale=False, update_scale
         require(generation == expected_generation, 'Run advanced; use the committed generation in state.json')
         before = state['signature']['config']
         profile = g1491.count_search(before)
-        if update_scales and profile == g1491.UPDATED_SEARCH:
+        if g2600:
+            if g2600_revision.applied(before):
+                return state
+        elif update_scales and profile == g1491.UPDATED_SEARCH:
             return state
-        if not update_scales and (profile == g1491.COTTON_SPLIT_SEARCH or (profile is not None and not split_c_scale)):
+        elif not update_scales and (profile == g1491.COTTON_SPLIT_SEARCH or (profile is not None and not split_c_scale)):
             return state
-        config = configure(before, split_c_scale=split_c_scale, update_scales=update_scales)
+        config = configure(before, split_c_scale=split_c_scale, update_scales=update_scales, g2600=g2600)
         model, raw, _ = load_resume(root, run, state, state['signature'])
         del model
         validate_state(state, raw)
@@ -67,18 +77,19 @@ def prepare(root, run, *, expected_generation, split_c_scale=False, update_scale
         require(teacher == state['teacher_phase'] and search['generation'] == generation and
                 stamp(search) == state['search_value'], 'Teacher/search-value checkpoint state differs')
         stage = search['stage']
-        allowed_stages = ('A', 'B', 'C') if split_c_scale or update_scales else ('A',)
+        allowed_stages = ('A', 'B', 'C') if split_c_scale or update_scales or g2600 else ('A',)
         require(stage['stage'] in allowed_stages, 'The committed search-head stage does not support this retune')
 
         previous = state['history'][-1]
         profile = g1491.count_search(config)
-        tag = ('teacher-k8-c010-c070' if update_scales else
+        tag = ('teacher-g2600-opening13-c020-c070' if g2600 else 'teacher-k8-c010-c070' if update_scales else
                'teacher-k8-c020-cotton010' if split_c_scale else 'teacher-k8')
         directory = safe(run, run/'configuration-history'/f'{tag}-{generation:04d}')
         backup = directory/'state-before.json'
         labels, values = teacher['buffer'], search['buffer']
         # Dedicated validation uses realized utility, independent of the old
         # search scores. Only training returns bootstrap from the old search.
+        # g2600 also changes the teacher opening, so its held-out games retire too.
         kept, retired = [], []
         for row in values['receipts']:
             (kept if update_scales and row['split'] == 'heldout' else retired).append(row)
@@ -90,7 +101,7 @@ def prepare(root, run, *, expected_generation, split_c_scale=False, update_scale
         weight = dict(teacher['weight'], outside_streak=0)
         weight[adaptive.REMEASUREMENT] = dict(requested_generation=generation, previous_beta=weight['beta'])
         weight.pop(adaptive.KEY, None)
-        if update_scales:
+        if update_scales or g2600:
             # The old shadow window remains in the signed activation receipt.
             # It must not seed the fresh moving averages.
             weight['shadow_shares'] = []
@@ -102,8 +113,21 @@ def prepare(root, run, *, expected_generation, split_c_scale=False, update_scale
 
         signature = dict(state['signature'], config=config)
         backend = dict(state['native_backend'], config_sha256=digest(config))
+        extra = {}
+        if g2600:
+            # The activation receipt binds the stage schedule and PPG floor; the
+            # ordinary PPG state keeps beta, trips, Adam and replay, with new options.
+            backend['teacher'] = dict(backend['teacher'], stage_schedule=digest(config['teacher_phase']['search_value']['schedule']),
+                                      ppg_beta_floor=config['value_phase']['beta_clone_min'])
+            ppg = training['actor_value_phases']
+            require(ppg['options']['value_phase'] == before['value_phase'] and
+                    config['value_phase']['beta_clone_min'] <= ppg['beta_clone'] <= config['value_phase']['beta_clone_max'],
+                    'Ordinary PPG checkpoint options differ')
+            extra['actor_value_phases'] = dict(ppg, options=dict(ppg['options'], value_phase=config['value_phase']))
+            receipt.update(g2600_revision.summary(config), ppg_beta=ppg['beta_clone'])
+            rebuild['instruction_id'] = digest(receipt)
         checkpoint = dict(raw, training=dict(training, signature=digest(signature), native_backend=backend,
-                          native_backend_execution=execution(), teacher_phase=teacher, search_value=search))
+                          native_backend_execution=execution(), teacher_phase=teacher, search_value=search, **extra))
 
         if backup.exists():
             require(read(backup) == state, 'Teacher search migration backup differs from committed state')
@@ -119,7 +143,7 @@ def prepare(root, run, *, expected_generation, split_c_scale=False, update_scale
         finally:
             temporary.unlink(missing_ok=True)
         entry = dict(previous, path=output.relative_to(root).as_posix(), sha256=sha(output))
-        migration = ('teacher_search_scale_update' if update_scales else
+        migration = ('teacher_g2600_revision' if g2600 else 'teacher_search_scale_update' if update_scales else
                      'teacher_search_scale_split' if split_c_scale else 'teacher_search_retune')
         updated = dict(state, signature=signature, native_backend=backend, teacher_phase=teacher,
                        search_value=stamp(search), history=[*state['history'][:-1], entry], **{migration: receipt})
@@ -131,6 +155,10 @@ def prepare(root, run, *, expected_generation, split_c_scale=False, update_scale
         write_json(run/'state.json', updated)
         long_scale = (f'standard C_scale={profile["c_scale"]:.2f}, cotton C_scale={profile["cotton_c_scale"]:.2f}'
                       if split_c_scale else f'C_scale={profile["c_scale"]}')
+        if g2600:
+            print(f'g{generation}: opening temperature 1.3 for three actions in PPO and teacher games; '
+                  f'PPG beta floor .25, ordinary PPG at most one epoch. Retired {len(labels["receipts"])} teacher '
+                  f'label and {len(retired)} search-value shards.', flush=True)
         print(f'g{generation}: long K={profile["full_k"]}, {long_scale}, '
               f'short C_scale={profile["fast_c_scale"]}. Teacher-on beta remeasurement scheduled. '
               f'Search value stays in Stage {stage["stage"]} while the buffers refill. '

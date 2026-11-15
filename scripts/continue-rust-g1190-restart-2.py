@@ -72,6 +72,14 @@ from the three cotton build/develop allowance, for both PPO and teacher cotton
 seats. Teacher training tables use 15% cotton over time (4/5 of 32); each held-out
 set stays three standard plus one cotton. Ordinary PPG caps at two epochs;
 search-value PPG stays at one. Both keep the current .5 beta floor and buffers.
+
+--update-g2600-recipe (at a committed g2400 cotton-network boundary) uses
+temperature 1.3 for each seat's first three actions in PPO games and for the
+cotton seat in teacher tables, long C_scale=.20 on standard and cotton teacher
+tables (short stays .70), a .25 PPG beta floor in every search-head stage and
+at most one ordinary PPG epoch. It retires the teacher label and search-value
+buffers (held-out games included), keeps the search-head stage while they
+refill, and re-measures beta with teaching on. The new settings persist.
 """
 import importlib.util
 from pathlib import Path

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "77d8459751fff0bcd901dfdf839ffc60408f846b4e5a6787606002e46de6aa63",
+  "execution_implementation": "90c2e72e1544fe682157dec4a5357f620ad429a1f48bfe351c09886864853849",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -819,6 +819,16 @@
       "implementation": "5e55cfbcce9f9a0e954c8b134a55a85257d6635ec27e384543efa7e703944e8a",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "0c089ca9af7149a6c97825c6fe44879d6c430814755bd34d6191a4c7fff18d29"
+    },
+    {
+      "implementation": "77d8459751fff0bcd901dfdf839ffc60408f846b4e5a6787606002e46de6aa63",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "bc4a3985453e88550d85ed18179892821f105caa702b8468347c466383447bae"
+    },
+    {
+      "implementation": "1cb10da85648d9562dfa9c2c10cec5a0f04c5e3d651bb127376f931b3e5f4f9d",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "07b58d68513f6e4d7f2b04926327f76e8406a5b830265e53569691883e17698c"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1043,7 +1053,7 @@
     "qualified_implementation_unchanged": true
   },
   "teacher_vp_and_collection_scheduling": {
-    "scope": "Report uncapped terminal VP of training and held-out teacher games and render/export all three VP series. Historical reward payouts recover exact scores only below the cap. In an overlapped fixed-count wave, release each CPU after search and before deferred parity and sealing. Ordinary lanes can reuse released CPUs on demand and start alongside publishers. Share a 6 GiB handoff budget across ordinary lanes and pause new parents under pressure while ready branches keep priority. Frozen jobs, model inference, validation and durable replay contracts remain equivalent.",
+    "scope": "Report uncapped terminal VP of training and held-out teacher games and render/export all three VP series. Historical reward payouts recover exact scores only below the cap. The teacher VP overview and its moving averages start at g2269, with series styling and latest means derived from saved VP history. In an overlapped fixed-count wave, release each CPU after search and before deferred parity and sealing. Ordinary lanes can reuse released CPUs on demand and start alongside publishers. Share a 6 GiB handoff budget across ordinary lanes and pause new parents under pressure while ready branches keep priority. Frozen jobs, model inference, validation and durable replay contracts remain equivalent.",
     "qualified_implementation_unchanged": true
   },
   "teacher_cotton_table_search_scales": {
@@ -1080,6 +1090,10 @@
   },
   "g2400_cotton_network_and_ppg": {
     "scope": "One cotton network per seat and era, separate from three build/develop targets; 15 percent teacher cotton tables in training; heldouts retain three standard and one cotton game; ordinary PPG cap two, search value cap one. Preserve models, optimizers, beta, RNG and compatible buffers. Reuse private PPO shared result slots, admit inputs once, batch teacher targets and bound teacher padding. Report heldout utility and corrected search EV from existing predictions.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2600_recipe_and_ppo_performance": {
+    "scope": "PPO: the teacher term returns to one padded forward per step (the g2400 32k-cell chunks repeated the encoder forward/backward per chunk), keeping the single target upload and input audit; CPU staging admits only unsealed rows, since sealed rows and value-only views of sealed rows were fully admitted when sealed. Same gradients and batches. Recipe, adopted once at a committed g2400 cotton-network boundary by teacher_search_retune.prepare(g2600=True): PPO opening temperature 1.3 for each neural seat's first three actions with the FORK_T15 objective; teacher single-seat tables sample the same three opening actions from root visits raised to 1/1.3; long C_scale .20 on standard and cotton teacher tables, short .70, K=8; PPG beta floor .25 in every search-head stage and at most one ordinary PPG epoch. Teacher label and search-value buffers (held-out included) retire and refill over eight ages with the search-head stage kept; teacher beta is re-measured with teaching on; model, optimizers, PPG beta/trips/Adam/replay and RNG are preserved.",
     "qualified_implementation_unchanged": true
   }
 }

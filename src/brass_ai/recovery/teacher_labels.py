@@ -122,7 +122,7 @@ def validate_improved_policy(label, choices, *, view=None):
             'Teacher K differs')
     require(type(label.get('explored', False)) is bool, 'Invalid teacher exploration flag')
     if 'sampling_temperature' in label:
-        require(label['sampling_temperature']==2. and label.get('explored') is True and label['phase']=='canal_early',
+        require(label['sampling_temperature'] in (2., 1.3) and label.get('explored') is True and label['phase']=='canal_early',
                 'Invalid teacher opening sampling temperature')
     require(sum(label['counts']) == label['node_trajectories'] <= label['completed_trajectories'],
             'Teacher completed watermark differs')

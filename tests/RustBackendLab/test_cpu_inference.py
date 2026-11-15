@@ -877,6 +877,34 @@ class NativeWorkers(unittest.TestCase):
             self.assertTrue(all(n<=3 for era in receipt['targeted_by_era_seat'] for n in era))
             for row in result['rows']:C.validate_label(row['teacher'],row['choices'],view=row['view'])
 
+    def test_g2600_t13_cotton_network_teacher_at_full_blend(self):
+        from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
+        from brass_ai.step5.policy import cotton_seats
+        budget=dict(mode='count',full=64,fast=24,fast_k=8,**G.G2600_SEARCH)
+        exploration=dict(G.COTTON_ONLY_EXPLORATION,game_opening=G.T13_GAME_OPENING,cotton=C.settings(contract=C.NETWORK_CONTRACT))
+        seed=self.all_seat_job(1.)['sampling_seed']
+        seats=cotton_seats(seed,1,C.NETWORK_CONTRACT)
+        revision=G._job_block(exploration,short_labels=False,cotton_table=True,seats=seats,search_head_weight=1)
+        tempered=0
+        for split in ('train','heldout'):
+            job,result,verifier=self.run_all_seat(1.,budget,revision,split=split,streamed=True)
+            self.assertEqual(G.validate_job(job),revision)
+            self.assertTrue(verifier.take(result,job,self.model)[0])
+            self.assertTrue(all(r['teacher']['c2']==.2 for r in result['rows']))
+            receipt=result['metrics']['cpu_inference']['revision']['cotton']
+            C.validate_receipt(receipt,job,result['rows'])
+            for row in result['rows']:
+                self.assertIn(row['teacher'].get('sampling_temperature'),(None,1.3))
+                tempered+=row['teacher'].get('sampling_temperature')==1.3
+                C.validate_label(row['teacher'],row['choices'],view=row['view'])
+            self.assertTrue(all(r['search_value']['w']==1. for r in result['value_rows']))
+        # A T1.3 opening is refused with normal teacher sampling on (its policy fallback is T2).
+        seated=dict(G.EXPLORATION,game_opening=G.T13_GAME_OPENING,cotton=C.settings(contract=C.SEATED_CONTRACT))
+        with self.assertRaises(Exception):
+            self.run_all_seat(1.,budget,G._job_block(seated,short_labels=False,cotton_table=True,
+                                                     seats=cotton_seats(seed,2,C.SEATED_CONTRACT)))
+        print('T1.3 tempered labels', tempered)
+
     def test_single_seat_teacher_cotton_without_normal_exploration(self):
         from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
         from brass_ai.step5.policy import cotton_seats

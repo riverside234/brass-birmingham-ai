@@ -7,8 +7,9 @@ from .search_value_schedule import dedicated_holdout
 
 
 def applied(config):
+    """Teacher game-opening sampling is on (T2 from g2090, T1.3 from g2600)."""
     revision = config.get('teacher_phase', {}).get(teacher.KEY, {})
-    return revision.get('exploration', {}).get('game_opening') == teacher.GAME_OPENING
+    return revision.get('exploration', {}).get('game_opening') in teacher.GAME_OPENINGS
 
 
 def previous_opening(config):
@@ -39,6 +40,8 @@ def teacher_weight(config, state, weight):
 
 def configure(config):
     phase = config['teacher_phase']
+    if phase.get(teacher.KEY, {}).get('exploration', {}).get('game_opening') == teacher.T13_GAME_OPENING:
+        return config  # g2600 owns its later opening, PPG and search values.
     search = phase['search_value']
     value = config['value_phase']
     adopted = applied(config)
