@@ -24,6 +24,15 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/profile-rust
 
 ## What the current measurements show
 
+### Lab results through g2682: back to the g2600 PPO code
+
+The rollback was slower. PPO time over iterations 2654–2681 had a median of **58 s** and a mean of 78 s, with 13 of 28 iterations above 60 s and a peak of 136 s. Under the g2600 code (2600–2653) the median was **40 s** and the mean 48 s. Most rollback spikes were not in the teacher term (for example, 2668–2671 took 105–132 s with term 1.1 s). The diagnostics in iterations 2678–2681 point to the restored CPU preparation instead:
+- **Worker time:** 35–66 s.
+- **Trainer wait on batches:** up to 34 s.
+- **Full Python GC:** occasionally 8 s.
+
+The g2600 code avoids this with shared-memory batches and inputs admitted once. At g2682, `ppo_preparation.py`, `teacher_term.py`, `updates.py` and `history.py` return to the exact g2600 code, and the diagnostic-only step timing and GC watch are removed. The g2600 teacher-term spikes (28–42 s in about a third of iterations) are still unexplained. [g2682 export](../results/joint7-v11-2-g1190-restart-3-g2682-20261116T021651992454Z).
+
 ### Lab results through g2654: PPO code rolled back to g2280–g2400
 
 The g2600 fixes made typical PPO faster, about **31–35 s**, but not stable. The teacher term still spiked to **28–42 s** in 17 of 48 iterations. In iteration 2653, about 8 of 46 PPO steps each took about **+0.85 s**, while the median step was normal (0.28 s). So a subset of steps is slow, not the whole pass. Ruled out:

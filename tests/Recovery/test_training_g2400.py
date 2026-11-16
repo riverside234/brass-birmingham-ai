@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from multiprocessing.shared_memory import SharedMemory
 from unittest.mock import patch
 
 import numpy as np
@@ -139,8 +140,27 @@ class CottonNetwork(unittest.TestCase):
 
 
 class Diagnostics(unittest.TestCase):
-    # The g2400 PPO preparation and teacher-term changes were rolled back at g2654
-    # (test_training_g2600.Staging covers the restored path).
+    # The g2400 chunked teacher step was reverted at g2600 (test_training_g2600.Staging).
+
+    def test_shared_process_batches_preserve_order_rng_and_cleanup(self):
+        from test_throughput_g470 import probe_fixture
+        from brass_ai.recovery import ppo_preparation as P
+        from brass_ai.recovery.retention import _same_payload
+        _,data,_,_,_=probe_fixture((3,1,2,3),microbatch=2)
+        parts=[[3,1],[0,2],[1,1],[2,0],[3],[1,2]]
+        expected=list(data.policy_batches(parts,.08));rng=torch.get_rng_state().clone()
+        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as folder,P.PreparationPool(4) as pool:
+            with patch.object(P,'transport_directory',return_value=(Path(folder),'ram')),P.Preparation(pool,directory=folder) as prep:
+                actual=list(data.policy_batches(parts,.08,prep))
+                self.assertTrue(_same_payload(actual,expected))
+                self.assertEqual(prep.metrics['shared_memory_batches'],len(parts))
+                self.assertLessEqual(len(prep.shared),4)
+                self.assertEqual(len(prep.shared),len(prep.free_shared))
+                self.assertEqual(list(prep.path.glob('batch-*.bin')),[])
+                path=prep.path
+            self.assertEqual(prep.shared,{})
+            self.assertFalse(path.exists())
+        self.assertTrue(torch.equal(torch.get_rng_state(),rng))
 
     def test_ev_uses_the_same_heldout_targets_and_all_seats_as_mse(self):
         from brass_ai.recovery.search_value_schedule import diagnostics
@@ -155,3 +175,22 @@ class Diagnostics(unittest.TestCase):
         self.assertIsNone(diagnostics(flat,main,delta)['main_ev'])
         self.assertEqual(diagnostics([],[],[]),dict(recorded=False,games=0,rows=0))
 
+    def test_shared_packing_matches_files_and_overwrites_old_padding(self):
+        from brass_ai.recovery import ppo_preparation as P
+        from test_training_speedups import Staging
+        e=Staging().encoded();self.assertEqual(len(e.actions),2)
+        with tempfile.TemporaryDirectory() as directory:
+            source=Path(directory)/'inputs';file=Path(directory)/'batch'
+            with source.open('wb') as stream:
+                specs=[P.write_array(stream,a) for a in (e.state,e.actions,e.stable_to_relative)]
+                q=P.write_array(stream,np.array([.2,.8],dtype=np.float32))
+            rows=[(*specs,q,e.feature_version),(*specs,None,e.feature_version)]
+            layout,size=P.batch_layout(rows);shared=SharedMemory(create=True,size=size)
+            try:
+                shared.buf[:]=b'\xff'*size
+                expected=P.prepare(source,source.stat().st_size,rows,[1,0],file)
+                actual=P.prepare(source,source.stat().st_size,rows,[1,0],dict(shared=shared.name,layout=layout,bytes=size))
+                data=file.read_bytes()
+                for a,b in zip(expected['layout'],actual['layout']):
+                    np.testing.assert_array_equal(P.view(data,a),P.view(shared.buf,b))
+            finally:shared.close();shared.unlink()

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "4d9ff9c70e5c1395bce12c4bb1b0b007c43bcae44c3375dce237096c8c8188a4",
+  "execution_implementation": "b911da89568dca3dc159088c56f4934fcc8c8efc3eb8423369b74288849ac37b",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -834,6 +834,11 @@
       "implementation": "90c2e72e1544fe682157dec4a5357f620ad429a1f48bfe351c09886864853849",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "8dc30440efc6f0efe69b13d56f21fcd60e1c0bb3f624ecdb2980df87a8a8ed92"
+    },
+    {
+      "implementation": "4d9ff9c70e5c1395bce12c4bb1b0b007c43bcae44c3375dce237096c8c8188a4",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "1f6c24358491078c6dc7d35e5f55b7cd15e8c9a5210310c1b7402b66def7eb2e"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1107,6 +1112,10 @@
   },
   "g2654_rail_cotton_build_level": {
     "scope": "PPO ordinary cotton tables (ordinary-cotton-exploration/4.0.0) and teacher cotton tables (teacher-cotton-exploration/8.0.0, native RailNetwork mode) target a cotton build only when the seat next cotton tile is at least level 2 in the Canal era and level 3 in the Rail era. Develop and network targets, allowances, quotas, seat draws per contract, labels, buffers and the search-head stage are otherwise the g2400 network recipe; older rows and labels validate under their own contract. Adopted with --update-rail-cotton.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2682_ppo_g2600_restore": {
+    "scope": "PPO CPU preparation, the teacher term, the PPO update wrapper and compact summaries return to the exact code that trained g2600-g2654 (shared-memory batch transport, admitted-once inputs, batched targets, one padded forward per teacher step). The g2654 rollback to the g2280-g2400 code and its diagnostic-only teacher-step timing and GC watch are removed. Recipe, cotton contracts and the g2654 Rail-era cotton rule are unchanged.",
     "qualified_implementation_unchanged": true
   }
 }

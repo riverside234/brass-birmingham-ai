@@ -118,23 +118,29 @@ class Labels(unittest.TestCase):
 
 
 class Staging(unittest.TestCase):
-    """The g2280-g2400 PPO path restored at g2654, plus its diagnostic-only timing."""
-    def test_restored_preparation_uses_file_transport_and_worker_admission(self):
+    def test_sealed_rows_skip_the_main_thread_audit(self):
         from test_throughput_g470 import probe_fixture
         from brass_ai.recovery import ppo_preparation as P
+        from brass_ai.recovery.replay_binding import checked_encoded, seal_encoded
         from brass_ai.recovery.retention import _same_payload
-        self.assertFalse(hasattr(P, 'batch_layout') or hasattr(P, 'pack_shared'))
         _, data, _, _, _ = probe_fixture((3, 1, 2, 3), microbatch=2)
-        parts = [[3, 1], [0, 2], [1, 1], [2, 0]]
-        expected = list(data.policy_batches(parts, .08))
-        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as folder, P.PreparationPool(4) as pool:
-            with mock.patch.object(P, 'transport_directory', return_value=(Path(folder), 'ram')), \
-                 P.Preparation(pool, directory=folder) as prep:
-                self.assertTrue(_same_payload(list(data.policy_batches(parts, .08, prep)), expected))
-                self.assertEqual((prep.metrics['shared_memory_batches'], prep.metrics['batches']), (0, len(parts)))
-                self.assertEqual(list(prep.path.glob('batch-*.bin')), [])
+        parts = [[3, 1], [0, 2]]
+        expected = list(data.policy_batches(parts, .08)) + list(data.policy_batches(parts, 0, value_only=True))
+        for sealed in (False, True):
+            if sealed:
+                data.encoded = [seal_encoded(e) for e in data.encoded]
+                self.assertTrue(all(checked_encoded(e) for e in data.encoded))
+            with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as folder, P.PreparationPool(4) as pool:
+                with mock.patch.object(P, 'transport_directory', return_value=(Path(folder), 'ram')), \
+                     P.Preparation(pool, directory=folder) as prep:
+                    prep.input_audit = mock.Mock(wraps=P.InputAudit())
+                    actual = list(data.policy_batches(parts, .08, prep)) + \
+                             list(data.policy_batches(parts, 0, prep, value_only=True))
+                    self.assertTrue(_same_payload(actual, expected))
+                    # Unsealed rows are admitted once each (4 full, 4 value-only); sealed rows not at all.
+                    self.assertEqual(prep.input_audit.check.call_count, 0 if sealed else 8)
 
-    def test_wide_teacher_steps_use_one_forward_and_report_their_timing(self):
+    def test_wide_teacher_steps_use_one_forward(self):
         from test_b025 import config
         from types import SimpleNamespace
         from brass_ai.recovery import teacher_term as T
@@ -148,44 +154,22 @@ class Staging(unittest.TestCase):
         for i in range(96):
             x=np.stack((np.linspace(-1,1,width),np.sin(np.arange(width)+i)),axis=-1).astype(np.float32)
             target=np.exp(x[:,0]+x[:,1]*.2);target/=target.sum()
-            label=dict(target=target.tolist(),logits=[0.]*width,legal_ids=list(map(str,range(width))),
-                       phase=('canal_early','rail_late')[i%2],kind='root')
+            label=dict(target=target.tolist(),logits=[0.]*width,legal_ids=list(map(str,range(width))),phase='canal_early')
             rows.append(LabelRow(dict(teacher=label),SimpleNamespace(choice_ids=label['legal_ids'],features=x)))
         options=config()['teacher_phase'];options=dict(options,mode='on',term=dict(options['term'],rows_per_step=96))
         cells=[]
-        def forward(net,part):
+        def forward(net,part,**kwargs):
             cells.append(len(part)*width)
             return net.state_encoder(torch.as_tensor(np.stack([r.encoded.features for r in part]))).squeeze(-1)
         with mock.patch.object(T,'forward_policy',side_effect=forward):
-            term=T.TeacherTerm(model,options,[(i%3,r) for i,r in enumerate(rows)],seed=4,generation=2654,
-                               state=dict(beta=1.,calibrated=True))
-            logits=forward(model,rows);target=torch.as_tensor(np.stack([r.label['target'] for r in rows]))
+            term=T.TeacherTerm(model,options,[(0,r) for r in rows],seed=4,generation=2600,state=dict(beta=1.,calibrated=True))
+            logits=forward(model,rows);target=T.target_tensor(rows,logits)
             loss=(torch.special.xlogy(target,target)-target*logits.log_softmax(-1)).sum(-1).mean()
             expected=torch.autograd.grad(loss,tuple(model.parameters()))
             cells.clear();term.apply(model,TrunkGradients(model),1)
         self.assertEqual(cells,[96*width])
         self.assertAlmostEqual(term.steps[0]['loss'],float(loss.detach()),places=6)
         for p,want in zip(model.parameters(),expected):torch.testing.assert_close(p.grad,want,atol=1e-6,rtol=1e-5)
-        timing=term.timing.report()
-        self.assertEqual(timing['steps'],1)
-        step=timing['slowest'][0]
-        self.assertEqual((step['rows'],step['max_width'],step['cells']),(96,width,96*width))
-        self.assertEqual(sum(step['phases'].values()),96)
-        self.assertAlmostEqual(sum(step[k+'_seconds'] for k in T.StepTiming.PARTS),step['seconds'],places=9)
-        self.assertAlmostEqual(term.seconds,step['seconds'],places=9)
-
-    def test_gc_watch_records_pauses_without_changing_collection(self):
-        import gc
-        from brass_ai.recovery.gc_timing import watch
-        before=list(gc.callbacks)
-        with watch() as collector:
-            self.assertIn(collector,gc.callbacks)
-            gc.collect()
-        self.assertEqual(gc.callbacks,before)
-        report=collector.report()
-        self.assertGreaterEqual(report['collections'].get('2',0),1)
-        self.assertEqual(len(report['full_collections']),report['collections']['2'])
-        self.assertGreaterEqual(collector.seconds(),0.)
 
 
 class Command(unittest.TestCase):

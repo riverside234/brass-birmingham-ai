@@ -11,7 +11,6 @@ from brass_ai.learning.batching import collate
 from brass_ai.learning.contracts import require
 from .teacher_buffer import sample_indices
 from .teacher_labels import PHASES, softmax
-from . import gc_timing
 
 ACTOR_PREFIXES = ('state_encoder.', 'entity_encoder.', 'entity_projections.', 'action_encoder.', 'policy_scorer.')
 
@@ -35,9 +34,18 @@ def _score_policy(model, states, actions, mask):
     return model.score_prepared(actions, model.prepare_candidates(encoded)).masked_fill(~mask, -torch.inf)
 
 
-def forward_policy(model, rows):
-    states, actions, mask, _ = collate([r.encoded for r in rows], next(model.parameters()).device)
+def forward_policy(model, rows, *, audit=None):
+    states, actions, mask, _ = collate([r.encoded for r in rows], next(model.parameters()).device, audit=audit)
     return _score_policy(model, states, actions, mask)
+
+
+def target_tensor(rows, logits):
+    """One host-to-device transfer, replacing one transfer per teacher row."""
+    target = np.zeros(tuple(logits.shape), dtype=np.float32)
+    for i, row in enumerate(rows):
+        values = row.label['target']
+        target[i, :len(values)] = values
+    return torch.as_tensor(target, device=logits.device)
 
 
 def policy_logits(model, rows, *, batches=None, timings=None):
@@ -109,14 +117,13 @@ def chunks(rows, max_rows=512, max_cells=131072):
     return result
 
 
-def weighted_gradients(model, rows, weights, parameters):
+def weighted_gradients(model, rows, weights, parameters, *, audit=None, max_cells=131072):
     """Exact gradients of sum_i w_i KL(target_i || policy_i), accumulated over chunks."""
     sums = [None] * len(parameters); total = 0.; per_row = [0.] * len(rows)
-    for part in chunks(rows):
+    for part in chunks(rows, max_cells=max_cells):
         selected = [rows[i] for i in part]
-        logits = forward_policy(model, selected).float()
-        target = torch.zeros_like(logits)
-        for j, r in enumerate(selected): target[j, :len(r.label['target'])] = target.new_tensor(r.label['target'])
+        logits = forward_policy(model, selected, audit=audit).float()
+        target = target_tensor(selected, logits)
         logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
         losses = (torch.special.xlogy(target, target) - target * logp).sum(-1)
         loss = (losses * losses.new_tensor([weights[i] for i in part])).sum()
@@ -127,42 +134,6 @@ def weighted_gradients(model, rows, weights, parameters):
         total += float(loss.detach())
         for i, value in zip(part, losses.detach().double().cpu().tolist()): per_row[i] = value
     return total, sums, per_row
-
-
-SLOWEST = 5
-
-
-class StepTiming:
-    """Wall split of each teacher step; diagnostic only, the update is unchanged.
-
-    ``backlog`` is the GPU work the PPO step queued before the term (made explicit by
-    one synchronize that the term's first host-to-device copy would wait on anyway).
-    """
-    PARTS = ('backlog', 'forward', 'backward', 'apply')
-
-    def __init__(self):
-        self.totals = dict.fromkeys(self.PARTS, 0.); self.thread_cpu = 0.; self.gc = 0.; self.steps = []
-
-    def record(self, step, rows, ages, parts, thread_cpu, gc_seconds):
-        for k, v in parts.items(): self.totals[k] += v
-        self.thread_cpu += thread_cpu; self.gc += gc_seconds
-        widths = [len(r.label['legal_ids']) for r in rows]
-        self.steps.append(dict(step=step, seconds=sum(parts.values()), **{k + '_seconds': v for k, v in parts.items()},
-            thread_cpu_seconds=thread_cpu, gc_seconds=gc_seconds, rows=len(rows), max_width=max(widths, default=0),
-            cells=len(rows) * max(widths, default=0), mean_width=float(np.mean(widths)) if widths else 0.,
-            phases=dict(Counter(r.label['phase'] for r in rows)), kinds=dict(Counter(r.label['kind'] for r in rows)),
-            ages=dict(Counter(str(a) for a in ages)), encoded=dict(Counter(type(r.encoded).__name__ for r in rows))))
-
-    def report(self):
-        seconds = [s['seconds'] for s in self.steps]
-        return dict(steps=len(self.steps), **{k + '_seconds': v for k, v in self.totals.items()},
-            thread_cpu_seconds=self.thread_cpu, gc_seconds=self.gc,
-            step_seconds=dict(median=float(np.median(seconds)), p90=float(np.quantile(seconds, .9)), max=max(seconds)) if seconds else None,
-            slowest=sorted(self.steps, key=lambda s: -s['seconds'])[:SLOWEST],
-            fastest=min(self.steps, key=lambda s: s['seconds']) if self.steps else None,
-            scope='Per teacher step: backlog=GPU work queued by the PPO step before the term; forward=sampling, '
-                  'collation/uploads, forward and targets; backward=gradients and the norm sync; apply=gradient '
-                  'accumulation and bookkeeping. thread_cpu is main-thread CPU time; gc is cyclic-GC pause time.')
 
 
 class TeacherTerm:
@@ -211,7 +182,9 @@ class TeacherTerm:
                 self.adaptive = adaptive.restore(saved_adaptive, self.beta, basis, prior_basis=prior_basis)
                 self.beta = self.adaptive['beta']
         self.beta_used = 1. if self.mode == 'shadow' else self.beta
-        self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.; self.timing = StepTiming()
+        self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.
+        from .batch_cache import InputAudit
+        self.input_audit = InputAudit()
         self.presentations = Counter(); self.used = set(); self.improvement_by_phase = {}
         from .training_revision_g1491 import KEY as REVISION
         # g1491: L = a mean(L_long) + (1-a) mean(L_short); None keeps one long-only pool
@@ -262,20 +235,7 @@ class TeacherTerm:
 
     def apply(self, model, actor, step):
         if not self.active: return
-        began = time.perf_counter(); cpu = time.thread_time()
-        device = next(model.parameters()).device
-        if device.type == 'cuda': torch.cuda.synchronize(device)
-        queued = time.perf_counter()
-        with gc_timing.watch() as collector:
-            forwarded, synced, indices = self._apply(model, actor, step, queued)
-        done = time.perf_counter()
-        self.timing.record(step, [self.rows[i] for i in indices], [self.ages[i] for i in indices],
-                           dict(backlog=queued - began, forward=forwarded - queued, backward=synced - forwarded, apply=done - synced),
-                           time.thread_time() - cpu, collector.seconds())
-        self.seconds += done - began
-
-    def _apply(self, model, actor, step, queued):
-        forwarded = queued
+        began = time.perf_counter()
         mix = None
         if self.long_weight is None:
             indices = sample_indices(self.ages, self.config['buffer']['age_weights'], self.config['term']['rows_per_step'],
@@ -286,17 +246,18 @@ class TeacherTerm:
         parameters = tuple(p for n, p in model.named_parameters() if n.startswith(ACTOR_PREFIXES) and p.requires_grad)
         with policy_context(model):
             if self.long_weight is None:
-                logits = forward_policy(model, rows).float()
-                target = torch.zeros_like(logits)
-                for i, r in enumerate(rows): target[i, :len(r.label['target'])] = target.new_tensor(r.label['target'])
-                forwarded = time.perf_counter()
+                # One padded forward per step, however wide the rows. Splitting wide
+                # steps into 32k-cell chunks (g2400) repeated the launch-bound
+                # encoder forward/backward per chunk: 20-30 s per PPO pass, not 1-3 s.
+                logits = forward_policy(model, rows, audit=self.input_audit).float()
+                target = target_tensor(rows, logits)
                 logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
                 loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
                 gradients = torch.autograd.grad(loss, parameters, allow_unused=True)
             else:
                 # 2048 rows do not fit one forward: exact gradient sums over PPO-sized chunks.
-                total, gradients, per_row = weighted_gradients(model, rows, row_weights, parameters)
+                total, gradients, per_row = weighted_gradients(model, rows, row_weights, parameters, audit=self.input_audit)
                 loss = torch.tensor(total)
                 mean = lambda values: float(np.mean(values)) if values else None
                 mix = dict(long_rows=long_count, short_rows=len(rows) - long_count,
@@ -317,7 +278,6 @@ class TeacherTerm:
                 g = by_parameter.get(id(p))
                 if g is not None: tn = tn + g.square().sum()
         a, t, d = torch.stack((an.sqrt(), tn.sqrt(), dot)).double().detach().cpu().tolist()
-        synced = time.perf_counter()
         require(all(np.isfinite(v) for v in (a, t, d)), 'Non-finite teacher gradients')
         raw_share = t / a if measured and a > 0 else None
         if self.mode == 'on':
@@ -333,7 +293,7 @@ class TeacherTerm:
         if measured and (self.adaptive_enabled or self.remeasure_pending):
             self.steps[-1]['raw_teacher_norm'] = t
         for i in indices: self.presentations[i] += 1; self.used.add(i)
-        return forwarded, synced, indices
+        self.seconds += time.perf_counter() - began
 
     def finish(self):
         raw = [s['raw_share'] for s in self.steps if s['raw_share'] is not None and s['raw_share'] > 0]
@@ -410,5 +370,5 @@ class TeacherTerm:
             distinct_by_age=dict(Counter(str(self.ages[i]) for i in self.used)),
             distinct_by_phase=dict(Counter(self.rows[i].label['phase'] for i in self.used)),
             first_loss=self.steps[0]['loss'] if self.steps else None, last_loss=self.steps[-1]['loss'] if self.steps else None,
-            outside_share_warning=self.outside >= 3, term_seconds=self.seconds, timing=self.timing.report(),
+            outside_share_warning=self.outside >= 3, term_seconds=self.seconds,
             scope='Policy term before PPO clipping/Adam/KL guard; shadow never applies gradients')

@@ -551,11 +551,8 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
             require(pool.workers==workers,'PPO preparation pool/config differ')
             executor=stack.enter_context(Preparation(pool))
         else:executor=stack.enter_context(ThreadPoolExecutor(max_workers=2)) if cuda else None
-        from .gc_timing import watch
-        with watch() as collector:
-            result=_ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                                  rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,teacher_term=teacher_term)
-        result['gc']=collector.report()
+        result=_ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
+                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,teacher_term=teacher_term)
         if workers:result['cpu_preparation']=(executor.report() if useful else
             dict(workers=0,requested_workers=workers,reason='Fewer than 2048 rows; inline/thread preparation avoids process overhead'))
         return result
