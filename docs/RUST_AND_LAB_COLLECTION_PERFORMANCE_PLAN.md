@@ -24,6 +24,10 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/benchmarks/p
 
 ## What the current measurements show
 
+### g2880: search-value lambda .95
+
+From g2880 the search-value head fits λ-returns with λ=.95 (was .8 since the 32-wide head refresh). The change is adopted once with `--update-search-lambda` (`training_revision_g2880`), and the setting persists. The run was at Stage C, w=1, trunk scale 1, and keeps that stage, its head, optimizer, teacher labels and beta. No buffer retires: every fit recomputes each buffered game's targets from its stored per-turn utility, root bootstrap and final utility at the current λ. Dedicated held-out games score realized utility-to-go, which does not depend on λ. With λ=.95, a target leans less on root bootstraps from older heads (weight .05 instead of .2 per step). The stage machine accepts only .8 → .95, and the signature transition refuses a revert. An interrupted iteration at the switch is journalled under `configuration-history/search-lambda-NNNN`. [g2880 export](../results/joint7-v11-2-g1190-restart-3-g2880-20261116T203152003541Z).
+
 ### Lab crash at g2832: slow exit of a killed teacher worker
 
 The run stopped while collecting g2832. A teacher table had finished and passed verification. Python then killed its worker process, as it does for every table, and waited 5 s for it to exit. The process was not reaped in time, so `TimeoutExpired` failed that table, the teacher collection, and the cancelled ordinary collection behind it. Nothing in the evidence shows a worker error. Iteration 2830 had `cleanup=75.5s` and a 62 s lane start, which points to lab I/O or memory pressure slowing the kernel's teardown of the killed process. The worker now gets up to 120 s before a table fails (`EXIT_GRACE_SECONDS`). Each table records `worker_exit_seconds`, the teacher phase summary reports p50, max and the count over 5 s, and the log prints a line when any exit took longer than 5 s. [qualification evidence](../results/rust-lab-qualification/20261116T122655870961Z-20261116T070216449130Z-on-training-617ccbc3-ae3d53f7/evidence/qualification.json).

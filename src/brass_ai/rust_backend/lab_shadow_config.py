@@ -98,6 +98,11 @@ def signature_transition(before,after):
         if g2654.applied(old):return False
         try:old=g2654.configure(old)
         except (ValueError, KeyError, TypeError):return False
+    from brass_ai.recovery import training_revision_g2880 as g2880
+    if g2880.applied(old) != g2880.applied(new):
+        if g2880.applied(old):return False
+        try:old=g2880.configure(old)
+        except (ValueError, KeyError, TypeError):return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False
     from brass_ai.recovery.ordinary_cotton import KEY as COTTON, LIMITED, NETWORK, RAIL_NETWORK

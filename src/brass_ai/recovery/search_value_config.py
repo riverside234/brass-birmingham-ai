@@ -75,7 +75,8 @@ def validate(c):
     fixed['trunk']['scale'] = 0.
     fixed['target']['lambda'] = None
     if 'schedule' in c and dedicated_holdout(c):
-        require(c['target']['lambda'] == .8, 'The refreshed search-value head uses lambda .8')
+        # .95 from g2880 (training_revision_g2880).
+        require(c['target']['lambda'] in (.8, .95), 'The refreshed search-value head uses lambda .8 or .95')
     require(digest(fixed) == digest(expected), 'Unreviewed search value recipe')
     require(c['stage'] in ('off', 'A', 'B', 'head_to_head', 'C'), 'Invalid search value stage')
     binding(c['blend']['w'])

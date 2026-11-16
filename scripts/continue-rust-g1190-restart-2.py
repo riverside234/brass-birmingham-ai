@@ -85,6 +85,11 @@ refill, and re-measures beta with teaching on. The new settings persist.
 exploration from targeting Rail-era cotton builds below level three; level-one
 builds stay excluded in both eras. Develop and network targets, allowances,
 labels, buffers and the search-head stage are unchanged. The setting persists.
+
+--update-search-lambda (at a committed g2654 boundary) sets the search-value return
+lambda to .95 (was .8). Each fit recomputes the buffered games' returns at the new
+lambda, so no buffer retires; held-out games still score the realized utility-to-go.
+Labels, the search head, its stage and beta are unchanged. The setting persists.
 """
 import importlib.util
 from pathlib import Path

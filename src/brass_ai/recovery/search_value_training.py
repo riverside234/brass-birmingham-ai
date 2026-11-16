@@ -90,7 +90,10 @@ class StageMachine:
                 self.choose_lambda(configured_lambda)
 
     def choose_lambda(self, value):
-        require(value in (.5,.8,.95,1.) and self.state['lam'] in (None,value), 'Lambda changes require reviewed buffer retirement')
+        # g2880: .8 -> .95 is the one reviewed change. Fits recompute targets from the
+        # buffered returns at the current lambda, so the buffer needs no retirement.
+        require(value in (.5,.8,.95,1.) and (self.state['lam'] in (None,value) or (self.state['lam'],value)==(.8,.95)),
+                'Lambda changes require reviewed buffer retirement')
         self.state['lam'] = value
 
     def manual(self, stage):

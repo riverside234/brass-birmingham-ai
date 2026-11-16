@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "d7305baa5e6e3de54c22bcdc7136c7f76d5385c7bcd48973d87b2a62aa7131fd",
+  "execution_implementation": "734c709512a95d5860dcc2294635737a4bf1931f0d1d96c322d3c496cea7a6a0",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -844,6 +844,11 @@
       "implementation": "b911da89568dca3dc159088c56f4934fcc8c8efc3eb8423369b74288849ac37b",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "bf8468c3798a94341be8709e27b86bdd82d555a1bb61564ce772c5b14cd17f1b"
+    },
+    {
+      "implementation": "d7305baa5e6e3de54c22bcdc7136c7f76d5385c7bcd48973d87b2a62aa7131fd",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "b58d0401bff7aaebf1c2da74b193511f2c380c2adb63c880e8adcf53b15d423b"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1125,6 +1130,10 @@
   },
   "g2831_teacher_worker_exit_grace": {
     "scope": "A killed native teacher worker gets up to 120 s (was 5 s) to be reaped before the table fails; at g2832 a verified table failed because the kernel took over 5 s to tear down its killed worker. Each table records worker_exit_seconds and the teacher phase summarises them. No search, label, admission or training change.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2880_search_value_lambda_095": {
+    "scope": "Search-value lambda-returns use lambda .95 (was .8) from g2880 (training_revision_g2880, --update-search-lambda). The stage machine accepts only the .8 -> .95 change. Each fit recomputes buffered games' targets from stored utilities and bootstraps, so no buffer retires; held-out games score realized utility-to-go. No collection, search, label or ordinary PPO change.",
     "qualified_implementation_unchanged": true
   }
 }
