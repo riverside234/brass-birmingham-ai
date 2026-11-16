@@ -18,7 +18,7 @@ from brass_ai.learning.contracts import SOURCE_ROOT, digest
 from brass_ai.learning.model import FourSeatNet, ModelConfig
 from brass_ai.step5.league import seeds_for, write_json
 
-spec = importlib.util.spec_from_file_location('il_head_to_head', SOURCE_ROOT / 'scripts/il_head_to_head.py')
+spec = importlib.util.spec_from_file_location('il_head_to_head', SOURCE_ROOT / 'scripts/experiments/il-head-to-head/il_head_to_head.py')
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 

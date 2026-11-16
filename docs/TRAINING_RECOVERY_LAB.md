@@ -1,7 +1,7 @@
 # Fresh training in conda: selected v4 teachers and Masked ISMCTS NN
 
 Report storage is now independent of code Git. The existing
-`python scripts/export-training-reports.py --run artifacts/step5/joint7-v11-2-g1290-trained-restart --continue`
+`python scripts/reports/export-training-reports.py --run artifacts/step5/joint7-v11-2-g1290-trained-restart --continue`
 command exports and uploads to `riverside234/ai-training-results` automatically.
 Use `--no-push` for a local export. See [storage and old-checkout migration instructions](RESULTS_STORAGE.md).
 
@@ -1277,7 +1277,7 @@ For a first installation using the separate runtime ZIP (skip this ZIP/import st
 
 ```sh
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py import-runtime --bundle /data/not_backed_up/yxu209/ai-training/artifacts/step5-transfer/private-rules-runtime-v4.zip
-python /data/not_backed_up/yxu209/ai-training/scripts/check_qualification_reports.py --root /data/not_backed_up/yxu209/ai-training/
+python /data/not_backed_up/yxu209/ai-training/scripts/reports/check_qualification_reports.py --root /data/not_backed_up/yxu209/ai-training/
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda preflight
 ```
 
@@ -1793,7 +1793,7 @@ The automatic four-game monitor is one setup with all four seat rotations; the b
 A quick decision probe compares only the selected backend against its own NN prior and, optionally, the same search with top-K fully opened. It is a coverage/latency check, not a tournament:
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/masked-search.py --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/search/lab-gpu.json --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/masked-24x4-tournament-v4-fresh/generation-0020.pt --compare-unpruned --output /data/not_backed_up/yxu209/ai-training/artifacts/masked-search/probe.json
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/masked-ismcts/masked-search.py --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/search/lab-gpu.json --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/masked-24x4-tournament-v4-fresh/generation-0020.pt --compare-unpruned --output /data/not_backed_up/yxu209/ai-training/artifacts/masked-search/probe.json
 ```
 
 The CPU path is mandatory and uses `configs/search/lab-cpu.json`; laptop CPU uses `configs/search/laptop-cpu.json` (two private search workers, two tensor threads, eight pending paths per root). Standalone probes can override the NN clock with `--seconds`; this never changes the v3 bank's fixed one-second clock. The frozen S1 comparison remains a historical diagnostic control. S2/S3 and alternative neural-search comparisons remain retired.
@@ -1929,7 +1929,7 @@ Ordinary encoding caches semantic action vectors with exact R2 parity; replay gz
 Historical era-comparison command (eight games, both one second/four workers; not required for this release):
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/smoke-era-v3.py --tables 8 --seed 842400 --output /data/not_backed_up/yxu209/ai-training/artifacts/rail-era/lab-confirmation
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/legacy-economy/smoke-era-v3.py --tables 8 --seed 842400 --output /data/not_backed_up/yxu209/ai-training/artifacts/rail-era/lab-confirmation
 ```
 
 This small standalone smoke runs at most eight tables (32 search slots); the main dataset/training preset queues 24 tables under the shared 60-slot admission gate. It is diagnostic and never enters BC/PPO. Preserve each output directory.

@@ -18,7 +18,7 @@ Sync this folder and the helper to the lab. With training stopped at a committed
 boundary, run from the repository root:
 
 ```bash
-python scripts/backfill-vp-history.py \
+python scripts/reports/backfill-vp-history.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --cache ai-research/vp-history/joint7-v11-2-g1290-trained-restart/vp-history.json
 ```

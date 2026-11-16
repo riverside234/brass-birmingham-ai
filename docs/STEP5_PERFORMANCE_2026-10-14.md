@@ -22,7 +22,7 @@ No actor count, batch size, flush delay, CPU budget/reserve, four-worker search 
 
 ## Local measurements
 
-Evidence lives under `artifacts/step5-performance-20261014/`. `before.json` and `before/` preserve the starting source/configuration and protected-file hashes. The benchmark driver is `scripts/benchmark-step5-performance.py`; it only accepts a new output directory under `artifacts` and does not resume a training run.
+Evidence lives under `artifacts/step5-performance-20261014/`. `before.json` and `before/` preserve the starting source/configuration and protected-file hashes. The benchmark driver is `scripts/benchmarks/benchmark-step5-performance.py`; it only accepts a new output directory under `artifacts` and does not resume a training run.
 
 The final CPU microbenchmark warms both implementations, alternates six measurements in before/after/after/before/before/after order, and asserts equal outputs on real native-game observations. It measures the final production functions, not the earlier prototype.
 
@@ -125,9 +125,9 @@ checkpoint=$(python -c 'import json; s=json.load(open("artifacts/step5/v4-selfpl
 sha256sum "$checkpoint" > "$probe/checkpoint.sha256"
 common=(--root "$brass_root" --config configs/step5/joint7-g150-gate72.json \
   --device cuda --checkpoint "$checkpoint" --actors 24 --lanes 2 --games 48 --rounds 2 --seed 936211)
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${common[@]}" \
   --baseline-inputs "$probe/before" --output "$probe/ordinary-before"
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${common[@]}" \
   --output "$probe/ordinary-after"
 # Reverse the order into two further new output directories before drawing conclusions.
 sha256sum --check "$probe/checkpoint.sha256"
@@ -144,13 +144,13 @@ replay=$(find "$probe/ordinary-before/round-0" -maxdepth 1 -name '*.jsonl.gz' -p
 search_common=(--root "$brass_root" --config configs/step5/joint7-g150-gate72.json \
   --device cuda --checkpoint "$checkpoint" --replay "$replay" --rounds 2 \
   --phases canal_early canal_late rail_early rail_late --seed 936211)
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${search_common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${search_common[@]}" \
   --mode teacher --baseline-inputs "$probe/before" --output "$probe/teacher-before"
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${search_common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${search_common[@]}" \
   --mode teacher --output "$probe/teacher-after"
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${search_common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${search_common[@]}" \
   --mode opponent --baseline-inputs "$probe/before" --output "$probe/opponent-before"
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${search_common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${search_common[@]}" \
   --mode opponent --output "$probe/opponent-after"
 ```
 
@@ -163,9 +163,9 @@ Collect instrumentation separately from uninstrumented wall-time comparisons:
 pidstat -h -u -r -d -p ALL 1 > "$probe/process-cpu-io.txt"
 # Stop that sampler after the bounded probes; inspect Python actors and Mono children separately.
 
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${common[@]}" \
   --profile --output "$probe/profile-ordinary"
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${search_common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${search_common[@]}" \
   --mode teacher --profile --output "$probe/profile-teacher"
 ```
 

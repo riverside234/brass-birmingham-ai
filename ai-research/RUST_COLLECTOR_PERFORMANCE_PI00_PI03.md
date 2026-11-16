@@ -68,7 +68,7 @@ CPU/wire 回归覆盖完整动作/候选/observations、RNG、特征、记录 SH
 mandatory identity/NaN/越界/篡改持续拒绝，以及跨 chunk、backpressure、取消、源/父 build 绑定与恢复。
 已有 shadow 32-table/fixed-beta、checkpoint/source、PPG/replay、不可变输入回归只跑受影响部分。
 完整 GPU/frozen-checkpoint 与正常 shadow 整轮收益保留 **Pending on lab**。
-对应 lab 工具是 `scripts/profile-rust-collector-performance.py`，复用实际 frozen planner、
+对应 lab 工具是 `scripts/benchmarks/profile-rust-collector-performance.py`，复用实际 frozen planner、
 ActorPool、NativePool、B06 输出/target 比较和有界进程 watchdog；每臂最多三桌，输出自动导出到 results。
 工具及其 snapshot/失败导出有本地 CPU 回归，真实 GPU 两臂运行仍留给 lab。
 

@@ -644,7 +644,7 @@ with its own committed generation, never 1360.
 Export its reports explicitly:
 
 ```bash
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --continue
 ```

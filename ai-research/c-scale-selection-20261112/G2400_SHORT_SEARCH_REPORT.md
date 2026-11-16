@@ -213,7 +213,7 @@ Run from the lab repository root after updating the scripts.
 S1 (the original smaller scan):
 
 ```bash
-python scripts/policy-c-scale/short-search.py \
+python scripts/experiments/policy-c-scale/short-search.py \
   --generation 2400 --collected-generation 2399 \
   --normal-positions 200 --cotton-positions 50 \
   --lanes 60 --limit 250 --ref-scale 0.1 \
@@ -223,7 +223,7 @@ python scripts/policy-c-scale/short-search.py \
 S2 (expanded g2399 scan):
 
 ```bash
-python scripts/policy-c-scale/short-search.py \
+python scripts/experiments/policy-c-scale/short-search.py \
   --generation 2400 --collected-generation 2399 \
   --normal-positions 400 --cotton-positions 100 \
   --lanes 60 --limit 500 --ref-scale 0.1 \
@@ -233,7 +233,7 @@ python scripts/policy-c-scale/short-search.py \
 S3 (latest pooled scan):
 
 ```bash
-python scripts/policy-c-scale/short-search.py \
+python scripts/experiments/policy-c-scale/short-search.py \
   --generation 2400 --collected-generations 2396 2397 2398 \
   --normal-positions 500 --cotton-positions 100 \
   --lanes 60 --limit 600 --ref-scale 0.1 \
@@ -243,7 +243,7 @@ python scripts/policy-c-scale/short-search.py \
 ## Sources and limits
 
 - Numerical results: the user's S1, S2 and S3 console outputs in the C_scale study conversation.
-- Implementation: [short-search.py](../../scripts/policy-c-scale/short-search.py) and [shared study reader/runner](../../scripts/policy-c-scale/_study.py).
+- Implementation: [short-search.py](../../scripts/experiments/policy-c-scale/short-search.py) and [shared study reader/runner](../../scripts/experiments/policy-c-scale/_study.py).
 - Source-pool evidence: [g2400 export state](../../results/joint7-v11-2-g1190-restart-3-g2400-20261115T022541658333Z/state.json). The export timestamp is UTC; the update date above uses America/Chicago.
 - No new lab search was executed while writing this report. No production search setting was changed.
 - Actual VP/win-rate superiority and statistical separation of 0.90 versus 0.70 remain unmeasured here.

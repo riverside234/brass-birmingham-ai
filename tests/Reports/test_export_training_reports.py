@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('export_reports', ROOT / 'scripts/export-training-reports.py')
+spec = importlib.util.spec_from_file_location('export_reports', ROOT / 'scripts/reports/export-training-reports.py')
 reports = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reports)
 
@@ -123,7 +123,7 @@ class ExportTests(unittest.TestCase):
         history=reports.load_json(self.root/self.run/'retention-history.json')
         history['iteration-0058/report.json']=dict(summary=dict(iteration=58))
         self.put(self.run+'/retention-history.json',history)
-        completed=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/export-training-reports.py'),
+        completed=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/reports/export-training-reports.py'),
             '--root',str(self.root),'--run',self.run,'--continue','--latest','1',
             '--output','results/one-detailed-iteration','--no-push'],capture_output=True,text=True)
         self.assertEqual(completed.returncode,0,completed.stderr)
@@ -313,7 +313,7 @@ class ExportTests(unittest.TestCase):
         for source,destination in ((original,parent),(parent,self.run)):
             self.put(destination+'/branch-restart.json',dict(complete=True,binding=dict(
                 contract=reports.BRANCH_RESTART,source_run=source,destination_run=destination)))
-        completed=subprocess.run([sys.executable,str(ROOT/'scripts/export-training-reports.py'),'--root',str(self.root),
+        completed=subprocess.run([sys.executable,str(ROOT/'scripts/reports/export-training-reports.py'),'--root',str(self.root),
             '--output','results/current-restart','--continue','--no-push'],capture_output=True,text=True)
         self.assertEqual(completed.returncode,0,completed.stderr)
         output=self.root/'results/current-restart'
@@ -343,7 +343,7 @@ class ExportTests(unittest.TestCase):
         self.put(self.run+'/seed/weights.pt',b'not a report')
         source_before={p:p.read_bytes() for p in (self.root/self.run).rglob('*') if p.is_file()}
         def cli(output):
-            completed=subprocess.run([sys.executable,str(ROOT/'scripts/export-training-reports.py'),
+            completed=subprocess.run([sys.executable,str(ROOT/'scripts/reports/export-training-reports.py'),
                 '--root',str(self.root),'--output',output,'--continue','--no-push'],capture_output=True,text=True)
             self.assertEqual(completed.returncode,0,completed.stderr)
             directory=self.root/output
@@ -718,7 +718,7 @@ class ExportTests(unittest.TestCase):
         self.state['champion_gate'] = None
         self.put(self.run + '/state.json', self.state)
         before = {p: p.read_bytes() for p in (self.root / 'artifacts').rglob('*') if p.is_file()}
-        completed = subprocess.run([sys.executable, str(ROOT / 'scripts/export-training-reports.py'),
+        completed = subprocess.run([sys.executable, str(ROOT / 'scripts/reports/export-training-reports.py'),
             '--root', str(self.root), '--run', self.run, '--no-push'], capture_output=True, text=True)
         self.assertEqual(completed.returncode, 0, completed.stderr)
         outputs = list((self.root / 'results').iterdir())
@@ -937,7 +937,7 @@ class ExportTests(unittest.TestCase):
             name=Path(slot[key]['path']).relative_to(self.run).as_posix()
             self.assertEqual((output/name).read_bytes(),raw)
             self.assertEqual(sum(e['path']==name for e in manifest['files']),1)
-        completed=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/export-training-reports.py'),
+        completed=subprocess.run([sys.executable,'-B',str(ROOT/'scripts/reports/export-training-reports.py'),
             '--root',str(self.root),'--run',self.run,'--output','results/anchor-continued','--continue','--no-push'],
             capture_output=True,text=True)
         self.assertEqual(completed.returncode,0,completed.stderr)
@@ -1066,7 +1066,7 @@ class ExportTests(unittest.TestCase):
         self.put(self.run+'/state.json',self.state)
         self.export(output='results/previous')
         self.advance_run(61)
-        completed=subprocess.run([sys.executable,str(ROOT/'scripts/export-training-reports.py'),
+        completed=subprocess.run([sys.executable,str(ROOT/'scripts/reports/export-training-reports.py'),
             '--root',str(self.root),'--run',self.run,'--output','results/continued','--continue','--no-push'],
             capture_output=True,text=True)
         self.assertEqual(completed.returncode,0,completed.stderr)

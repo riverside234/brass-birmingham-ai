@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'scripts/reports'))
 import results_git as G
 
 
@@ -82,7 +82,7 @@ class ResultsGitTests(unittest.TestCase):
                                        stderr=subprocess.STDOUT).decode().strip()
 
     def cli(self, output, *extra):
-        return subprocess.run([sys.executable, str(ROOT / 'scripts/export-training-reports.py'),
+        return subprocess.run([sys.executable, str(ROOT / 'scripts/reports/export-training-reports.py'),
             '--root', str(self.root), '--run', self.run, '--output', 'results/' + output,
             '--continue', '--results-remote', str(self.remote), *extra], capture_output=True, text=True)
 
@@ -115,7 +115,7 @@ class ResultsGitTests(unittest.TestCase):
                 target = second_root / path.relative_to(self.root)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(path.read_bytes())
-        result = subprocess.run([sys.executable, str(ROOT / 'scripts/export-training-reports.py'),
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts/reports/export-training-reports.py'),
             '--root', str(second_root), '--run', self.run, '--output', 'results/second', '--continue',
             '--results-remote', str(self.remote)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -192,7 +192,7 @@ class ResultsGitTests(unittest.TestCase):
         self.cmd('remote', 'set-url', 'origin', str(unrelated), cwd=directory)
         self.cmd('config', 'remote.origin.pushurl', str(unrelated), cwd=directory)
         before = (directory / '.git/config').read_bytes()
-        spec = importlib.util.spec_from_file_location('export_selected_default', ROOT / 'scripts/export-training-reports.py')
+        spec = importlib.util.spec_from_file_location('export_selected_default', ROOT / 'scripts/reports/export-training-reports.py')
         reports = importlib.util.module_from_spec(spec);spec.loader.exec_module(reports)
         argv = ['export-training-reports.py', '--root', str(self.root), '--run', self.run,
                 '--output', 'results/scripted-target', '--continue']
@@ -259,7 +259,7 @@ class ResultsGitTests(unittest.TestCase):
         self.assertEqual((self.root / 'results/old.txt').read_text(), 'keep')
 
     def test_failed_push_keeps_export_and_commit_then_next_export_retries(self):
-        module_spec = importlib.util.spec_from_file_location('export_git_smoke', ROOT / 'scripts/export-training-reports.py')
+        module_spec = importlib.util.spec_from_file_location('export_git_smoke', ROOT / 'scripts/reports/export-training-reports.py')
         reports = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(reports)
         original = G.git
@@ -281,7 +281,7 @@ class ResultsGitTests(unittest.TestCase):
         self.assertNotIn('unrelated-checkpoint.pt', self.cmd('ls-tree', '-r', '--name-only', 'main', cwd=self.remote))
 
     def test_changed_export_is_rejected_before_commit(self):
-        module_spec = importlib.util.spec_from_file_location('export_git_changed', ROOT / 'scripts/export-training-reports.py')
+        module_spec = importlib.util.spec_from_file_location('export_git_changed', ROOT / 'scripts/reports/export-training-reports.py')
         reports = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(reports)
         with G.transaction(self.root, str(self.remote)) as directory:
@@ -312,7 +312,7 @@ class ResultsGitTests(unittest.TestCase):
     def test_reused_file_changed_after_export_still_rejects_before_staging(self):
         first = self.cli('first')
         self.assertEqual(first.returncode, 0, first.stderr)
-        module_spec = importlib.util.spec_from_file_location('export_reuse_changed', ROOT / 'scripts/export-training-reports.py')
+        module_spec = importlib.util.spec_from_file_location('export_reuse_changed', ROOT / 'scripts/reports/export-training-reports.py')
         reports = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(reports)
         with G.transaction(self.root, str(self.remote)) as directory:
@@ -327,7 +327,7 @@ class ResultsGitTests(unittest.TestCase):
             self.assertFalse(self.cmd('diff', '--cached', '--name-only', cwd=directory))
 
     def test_unpublished_cache_with_unrelated_bad_file_keeps_flat_reuse_after_clone(self):
-        module_spec = importlib.util.spec_from_file_location('export_unpublished_cache', ROOT / 'scripts/export-training-reports.py')
+        module_spec = importlib.util.spec_from_file_location('export_unpublished_cache', ROOT / 'scripts/reports/export-training-reports.py')
         reports = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(reports)
         output, _ = reports.export(self.root, self.run, 'results/local-cache')

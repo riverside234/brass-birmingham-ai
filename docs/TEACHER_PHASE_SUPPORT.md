@@ -81,7 +81,7 @@ python scripts/step5.py --root /data/not_backed_up/yxu209/ai-training \
   --imitation-run artifacts/step5/v4-batch7-joint \
   --resume-reviewed-source --iterations 1
 
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --root /data/not_backed_up/yxu209/ai-training \
   --run artifacts/step5/v4-selfplay-joint
 ```

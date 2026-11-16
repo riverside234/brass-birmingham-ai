@@ -111,7 +111,7 @@ python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/
 python -m pip install -r /data/not_backed_up/yxu209/ai-training/requirements-step5.txt
 
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py import-runtime --bundle /data/not_backed_up/yxu209/ai-training/artifacts/step5-transfer/private-rules-runtime.zip
-python /data/not_backed_up/yxu209/ai-training/scripts/check_qualification_reports.py
+python /data/not_backed_up/yxu209/ai-training/scripts/reports/check_qualification_reports.py
 python /data/not_backed_up/yxu209/ai-training/scripts/verify-step5.py
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda preflight
 python /data/not_backed_up/yxu209/ai-training/scripts/check-transferred-legacy.py
@@ -154,7 +154,7 @@ After transferring/pulling the fix into the lab checkout, run:
 
 ```bash
 conda activate ai-training
-python /data/not_backed_up/yxu209/ai-training/scripts/check_qualification_reports.py --repair-line-endings
+python /data/not_backed_up/yxu209/ai-training/scripts/reports/check_qualification_reports.py --repair-line-endings
 python /data/not_backed_up/yxu209/ai-training/scripts/check-step5-distribution.py
 ```
 

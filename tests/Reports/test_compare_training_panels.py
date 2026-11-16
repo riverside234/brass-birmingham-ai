@@ -5,7 +5,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('compare_panels', ROOT/'scripts/compare-training-panels.py')
+spec = importlib.util.spec_from_file_location('compare_panels', ROOT/'scripts/reports/compare-training-panels.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 

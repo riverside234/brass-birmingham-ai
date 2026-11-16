@@ -22,7 +22,7 @@ Files changed for this follow-up:
 - `recovery/config.py`, `lr_controller.py`, `league.py`: strict opt-in contract/default generation, LR-increase gate and checkpoint integration.
 - `recovery/diagnostics.py`, `history.py`, `retention.py`: complete-game health counts, compact evidence and explicit probe/cache retention pins.
 - `configs/step5/joint7-latest.json`, `configs/learning/imitation-handoff-sources.json`: fresh defaults and exact pre-change completed-IL admission.
-- `scripts/export-training-reports.py`, its regression suite, `test_auto_il_kl.py`, `test_ppo_lr_controller.py`, `smoke_fixed_selfplay.py`: report selection, new/legacy contracts, rules, cache integrity and native integration checks.
+- `scripts/reports/export-training-reports.py`, its regression suite, `test_auto_il_kl.py`, `test_ppo_lr_controller.py`, `smoke_fixed_selfplay.py`: report selection, new/legacy contracts, rules, cache integrity and native integration checks.
 - This report, `docs/MLP_V11_LAB.md`, `docs/EXPORT_TRAINING_REPORTS.md`: settings, evidence and launch/export instructions.
 
 The learning/model compatibility digest is unchanged at `b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674`. Config generation was exercised against completed v11.1 IL. It retains the 60/30/10 table mixture, four/two/two learner seats, population 16, teacher disabled, exploration 0.08, PPO base LR 6e-6, 100-step warmup, insolvency costs 0.005/0.075, dormant 9/12/12/12-second teacher budgets and `search_wall_fraction=null`. No existing training state or IL weights were modified. Audit: `artifacts/auto-il-kl-20261017/final-config-audit.json`.
@@ -152,7 +152,7 @@ Evidence: [verification](../artifacts/selfplay-lr-controller-20261016/verificati
 
 Teacher search/distillation cost is removed. History storage is bounded to one quarter of the former population size. The new recipe produces more learner trajectories than the old early curriculum (1,024 versus 464 at 320 games), so PPO preparation and training can increase even as teacher/v4 search work decreases. Anchor measurement adds a frozen model of roughly 24 MB of float32 parameters plus a forward pass on at most 2,048 probe rows. No representative full-iteration speedup is claimed.
 
-Use the commands in [the updated lab instructions](../docs/MLP_V11_LAB.md#fresh-self-play-from-completed-v111-il), substituting your actual completed IL path. Generate `configs/step5/joint7-v11-1-grouped-lr.json`, start a **new** `artifacts/step5/joint7-v11-1-grouped-lr` run, and omit `--fresh` for subsequent matching-source continuation. Keep the completed IL directory `artifacts/step5/features4-v11-1-batch7-il` unchanged; no new IL is needed for this self-play revision. `python scripts/export-training-reports.py` exports this self-play run by default; see [report export instructions](../docs/EXPORT_TRAINING_REPORTS.md).
+Use the commands in [the updated lab instructions](../docs/MLP_V11_LAB.md#fresh-self-play-from-completed-v111-il), substituting your actual completed IL path. Generate `configs/step5/joint7-v11-1-grouped-lr.json`, start a **new** `artifacts/step5/joint7-v11-1-grouped-lr` run, and omit `--fresh` for subsequent matching-source continuation. Keep the completed IL directory `artifacts/step5/features4-v11-1-batch7-il` unchanged; no new IL is needed for this self-play revision. `python scripts/reports/export-training-reports.py` exports this self-play run by default; see [report export instructions](../docs/EXPORT_TRAINING_REPORTS.md).
 
 ## Changed files
 

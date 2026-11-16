@@ -36,7 +36,7 @@ def main():
     # Import the measurement helper without changing its pinned imports.
     sys.path.insert(0,str(ROOT/'scripts'))
     from importlib.machinery import SourceFileLoader
-    measure=SourceFileLoader('fe_bench_helper',str(ROOT/'scripts/benchmark-feature-engineering.py')).load_module().measure
+    measure=SourceFileLoader('fe_bench_helper',str(ROOT/'scripts/benchmarks/benchmark-feature-engineering.py')).load_module().measure
     # The helper adds the live source path. Spawned actors must inherit the
     # selected immutable runtime, just like this parent process.
     selected=str((snapshot if args.arm=='before' else ROOT)/'src')

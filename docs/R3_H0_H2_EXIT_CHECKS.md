@@ -76,7 +76,7 @@ From this checkout, with the matching private runtime/tool dependencies already 
 ```powershell
 ./scripts/build-legacy.ps1
 ./scripts/capture-h0.ps1 -Seed 9301 -Games 2
-python scripts/diagnose-legacy.py --root .
+python scripts/experiments/legacy-style/diagnose-legacy.py --root .
 python -m unittest discover -s tests/legacy-ai -v
 ./scripts/build-legacy-overlay.ps1
 ./scripts/check-legacy-bridge.ps1 -Overlay
@@ -84,9 +84,9 @@ python -m unittest discover -s tests/legacy-ai -v
 # Wait for the isolated Unity process to exit and inspect its new result file.
 ./scripts/check-legacy-overlay-ui.ps1
 # Again wait for the process and inspect the newly written result.
-python scripts/run-legacy.py --root . --profile balanced-v1 --seeds 9801 9802 --seats 0 1 2 3 --milliseconds 3000 --output new-balanced-pilot
-python scripts/run-legacy.py --root . --profile rail-tempo-v1 --seeds 9801 9802 --seats 0 1 2 3 --milliseconds 3000 --output new-rail-pilot
-python scripts/summarize-legacy.py artifacts/legacy-ai/new-balanced-pilot artifacts/legacy-ai/new-rail-pilot --output artifacts/legacy-ai/new-pilot-summary.json
+python scripts/experiments/legacy-style/run-legacy.py --root . --profile balanced-v1 --seeds 9801 9802 --seats 0 1 2 3 --milliseconds 3000 --output new-balanced-pilot
+python scripts/experiments/legacy-style/run-legacy.py --root . --profile rail-tempo-v1 --seeds 9801 9802 --seats 0 1 2 3 --milliseconds 3000 --output new-rail-pilot
+python scripts/reports/summarize-legacy.py artifacts/legacy-ai/new-balanced-pilot artifacts/legacy-ai/new-rail-pilot --output artifacts/legacy-ai/new-pilot-summary.json
 python scripts/register-legacy-candidates.py --root .
 ```
 

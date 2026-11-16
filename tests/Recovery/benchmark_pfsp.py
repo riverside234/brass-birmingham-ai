@@ -59,7 +59,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--output',required=True)
     args=parser.parse_args();out=project_path(SOURCE_ROOT,args.output)
     require(not out.exists(),'Use a new benchmark output directory');out.mkdir(parents=True)
-    result=dict(scope='Synthetic correlated four-seat PL outcomes, 144 history tables/iteration, fixed 16/23-member scored pools, 16 seeds each. 100 stationary iterations then 40 forgetting iterations. Evictions inspected on copies, not applied. Independent diagnostic; the supplied dynamic-pool simulation is stored separately in ai-research/simulations/pfsp_sim_original.py with a maintained runner at scripts/pfsp_sim.py. Neither establishes playing strength.',cases=[])
+    result=dict(scope='Synthetic correlated four-seat PL outcomes, 144 history tables/iteration, fixed 16/23-member scored pools, 16 seeds each. 100 stationary iterations then 40 forgetting iterations. Evictions inspected on copies, not applied. Independent diagnostic; the supplied dynamic-pool simulation is stored separately in ai-research/simulations/pfsp_sim_original.py with a maintained runner at scripts/experiments/pfsp/pfsp_sim.py. Neither establishes playing strength.',cases=[])
     for n in (16,23):
         runs=[simulate(n,79100+s) for s in range(16)]
         rmse=2*np.sqrt(np.mean([r['squared_errors'] for r in runs],axis=0))

@@ -6,7 +6,7 @@ models or launch training.
 ```sh
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
-python scripts/export-training-reports.py
+python scripts/reports/export-training-reports.py
 ```
 
 The default source is **`artifacts/step5/joint7-v11-2-g1290-trained-restart`**, matching the
@@ -17,13 +17,13 @@ Choose another new folder under `results/` with `--output`; existing output
 folders are never overwritten:
 
 ```sh
-python scripts/export-training-reports.py --output results/joint7-v11-2-g1290-trained-restart-review
+python scripts/reports/export-training-reports.py --output results/joint7-v11-2-g1290-trained-restart-review
 ```
 
 For the current g1290 restart, export with incremental reuse:
 
 ```sh
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --continue
 ```
@@ -70,7 +70,7 @@ its own cache stays short; every export repairs its copy. To repair the run too,
 training at a committed boundary and import the repaired history:
 
 ```bash
-python scripts/backfill-vp-history.py \
+python scripts/reports/backfill-vp-history.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --cache results/YOUR-NEW-BUNDLE/ratings/vp-history.json
 ```
@@ -107,7 +107,7 @@ archived-generation-60 fixture was skipped because its source files are absent.
 
 The CLI fetches and publishes through the independent `results/` repository.
 Its default destination is `https://github.com/riverside234/ai-training-results.git`,
-configured in `scripts/results_git.py`. Every fetch/push uses that URL directly;
+configured in `scripts/reports/results_git.py`. Every fetch/push uses that URL directly;
 an older or absent `results/origin` does not select the destination or block
 export. Each operation pins both URLs in command-scoped Git configuration;
 `pushInsteadOf` cannot redirect the upload. Existing origin URLs and upstream
@@ -321,7 +321,7 @@ Already-pruned evidence cannot be invented. To redraw both charts from a run or
 a complete export bundle without training, inference, or a PL refit:
 
 ```bash
-python scripts/render-pl-progress.py \
+python scripts/reports/render-pl-progress.py \
   --report results/YOUR-BUNDLE/ratings/slots/generation-000370/report.json
 ```
 
@@ -331,7 +331,7 @@ the run/bundle when it is not an ancestor of the report. Optional repeated
 `--history-source results/OLDER-BUNDLE` arguments fill gaps using complete older
 bundles with the same initial checkpoint lineage; conflicting totals are rejected.
 A PL-only report with no training history produces an explicitly empty VP chart.
-The normal `python scripts/export-training-reports.py` command copies the new
+The normal `python scripts/reports/export-training-reports.py` command copies the new
 chart and history automatically, including verified reuse with `--continue`.
 
 Upload/copy the **whole output folder**, including its subfolders, and any older
@@ -346,7 +346,7 @@ Use `--run` for another self-play run, `--latest` for more full iteration report
 and repeat `--extra` to include independent comparisons outside the run directory:
 
 ```sh
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --run artifacts/step5/joint7-v11-1-grouped-lr \
   --output results/joint7-v11-1-grouped-lr-review-next \
   --latest 4 \
@@ -367,7 +367,7 @@ Before any reports have been archived, `retention-history.json` may not exist;
 the manifest lists it as missing and still exports the committed reports. No
 evaluation files are expected until an evaluation has actually run. For an older
 run, select it explicitly, for example
-`python scripts/export-training-reports.py --run artifacts/step5/v4-selfplay-joint`.
+`python scripts/reports/export-training-reports.py --run artifacts/step5/v4-selfplay-joint`.
 
 For the generation-150 comparison, include the independent panels with
 `--extra artifacts/joint7-g150-panel` and the paired comparison with

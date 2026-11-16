@@ -363,7 +363,7 @@ Maintain historical v1 validation and dispatch. A mode/share-only toggle cannot 
 4. Preserve the existing policy-only teacher term and add strategy/objective telemetry.
 5. Extend the generation/hash-checked helper; default off. Keep ordinary RNG, teacher seed cursor and training progress exact.
 
-Primary files: `src/brass_ai/recovery/teacher_{phase_config,phase,labels,buffer,term}.py`, `config.py`, `history.py`, `resume.py`, `scripts/configure-teacher-phase.py`, and `scripts/export-training-reports.py`.
+Primary files: `src/brass_ai/recovery/teacher_{phase_config,phase,labels,buffer,term}.py`, `config.py`, `history.py`, `resume.py`, `scripts/configure-teacher-phase.py`, and `scripts/reports/export-training-reports.py`.
 
 Add small isolated modules for the teacher context/bundle contract where that avoids coupling generic teacher code to mutable DOMiNO state. Add retained-fit metadata hooks in `domino_auxiliary.py`/PPG rollback only where necessary; no new optimizer, loss coefficient or training schedule.
 

@@ -271,7 +271,7 @@ python scripts/step5.py \
 
 Keep the existing source-transition backup, adoption receipt and checkpoint files. Do not rerun `--fresh-ppg-buffer` or manually remove the adoption receipt: the restart validates and reuses them, and the first scheduled PPG phase remains g568.
 
-Console `local=apply@scale rows=retained/available head_steps=PPO+PPG` exposes activation and usage. Full and compact reports include ownership/VP diagnostics, missing/masked labels, separate attempted/retained usage, joint rollback counts, cache bytes and timing. `python scripts/export-training-reports.py` includes the small runtime contract and adoption receipt, without copying PPG arrays.
+Console `local=apply@scale rows=retained/available head_steps=PPO+PPG` exposes activation and usage. Full and compact reports include ownership/VP diagnostics, missing/masked labels, separate attempted/retained usage, joint rollback counts, cache bytes and timing. `python scripts/reports/export-training-reports.py` includes the small runtime contract and adoption receipt, without copying PPG arrays.
 
 The following **g540 procedure is archived**; it has already been applied to the current run:
 
@@ -510,7 +510,7 @@ It resumes the committed g110 checkpoint and completed rating, keeps both Adam
 states and RNG, and excludes previous PPG rows with old reward targets for one
 iteration. Do not restart the run or regenerate its IL model.
 
-The supplied **PFSP-vs-quality simulation is saved in the repository**. Rerun `python scripts/pfsp_sim.py --games 320 --history-share 0.45 --output results/pfsp-history45.json` when history share, games per iteration or pool capacity changes; choose a new result filename and adjust the share to the proposed setting. The command is an isolated synthetic experiment and does not change training. See [simulation files, options, limitations and reference cross-check](../ai-research/simulations/PFSP_SIMULATION.md).
+The supplied **PFSP-vs-quality simulation is saved in the repository**. Rerun `python scripts/experiments/pfsp/pfsp_sim.py --games 320 --history-share 0.45 --output results/pfsp-history45.json` when history share, games per iteration or pool capacity changes; choose a new result filename and adjust the share to the proposed setting. The command is an isolated synthetic experiment and does not change training. See [simulation files, options, limitations and reference cross-check](../ai-research/simulations/PFSP_SIMULATION.md).
 
 Ordinary v4 tables cycle through all five admitted training profiles: balanced, cotton, goods-beer, rail-tempo and supplier. Selection advances by the **v4-table ordinal**, derived from committed ordinary progress, rather than the overall game index that aliases the 5% quota. With 320 games at 50/45/5, the 32 v4 opponent seats give each profile 6–7 appearances. Each table uses two distinct variants; learner-pair rotation remains unchanged. `pottery-flex` stays in the evaluation pool. `sampling.legacy_profiles` records actual completed counts by profile and physical seat and is retained in compact history. No extra mutable rollout counter or config regeneration is required.
 
@@ -536,7 +536,7 @@ The MAP model fixes IL theta at zero, uses agent priors N(0, 2²), and four zero
 
 Committed compact games, slot specifications, fit reports, panel results, bootstrap arrays and `progress.svg` live under `ratings/slots/generation-NNNNNN/`. Rating work finishes before further PPO on resume; an interrupted slot reuses verified games. Reports flag a new upper interval more than 50 points below the best point estimate and a strict decline in v4 win share over three slots. The decline remains a manual-review warning, with no automatic increase or reversal of the v4 share gate. **Deployment qualification requires manual panel review; no model is automatically deployed or published.** The highest lower-bound candidate is reported as a review aid.
 
-Automatic rating slots and offline refits use `src/brass_ai/recovery/rating_plot.py`, shared with `scripts/render-pl-progress.py`. Each newly completed scheduled rating slot automatically writes the updated `progress.svg`; no plotting configuration change is needed. **Full training history has at most 30 dots**, including the latest point: longer histories use the previous adjacent-checkpoint averaging in non-overlapping groups, with first/latest exact and every checkpoint contributing once. The **last 100 generations** remain exact in the recent panel, with an explicitly separate y-axis and a lightly shaded corresponding window in the main plot. Both panels retain the original pointwise 95% setup-bootstrap intervals; the main ribbon is **not a confidence interval for averaged scores**. Smaller summary cards leave more room for the plots and show the latest score and interval, the change versus the previous rated checkpoint using its **paired difference interval from the same fit**, and clearly separated latest-slot and accumulated-fit game counts. Missing paired evidence is labelled unavailable, never inferred from separate rating intervals. IL and v4 remain reference lines; there is no active KL-reference marker. Existing reports, rating fits and training state remain unchanged. To redraw an older plot from its existing fit, run `python scripts/render-pl-progress.py --report <slot-directory>/report.json`; add `--output <new.svg>` to preserve the old chart, `--preview <output.png>` for a PNG preview, or `--max-points 24` for a smaller full-history cap (allowed range 3–30). Redrawing does not refit ratings or collect games.
+Automatic rating slots and offline refits use `src/brass_ai/recovery/rating_plot.py`, shared with `scripts/reports/render-pl-progress.py`. Each newly completed scheduled rating slot automatically writes the updated `progress.svg`; no plotting configuration change is needed. **Full training history has at most 30 dots**, including the latest point: longer histories use the previous adjacent-checkpoint averaging in non-overlapping groups, with first/latest exact and every checkpoint contributing once. The **last 100 generations** remain exact in the recent panel, with an explicitly separate y-axis and a lightly shaded corresponding window in the main plot. Both panels retain the original pointwise 95% setup-bootstrap intervals; the main ribbon is **not a confidence interval for averaged scores**. Smaller summary cards leave more room for the plots and show the latest score and interval, the change versus the previous rated checkpoint using its **paired difference interval from the same fit**, and clearly separated latest-slot and accumulated-fit game counts. Missing paired evidence is labelled unavailable, never inferred from separate rating intervals. IL and v4 remain reference lines; there is no active KL-reference marker. Existing reports, rating fits and training state remain unchanged. To redraw an older plot from its existing fit, run `python scripts/reports/render-pl-progress.py --report <slot-directory>/report.json`; add `--output <new.svg>` to preserve the old chart, `--preview <output.png>` for a PNG preview, or `--max-points 24` for a smaller full-history cap (allowed range 3–30). Redrawing does not refit ratings or collect games.
 
 The recent-panel endpoint score uses a measured right-hand gutter and a short leader to its exact checkpoint, keeping text clear of the curve and uncertainty band. The gutter expands for longer formatted scores. Lighter interval shading, subtle vertical guides and higher-contrast secondary text improve readability in both SVG and PNG output.
 
@@ -545,7 +545,7 @@ With automatic retention enabled, full rating folders cover the **most recent 10
 The versioned `table_plan`, `opponent_pool` and `rating` blocks join the run signature. SciPy and Matplotlib are in `requirements-step5.txt`. To refit existing evidence into a new review directory without collecting games:
 
 ```bash
-python scripts/strength-ratings.py \
+python scripts/reports/strength-ratings.py \
   --run artifacts/step5/joint7-v11-1-grouped-lr-quality \
   --output artifacts/joint7-v11-1-grouped-lr-quality-rating-review
 ```
@@ -693,7 +693,7 @@ V11.2 retains v11.1's pre-GELU local action context, fixed-weight action project
 After an iteration finishes, collect the analysis bundle with:
 
 ```bash
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --continue
 ```

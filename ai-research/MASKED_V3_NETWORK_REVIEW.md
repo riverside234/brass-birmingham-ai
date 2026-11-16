@@ -15,7 +15,7 @@ All 24 games completed at the same nominal one-second/four-worker decision allow
 
 The user requires improvement on **every metric against both controls**. Overall promotion fails. Game UI 1.4.19 / AI 1.4.18 and admitted training bank `bank-340a20d72b23c652c267` remain unchanged.
 
-Evidence is retained in `artifacts/economy-v3/smoke-8/report.json`, its 24 game traces, and `diagnosis.json`. The [diagnosis script](../scripts/diagnose-economy-v3.py) re-applied every recorded choice through the pinned rules host. **All 24 terminal results matched exactly**, and each era's tile/link award matched the official score change. Merchant bonus VP was checked separately because it is banked immediately. No new AI decisions, training samples or strength games were generated during replay.
+Evidence is retained in `artifacts/economy-v3/smoke-8/report.json`, its 24 game traces, and `diagnosis.json`. The [diagnosis script](../scripts/experiments/legacy-economy/diagnose-economy-v3.py) re-applied every recorded choice through the pinned rules host. **All 24 terminal results matched exactly**, and each era's tile/link award matched the official score change. Merchant bonus VP was checked separately because it is banked immediately. No new AI decisions, training samples or strength games were generated during replay.
 
 This supports a policy/budget diagnosis. It does not establish that every rule is correct, or that one added feature alone caused the loss. Each style has only four seat-games per control, from one setup. Style rankings need broader confirmation; the failed screen must not be replaced by favorable seeds.
 

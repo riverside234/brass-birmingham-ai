@@ -280,7 +280,7 @@ class Performance(unittest.TestCase):
 
     def matched_launcher(self):
         import importlib.util
-        spec=importlib.util.spec_from_file_location('pi_matched',SOURCE_ROOT/'scripts/profile-rust-collector-performance.py')
+        spec=importlib.util.spec_from_file_location('pi_matched',SOURCE_ROOT/'scripts/benchmarks/profile-rust-collector-performance.py')
         value=importlib.util.module_from_spec(spec);spec.loader.exec_module(value);value.ROOT=self.out
         return value
 

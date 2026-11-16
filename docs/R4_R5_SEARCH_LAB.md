@@ -2,13 +2,13 @@
 
 The neural R4/R5 and S1/S2/S3 comparison roadmap is retired by the implemented [Masked ISMCTS revision](../ai-research/MASKED_ISMCTS_REVISION_PLAN.md). On 1 October, the requested quick comparisons retained rule-based v3 + Masked ISMCTS for imitation generation and training/evaluation opponents, with one second and the 16×2 lab preset. Original S1 is a frozen diagnostic control. See [both screens and the selection](V3_S1_TRAINING.md). Neural search and distillation continue to use Masked ISMCTS. The explicit-chance OpenSpiel adapter remains an implementation dependency. Historical configs remain in `configs/searchlab/archive/`.
 
-Use the [current conda lab guide](TRAINING_RECOVERY_LAB.md) for fresh MLP-ResNet training, one-second Masked **v4** teachers/opponents, Masked ISMCTS NN teachers, evaluation and cleanup. `scripts/r4r5.py`, `verify-searchlab.py` and `smoke-searchlab.py` still exit with a migration message.
+Use the [current conda lab guide](TRAINING_RECOVERY_LAB.md) for fresh MLP-ResNet training, one-second Masked **v4** teachers/opponents, Masked ISMCTS NN teachers, evaluation and cleanup. `scripts/experiments/searchlab/r4r5.py`, `scripts/legacy/verify-searchlab.py` and `scripts/legacy/smoke-searchlab.py` still exit with a migration message.
 
-The additional quick experiment is `scripts/masked-search.py`. It loads only a checkpoint from a new fresh residual run and compares its policy-only preferred move with Masked ISMCTS. `--compare-unpruned` adds the same backend with all legal candidates opened immediately. Both variants receive the same whole-decision clock. Legal choices, protected industries and PPO probabilities are unchanged by expansion pruning.
+The additional quick experiment is `scripts/experiments/masked-ismcts/masked-search.py`. It loads only a checkpoint from a new fresh residual run and compares its policy-only preferred move with Masked ISMCTS. `--compare-unpruned` adds the same backend with all legal candidates opened immediately. Both variants receive the same whole-decision clock. Legal choices, protected industries and PPO probabilities are unchanged by expansion pruning.
 
 ```sh
 conda activate ai-training
-python /data/not_backed_up/yxu209/ai-training/scripts/masked-search.py --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/masked-24x4-tournament-v4-fresh/generation-0020.pt --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/search/lab-gpu.json --compare-unpruned --output /data/not_backed_up/yxu209/ai-training/artifacts/masked-search/probe.json
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/masked-ismcts/masked-search.py --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/masked-24x4-tournament-v4-fresh/generation-0020.pt --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/search/lab-gpu.json --compare-unpruned --output /data/not_backed_up/yxu209/ai-training/artifacts/masked-search/probe.json
 ```
 
 Use `lab-cpu.json` or `laptop-cpu.json` for the required CPU path. `--seconds` and `--simulations` bound this decision probe; they do not calibrate or change v3's 1,000ms training allowance. The report records source/model/config identity, complete legal incumbents, completed root statistics, coverage and actual latency. It makes no playing-strength claim and performs no promotion.

@@ -134,5 +134,5 @@ The implementation and bounded tests establish capture, gradient, cache and resu
 - Native capture/runtime: `src/BrassLocalScoringHost/LocalScoring.cs`, `scripts/build-local-scoring-host.py`, `training/runtime/local-scoring/ordinary/`, recovery `host_runtime.py`, `execution.py`, `ordinary.py`, `branching.py`.
 - Labels/storage: recovery `local_scoring_targets.py`, `replay.py`, `ingress.py`, `ppg_replay.py`.
 - Heads/training: learning `local_scoring_heads.py`; recovery `local_scoring_auxiliary.py`, `updates.py`, `actor_value.py`, `ppg_auxiliary.py`, `ppg_selection.py`.
-- Adoption/reporting: recovery `local_scoring_adoption.py`, `config.py`, `exploration.py`, `resume.py`, `league.py`, `retention.py`, `history.py`; step5 `league.py`; source-review registry; `scripts/configure-local-scoring-aux.py`, `scripts/export-training-reports.py`, lab guide.
+- Adoption/reporting: recovery `local_scoring_adoption.py`, `config.py`, `exploration.py`, `resume.py`, `league.py`, `retention.py`, `history.py`; step5 `league.py`; source-review registry; `scripts/configure-local-scoring-aux.py`, `scripts/reports/export-training-reports.py`, lab guide.
 - Validation: `tests/Recovery/test_local_scoring*.py`, `tests/Recovery/LocalScoringChecks.cs`, report-export regression, `scripts/smoke-local-scoring.py`.

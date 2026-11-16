@@ -123,7 +123,7 @@ class Lifecycle(unittest.TestCase):
     def test_export_verifies_compact_evidence_and_svg_alias_and_omits_raw(self):
         run,state,c,spec,directory,rows=panel(self.root)
         with patch.object(L,'validate_runtime'),patch.object(L,'collect',side_effect=collector(rows)):L.run_pending(self.root,run,state,c)
-        spec_module=importlib.util.spec_from_file_location('context_export',SOURCE_ROOT/'scripts/export-training-reports.py')
+        spec_module=importlib.util.spec_from_file_location('context_export',SOURCE_ROOT/'scripts/reports/export-training-reports.py')
         m=importlib.util.module_from_spec(spec_module);spec_module.loader.exec_module(m)
         files=list(m.context_files(self.root,run,state));names={p.name for p,_ in files}
         self.assertTrue({'report.json','spec.json','games.jsonl','summaries.jsonl','progress.svg','report.md','status.json'}<=names)

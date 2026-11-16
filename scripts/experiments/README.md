@@ -1,67 +1,67 @@
 # Experiments
 
-Each section groups one experiment's entry points and helpers. The C-scale
-study keeps its existing folder and shared reader. See the [legacy archive](../legacy/README.md)
-for retired SearchLab commands.
+Each experiment has a folder for its entry points and private helpers.
+See [legacy](../legacy/README.md) for the historical SearchLab smoke and
+verification commands.
 
 ## C-scale selection
 
-- [policy-c-scale/short-search.py](../policy-c-scale/short-search.py)
-- [policy-c-scale/long-search.py](../policy-c-scale/long-search.py)
-- [policy-c-scale/_study.py](../policy-c-scale/_study.py)
+- [policy-c-scale/short-search.py](policy-c-scale/short-search.py)
+- [policy-c-scale/long-search.py](policy-c-scale/long-search.py)
+- [policy-c-scale/_study.py](policy-c-scale/_study.py)
 
 ## PPO opening temperature
 
-- [compare-ppo-opening-temperatures.py](../compare-ppo-opening-temperatures.py)
+- [ppo-opening-temperature/compare-ppo-opening-temperatures.py](ppo-opening-temperature/compare-ppo-opening-temperatures.py)
 
 ## PFSP sampling simulation
 
-- [pfsp_sim.py](../pfsp_sim.py)
+- [pfsp/pfsp_sim.py](pfsp/pfsp_sim.py)
 
 ## Search value correction
 
-- [evaluate-rust-search-value.py](../evaluate-rust-search-value.py)
-
-## Gumbel IS-MCTS reference
-
-- [reproduce-gumbel-is-mcts.py](../reproduce-gumbel-is-mcts.py)
-- [reproduce-gumbel-coordinator.py](../reproduce-gumbel-coordinator.py)
-- [reproduce-gumbel-sessions.py](../reproduce-gumbel-sessions.py)
-
-## NN checkpoint calibration
-
-- [export-test-nn.py](../export-test-nn.py)
-- [test_nn_calibration.py](../test_nn_calibration.py)
+- [search-value/evaluate-rust-search-value.py](search-value/evaluate-rust-search-value.py)
 
 ## IL head-to-head
 
-- [il_head_to_head.py](../il_head_to_head.py)
+- [il-head-to-head/il_head_to_head.py](il-head-to-head/il_head_to_head.py)
 
-## Legacy style and economy
+## Legacy style
 
-- [run-legacy.py](../run-legacy.py)
-- [diagnose-legacy.py](../diagnose-legacy.py)
-- [diagnose-tactical-diversity.py](../diagnose-tactical-diversity.py)
-- [diagnose-economy-v3.py](../diagnose-economy-v3.py)
-- [smoke-economy-v3.py](../smoke-economy-v3.py)
-- [smoke-era-v3.py](../smoke-era-v3.py)
-- [smoke-industry-v3.py](../smoke-industry-v3.py)
-- [smoke-network-v4.py](../smoke-network-v4.py)
+- [legacy-style/run-legacy.py](legacy-style/run-legacy.py)
+- [legacy-style/diagnose-legacy.py](legacy-style/diagnose-legacy.py)
+- [legacy-style/diagnose-tactical-diversity.py](legacy-style/diagnose-tactical-diversity.py)
+
+## Legacy economy
+
+- [legacy-economy/diagnose-economy-v3.py](legacy-economy/diagnose-economy-v3.py)
+- [legacy-economy/smoke-economy-v3.py](legacy-economy/smoke-economy-v3.py)
+- [legacy-economy/smoke-era-v3.py](legacy-economy/smoke-era-v3.py)
+- [legacy-economy/smoke-industry-v3.py](legacy-economy/smoke-industry-v3.py)
+- [legacy-economy/smoke-network-v4.py](legacy-economy/smoke-network-v4.py)
 
 ## Masked ISMCTS probes
 
-- [masked-search.py](../masked-search.py)
-- [masked-strength-check.py](../masked-strength-check.py)
+- [masked-ismcts/masked-search.py](masked-ismcts/masked-search.py)
+- [masked-ismcts/masked-strength-check.py](masked-ismcts/masked-strength-check.py)
 
 ## R4/R5 SearchLab
 
-- [r4r5.py](../r4r5.py)
+- [searchlab/r4r5.py](searchlab/r4r5.py)
 
 ## Personality pilot
 
-- [personality.py](../personality.py)
-- [personality_search.py](../personality_search.py)
-- [personality_repertoire.py](../personality_repertoire.py)
-- [personality_deployment.py](../personality_deployment.py)
-- [personality_difficulty.py](../personality_difficulty.py)
-- [personality_laptop.py](../personality_laptop.py)
+- [personality/personality.py](personality/personality.py)
+- [personality/personality_search.py](personality/personality_search.py)
+- [personality/personality_repertoire.py](personality/personality_repertoire.py)
+- [personality/personality_deployment.py](personality/personality_deployment.py)
+- [personality/personality_difficulty.py](personality/personality_difficulty.py)
+
+## Source and installation paths retained
+
+- [reproduce-gumbel-is-mcts.py](../reproduce-gumbel-is-mcts.py) — Gumbel reference lock.
+- [reproduce-gumbel-coordinator.py](../reproduce-gumbel-coordinator.py) — Qualified coordinator reference.
+- [reproduce-gumbel-sessions.py](../reproduce-gumbel-sessions.py) — Qualified session reference.
+- [export-test-nn.py](../export-test-nn.py) — Frozen Rust baseline and NN package builder.
+- [test_nn_calibration.py](../test_nn_calibration.py) — Sibling helper used by the pinned NN bundle exporter.
+- [personality_laptop.py](../personality_laptop.py) — Local install and rollback entry point.

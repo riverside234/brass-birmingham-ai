@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'scripts/reports'))
 sys.path.insert(0, str(ROOT / 'src'))
 import compact_selfplay_reviews as cli
 from brass_ai.recovery.source_reviews import expand_source_reviews
@@ -26,7 +26,7 @@ class CompactRegistryCliTests(unittest.TestCase):
                     transitions=[copy.deepcopy(entry) for _ in range(10)])
 
     def run_cli(self, path):
-        return subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/compact_selfplay_reviews.py'),
+        return subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/reports/compact_selfplay_reviews.py'),
                                str(path)], cwd=path.parent, capture_output=True, text=True, timeout=30)
 
     def test_command_roundtrip_and_no_rewrite_when_already_compact(self):

@@ -4,7 +4,7 @@ Date: 2026-10-19.
 
 The supplied simulation is saved unchanged as [pfsp_sim_original.py](pfsp_sim_original.py). Its SHA-256 is `d4a3b527e6da783d8ee7da1fb1d577ccc47744021210297fa6ae6fffb2ab22d1`; `.gitattributes` preserves its original bytes across Windows/Linux checkouts. It came from the user's attachment `de4abf70-c95e-4301-bbcf-942b4ecc0a58/Pasted text.txt`.
 
-Use the maintained [scripts/pfsp_sim.py](../../scripts/pfsp_sim.py) for future experiments. **Rerun this simulation when history-table share, games per iteration, scored-pool capacity, IL seat share or estimator half-life changes.** It requires Python and NumPy, and does not load or modify models, training state or configs.
+Use the maintained [scripts/experiments/pfsp/pfsp_sim.py](../../scripts/experiments/pfsp/pfsp_sim.py) for future experiments. **Rerun this simulation when history-table share, games per iteration, scored-pool capacity, IL seat share or estimator half-life changes.** It requires Python and NumPy, and does not load or modify models, training state or configs.
 
 ## Rerun from the repository root
 
@@ -21,17 +21,17 @@ or artificially rescaled. History learner-pair rotation counts actual history
 tables, including the transferred slots.
 
 ```bash
-python scripts/pfsp_sim.py --games 320 --history-share 0.45 \
+python scripts/experiments/pfsp/pfsp_sim.py --games 320 --history-share 0.45 \
   --output results/pfsp-history45.json
 
-python scripts/pfsp_sim.py --games 320 --tables 154 \
+python scripts/experiments/pfsp/pfsp_sim.py --games 320 --tables 154 \
   --output results/pfsp-history154.json
 ```
 
 For example, to explore a future 30% history share:
 
 ```bash
-python scripts/pfsp_sim.py --games 320 --history-share 0.30 \
+python scripts/experiments/pfsp/pfsp_sim.py --games 320 --history-share 0.30 \
   --output results/pfsp-history30.json
 ```
 

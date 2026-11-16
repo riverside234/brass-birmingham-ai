@@ -8,7 +8,7 @@ The H0–H2 foundation below is now extended by [H3–H5 tactical profiles, mand
 
 ## H0: baseline and diagnosis
 
-`scripts/capture-h0.ps1` runs the original and guarded stock policies in separate directories. `scripts/diagnose-legacy.py` adds a four-player control/recorded/diagnosed comparison. Stock `GetNextAIMove` and its selector are invoked exactly once per action. Logging records the returned rule, publicly played cards, context, latency, outcomes and independently generated legal alternatives with evaluator ledgers. It never calls stock applicability/printing again for an explanation.
+`scripts/capture-h0.ps1` runs the original and guarded stock policies in separate directories. `scripts/experiments/legacy-style/diagnose-legacy.py` adds a four-player control/recorded/diagnosed comparison. Stock `GetNextAIMove` and its selector are invoked exactly once per action. Logging records the returned rule, publicly played cards, context, latency, outcomes and independently generated legal alternatives with evaluator ledgers. It never calls stock applicability/printing again for an explanation.
 
 Diagnosis reconstructs a separate world from the acting player's allowed observation. The live canonical state, including its RNG, is checked before and after every diagnostic decision. Entire public action/state/outcome traces must match the control. Wildcard plays are captured even though spent wildcards return to their decks rather than entering the discard pile. Guarded stock retains its original liquidation strategy; in mixed games its debtor's choices are obtained from an isolated trusted copy. Failures remain reliability failures and are never credited as wins.
 
@@ -38,8 +38,8 @@ On this Windows checkout:
 
 ```powershell
 ./scripts/build-legacy.ps1 -ManagedPath artifacts/r1-host/guarded
-python scripts/run-legacy.py --root . --profile balanced-v1 --seeds 9501 9502 --seats 0 1 2 3 --milliseconds 3000 --output my-pilot
-python scripts/diagnose-legacy.py --root .
+python scripts/experiments/legacy-style/run-legacy.py --root . --profile balanced-v1 --seeds 9501 9502 --seats 0 1 2 3 --milliseconds 3000 --output my-pilot
+python scripts/experiments/legacy-style/diagnose-legacy.py --root .
 python -m unittest discover -s tests/legacy-ai -v
 ./scripts/check-legacy-bridge.ps1
 ```
@@ -50,7 +50,7 @@ The default lab root is `/data/not_backed_up/yxu209/ai-training/`. For example:
 
 ```bash
 cd /data/not_backed_up/yxu209/ai-training/
-python scripts/run-legacy.py --profile balanced-v1 --seeds 9601 --seats 0 1 2 3 --output lab-pilot
+python scripts/experiments/legacy-style/run-legacy.py --profile balanced-v1 --seeds 9601 --seats 0 1 2 3 --output lab-pilot
 ```
 
 The lab requires a **private copy of the matching runtime/dependencies**, kept under `artifacts/legacy-ai/runtime/`, and Mono to execute the .NET worker. Git contains no game binaries or assets. Linux/Mono equivalence is not qualified here; repeat the R1/R3 exit checks there before generating production training data. Training R2 from compatible replay shards does not require this game runtime. The RTX GPU is unnecessary for the legacy bank.

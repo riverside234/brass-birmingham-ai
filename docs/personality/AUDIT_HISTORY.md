@@ -299,7 +299,7 @@ For the documented lab joint pilot, when these are its existing paths/options, t
 conda activate ai-training
 brass_root=/data/not_backed_up/yxu209/ai-training
 cd "$brass_root"
-python "$brass_root/scripts/personality.py" --device cuda joint-pilot \
+python "$brass_root/scripts/experiments/personality/personality.py" --device cuda joint-pilot \
   --handoff "$brass_root/artifacts/personality/handoff-v1" \
   --run "$brass_root/artifacts/personality/goal-pilot-v1" \
   --games 20 --workers 4 --epochs 2

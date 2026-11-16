@@ -11,7 +11,7 @@ pointer. Ordinary code clones do not download the results repository.
 The existing command now exports, commits and pushes the report bundle:
 
 ```bash
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --continue
 ```
@@ -27,7 +27,7 @@ For SSH authentication, append
 For token-based uploads, configure the credentials **on the training server**:
 
 ```bash
-python scripts/results_git_auth.py configure
+python scripts/reports/results_git_auth.py configure
 ```
 
 Enter the GitHub username and paste the token at the hidden prompt. The helper
@@ -54,7 +54,7 @@ If an export already committed locally and only its push failed, retry without
 generating another export:
 
 ```bash
-python scripts/export-training-reports.py --push-only
+python scripts/reports/export-training-reports.py --push-only
 ```
 
 Subsequent exports use the original command automatically; no repeated login or
@@ -75,7 +75,7 @@ cache files do not become dependencies of the new export.
 For local-only export, without Git or network access:
 
 ```bash
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --continue --no-push
 ```

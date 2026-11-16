@@ -94,7 +94,7 @@ See [the conda lab guide](../docs/TRAINING_RECOVERY_LAB.md). This historical com
 
 ```sh
 conda activate ai-training
-python /data/not_backed_up/yxu209/ai-training/scripts/smoke-economy-v3.py --root /data/not_backed_up/yxu209/ai-training/ --bank bank-fcab56543a2c86f30c66 --output /data/not_backed_up/yxu209/ai-training/artifacts/economy-v3/lab-screen --tables 24 --seed 843700
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/legacy-economy/smoke-economy-v3.py --root /data/not_backed_up/yxu209/ai-training/ --bank bank-fcab56543a2c86f30c66 --output /data/not_backed_up/yxu209/ai-training/artifacts/economy-v3/lab-screen --tables 24 --seed 843700
 ```
 
 

@@ -126,7 +126,7 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stderr)
         (self.root / self.run / 'state.json').write_text('invalid source must not be read')
         before = sorted(path.name for path in (self.root / 'results').iterdir())
-        result = subprocess.run([sys.executable, str(ROOT / 'scripts/export-training-reports.py'),
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts/reports/export-training-reports.py'),
             '--root', str(self.root), '--push-only', '--results-remote', str(self.remote)], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('Uploaded results commit', result.stdout)

@@ -21,7 +21,7 @@ registry. Missing, unknown or ambiguous references are rejected. To convert a
 legacy file or normalize an existing v2 file:
 
 ```sh
-python scripts/compact_selfplay_reviews.py
+python scripts/reports/compact_selfplay_reviews.py
 ```
 
 The reader change has a new source identity. Exact source-only continuation
@@ -51,12 +51,12 @@ failure. Overlapping exports or compactions cannot overwrite each other's
 temporary files; the last completed summary publication selects its matching
 sidecar. Invalid report types are rejected before any output is written.
 
-Regenerate both files with `python scripts/review_joint7_150.py`. To load the
+Regenerate both files with `python scripts/reports/review_joint7_150.py`. To load the
 complete original v1 data structure, including checksum/count validation:
 
 ```python
 import sys
-sys.path.insert(0, 'scripts')
+sys.path.insert(0, 'scripts/reports')
 from review_joint7_150 import read_metrics
 
 metrics = read_metrics('docs/joint7-150-evidence/metrics.json')

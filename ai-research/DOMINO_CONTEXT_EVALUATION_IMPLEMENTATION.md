@@ -78,7 +78,7 @@ elapsed tail marks timing incomplete; missing overhead is not reported as zero.
 After two complete panels, the 5% overhead budget is advisory and does not
 change training or evaluation cadence.
 
-`scripts/export-training-reports.py` exports the verified compact evidence,
+`scripts/reports/export-training-reports.py` exports the verified compact evidence,
 Markdown, per-generation SVGs and the latest SVG alias. It verifies generation
 identity and matching receipts and excludes model tensors and raw replay shards.
 
@@ -272,7 +272,7 @@ the new interval.
 Export after a completed context panel with the existing command:
 
 ```bash
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic
 ```
 

@@ -27,7 +27,7 @@ Promotion requires complete games without errors and **at least one** improvemen
 ```sh
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
-python /data/not_backed_up/yxu209/ai-training/scripts/smoke-industry-v3.py --root /data/not_backed_up/yxu209/ai-training/ --bank BANK_FROM_CURRENT_JSON --output /data/not_backed_up/yxu209/ai-training/artifacts/industry-v3/lab-screen --tables 24
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/legacy-economy/smoke-industry-v3.py --root /data/not_backed_up/yxu209/ai-training/ --bank BANK_FROM_CURRENT_JSON --output /data/not_backed_up/yxu209/ai-training/artifacts/industry-v3/lab-screen --tables 24
 ```
 
 Replace `BANK_FROM_CURRENT_JSON` with the identity in `training/opponents/current.json`. The private distribution includes both controls; their code and runtime bytes remain frozen. The old S1 control's work ceiling is increased so dividing it among four workers does not prematurely truncate its one-second clock.

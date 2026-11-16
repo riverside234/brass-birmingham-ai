@@ -84,7 +84,7 @@ python scripts/feature-engineering.py configure \
   --output configs/step5/joint7-v11-1-grouped-lr-gae-ppg-buffer2.json
 ```
 
-Use the fresh-start and twenty-iteration continuation commands in [the lab instructions](../docs/MLP_V11_LAB.md#fresh-self-play-from-completed-v111-il). The config generator refuses overwrites; use another unused suffix if necessary. Reports export with `python scripts/export-training-reports.py --run artifacts/step5/joint7-v11-1-grouped-lr-gae-ppg-buffer2`.
+Use the fresh-start and twenty-iteration continuation commands in [the lab instructions](../docs/MLP_V11_LAB.md#fresh-self-play-from-completed-v111-il). The config generator refuses overwrites; use another unused suffix if necessary. Reports export with `python scripts/reports/export-training-reports.py --run artifacts/step5/joint7-v11-1-grouped-lr-gae-ppg-buffer2`.
 
 Initial single-iteration tested implementation: `e21348a9f87705983350b5d5b49fc8d17178ed540c9107d79011090cc6b80b2e`. Learning compatibility remains `b3b944dbc492bc1483c41bdb5a9d566f13e2b2a8b7988dbeec8fcb9ebb372674`.
 

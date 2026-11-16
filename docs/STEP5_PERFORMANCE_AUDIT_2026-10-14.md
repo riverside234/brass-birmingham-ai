@@ -95,17 +95,17 @@ sha256sum "$checkpoint" > "$probe/checkpoint.sha256"
 baseline=artifacts/step5-performance-audit-20261014/before/src/brass_ai
 common=(--root "$brass_root" --config configs/step5/joint7-g150-gate72.json \
   --device cuda --checkpoint "$checkpoint" --actors 24 --lanes 2 --games 48 --rounds 2 --seed 936211)
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${common[@]}" \
   --baseline-inputs "$baseline" --output "$probe/ordinary-before"
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${common[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${common[@]}" \
   --output "$probe/ordinary-after"
 replay=$(find "$probe/ordinary-before/round-0" -maxdepth 1 -name '*.jsonl.gz' -print -quit)
 search=(--root "$brass_root" --config configs/step5/joint7-g150-gate72.json --device cuda \
   --checkpoint "$checkpoint" --replay "$replay" --rounds 2 --seed 936211 \
   --phases canal_early canal_late rail_early rail_late)
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${search[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${search[@]}" \
   --mode teacher --baseline-inputs "$baseline" --output "$probe/teacher-before"
-CUDA_VISIBLE_DEVICES=2 python scripts/benchmark-step5-performance.py "${search[@]}" \
+CUDA_VISIBLE_DEVICES=2 python scripts/benchmarks/benchmark-step5-performance.py "${search[@]}" \
   --mode teacher --output "$probe/teacher-after"
 sha256sum --check "$probe/checkpoint.sha256"
 ```

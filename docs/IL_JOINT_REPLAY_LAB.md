@@ -53,7 +53,7 @@ The active evaluation preset controls the same v4 search budget for every model;
 To answer the separate question **one joint candidate versus three original batch6 policies**, run:
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/il_head_to_head.py --device cuda
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/il-head-to-head/il_head_to_head.py --device cuda
 ```
 
 This standalone evaluation uses the completed `best` checkpoint receipts from `artifacts/step5/v4-batch7-joint` and `artifacts/step5/v4-batch6`, preserving their original identities and checking their hashes/IL provenance. It does not use the joint run's `initial.pt` (which is batch7). Both sides use neutral NN policies without search. Defaults are the same seed cursor `1947000` and **40 validation setups × four candidate seats = 160 games**. CPU actors and GPU batching inherit the existing evaluation preset. No training, population import or automatic promotion occurs.

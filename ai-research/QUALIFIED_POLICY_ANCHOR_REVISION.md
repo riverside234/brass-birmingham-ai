@@ -105,7 +105,7 @@ Rating game count is unchanged. More neural and fewer rule-bot seats may change 
 - New reference/coverage modules: `src/brass_ai/recovery/policy_anchor.py`, `rating_coverage.py`; hotfix entry point: `scripts/joint7-qualified-anchor.py`.
 - Integration: `panel_gates.py`, `ratings.py`, `il_kl_probe.py`, `il_kl_limit.py`, `league.py`, `retention.py`, `history.py`, `resume.py`, `config.py`, `exploration.py`.
 - Configs: `configs/step5/joint7-latest.json` and new `joint7-v11-2-grouped-lr-critic-qualified-anchor.json`. Earlier signed g270 config remains available.
-- Reports/docs: `scripts/export-training-reports.py`, `docs/MLP_V11_LAB.md`, `docs/EXPORT_TRAINING_REPORTS.md`, this report.
+- Reports/docs: `scripts/reports/export-training-reports.py`, `docs/MLP_V11_LAB.md`, `docs/EXPORT_TRAINING_REPORTS.md`, this report.
 - Regressions/smoke: `tests/Recovery/test_policy_anchor.py`, `smoke_policy_anchor.py`, updated fresh/legacy config expectations in `test_auto_il_kl.py`, `test_ppo_lr_controller.py`, `test_exploration_revision.py`, `test_quality_pool.py`; active-anchor export test in `tests/Reports/test_export_training_reports.py`.
 - Reviewed source registries: `configs/learning/selfplay-resume-sources.json`, `imitation-handoff-sources.json`. All **6,723** pre-existing resume approvals are preserved; new paths remain exact source/config migrations, with unchanged-config continuations also allowed. Learning compatibility stays `ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54`.
 

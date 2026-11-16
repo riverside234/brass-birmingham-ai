@@ -29,7 +29,7 @@ Use your existing conda environment and dependencies. No new package installatio
 ```sh
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
-python /data/not_backed_up/yxu209/ai-training/scripts/personality.py inspect \
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/personality/personality.py inspect \
   --from-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-best-v1
 ```
 
@@ -50,7 +50,7 @@ Returns stay undiscounted and subtract only future insolvency costs at each deci
 Use a new output directory:
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/personality.py handoff \
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/personality/personality.py handoff \
   --from-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/selfplay-best-v1 \
   --output /data/not_backed_up/yxu209/ai-training/artifacts/personality/handoff-v1 \
   --trace-shards 4 --references 3
@@ -72,7 +72,7 @@ This command is the existing cleanup dry run; do not add `--apply` merely to ins
 ### 3. Warm up the new head with the core frozen - skipped
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/personality.py --device cuda warmup \
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/personality/personality.py --device cuda warmup \
   --handoff /data/not_backed_up/yxu209/ai-training/artifacts/personality/handoff-v1 \
   --run /data/not_backed_up/yxu209/ai-training/artifacts/personality/goal-pilot-v1 \
   --epochs 3
@@ -91,17 +91,17 @@ Goal labels use **public realized outcomes**, never future features or opponents
 ### 4. Measure held-out goal diagnostics, then run a small joint pilot - skipped
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/personality.py --device cuda validate-goals \
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/personality/personality.py --device cuda validate-goals \
   --handoff /data/not_backed_up/yxu209/ai-training/artifacts/personality/handoff-v1 \
   --run /data/not_backed_up/yxu209/ai-training/artifacts/personality/goal-pilot-v1 \
   --games 20 --workers 4
 
-python /data/not_backed_up/yxu209/ai-training/scripts/personality.py --device cuda joint-pilot \
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/personality/personality.py --device cuda joint-pilot \
   --handoff /data/not_backed_up/yxu209/ai-training/artifacts/personality/handoff-v1 \
   --run /data/not_backed_up/yxu209/ai-training/artifacts/personality/goal-pilot-v1 \
   --games 20 --workers 4 --epochs 2
 
-python /data/not_backed_up/yxu209/ai-training/scripts/personality.py --device cuda validate-goals \
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/personality/personality.py --device cuda validate-goals \
   --handoff /data/not_backed_up/yxu209/ai-training/artifacts/personality/handoff-v1 \
   --run /data/not_backed_up/yxu209/ai-training/artifacts/personality/goal-pilot-v1 \
   --games 20 --workers 4
@@ -186,7 +186,7 @@ The examples use `handoff-v1` and `goal-pilot-v1` from the P0/P1 guide. Substitu
 ### P2: prepare the current learner
 
 ```sh
-python "$brass_root/scripts/personality_search.py" --device cuda prepare \
+python "$brass_root/scripts/experiments/personality/personality_search.py" --device cuda prepare \
   --handoff "$personality_root/handoff-v1" \
   --pilot "$personality_root/goal-pilot-v1" \
   --output "$personality_root/search-ready-v1" \
@@ -206,7 +206,7 @@ The bundle pins the source handoff, calibrated checkpoint and both collection re
 ### P2: compare root priors under the same budget
 
 ```sh
-python "$brass_root/scripts/personality_search.py" --device cuda probe \
+python "$brass_root/scripts/experiments/personality/personality_search.py" --device cuda probe \
   --ready "$personality_root/search-ready-v1" \
   --seconds 12 --workers 4 --repeats 2 \
   --report "$personality_root/search-ready-v1/paired-root-timing.json"
@@ -230,7 +230,7 @@ Search behavior:
 Ordinary-game counters start with this personality stage, not the completed Step 5 run. The initial warm-up is **640 ordinary games**, followed by one collection due every **160** games. Only committed fresh P1 `joint-pilot` collections count. Held-out diagnostics, descriptor games and teacher games do not advance that counter.
 
 ```sh
-python "$brass_root/scripts/personality_search.py" --device cuda teach \
+python "$brass_root/scripts/experiments/personality/personality_search.py" --device cuda teach \
   --ready "$personality_root/search-ready-v1" \
   --pilot "$personality_root/goal-pilot-v1" \
   --run "$personality_root/teachers-v1" --tables 4
@@ -245,7 +245,7 @@ The **90% wall allowance** is retained: accounted search time may be at most nin
 The master personality plan §4.4 instead specifies a 50% accounted ceiling, matching current Step 5. This is an unresolved specification discrepancy: active P2 code and this workflow use 90%. The 13 October audit preserves that behavior and all clocks/worker counts; choose and explicitly version the intended P2 accounting policy before a real teacher campaign.
 
 ```sh
-python "$brass_root/scripts/personality_search.py" --device cuda distill \
+python "$brass_root/scripts/experiments/personality/personality_search.py" --device cuda distill \
   --ready "$personality_root/search-ready-v1" \
   --collection "$personality_root/teachers-v1/collection-0000" \
   --output "$personality_root/distilled-v1"
@@ -260,12 +260,12 @@ Successful distillation uses at most eight policy-only steps, LR `1e-5`, and two
 #### Continue PPO from a distilled learner
 
 ```sh
-python "$brass_root/scripts/personality_search.py" continue-pilot \
+python "$brass_root/scripts/experiments/personality/personality_search.py" continue-pilot \
   --pilot "$personality_root/goal-pilot-v1" \
   --distilled "$personality_root/distilled-v1" \
   --output "$personality_root/goal-pilot-v2"
 
-python "$brass_root/scripts/personality.py" --device cuda joint-pilot \
+python "$brass_root/scripts/experiments/personality/personality.py" --device cuda joint-pilot \
   --handoff "$personality_root/handoff-v1" \
   --run "$personality_root/goal-pilot-v2" --games 20 --workers 4 --epochs 2
 ```
@@ -283,16 +283,16 @@ To use the distilled checkpoint directly for a frozen discovery pilot, run `prep
 The initial target is seven styles corresponding to the seven supported inputs, with priority given to good playing quality, repeatability and clear behavioral separation. Report a smaller qualified subset when fewer styles meet those requirements, and identify indistinguishable, weak or inconclusive candidates separately. The former 16-archetype/eight-variant target is canceled; the old shortlist counts and archive examples below are retained implementation history. If evidence motivates learning new behaviors through weight updates, [PPGA adaptation is an optional independent experiment](README.md#optional-ppga-experiment). Define and validate that adaptation before running a bounded pilot; the historical commands below do not implement PPGA or automatically launch weight training.
 
 ```sh
-python "$brass_root/scripts/personality_repertoire.py" propose \
+python "$brass_root/scripts/experiments/personality/personality_repertoire.py" propose \
   --ready "$personality_root/search-ready-v1" \
   --output "$personality_root/proposals-v1" --count 64 --decision-mode direct
 
-python "$brass_root/scripts/personality_repertoire.py" --device cuda collect \
+python "$brass_root/scripts/experiments/personality/personality_repertoire.py" --device cuda collect \
   --proposal "$personality_root/proposals-v1" \
   --output "$personality_root/discovery-v1" --partition train \
   --setups 2 --tables 24 --seed 83000000
 
-python "$brass_root/scripts/personality_repertoire.py" --device cuda fit \
+python "$brass_root/scripts/experiments/personality/personality_repertoire.py" --device cuda fit \
   --collections "$personality_root/discovery-v1" \
   --output "$personality_root/descriptor-v1" --epochs 30
 ```
@@ -303,7 +303,7 @@ Larger proposals can now use `--candidate-start` and `--candidate-count` without
 
 ```sh
 for start in 0 512 1024 1536; do
-  python "$brass_root/scripts/personality_repertoire.py" --device cuda collect \
+  python "$brass_root/scripts/experiments/personality/personality_repertoire.py" --device cuda collect \
     --proposal "$personality_root/proposals-large" \
     --output "$personality_root/discovery-large-$start" --partition train \
     --setups 2 --tables 24 --seed 83000000 \
@@ -326,12 +326,12 @@ The small masked GRU autoencoder produces a 2D descriptor. Normalization and a P
 ### P3: independent preliminary quality and an archive
 
 ```sh
-python "$brass_root/scripts/personality_repertoire.py" --device cuda collect \
+python "$brass_root/scripts/experiments/personality/personality_repertoire.py" --device cuda collect \
   --proposal "$personality_root/proposals-v1" \
   --output "$personality_root/quality-v1" --partition validation \
   --setups 8 --tables 24 --seed 93000000
 
-python "$brass_root/scripts/personality_repertoire.py" archive \
+python "$brass_root/scripts/experiments/personality/personality_repertoire.py" archive \
   --proposal "$personality_root/proposals-v1" \
   --encoder "$personality_root/descriptor-v1" \
   --discovery "$personality_root/discovery-v1" \
@@ -352,7 +352,7 @@ The unstructured archive holds up to 128 distinct qualified elites with a discov
 Propose a larger batch around qualified elites while retaining old controller IDs:
 
 ```sh
-python "$brass_root/scripts/personality_repertoire.py" propose \
+python "$brass_root/scripts/experiments/personality/personality_repertoire.py" propose \
   --ready "$personality_root/search-ready-v1" --from-archive "$personality_root/archive-v1" \
   --output "$personality_root/proposals-v2" --count 128 --seed 17702 --decision-mode direct
 ```
@@ -362,7 +362,7 @@ Collect new discovery/quality setups with different seed ranges, fit a new encod
 For shortlisted search confirmation:
 
 ```sh
-python "$brass_root/scripts/personality_repertoire.py" propose \
+python "$brass_root/scripts/experiments/personality/personality_repertoire.py" propose \
   --ready "$personality_root/search-ready-v1" --from-archive "$personality_root/archive-v1" \
   --output "$personality_root/search-proposals-v1" --decision-mode searched \
   --seconds 12 --workers 4

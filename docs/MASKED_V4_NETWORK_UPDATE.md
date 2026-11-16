@@ -31,7 +31,7 @@ All seats receive one second and four workers. Local execution uses two concurre
 
 ```sh
 conda activate ai-training
-python /data/not_backed_up/yxu209/ai-training/scripts/smoke-network-v4.py --root /data/not_backed_up/yxu209/ai-training/ --bank bank-29b8fdbbd14ff00c7c88 --tables 24 --seed 844000 --output /data/not_backed_up/yxu209/ai-training/artifacts/v4-network/lab-screen
+python /data/not_backed_up/yxu209/ai-training/scripts/experiments/legacy-economy/smoke-network-v4.py --root /data/not_backed_up/yxu209/ai-training/ --bank bank-29b8fdbbd14ff00c7c88 --tables 24 --seed 844000 --output /data/not_backed_up/yxu209/ai-training/artifacts/v4-network/lab-screen
 ```
 
 Local evidence is saved in `artifacts/v4-network/smoke-1/`. The report includes VP, official win share, first places, mean rank, completed MCTS simulations per decision/second, nodes, latency and optional-pair work. Throughput comparisons reflect the games' changing states as well as implementation overhead; they are not an isolated causal timing benchmark. Final results and deployment disposition will be recorded after the screen completes.

@@ -13,7 +13,7 @@ The run recovered against its fixed IL opponent, with a promising generation-140
 
 Primary evidence: [export manifest](../results/v4-selfplay-joint-g0150-20261013T173011108713Z/export-manifest.json), [state](../results/v4-selfplay-joint-g0150-20261013T173011108713Z/state.json), [recorded configuration](../results/v4-selfplay-joint-g0150-20261013T173011108713Z/recorded-config.json), [retained history](../results/v4-selfplay-joint-g0150-20261013T173011108713Z/retention-history.json), and full reports for [iteration 148](../results/v4-selfplay-joint-g0150-20261013T173011108713Z/iteration-0148/report.json) and [149](../results/v4-selfplay-joint-g0150-20261013T173011108713Z/iteration-0149/report.json). Earlier evidence: [selfplay-joint](../results/selfplay-joint/), [generation-60 review](JOINT7_ITERATION60_REVIEW.md), and [IL comparisons](../results/joint-v7/).
 
-Reproduce aggregation with `python scripts/review_joint7_150.py`. Outputs: [metrics and input hashes](joint7-150-evidence/metrics.json), [all windows and rolling tables](joint7-150-evidence/tables.md), [source identities](joint7-150-evidence/source-versions.json), and [verification receipt](joint7-150-evidence/verification.json).
+Reproduce aggregation with `python scripts/reports/review_joint7_150.py`. Outputs: [metrics and input hashes](joint7-150-evidence/metrics.json), [all windows and rolling tables](joint7-150-evidence/tables.md), [source identities](joint7-150-evidence/source-versions.json), and [verification receipt](joint7-150-evidence/verification.json).
 
 The metrics summary now references a compressed file containing all 150 complete iteration records. Its filename, SHA-256 and count are recorded in `iterations_ref`; [compact evidence documentation](COMPACT_TRAINING_EVIDENCE.md) explains how to load or regenerate the complete report.
 
@@ -257,7 +257,7 @@ Changes: [probe](../src/brass_ai/recovery/review_metrics.py), [integration](../s
 
 [Preflight](../scripts/joint7_preflight.py) accepts `--evidence` for an exported generation, retaining its old generation-60 default. It checks checkpoint/counters/population/history, live opponent hashes, complete IL lineage, compatibility, reviewed source/config changes and restored Adam configuration before optional archival. Arbitrary setting changes still fail. **New code/settings are adopted through a reviewed continuation, without reinitializing or loading best.pt.**
 
-[Panel comparator](../scripts/compare-training-panels.py) verifies source/configuration/opponents/setups/seats/budgets, rejects failures and missing/duplicate outcomes, and computes paired setup-bootstrap official win/rank/VP differences. It never promotes. [The exporter](../scripts/export-training-reports.py) includes new full report fields and recognizes `comparison.json`; `--extra` includes independent panels outside the run. Automatic selection includes state, retention, latest two completed iterations, available evaluations and completed IL lineage.
+[Panel comparator](../scripts/reports/compare-training-panels.py) verifies source/configuration/opponents/setups/seats/budgets, rejects failures and missing/duplicate outcomes, and computes paired setup-bootstrap official win/rank/VP differences. It never promotes. [The exporter](../scripts/reports/export-training-reports.py) includes new full report fields and recognizes `comparison.json`; `--extra` includes independent panels outside the run. Automatic selection includes state, retention, latest two completed iterations, available evaluations and completed IL lineage.
 
 ## Verification and limits
 
@@ -303,7 +303,7 @@ python scripts/step5.py --root /data/not_backed_up/yxu209/ai-training/ \
   --imitation-run artifacts/step5/v4-batch7-joint \
   --resume-reviewed-source --iterations 1
 
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --root /data/not_backed_up/yxu209/ai-training/ \
   --run artifacts/step5/v4-selfplay-joint
 ```
@@ -391,23 +391,23 @@ for ARM_ROOT in "$JOINT7_CONTROL" "$JOINT7_CANDIDATE"; do
 done
 
 cd "$JOINT7_BASE"
-python scripts/compare-training-panels.py \
+python scripts/reports/compare-training-panels.py \
   --control "$JOINT7_CONTROL/artifacts/joint7-g150-panel/g0154/report.json" \
   --candidate "$JOINT7_CANDIDATE/artifacts/joint7-g150-panel/g0154/report.json" \
   --output artifacts/joint7-g150-comparison/comparison.json
 
 for ARM_ROOT in "$JOINT7_CONTROL" "$JOINT7_CANDIDATE"; do
   cd "$ARM_ROOT"
-  python scripts/compare-training-panels.py \
+  python scripts/reports/compare-training-panels.py \
     --control artifacts/joint7-g150-panel/g0150/report.json \
     --candidate artifacts/joint7-g150-panel/g0154/report.json \
     --output artifacts/joint7-g150-panel/endpoint-vs-start/comparison.json
-  python scripts/export-training-reports.py --root "$ARM_ROOT" \
+  python scripts/reports/export-training-reports.py --root "$ARM_ROOT" \
     --run artifacts/step5/v4-selfplay-joint --extra artifacts/joint7-g150-panel
 done
 
 cd "$JOINT7_BASE"
-python scripts/export-training-reports.py --root "$JOINT7_BASE" \
+python scripts/reports/export-training-reports.py --root "$JOINT7_BASE" \
   --run artifacts/step5/v4-selfplay-joint --extra artifacts/joint7-g150-comparison
 ```
 

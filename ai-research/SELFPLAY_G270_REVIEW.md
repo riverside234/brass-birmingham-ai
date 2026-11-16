@@ -52,7 +52,7 @@ The saved g270 rating iteration took 577.0 seconds, including 300.7 seconds of e
 ## Changed files and validation
 
 - Gates/defaults: `src/brass_ai/recovery/panel_gates.py` (new), `v4_share.py`, `temperature_rating.py`, `exploration.py`, `config.py`; `configs/step5/joint7-latest.json` and new `joint7-v11-2-grouped-lr-critic-g270.json`.
-- Planning/reporting: `pfsp_pool.py`, `quality_pool.py`, `ordinary.py`, `ratings.py`, `league.py`, `history.py`, and `scripts/export-training-reports.py`. Export retains live trigger slots until their evidence moves into the existing checksummed archive.
+- Planning/reporting: `pfsp_pool.py`, `quality_pool.py`, `ordinary.py`, `ratings.py`, `league.py`, `history.py`, and `scripts/reports/export-training-reports.py`. Export retains live trigger slots until their evidence moves into the existing checksummed archive.
 - Controller/continuation: `snapshot_r2.py`, `resume.py`, both source-compatibility registries, and new `scripts/joint7-panel-gates.py`. The recognized config transition changes only `panel_gates`, `v4_share_gate`, and `entropy_control`'s comparison-enable field.
 - Focused regressions: new `tests/Recovery/test_panel_gates.py`; updated archived/default fixtures in `test_v4_share.py`, `test_pfsp_pool.py`, `test_quality_pool.py`, `test_exploration_revision.py`, and trigger coverage in `tests/Reports/test_export_training_reports.py`. `docs/MLP_V11_LAB.md` has current defaults and commands. Concurrent shared plot-renderer changes were preserved separately.
 
@@ -83,7 +83,7 @@ This trains **20 additional iterations**, ending at g290 if all commit. The firs
 For later continuations, reuse only the final `step5.py ... train` command with the desired additional iteration count. Export with:
 
 ```bash
-python scripts/export-training-reports.py \
+python scripts/reports/export-training-reports.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic
 ```
 

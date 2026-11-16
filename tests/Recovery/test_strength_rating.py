@@ -249,7 +249,7 @@ class Slots(unittest.TestCase):
                  patch.object(r,'plot_report',side_effect=lambda path,*args:path.write_text('<svg/>')):
                 first=r.schedule(root,run,state,cfg)
                 before={p:p.read_bytes() for p in run.rglob('*') if p.is_file()}
-                spec=importlib.util.spec_from_file_location('strength_rating_command',SOURCE_ROOT/'scripts/strength-ratings.py')
+                spec=importlib.util.spec_from_file_location('strength_rating_command',SOURCE_ROOT/'scripts/reports/strength-ratings.py')
                 command=importlib.util.module_from_spec(spec);spec.loader.exec_module(command);command.ROOT=root
                 with patch.object(sys,'argv',['strength-ratings.py','--run','artifacts/run','--output','artifacts/review']):
                     command.main()

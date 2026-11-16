@@ -45,11 +45,11 @@ conda activate ai-training
 ROOT=/data/not_backed_up/yxu209/ai-training
 P4=$ROOT/artifacts/personality/p4
 
-python "$ROOT/scripts/personality_deployment.py" --root "$ROOT" select \
+python "$ROOT/scripts/experiments/personality/personality_deployment.py" --root "$ROOT" select \
   --archive "$ROOT/artifacts/personality/discovery/searched-archive" \
   --output "$P4/candidate" --groups 16 --members 8 --method fps
 
-python "$ROOT/scripts/personality_deployment.py" --root "$ROOT" cards \
+python "$ROOT/scripts/experiments/personality/personality_deployment.py" --root "$ROOT" cards \
   --roster "$P4/candidate" --output "$P4/naming"
 ```
 
@@ -64,7 +64,7 @@ Read `naming/cards.json`: it contains labeled **public discovery plans and visib
 ### 3. Freeze a bounded collection plan
 
 ```bash
-python "$ROOT/scripts/personality_deployment.py" --root "$ROOT" plan \
+python "$ROOT/scripts/experiments/personality/personality_deployment.py" --root "$ROOT" plan \
   --roster "$P4/candidate" --labels "$P4/naming/labels.json" \
   --output "$P4/panel" --setups 16 --repetitions 2 --seed 121000000
 ```
@@ -82,11 +82,11 @@ This full default is **12,608 games**, deliberately planned separately from exec
 ### 4. Collect chunks on the lab
 
 ```bash
-python "$ROOT/scripts/personality_deployment.py" --root "$ROOT" --device cuda collect \
+python "$ROOT/scripts/experiments/personality/personality_deployment.py" --root "$ROOT" --device cuda collect \
   --panel "$P4/panel" --output "$P4/chunk-00000" \
   --start 0 --games 128 --tables 24
 
-python "$ROOT/scripts/personality_deployment.py" --root "$ROOT" --device cuda collect \
+python "$ROOT/scripts/experiments/personality/personality_deployment.py" --root "$ROOT" --device cuda collect \
   --panel "$P4/panel" --output "$P4/chunk-00128" \
   --start 128 --games 128 --tables 24
 ```
@@ -102,7 +102,7 @@ These are calibration/evaluation records. They do not increment ordinary-game co
 ### 5. Re-encode and check the deployed roster
 
 ```bash
-python "$ROOT/scripts/personality_deployment.py" --root "$ROOT" --device cuda check \
+python "$ROOT/scripts/experiments/personality/personality_deployment.py" --root "$ROOT" --device cuda check \
   --panel "$P4/panel" --chunks "$P4"/chunk-* \
   --output "$P4/check-automatic"
 ```
@@ -123,7 +123,7 @@ Automatic analysis also writes `blind-packet.json` and `review-template.json`. S
 Merge the responses into one file matching `review-template.json`, with one rating per `(example, rater)` and at least two distinct raters per example. `guess` is the frozen archetype ID. Save, for example, as `blind-review.json`, then check the **same** games:
 
 ```bash
-python "$ROOT/scripts/personality_deployment.py" --root "$ROOT" --device cuda check \
+python "$ROOT/scripts/experiments/personality/personality_deployment.py" --root "$ROOT" --device cuda check \
   --panel "$P4/panel" --chunks "$P4"/chunk-* \
   --review "$P4/blind-review.json" --output "$P4/check-reviewed"
 ```
@@ -177,7 +177,7 @@ P5 tools are implemented. **Real calibration, human review, and qualification ar
 
 The current verifier is `personality-difficulty/1.2.0`. The [P5/P6 audit](AUDIT_HISTORY.md#audit-2026-10-12-p5-p6) added panel-wide job ownership, full derived-report revalidation and preparation-failure cleanup. Earlier P5 evidence must be regenerated under new panels; Step 5 and P0–P4 continuation are unchanged.
 
-The separate `scripts/personality_difficulty.py` command reuses P0's handoff, P1's unchanged shared network, P2's intent/search/central inference, and P4's roster, profiles, frozen reference pool and pinned qualification evidence. It neither resumes nor writes into Step 5. Existing datasets, IL handoff, model weights, optimizer state and training progress retain their existing contracts; **P5 requires no Step 5 checkpoint migration**.
+The separate `scripts/experiments/personality/personality_difficulty.py` command reuses P0's handoff, P1's unchanged shared network, P2's intent/search/central inference, and P4's roster, profiles, frozen reference pool and pinned qualification evidence. It neither resumes nor writes into Step 5. Existing datasets, IL handoff, model weights, optimizer state and training progress retain their existing contracts; **P5 requires no Step 5 checkpoint migration**.
 
 <a id="p5-1-environment-and-prerequisites"></a>
 
@@ -190,7 +190,7 @@ cd "$ROOT"
 python -m pip install -r "$ROOT/requirements-personality-p5.txt"
 export PYTHONPATH="$ROOT/src:$ROOT/tests/R2:$ROOT/tests/Recovery:$ROOT/tests/Personality${PYTHONPATH:+:$PYTHONPATH}"
 
-python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" build-host
+python "$ROOT/scripts/experiments/personality/personality_difficulty.py" --root "$ROOT" build-host
 ```
 
 The SciPy dependency is used only for P5's statistical intervals. The build uses the existing pinned compiler and privately transferred R1 dependencies, under `artifacts/personality-host/guarded/`. On Linux it uses Mono (or the global `--mono` argument). It does not read or modify the installed Unity package. Transfer the existing compiler/dependencies first if this is a new lab checkout.
@@ -227,7 +227,7 @@ Step 5 remains unchanged: NN teachers 12 seconds/four workers, searched v4 one s
 P5="$ROOT/artifacts/personality/p5"
 ROSTER="$ROOT/artifacts/personality/p4/check-reviewed"
 
-python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" plan \
+python "$ROOT/scripts/experiments/personality/personality_difficulty.py" --root "$ROOT" plan \
   --roster "$ROSTER" \
   --profiles "$ROOT/configs/personality/difficulty-1.0.0.json" \
   --output "$P5/calibration-panel" --stage calibration \
@@ -256,11 +256,11 @@ The panels include:
 # Select the one GPU allocated to this job, for example physical GPU 0.
 export CUDA_VISIBLE_DEVICES=0
 
-python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" --device cuda collect \
+python "$ROOT/scripts/experiments/personality/personality_difficulty.py" --root "$ROOT" --device cuda collect \
   --panel "$P5/calibration-panel" --output "$P5/calibration-chunk-000000" \
   --start 0 --games 96 --tables 24
 
-python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" --device cuda collect \
+python "$ROOT/scripts/experiments/personality/personality_difficulty.py" --root "$ROOT" --device cuda collect \
   --panel "$P5/calibration-panel" --output "$P5/calibration-chunk-000096" \
   --start 96 --games 96 --tables 24
 ```
@@ -276,7 +276,7 @@ Reports include completed/interrupted simulations, fallbacks, prior/search secon
 ### 5. Analyze and collect human play feedback
 
 ```bash
-python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" check \
+python "$ROOT/scripts/experiments/personality/personality_difficulty.py" --root "$ROOT" check \
   --panel "$P5/calibration-panel" --chunks "$P5"/calibration-chunk-* \
   --output "$P5/calibration-automatic"
 ```
@@ -323,7 +323,7 @@ Rotations and repetitions are averaged **within setup**. One prespecified Bonfer
 This is a **schema example, not a real review**. Keep the template's panel/model/profile/hardware identity fields intact. At least two independent raters per style/tier, no reported tactical failure, and mean ratings of at least three in each category are required. Tools validate attribution and coverage; they cannot prove reviewer independence or enjoyment. The current delivery provides interfaces/records, not a playable Unity UI. Actual human sessions await a suitable review harness or P6 integration.
 
 ```bash
-python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" check \
+python "$ROOT/scripts/experiments/personality/personality_difficulty.py" --root "$ROOT" check \
   --panel "$P5/calibration-panel" --chunks "$P5"/calibration-chunk-* \
   --review "$P5/calibration-human-review.json" \
   --output "$P5/calibration-reviewed"
@@ -332,7 +332,7 @@ python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" check \
 Calibration-stage reports always remain provisional. Tune only on calibration evidence, freeze the final candidate and register a **new test-partition** release panel referencing the complete calibration report:
 
 ```bash
-python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" plan \
+python "$ROOT/scripts/experiments/personality/personality_difficulty.py" --root "$ROOT" plan \
   --roster "$ROSTER" --profiles "$ROOT/configs/personality/difficulty-1.0.0.json" \
   --output "$P5/release-panel" --stage release \
   --calibration "$P5/calibration-reviewed" --setups 32 --repetitions 2 \
@@ -346,7 +346,7 @@ Collect/check that frozen panel in disjoint chunks and provide its own bound hum
 ### 6. Public selection and intent interfaces
 
 ```bash
-python "$ROOT/scripts/personality_difficulty.py" --root "$ROOT" menu \
+python "$ROOT/scripts/experiments/personality/personality_difficulty.py" --root "$ROOT" menu \
   --roster "$ROSTER" --report "$P5/release-reviewed" \
   --output "$P5/public-interface"
 ```

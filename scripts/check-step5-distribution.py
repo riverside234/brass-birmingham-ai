@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 root = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(root / 'src'))
+sys.path[:0] = [str(root / 'src'), str(root / 'scripts/reports')]
 from brass_ai.bank import load_bank, read, sha, require
 from check_qualification_reports import check_reports
 

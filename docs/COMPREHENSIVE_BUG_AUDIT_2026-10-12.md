@@ -6,7 +6,7 @@ Confirmed defects were fixed in replay attribution, P1 checkpoint publication, r
 
 The audited base revision was `a873a78830096d92c567afac4e0170859b89ca1d` (“Improve step5 transfer and training budgets”). Repository instructions, Git status, current entry points, approved configurations, current lab guides, existing reports and the [personality plan](../ai-research/PERSONALITIES_AND_DIFFICULTY_PLAN.md) were inspected. Parallel reviewers owned host/contracts, search/runtime and P0–P4; the coordinating reviewer owned retention/continuation and integrated the changes. Confirmed paths and regressions were cross-reviewed.
 
-Active training uses `scripts/step5.py`, dispatching to `recovery/` for the current recipe. The independent post-training entry points are `scripts/personality.py`, `scripts/personality_search.py`, `scripts/personality_repertoire.py` and `scripts/personality_deployment.py`. Historical dense models, old experiment recipes and frozen native banks were treated as references, not current specifications.
+Active training uses `scripts/step5.py`, dispatching to `recovery/` for the current recipe. The independent post-training entry points are `scripts/experiments/personality/personality.py`, `scripts/experiments/personality/personality_search.py`, `scripts/experiments/personality/personality_repertoire.py` and `scripts/experiments/personality/personality_deployment.py`. Historical dense models, old experiment recipes and frozen native banks were treated as references, not current specifications.
 
 | Identity | Value |
 |---|---|

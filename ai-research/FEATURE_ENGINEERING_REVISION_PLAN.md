@@ -191,7 +191,7 @@ FE0: See [field/source contract](FEATURE_ENGINEERING_FE0_CONTRACT.md) and its
 ordered JSON matrix. The active settings snapshot, 14 reusable native permitted
 positions (1,014 candidates), CPU reference/prepared cold/warm baseline and
 provisional parameter report are in `artifacts/feature-engineering/fe0-fe3/`.
-Commands: `python scripts/benchmark-feature-engineering.py --stage baseline`
+Commands: `python scripts/benchmarks/benchmark-feature-engineering.py --stage baseline`
 and `--stage reference`, both completed. No production encoder/model/settings
 changed. The user subsequently authorized exceeding 2M and retaining width 304.
 The final FE3 provisional layout projects 2,590,449 parameters with utility and
@@ -229,7 +229,7 @@ Final command (project dependencies installed, `src;tests/R2;tests/FeatureEngine
 on Windows PYTHONPATH): `python -m unittest test_fe1 test_fe2 test_fe3 -v`:
 **32 passed in 15.870 seconds**, saved to
 `artifacts/feature-engineering/fe0-fe3/focused-tests.log`. The bounded component
-smoke `python scripts/benchmark-feature-engineering.py --stage derived` completed
+smoke `python scripts/benchmarks/benchmark-feature-engineering.py --stage derived` completed
 on the exact 14 baseline positions / 1,014 candidates. Median/p95: cold
 26.207/113.086 ms; warm 23.651/105.736 ms. Warm cache: 70 timed hits after 14
 warmup misses; 191 dynamic calculations. Python allocation peaks: 1.22/3.84 MB.

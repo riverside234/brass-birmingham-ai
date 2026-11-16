@@ -58,7 +58,7 @@ the committed Git blob. Main training rejected that report before creating a run
 pure-neural smoke training and diagnostic preflight did not exercise admission.
 
 The follow-up preserves report bytes through Git and adds
-`scripts/check_qualification_reports.py --repair-line-endings`, which restores
+`scripts/reports/check_qualification_reports.py --repair-line-endings`, which restores
 only newline variants matching the existing SHA-256 exactly. The distribution
 check now covers the report and all six admission checks. Frozen bank code,
 qualification pins, model weights and trainer signatures remain unchanged.

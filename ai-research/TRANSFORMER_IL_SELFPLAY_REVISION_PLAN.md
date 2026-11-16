@@ -547,7 +547,7 @@ The laptop inspected during planning has a Core Ultra 5 135U and approximately 1
 | `step5/cli.py`, `league.py`, `evaluation.py`; config generators | Carry model specification end to end; explicit recipe/evaluation mode; updated descriptions |
 | New `scripts/transformer-training.py` | Inspection, dataset inventory/union, config binding, export, bounded benchmark helpers |
 | New transformer IL/self-play/evaluation presets | Explicit new paths; do not modify an existing signed run configuration |
-| `scripts/export-training-reports.py` and compact evidence helpers | Include model/token manifest, data-diversity, actual usage, and zero-search evidence |
+| `scripts/reports/export-training-reports.py` and compact evidence helpers | Include model/token manifest, data-diversity, actual usage, and zero-search evidence |
 | New `tests/Transformer/` regressions and smoke harness | Focused checks listed below |
 | New `docs/TRANSFORMER_IL_SELFPLAY_LAB.md` and implementation report | Verified commands, measured counts/latency, limitations, and continuation instructions |
 

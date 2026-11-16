@@ -21,7 +21,7 @@ The request's `results/joint-v7` directory contains **IL comparisons**. The self
 
 All 60 iterations have PPO/search summaries: 0–57 from retention and 58–59 from `state.recent_training`. **Iteration 58 has no composition outcomes or timings in this export.** Outcome/timing windows labelled 40–59 therefore contain 19 measured iterations. Full reports for 0–58, replay shards, complete intermediate evaluation reports/specifications, CUDA profiler traces, and lab model files are missing. Monitor 2's state receipt records its existence but does not preserve its results. No broader panel was yet due: its first threshold is 25,600 ordinary games.
 
-[Reproducer](../scripts/review_joint7.py), [generated tables](joint7-60-evidence/tables.md), and [machine-readable measurements](joint7-60-evidence/metrics.json) retain source hashes, per-field coverage, all available iteration summaries, descriptive variability, and ten-iteration windows. SD in the tables is **between iteration means**, not per-game variability or a confidence interval. Teacher fields have unequal retention coverage; `phase_field_iterations` records it. In particular, early fallback/interruption counts must not be filled with zero.
+[Reproducer](../scripts/reports/review_joint7.py), [generated tables](joint7-60-evidence/tables.md), and [machine-readable measurements](joint7-60-evidence/metrics.json) retain source hashes, per-field coverage, all available iteration summaries, descriptive variability, and ten-iteration windows. SD in the tables is **between iteration means**, not per-game variability or a confidence interval. Teacher fields have unequal retention coverage; `phase_field_iterations` records it. In particular, early fallback/interruption counts must not be filled with zero.
 
 The exported monitor/champion files use Windows line endings. Their LF-normalized SHA-256 hashes exactly match the generation-60 receipts in state (`5679651b…` and `5de4f326…`). The evidence JSON records both raw export and LF hashes.
 
@@ -232,7 +232,7 @@ Reproduce the analysis without Torch or game dependencies:
 ```sh
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
-python scripts/review_joint7.py
+python scripts/reports/review_joint7.py
 ```
 
 Run the focused checks in the lab environment (no training campaign):

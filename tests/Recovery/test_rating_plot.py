@@ -50,7 +50,7 @@ def long_fixture(count=47):
 
 
 def command():
-    spec = importlib.util.spec_from_file_location('render_pl_progress_cli', ROOT/'scripts/render-pl-progress.py')
+    spec = importlib.util.spec_from_file_location('render_pl_progress_cli', ROOT/'scripts/reports/render-pl-progress.py')
     module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     return module
 

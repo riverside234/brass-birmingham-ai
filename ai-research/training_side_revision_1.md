@@ -110,7 +110,7 @@ PPO preparation 的现有设置为 `microbatch_size=512`、`max_candidate_cells=
 
 ## 4. 报告导出修改
 
-`scripts/export-training-reports.py` 的导出 manifest 为 `selfplay-report-export/1.2.0`。
+`scripts/reports/export-training-reports.py` 的导出 manifest 为 `selfplay-report-export/1.2.0`。
 
 - 导出的 `retention-history.json` 删除字符串外的 JSON 排版空白，保留字符串、转义和数字 token；不通过浮点 parse/dump 改写内容。
 - 原训练目录的 history 保持原样，其他报告保持原始字节。
@@ -192,7 +192,7 @@ g660 smoke 保留 PPG steps 为 **3、6、6**，训练行数为 **108、217、21
 | `src/brass_ai/recovery/config.py` / `resume.py` / `value_buffer.py` | 严格配置校验、reviewed migration、受控缓存清理 |
 | `configs/learning/selfplay-resume-sources.json` | 明确 source/config 迁移许可 |
 | `scripts/configure-ppg-g210.py` | 当前 g660 新配置生成入口 |
-| `scripts/export-training-reports.py` | History 紧凑导出和 manifest / 增量校验 |
+| `scripts/reports/export-training-reports.py` | History 紧凑导出和 manifest / 增量校验 |
 | `tests/Recovery/test_ppg_g210.py` / `smoke_ppg_g210.py` | 当前方案 focused tests / 独立 smoke |
 
 详细阶段报告：

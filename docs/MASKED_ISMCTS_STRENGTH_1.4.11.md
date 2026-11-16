@@ -55,9 +55,9 @@ To reproduce the compact checks locally:
 
 ```powershell
 python scripts/verify-masked-ismcts.py --integration
-python scripts/masked-strength-check.py diagnose --positions 16
-python scripts/masked-strength-check.py clocks
-python scripts/masked-strength-check.py screen --workers 4
+python scripts/experiments/masked-ismcts/masked-strength-check.py diagnose --positions 16
+python scripts/experiments/masked-ismcts/masked-strength-check.py clocks
+python scripts/experiments/masked-ismcts/masked-strength-check.py screen --workers 4
 ```
 
 Keep completed strength evidence in a new output directory if repeating a screen. Windows CPU/native checks were performed here; CUDA performance and Linux execution must pass the lab preflight before training.

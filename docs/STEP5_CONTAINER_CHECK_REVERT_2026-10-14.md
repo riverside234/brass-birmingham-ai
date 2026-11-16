@@ -38,7 +38,7 @@ The native A/B/B/A comparison used two measured games per invocation, one warmup
 
 Collection ranges were 22.889–22.914 seconds before and 20.390–20.822 after. Component-total ranges were 27.632–27.909 and 24.497–24.966 seconds. PPO medians were 2.082 and 2.020 seconds, while checkpoint medians were 0.040 and 0.029 seconds; those small differences are not attributed to the reverted input checks. All four probes produced the same 619-decision trajectory digest, `19c79e753f944ab977ada007ea88815e9d981c70b1da466119dd50ced4ad514f`.
 
-These are bounded CPU fixture measurements, not evidence of complete production-iteration or lab-GPU speedups. The unchanged public driver is [benchmark-step5-performance.py](../scripts/benchmark-step5-performance.py); `run_comparison.py` and the saved `*-command.json` files record the exact invocation sequence. Before reports record the installed source identity plus the four executed baseline module hashes; the overridden-baseline teacher labels are diagnostic, not production attestations.
+These are bounded CPU fixture measurements, not evidence of complete production-iteration or lab-GPU speedups. The unchanged public driver is [benchmark-step5-performance.py](../scripts/benchmarks/benchmark-step5-performance.py); `run_comparison.py` and the saved `*-command.json` files record the exact invocation sequence. Before reports record the installed source identity plus the four executed baseline module hashes; the overridden-baseline teacher labels are diagnostic, not production attestations.
 
 Teacher probes used the same frozen fixture checkpoint and one saved root in each phase, with four workers and the unchanged clocks:
 

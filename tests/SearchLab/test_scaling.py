@@ -60,7 +60,7 @@ class SearchScalingTests(unittest.TestCase):
                               ('seconds', float('nan')), ('unused_workers', 32)]:
             with self.subTest(field=field), self.assertRaises(ValueError):
                 self.config(**{field: value})
-        spec = importlib.util.spec_from_file_location('searchlab_cli', SOURCE_ROOT / 'scripts/r4r5.py')
+        spec = importlib.util.spec_from_file_location('searchlab_cli', SOURCE_ROOT / 'scripts/experiments/searchlab/r4r5.py')
         cli = importlib.util.module_from_spec(spec); spec.loader.exec_module(cli)
         args = cli.parser().parse_args(['compare', '--checkpoint', 'a', '--references', 'b', '--output', 'c'])
         self.assertIsNone(args.setups)

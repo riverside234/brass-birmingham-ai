@@ -47,12 +47,12 @@ When normal and cotton result rows are available, compute each aggregate as `0.8
 This is the configured test command, not a claim that its results have been recorded:
 
 ```bash
-python scripts/policy-c-scale/long-search.py \
+python scripts/experiments/policy-c-scale/long-search.py \
   --generation 2400 --collected-generation 2399 \
   --normal-positions 200 --cotton-positions 50 \
   --lanes 60 --limit 250 --ref-scale 0.1 \
   --scales 0.10 0.15 0.20 0.25 0.30
 ```
 
-Sources: [long-search.py](../../scripts/policy-c-scale/long-search.py), [shared study reader/runner](../../scripts/policy-c-scale/_study.py), and the g2400 export linked above. No new lab search or production configuration change was performed for this documentation update.
+Sources: [long-search.py](../../scripts/experiments/policy-c-scale/long-search.py), [shared study reader/runner](../../scripts/experiments/policy-c-scale/_study.py), and the g2400 export linked above. No new lab search or production configuration change was performed for this documentation update.
 

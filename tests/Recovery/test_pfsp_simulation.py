@@ -22,7 +22,7 @@ def module(path, name):
 
 
 reference = module('ai-research/simulations/pfsp_sim_original.py', 'pfsp_reference')
-sim = module('scripts/pfsp_sim.py', 'pfsp_simulation')
+sim = module('scripts/experiments/pfsp/pfsp_sim.py', 'pfsp_simulation')
 
 
 class Simulation(unittest.TestCase):

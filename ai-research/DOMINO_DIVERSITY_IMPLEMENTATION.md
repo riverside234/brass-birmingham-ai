@@ -138,7 +138,7 @@ constraint residuals, centroid distances/ties, intrinsic reward/return and advan
 scales, preservation drift, actual fitting support/steps, held-out intrinsic error,
 PPO/PPG KL by ID, fingerprint work and cache bytes. Existing economic, KL, EV/R²,
 memory and phase timings remain. The short console field is `DOMiNO=mode:readiness`.
-`python scripts/export-training-reports.py` also copies the adoption receipt and
+`python scripts/reports/export-training-reports.py` also copies the adoption receipt and
 retains the new report sections, without copying model weights or replay arrays.
 
 Validation completed on CPU; no active training checkpoint was changed:
