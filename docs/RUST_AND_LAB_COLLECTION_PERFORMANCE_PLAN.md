@@ -24,6 +24,10 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/benchmarks/p
 
 ## What the current measurements show
 
+### Lab crash at g2832: slow exit of a killed teacher worker
+
+The run stopped while collecting g2832. A teacher table had finished and passed verification. Python then killed its worker process, as it does for every table, and waited 5 s for it to exit. The process was not reaped in time, so `TimeoutExpired` failed that table, the teacher collection, and the cancelled ordinary collection behind it. Nothing in the evidence shows a worker error. Iteration 2830 had `cleanup=75.5s` and a 62 s lane start, which points to lab I/O or memory pressure slowing the kernel's teardown of the killed process. The worker now gets up to 120 s before a table fails (`EXIT_GRACE_SECONDS`). Each table records `worker_exit_seconds`, the teacher phase summary reports p50, max and the count over 5 s, and the log prints a line when any exit took longer than 5 s. [qualification evidence](../results/rust-lab-qualification/20261116T122655870961Z-20261116T070216449130Z-on-training-617ccbc3-ae3d53f7/evidence/qualification.json).
+
 ### Lab results through g2682: back to the g2600 PPO code
 
 The rollback was slower. PPO time over iterations 2654–2681 had a median of **58 s** and a mean of 78 s, with 13 of 28 iterations above 60 s and a peak of 136 s. Under the g2600 code (2600–2653) the median was **40 s** and the mean 48 s. Most rollback spikes were not in the teacher term (for example, 2668–2671 took 105–132 s with term 1.1 s). The diagnostics in iterations 2678–2681 point to the restored CPU preparation instead:

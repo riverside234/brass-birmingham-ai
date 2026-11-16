@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "b911da89568dca3dc159088c56f4934fcc8c8efc3eb8423369b74288849ac37b",
+  "execution_implementation": "d7305baa5e6e3de54c22bcdc7136c7f76d5385c7bcd48973d87b2a62aa7131fd",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -839,6 +839,11 @@
       "implementation": "4d9ff9c70e5c1395bce12c4bb1b0b007c43bcae44c3375dce237096c8c8188a4",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "1f6c24358491078c6dc7d35e5f55b7cd15e8c9a5210310c1b7402b66def7eb2e"
+    },
+    {
+      "implementation": "b911da89568dca3dc159088c56f4934fcc8c8efc3eb8423369b74288849ac37b",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "bf8468c3798a94341be8709e27b86bdd82d555a1bb61564ce772c5b14cd17f1b"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1116,6 +1121,10 @@
   },
   "g2682_ppo_g2600_restore": {
     "scope": "PPO CPU preparation, the teacher term, the PPO update wrapper and compact summaries return to the exact code that trained g2600-g2654 (shared-memory batch transport, admitted-once inputs, batched targets, one padded forward per teacher step). The g2654 rollback to the g2280-g2400 code and its diagnostic-only teacher-step timing and GC watch are removed. Recipe, cotton contracts and the g2654 Rail-era cotton rule are unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2831_teacher_worker_exit_grace": {
+    "scope": "A killed native teacher worker gets up to 120 s (was 5 s) to be reaped before the table fails; at g2832 a verified table failed because the kernel took over 5 s to tear down its killed worker. Each table records worker_exit_seconds and the teacher phase summarises them. No search, label, admission or training change.",
     "qualified_implementation_unchanged": true
   }
 }

@@ -70,6 +70,22 @@ class CollectionFailures(unittest.TestCase):
         self.assertEqual(worker.failure['close_error'],'cleanup failure')
         self.assertIn('native diagnostic',worker.failure['stderr'])
 
+    def test_slow_exit_after_kill_keeps_a_verified_table(self):
+        # g2832: a finished table failed because its killed worker took over 5 s to be reaped.
+        import subprocess
+        worker=teacher.Worker.__new__(teacher.Worker)
+        worker.cancel=threading.Event();worker.stop=threading.Event();worker.events=Mock()
+        worker.reader=Mock();worker.err_reader=Mock();worker.stderr=b''
+        worker.process=process=Mock();process.poll.return_value=None
+        def wait(timeout):
+            if timeout<=5:raise subprocess.TimeoutExpired('brass-lab-teacher',timeout)
+        process.wait.side_effect=wait
+        worker.close()
+        process.kill.assert_called_once()
+        process.wait.assert_called_once_with(timeout=teacher.EXIT_GRACE_SECONDS)
+        self.assertGreater(teacher.EXIT_GRACE_SECONDS,5)
+        self.assertGreaterEqual(worker.exit_seconds,0.)
+
     def test_value_seal_cache_is_detached_and_cold_restore_matches(self):
         from brass_ai.recovery.search_value_rows import ValueBuffer
         model=model_fixture();row,_,_=value_fixture(model)

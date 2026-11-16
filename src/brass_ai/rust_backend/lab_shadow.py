@@ -301,6 +301,12 @@ class ShadowCollector:
         if mono:
             phase.metrics['mono_bootstrap_seconds']=dict(tables=len(mono),min=mono[0],p50=mono[len(mono)//2],max=mono[-1],total=sum(mono))
             print(f"Teacher Mono bootstrap: {len(mono)} tables, p50 {mono[len(mono)//2]:.3f}s, max {mono[-1]:.3f}s",flush=True)
+        exits=sorted(r['metrics']['worker_exit_seconds'] for r in live if 'worker_exit_seconds' in r['metrics'])
+        if exits:
+            phase.metrics['worker_exit_seconds']=dict(tables=len(exits),p50=exits[len(exits)//2],max=exits[-1],
+                                                      over_5s=sum(x>5 for x in exits))
+            if exits[-1]>5:print(f"Teacher worker exit after kill: max {exits[-1]:.1f}s "
+                                 f"({sum(x>5 for x in exits)} of {len(exits)} tables over 5s)",flush=True)
         phase.metrics.update(shadow=phase.options['mode']=='shadow',mode=phase.options['mode'],
             cached_tables=len(jobs)-len(missing),new_tables=len(live),wall_seconds=time.monotonic()-began,
             overlapped_with_ordinary=overlapped,

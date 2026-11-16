@@ -23,6 +23,10 @@ LIMIT = 64*1024**2
 COUNT_TABLE_SECONDS = 1800
 COUNT_TURN_SECONDS = 120
 STREAM_TURNS = 'verified-stream/1'
+# A killed worker can publish nothing more, but under memory or I/O pressure the
+# kernel may need seconds to tear it down. At g2832 a verified table failed when
+# that took over 5 s; only a process still alive after this long is stuck.
+EXIT_GRACE_SECONDS = 120
 
 
 def validate_job(job):
@@ -220,8 +224,10 @@ class Worker:
 
     def close(self):
         self.stop.set()
+        began = time.monotonic()
         if self.process.poll() is None:self.process.kill()
-        self.process.wait(timeout=5)
+        self.process.wait(timeout=EXIT_GRACE_SECONDS)
+        self.exit_seconds = time.monotonic()-began
         self.reader.join(timeout=2);self.err_reader.join(timeout=2)
         self.process.stdin.close();self.process.stdout.close();self.process.stderr.close()
 
@@ -353,6 +359,8 @@ class TeacherCollector:
                 if following is None:
                     release_core(endpoint)
                 result['metrics']['mono_bootstrap_seconds'] = mono_seconds
+                if getattr(worker, 'exit_seconds', None) is not None:
+                    result['metrics']['worker_exit_seconds'] = worker.exit_seconds
                 result['metrics']['python_gpu_wait_seconds'] = client.wait_seconds
                 result['metrics']['cpu_admission'] = timings.report()
                 if batcher is None:
