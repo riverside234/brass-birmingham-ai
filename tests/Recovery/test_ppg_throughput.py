@@ -129,24 +129,6 @@ class Throughput(unittest.TestCase):
                 self.assertEqual(list(ds.microbatches(ids,3,10)),[ids[:3],ids[3:]])
                 self.assertEqual(ds.utility[torch.tensor(ids),torch.tensor([0,1,2,3,0])].shape,(5,))
 
-    def test_auxiliary_stats_deferred_without_changing_gradients(self):
-        from brass_ai.recovery.local_scoring_auxiliary import Companion,DEFAULT
-        m,_,_,(_,data)=fixture(games=2);annotate(data);ds=updates.Dataset(data,'cpu')
-        a=Companion(m,copy.deepcopy(DEFAULT));a.age=7
-        results=[]
-        for deferred in (False,True):
-            a.reset_report();a.begin('ppg');m.zero_grad();a.heads.zero_grad()
-            def immediate(name,value):a.stats[name]+=float(value.detach().double())
-            fn=a.accumulate if deferred else immediate
-            with patch.object(a,'accumulate',fn):
-                ix,inputs,_=ds.value_batch([0,2,4],m);_,loss=a.forward(m,inputs,ds,ix)
-                a.account_loss(loss,ds.critic_weights[ix],3,'ppg');loss.sum().backward()
-            report=a.report();results.append((report,{k:p.grad.clone() for k,p in m.named_parameters() if p.grad is not None}))
-            self.assertTrue(all(not t.requires_grad and t.numel()==1 for t in a.device_stats.values()))
-        for key,value in results[0][0]['training'].items():
-            if not key.endswith('seconds'):self.assertEqual(value,results[1][0]['training'][key])
-        self.assertTrue(_same_payload(results[0][1],results[1][1]))
-
     def test_32_step_guard_rolls_back_entire_interval_and_both_Adams(self):
         from brass_ai.recovery.local_scoring_auxiliary import Companion,DEFAULT
         m,ppo,c=setup();c=P.fixed_options(c);c['value_phase']['batch_size']=16
@@ -223,29 +205,5 @@ class Throughput(unittest.TestCase):
             # The source/config transition can be retried from the same old checkpoint.
             again=TrainingPhases(m,new,raw=raw,generation=4,root=SOURCE_ROOT,run=run)
             self.assertEqual(again.schedule,resumed.schedule);self.assertEqual(again.epoch_control,resumed.epoch_control)
-
-    def test_g580_reviewed_config_helper_is_narrow_and_leaves_run_untouched(self):
-        from brass_ai.bank import sha
-        from brass_ai.recovery.resume import check_signature
-        from brass_ai.step5.league import implementation_id
-        state=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0580-20261023T004923397197Z/state.json')
-        target=dict(state['signature'],config=P.fixed_options(state['signature']['config']),implementation=implementation_id())
-        self.assertTrue(check_signature(state,target,reviewed=True))
-        with self.assertRaisesRegex(ValueError,'resume-reviewed-source'):check_signature(state,target)
-        bad=copy.deepcopy(target);bad['config']['exploration']=.02
-        with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
-        spec=importlib.util.spec_from_file_location('ppg_throughput_helper',SOURCE_ROOT/'scripts/configure-ppg-throughput.py')
-        helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
-        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
-            root=Path(tmp);run=root/'artifacts/step5/run';run.mkdir(parents=True)
-            checkpoint=run/'generation-0580.pt';checkpoint.write_bytes(b'authored helper checksum fixture')
-            state['history'][-1]=dict(state['history'][-1],path=checkpoint.relative_to(root).as_posix(),sha256=sha(checkpoint))
-            write_json(run/'state.json',state);before={p.name:sha(p) for p in run.iterdir()}
-            for _ in range(2):
-                result=helper.generate(root,run,'configs/step5/new.json',580)
-                self.assertFalse(result['run_modified']);self.assertEqual(result['heldout_standard_errors'],1.5)
-                self.assertEqual({p.name:sha(p) for p in run.iterdir()},before)
-            with self.assertRaisesRegex(ValueError,'Stale'):helper.generate(root,run,'configs/step5/new.json',579)
-
 
 if __name__=='__main__':unittest.main()

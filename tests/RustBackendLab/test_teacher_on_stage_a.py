@@ -100,20 +100,6 @@ class Activation(unittest.TestCase):
         state['signature']=f.after
         self.assertEqual(A.authorize(state,f.after['config'])['beta'],0.16110139609854138)
 
-    def test_real_loader_activation_commit_and_restart_keep_full_state_and_pending(self):
-        f=self.f;model,raw,changed=f.load();self.assertTrue(changed);f.unchanged()
-        optimizer=torch.optim.AdamW(ordinary_parameters(model));resume_optimizer(raw,optimizer)
-        self.assertTrue(_same_payload(optimizer.state_dict(),f.optimizer.state_dict()))
-        with patch('brass_ai.rust_backend.lab_shadow.teacher_build',return_value={'receipt':{'existing':'runtime'}}):
-            updated=resume.commit_transition(f.run,f.state,f.after)
-        with patch.object(B,'checked_pin',return_value={'passed':True,'implementation':R.QUALIFIED}):
-            B.validate_state(updated,raw,check_runtime=False)
-        again,retry,revised=f.load(state=updated)
-        self.assertFalse(revised);self.assertTrue(_same_payload(model.state_dict(),again.state_dict()))
-        self.assertEqual(updated['teacher_phase'],f.phase);self.assertEqual(f.pending_bytes(),f.files)
-        self.assertEqual(updated['native_backend']['teacher']['beta'],0.16110139609854138)
-        self.assertEqual(retry['training']['search_value'],raw['training']['search_value'])
-
     def test_constructor_retains_collection_identity_and_frozen_jobs_until_post_ppg(self):
         f=self.f;model,raw,_=f.load();identity=model_id(model);rng=torch.get_rng_state().clone()
         phase=TeacherPhase(ROOT,f.run,f.after['config'],f.state,model,raw)

@@ -42,9 +42,10 @@ def cotton_seats(seed, count, stream):
     return sorted(rng.sample(range(4), count))
 
 
-def cotton_build_available(view, seat):
+def cotton_build_available(view, seat, minimum=2):
+    """The seat's next cotton tile is at least this level (level one is never targeted)."""
     tiles = next((mat['tiles'] for mat in view['players'][seat]['mat'] if mat['type'] == 'CottonMill'), ())
-    return bool(tiles and tiles[0]['level'] > 1)
+    return bool(tiles and tiles[0]['level'] >= minimum)
 
 
 def has_unflipped_cotton(view, seat):
@@ -66,11 +67,11 @@ def cotton_network_targets(view):
     return {link['id'] for link in view['links'] if any(city in cities for city in link['regions'])}
 
 
-def network_cotton_candidates(view, choices, *, industry=True, network=True):
+def network_cotton_candidates(view, choices, *, industry=True, network=True, minimum_build_level=2):
     phase = view['context']['phase']
     if len(choices) <= 1 or phase not in ('action', 'continuation'):
         return []
-    builds = industry and phase == 'action' and cotton_build_available(view, view['seat'])
+    builds = industry and phase == 'action' and cotton_build_available(view, view['seat'], minimum_build_level)
     links = cotton_network_targets(view) if network and any(c['kind'] == 'network' for c in choices) else ()
     return [i for i, c in enumerate(choices)
             if (c['kind'] == 'network' and c.get('target') in links) or

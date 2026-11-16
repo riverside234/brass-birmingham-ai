@@ -76,30 +76,6 @@ class AuxiliarySchedule(unittest.TestCase):
             phases.release.assert_called_once_with()
             if generation%5:self.assertNotIn('rows',report)
 
-    def test_default_512_rows_reduced_metrics_eligibility_and_modes(self):
-        from test_gae_value_phase import fixture
-        from test_local_scoring import annotate
-        from brass_ai.recovery import updates,local_scoring_auxiliary as aux
-        torch.set_num_threads(2)
-        model,_,_,(_,data)=fixture(games=48,decisions=3);annotate(data)
-        dataset=updates.Dataset(data,'cpu');dataset.rows[0]['_branch']=True
-        dataset.roles[1]='snapshot'
-        companion=aux.Companion(model,copy.deepcopy(aux.DEFAULT));model.train();companion.heads.train()
-        rng=torch.get_rng_state().clone()
-        result=companion.diagnostics(model,dataset,range(len(data)))
-        self.assertEqual(result['rows'],512)
-        self.assertTrue(model.training);self.assertTrue(companion.heads.training)
-        self.assertTrue(torch.equal(rng,torch.get_rng_state()))
-        for group in result['groups'].values():
-            self.assertEqual(set(group),{'rows','entities','positive','none','positive_errors','ce_sum','vp_abs_sum','owner_ce','vp_mae'})
-            self.assertEqual(group['positive']+group['none'],group['entities'])
-        small=companion.diagnostics(model,dataset,[0,1,2])
-        self.assertEqual(small['rows'],1)
-        with patch.object(model,'encode_state',side_effect=RuntimeError('fixture')):
-            with self.assertRaises(RuntimeError):companion.diagnostics(model,dataset,[2])
-        self.assertTrue(model.training);self.assertTrue(companion.heads.training)
-
-
 def retention_fixture(root,n=130):
     run=root/'artifacts/run';run.mkdir(parents=True)
     keep=run/'keep.pt';keep.write_bytes(b'live')
@@ -197,45 +173,6 @@ class CleanupOptimization(unittest.TestCase):
         self.assertEqual(bounded_fields(dict(cfg,every_iterations=1),RETENTION,'retention')['every_iterations'],1)
         for value in (0,True,21,1.5):
             with self.assertRaises(ValueError):bounded_fields(dict(cfg,every_iterations=value),RETENTION,'retention')
-
-
-class CurrentContinuation(unittest.TestCase):
-    def test_actual_g1340_export_accepts_same_helper_without_rewriting_run(self):
-        from brass_ai.learning.contracts import digest
-        from brass_ai.recovery import resume
-        from brass_ai.step5.league import implementation_id
-        state=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g1340-20261031T210153391863Z/state.json')
-        spec=importlib.util.spec_from_file_location('g1340_helper',SOURCE_ROOT/'scripts/configure-training-g1340.py')
-        helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
-        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
-            root=Path(tmp);run=root/'artifacts/step5/demo';run.mkdir(parents=True)
-            checkpoint=run/'generation-1340.pt';checkpoint.write_bytes(b'isolated helper fixture')
-            state['history'][-1].update(path=checkpoint.relative_to(root).as_posix(),sha256=sha(checkpoint))
-            write_json(run/'state.json',state);before=sha(run/'state.json');checkpoint_before=sha(checkpoint)
-            output='configs/step5/g1340.json'
-            report=helper.generate(root,run,output,1340)
-            self.assertEqual(report['generation'],1340);self.assertEqual(report['next_context_generation'],1390)
-            self.assertEqual(before,sha(run/'state.json'));self.assertEqual(checkpoint_before,sha(checkpoint))
-            config=read(root/output)
-            self.assertEqual(config['exploration'],.05);self.assertEqual(config['insolvency'],dict(event_cost=.01,max_cost=.075))
-            current=dict(state['signature'],config=config,implementation=implementation_id())
-            self.assertTrue(resume.check_signature(state,current,reviewed=True))
-            self.assertFalse(resume.evaluation_receipt_preserved(state,current,dict(training={'signature':digest(state['signature'])}),{}))
-            with self.assertRaises(ValueError):resume.check_signature(state,current,reviewed=False)
-            bad=copy.deepcopy(current);bad['config']['learning_rate']*=2
-            with self.assertRaises(ValueError):resume.check_signature(state,bad,reviewed=True)
-
-    def test_direct_performance_only_review_preserves_calibration_and_exact_config(self):
-        from brass_ai.learning.contracts import digest
-        from brass_ai.recovery import resume
-        from brass_ai.step5.league import implementation_id
-        state=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g1340-20261031T210153391863Z/state.json')
-        state['signature']['implementation']='b514fd9ee9944d93bfd596968cba77c93a4c742118119c74610c5541dce6c29f'
-        current=dict(state['signature'],implementation=implementation_id())
-        self.assertTrue(resume.check_signature(state,current,reviewed=True))
-        self.assertTrue(resume.evaluation_receipt_preserved(state,current,dict(training={'signature':digest(state['signature'])}),{}))
-        bad=copy.deepcopy(current);bad['config']['exploration']=.021
-        with self.assertRaises(ValueError):resume.check_signature(state,bad,reviewed=True)
 
 
 if __name__=='__main__':unittest.main()

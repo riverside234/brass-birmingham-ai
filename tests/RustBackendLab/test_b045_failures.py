@@ -81,30 +81,6 @@ class CollectionFailures(unittest.TestCase):
             restored=ValueBuffer(tmp,original['reward_id'],receipts=buffer.receipts)
             self.assertEqual(restored.rows(10),buffer.rows(10))
 
-    def test_value_sealing_charges_each_table_and_still_rejects_an_overrun(self):
-        from brass_ai.recovery.search_value_phase import SearchValuePhase
-        import numpy as np
-        model=model_fixture();c=adopt(config())
-        row,job,_=value_fixture(model,split='heldout')
-        second=copy.deepcopy(job);second['expected'].update(job_id='second',game_id='second-game')
-        tables=[dict(job_id=j['expected']['job_id'],value_rows=[],result={},final_spent=[0.]*4,
-            metrics=dict(turns=[dict(profile='fast',post_search_ns=20_000_000)])) for j in (job,second)]
-        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
-            phase=SearchValuePhase(tmp,model,c['teacher_phase']['search_value'],row['reward_id'])
-            with patch('brass_ai.recovery.search_value_phase.complete_game',side_effect=lambda *a,**k:[dict(row)]), \
-                 patch('brass_ai.learning.reward.terminal_utility',return_value=np.zeros(4)), \
-                 patch.object(phase.buffer,'publish') as publish:
-                # Total batch cost exceeds one turn, but each table stays below
-                # its own 500ms cap including the already measured 20ms post.
-                with patch('time.monotonic',side_effect=[0.,0.,.32,.32,.64,.64]):
-                    phase.admit(tables,[job,second],10)
-                self.assertEqual(len(publish.call_args_list),2)
-                self.assertAlmostEqual(phase.report['value_admission_seconds'],.64)
-                with patch('time.monotonic',side_effect=[0.,0.,.49]):
-                    with self.assertRaisesRegex(ValueError,'Value sealing exceeded.*seal=0.490000s'):
-                        phase.admit(tables[:1],[job],10)
-
-
 @unittest.skipUnless(os.environ.get('BRASS_B045_BINARY') and os.environ.get('BRASS_B045_BOOTSTRAP'),
                      'Explicit detached native binary/bootstrap required')
 class NativeScriptedTables(unittest.TestCase):

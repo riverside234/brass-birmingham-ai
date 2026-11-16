@@ -905,6 +905,24 @@ class NativeWorkers(unittest.TestCase):
                                                      seats=cotton_seats(seed,2,C.SEATED_CONTRACT)))
         print('T1.3 tempered labels', tempered)
 
+    def test_g2654_rail_cotton_teacher_table_matches_python_admission(self):
+        from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
+        from brass_ai.step5.policy import cotton_seats
+        budget=dict(mode='count',full=64,fast=24,fast_k=8,**G.G2600_SEARCH)
+        exploration=dict(G.COTTON_ONLY_EXPLORATION,game_opening=G.T13_GAME_OPENING,cotton=C.settings(contract=C.RAIL_NETWORK_CONTRACT))
+        seed=self.all_seat_job(0.)['sampling_seed']
+        seats=cotton_seats(seed,1,C.RAIL_NETWORK_CONTRACT)
+        revision=G._job_block(exploration,short_labels=False,cotton_table=True,seats=seats,search_head_weight=0)
+        job,result,verifier=self.run_all_seat(0.,budget,revision,split='train',streamed=True)
+        self.assertEqual(G.validate_job(job),revision)
+        self.assertTrue(verifier.take(result,job,self.model)[0])
+        receipt=result['metrics']['cpu_inference']['revision']['cotton']
+        self.assertEqual(receipt['contract'],C.RAIL_NETWORK_CONTRACT)
+        C.validate_receipt(receipt,job,result['rows'])
+        labelled=[r for r in result['rows'] if r['teacher'].get('cotton_exploration')]
+        self.assertTrue(labelled)
+        for row in result['rows']:C.validate_label(row['teacher'],row['choices'],view=row['view'])
+
     def test_single_seat_teacher_cotton_without_normal_exploration(self):
         from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
         from brass_ai.step5.policy import cotton_seats

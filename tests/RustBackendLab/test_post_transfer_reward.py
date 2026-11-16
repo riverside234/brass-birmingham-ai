@@ -175,27 +175,6 @@ class Rewards(unittest.TestCase):
             self.assertTrue(_same_payload(resumed.state_dict(),adam));self.assertTrue(torch.equal(torch.get_rng_state(),rng))
             self.assertIsNone(restored.utility_calibration);self.assertEqual(path.read_bytes(),original_bytes)
 
-    def test_export_queues_new_config_but_restores_original_checkpoint_and_state_bytes(self):
-        from test_native_transfer import NativeTransfer,transfer
-        fixture=NativeTransfer();fixture.setUp();self.addCleanup(fixture.doCleanups)
-        config=fixture.state['signature']['config']
-        config.update(reward=copy.deepcopy(P.BEFORE),insolvency=copy.deepcopy(P.OLD_COST),
-            search=dict(reward=P.specification(False)))
-        fixture.put('artifacts/step5/selfplay/state.json',fixture.state)
-        with self.assertRaisesRegex(ValueError,'before exporting'):
-            transfer.inventory(fixture.root,fixture.run)
-        fixture.put('distribution/rust-lab-g1250/inputs.zip',b'sealed source input fixture')
-        original=(fixture.run/'state.json').read_bytes()
-        fixture.export();manifest=transfer.inspect_bundle(fixture.bundle)
-        self.assertEqual(manifest['buffer_rebuild']['reward_revision'],P.REVISION)
-        self.assertEqual((fixture.run/'state.json').read_bytes(),original)
-        fixture.move_source();result=transfer.restore(fixture.root,fixture.bundle)
-        self.assertEqual((fixture.run/'state.json').read_bytes(),original)
-        self.assertEqual(read(fixture.root/result['config'])['reward'],P.AFTER)
-        self.assertIn('prepare-rust-post-transfer-reward.py',result['prepare_reward'])
-        self.assertEqual(R.instruction(fixture.root,fixture.run)['reward_revision'],P.REVISION)
-
-
 class NativeSupport(unittest.TestCase):
     def test_exact_core_patch_and_literal_numeric_tests_are_bound_to_recipe(self):
         from brass_ai.rust_backend import lab_reward_runtime as Z

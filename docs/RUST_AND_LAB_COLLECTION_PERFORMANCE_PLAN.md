@@ -24,6 +24,22 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/profile-rust
 
 ## What the current measurements show
 
+### Lab results through g2654: PPO code rolled back to g2280–g2400
+
+The g2600 fixes made typical PPO faster, about **31–35 s**, but not stable. The teacher term still spiked to **28–42 s** in 17 of 48 iterations. In iteration 2653, about 8 of 46 PPO steps each took about **+0.85 s**, while the median step was normal (0.28 s). So a subset of steps is slow, not the whole pass. Ruled out:
+- **GPU memory:** peak 2.8 GB.
+- **Label width:** decisions have at most 437 legal actions, so a step is at most about 42k cells.
+- **General GPU contention:** fixed-work validation and policy passes were unchanged in slow iterations.
+- **Chunking:** one forward per step still spiked.
+
+The spikes began with the g2400 PPO code. They were absent in 2280–2399 (teacher term p90 4 s). The separate `freeze_values`/staging bimodality (about 3 vs 12–16 s) dates back to at least g2150 and is unrelated. [g2654 export](../results/joint7-v11-2-g1190-restart-3-g2654-20261115T222935284220Z).
+
+At g2654, `ppo_preparation.py` and `teacher_term.py` return to the exact g2280–g2400 code: RAM-file transport, worker-side admission, and per-row teacher targets. The g2400–g2600 recipe code (cotton network, T1.3 openings, scales, PPG floor) is unchanged. Diagnostic-only additions, which do not change the update:
+- `teacher_phase.term.timing` splits each step into: GPU work queued before the term, made explicit by one synchronize the term already waited on; forward; backward with the norm sync; and apply. It also records main-thread CPU, GC pauses and the five slowest steps' rows.
+- `actor.gc` records Python cyclic-GC pauses over the whole PPO update.
+
+If spikes continue, these fields show which part they are.
+
 ### Lab results through g2600
 
 Mean PPO time rose from **50.2 s** (2280–2399) to **57.1 s** (2470–2599); the median went from **47.1 s** to **52.6 s**. The teacher term explains it: it correlates 0.91 with PPO time and is bimodal, **1.4–3.6 s** in some iterations and **20–31 s** in others (before g2400: median **3.0 s**). The bounded-padding branch (one step over 32,768 cells, about 342 choices for 96 rows) split each step into width-sorted chunks and re-ran the launch-bound encoder forward/backward per chunk. Whether an iteration was fast or slow depended on whether its label pool held wide rows, which is why slow and fast iterations came in runs. The rest of PPO did not get slower: PPO minus the teacher term averaged **46.9 s** before and **45.6 s** after. Batch transport improved, with worker time **36 → 19 s**, wait **8.1 → 1.4 s** and transfer **5.9 → 1.4 s**. Main-thread staging grew **9.6 → 18.9 s** (median), because the new single admission re-hashed every sealed row's actions and re-checked selectors on each value-only view on the main thread. `freeze_values` rose **4.2 → 6.5 s** (median) for the same reason. [g2600 export](../results/joint7-v11-2-g1190-restart-3-g2600-20261115T165747002789Z).

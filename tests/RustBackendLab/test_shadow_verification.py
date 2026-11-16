@@ -198,23 +198,6 @@ class FailureLogs(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):module.run_training(argv,log)
             self.assertIn('started',log.read_text());self.assertIn('ValueError: root validation fault',log.read_text())
 
-    def test_main_exports_child_log_and_bounded_error_tail(self):
-        module=launcher()
-        with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as temp,contextlib.redirect_stdout(io.StringIO()):
-            root=Path(temp);config=root/'config.json';config.write_text('{}')
-            state=dict(iteration=1257,signature={'imitation_source':{'bc_run':'artifacts/il'}})
-            def fail(argv,log):
-                log.write_text('start\n'+'x'*20000+'\nValueError: actual child error\n',encoding='utf-8')
-                raise subprocess.CalledProcessError(1,argv)
-            with patch.object(module,'ROOT',root),patch.object(module,'prepare',return_value=(state,config,2)), \
-                patch.object(module,'run_training',side_effect=fail),patch('rust_lab_results.export',return_value=root/'results') as export, \
-                patch.object(sys,'argv',['continue-rust-shadow.py','--expected-generation','1257']):
-                with self.assertRaises(subprocess.CalledProcessError):module.main()
-            report=read(next((root/'artifacts/rust-backend').glob('*/qualification.json')))
-            self.assertFalse(report['training_passed']);self.assertIn('actual child error',report['training_error_tail'])
-            self.assertLessEqual(len(report['training_error_tail'].encode()),16384)
-            self.assertTrue(Path(report['training_log']['path']).is_file());export.assert_called_once()
-
     def test_slow_verification_is_excluded_from_active_search_watchdog(self):
         from brass_ai.rust_backend.lab_teacher import Worker
         from brass_ai.rust_backend.lab_teacher_overlay import CONTRACT

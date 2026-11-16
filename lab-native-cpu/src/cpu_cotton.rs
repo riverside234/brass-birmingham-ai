@@ -18,6 +18,8 @@ const MIXED_25_CONTRACT: &str = "teacher-cotton-exploration/4.0.0";
 const SEATED_CONTRACT: &str = "teacher-cotton-exploration/5.0.0";
 const SINGLE_SEAT_CONTRACT: &str = "teacher-cotton-exploration/6.0.0";
 const NETWORK_CONTRACT: &str = "teacher-cotton-exploration/7.0.0";
+/// g2654: the network recipe, with Rail-era cotton builds targeted only from level three.
+const RAIL_NETWORK_CONTRACT: &str = "teacher-cotton-exploration/8.0.0";
 pub const CAP: u8 = 3;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -30,11 +32,22 @@ pub enum Mode {
     Seated,
     SingleSeat,
     Network,
+    RailNetwork,
 }
 
 impl Mode {
     pub fn develop(self) -> bool {
         self != Self::Builds
+    }
+
+    /// The one-network-per-era cotton recipes (g2400, and g2654 with the Rail-era build level).
+    pub fn network(self) -> bool {
+        matches!(self, Self::Network | Self::RailNetwork)
+    }
+
+    /// Lowest targeted cotton build level; level one is never targeted, Rail-era level two only before g2654.
+    fn minimum_build_level(self, era: usize) -> u8 {
+        if self == Self::RailNetwork && era == 1 { 3 } else { 2 }
     }
 
     fn contract(self) -> &'static str {
@@ -46,6 +59,7 @@ impl Mode {
             Self::Seated => SEATED_CONTRACT,
             Self::SingleSeat => SINGLE_SEAT_CONTRACT,
             Self::Network => NETWORK_CONTRACT,
+            Self::RailNetwork => RAIL_NETWORK_CONTRACT,
         }
     }
 
@@ -53,7 +67,7 @@ impl Mode {
         match self {
             Self::Builds => (1, 5),
             Self::Develop | Self::Mixed25 => (1, 4),
-            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network => (3, 10),
+            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork => (3, 10),
         }
     }
 
@@ -61,19 +75,20 @@ impl Mode {
         match self {
             Self::Builds => 0.2,
             Self::Develop | Self::Mixed25 => 0.25,
-            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network => 0.3,
+            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork => 0.3,
         }
     }
 
     pub fn settings(self) -> Value {
-        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated | Self::SingleSeat | Self::Network) { "train-and-heldout" } else { "train" };
+        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork) { "train-and-heldout" } else { "train" };
         let mut settings = json!({"contract":self.contract(),"probability":self.probability(),"max_per_seat_era":CAP,
             "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":scope});
-        if matches!(self, Self::SingleSeat | Self::Network) {
+        if matches!(self, Self::SingleSeat | Self::Network | Self::RailNetwork) {
             settings["minimum_build_level"] = json!(2);
             settings["short_window"] = json!("all-actions");
         }
-        if self == Self::Network { settings["network_max_per_seat_era"] = json!(1); }
+        if self.network() { settings["network_max_per_seat_era"] = json!(1); }
+        if self == Self::RailNetwork { settings["rail_minimum_build_level"] = json!(3); }
         settings
     }
 }
@@ -245,12 +260,13 @@ impl State {
                 })
             })
         };
-        let industry = self.mode != Mode::Network || self.used[binding.era][binding.seat] < CAP;
+        let industry = !self.mode.network() || self.used[binding.era][binding.seat] < CAP;
         self.develops = self.mode.develop() && industry;
-        self.builds = industry && (!matches!(self.mode, Mode::SingleSeat | Mode::Network) || view.players[binding.seat].mat.iter()
+        let minimum = self.mode.minimum_build_level(binding.era);
+        self.builds = industry && (!matches!(self.mode, Mode::SingleSeat | Mode::Network | Mode::RailNetwork) || view.players[binding.seat].mat.iter()
             .find(|m| m.industry == Industry::CottonMill)
-            .and_then(|m| m.tiles.first()).is_some_and(|tile| tile.level > 1));
-        if self.mode == Mode::Network && self.network_used[binding.era][binding.seat] == 0 {
+            .and_then(|m| m.tiles.first()).is_some_and(|tile| tile.level >= minimum));
+        if self.mode.network() && self.network_used[binding.era][binding.seat] == 0 {
             self.networks = network_targets(view, choices);
         }
         if phase == Phase::Continuation {
@@ -327,7 +343,7 @@ impl State {
         if self.eligible && self.trigger(seed, decision) {
             let candidates: Vec<_> = choices.iter().filter(|c| targeted(c, self.develops, false, &self.networks)).collect();
             if !candidates.is_empty() {
-                let index = if self.mode == Mode::Network {
+                let index = if self.mode.network() {
                     ((u128::from(super::cpu_eval::mix(seed ^ super::cpu_eval::mix(decision ^ 0xc077_0a02))) * candidates.len() as u128) >> 64) as usize
                 } else { 0 };
                 let choice = candidates[index];
@@ -361,7 +377,7 @@ impl State {
         let develop = self.develops;
         let builds = self.builds;
         let networks = &self.networks;
-        let planned = matches!(self.mode, Mode::SingleSeat | Mode::Network);
+        let planned = matches!(self.mode, Mode::SingleSeat | Mode::Network | Mode::RailNetwork);
         let mut cotton_total = 0;
         let mut cotton_mass = 0.;
         let mut locations = Vec::with_capacity(2);
@@ -430,7 +446,7 @@ impl State {
             covered_locations: locations.len(),
             choice: choices[selected].id.clone(),
             planned: planned.then(|| choices[base].id.clone()),
-            network_used_before: (self.mode == Mode::Network).then_some(self.network_used[binding.era][binding.seat]),
+            network_used_before: self.mode.network().then_some(self.network_used[binding.era][binding.seat]),
         });
         Ok(selected)
     }
@@ -494,7 +510,7 @@ impl State {
             self.developed[binding.era][binding.seat] += 1;
             self.counts[self.profile].actual_develops += 1;
         }
-        if self.mode == Mode::Network && choice.kind == Kind::Network {
+        if self.mode.network() && choice.kind == Kind::Network {
             self.network_built[binding.era][binding.seat] += 1;
             self.counts[self.profile].actual_networks += 1;
         }
@@ -507,7 +523,7 @@ impl State {
         if self.mode.develop() {
             receipt["develops_by_era_seat"] = json!(self.developed);
         }
-        if self.mode == Mode::Network {
+        if self.mode.network() {
             receipt["network_targeted_by_era_seat"] = json!(self.network_used);
             receipt["networks_by_era_seat"] = json!(self.network_built);
         }
@@ -720,6 +736,38 @@ mod tests {
         v.context.revision += 1;
         assert_eq!(state.prepare(&v, &choices, true, true), 1);
         assert!(state.builds());
+    }
+
+    #[test]
+    fn rail_network_targets_rail_builds_only_from_level_three() {
+        let mut v = view();
+        let seat = v.seat as usize;
+        let mut choices = choices();
+        choices[2].kind = Kind::Develop;
+        let mat = v.players[seat].mat.iter_mut().find(|m| m.industry == Industry::CottonMill).unwrap();
+        while mat.tiles.first().is_some_and(|t| t.level < 2) { mat.tiles.remove(0); }
+        assert_eq!(mat.tiles.first().unwrap().level, 2);
+        for (mode, era, builds) in [(Mode::Network, Era::RailEra, true), (Mode::RailNetwork, Era::CanalEra, true),
+                                    (Mode::RailNetwork, Era::RailEra, false)] {
+            let mut state = State { mode, seats: Some(1 << seat), ..State::default() };
+            v.context.era = era;
+            v.context.revision += 1;
+            assert_eq!(state.prepare(&v, &choices, true, true), 1);
+            assert_eq!(state.builds(), builds, "{mode:?} {era:?}");
+        }
+        let mat = v.players[seat].mat.iter_mut().find(|m| m.industry == Industry::CottonMill).unwrap();
+        while mat.tiles.first().is_some_and(|t| t.level < 3) { mat.tiles.remove(0); }
+        let mut state = State { mode: Mode::RailNetwork, seats: Some(1 << seat), ..State::default() };
+        v.context.revision += 1;
+        assert_eq!(state.prepare(&v, &choices, true, true), 1);
+        assert!(state.builds());
+        let settings = Mode::RailNetwork.settings();
+        assert_eq!(settings["contract"], RAIL_NETWORK_CONTRACT);
+        assert_eq!((settings["minimum_build_level"].as_u64(), settings["rail_minimum_build_level"].as_u64()), (Some(2), Some(3)));
+        let mut network = Mode::Network.settings();
+        network["contract"] = json!(RAIL_NETWORK_CONTRACT);
+        network["rail_minimum_build_level"] = json!(3);
+        assert_eq!(network, settings);
     }
 
     #[test]

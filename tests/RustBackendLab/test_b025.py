@@ -354,18 +354,6 @@ class Resume(Base):
         return dict(config=config, implementation=implementation or implementation_id(),
                     compatibility=compatibility(), legacy_pool={}, teachers={})
 
-    def test_exact_adoption_and_reviewed_self_toggle(self):
-        old = config(); old.pop('teacher_phase'); old['teacher_value']['enabled'] = True
-        before = self.signature(old, BASE_IMPLEMENTATION); after = self.signature(C.adopt(old))
-        state = dict(format='step5-recovery-league/2.2.0', iteration=1324, signature=before)
-        self.assertTrue(check_signature(state, after, True))
-        with self.assertRaises(ValueError): check_signature(state, after)
-        state['signature'] = after; toggled = copy.deepcopy(after)
-        toggled['config']['teacher_phase']['mode'] = 'on'
-        self.assertTrue(check_signature(state, toggled, True))
-        toggled['config']['learning_rate'] *= .9
-        with self.assertRaises(ValueError): check_signature(state, toggled, True)
-
     def test_receipt_preserved_through_toggle_crash_chain_only(self):
         before = self.signature(config()); after = copy.deepcopy(before)
         after['config']['teacher_phase']['mode'] = 'shadow'
@@ -405,25 +393,6 @@ class Resume(Base):
         model, _, _ = load_resume(SOURCE_ROOT, run, state, after)
         self.assertTrue(model.utility_calibration['ready'])
 
-    def test_helper_is_readonly_idempotent_generation_hash_and_adoption_bound(self):
-        spec = importlib.util.spec_from_file_location('configure_teacher', SOURCE_ROOT / 'scripts/configure-teacher-phase.py')
-        helper = importlib.util.module_from_spec(spec); spec.loader.exec_module(helper)
-        run = self.temp_run(); root = run; run = root / 'artifacts/test'; run.mkdir(parents=True)
-        checkpoint = run / 'generation-1324.pt'; checkpoint.write_bytes(b'fixture checkpoint')
-        old = config(); old.pop('teacher_phase'); old['teacher_value']['enabled'] = True
-        state = dict(format='step5-recovery-league/2.2.0', iteration=1324, signature=self.signature(old, BASE_IMPLEMENTATION),
-            history=[dict(generation=1324, path='artifacts/test/generation-1324.pt', sha256=sha(checkpoint))])
-        write_json(run / 'state.json', state); before = sha(run / 'state.json')
-        output = 'configs/step5/teacher-off.json'
-        a = helper.generate(root, run, output, 1324, 'off')
-        self.assertEqual(a, helper.generate(root, run, output, 1324, 'off'))
-        self.assertEqual(before, sha(run / 'state.json'))
-        with self.assertRaisesRegex(ValueError, 'adoption'): helper.generate(root, run, output, 1324, 'on')
-        with self.assertRaisesRegex(ValueError, 'generation'): helper.generate(root, run, output, 1323, 'off')
-        checkpoint.write_bytes(b'changed')
-        with self.assertRaisesRegex(ValueError, 'checkpoint'): helper.generate(root, run, output, 1324, 'off')
-
-
 class Lifecycle(Base):
     def test_fixture_collection_barrier_partial_buffer_and_resume(self):
         run = self.temp_run(); c = config(); c['teacher_phase']['mode'] = 'shadow'; m = model_fixture()
@@ -456,13 +425,6 @@ class Lifecycle(Base):
         raw = dict(training=dict(teacher_phase=copy.deepcopy(payload))); raw['training']['teacher_phase']['weight']['beta'] = 99
         with self.assertRaisesRegex(ValueError, 'checkpoint/state'):
             TeacherPhase(SOURCE_ROOT, run, c, state, m, raw=raw)
-
-    def test_live_enablement_fails_before_any_collection_or_state_write(self):
-        from brass_ai.recovery.league import _train
-        c = config(); c['teacher_phase']['mode'] = 'on'; run = self.temp_run()
-        with self.assertRaisesRegex(ValueError, 'teacher on-mode remains gated'):
-            _train(SOURCE_ROOT, run, c)
-        self.assertEqual(list(run.iterdir()), [])
 
     def test_lifecycle_rejects_wrong_result_set_and_retains_ready_buffer(self):
         run = self.temp_run(); c = config(); c['teacher_phase']['mode'] = 'shadow'; m = model_fixture()

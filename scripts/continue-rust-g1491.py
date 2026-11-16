@@ -111,6 +111,9 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'Refill the search buffers and re-measure beta with teaching on.')
     migrations.add_argument('--update-teacher-scales', action='store_true',
         help='Use long C_scale=0.10 and short C_scale=0.70 for all teacher tables and refill their training buffers.')
+    migrations.add_argument('--update-rail-cotton', action='store_true',
+        help='Exclude Rail-era level 1 and 2 cotton builds from PPO and teacher cotton exploration '
+             '(level 1 stays excluded in both eras). Keeps labels, buffers and the search-head stage.')
     migrations.add_argument('--update-g2600-recipe', action='store_true',
         help='Use opening temperature 1.3 for three actions in PPO and teacher games, long C_scale=0.20 on all '
              'teacher tables, a .25 PPG beta floor and one-epoch ordinary PPG. Clears both teacher search buffers '

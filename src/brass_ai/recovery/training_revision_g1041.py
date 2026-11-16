@@ -13,7 +13,7 @@ def mixed(config):return config.get('table_plan',{}).get('contract')==TABLE_CONT
 
 
 def validate_mix(config):
-    from .ordinary_cotton import KEY, LIMITED, NETWORK, PROBABILITIES, SETTINGS, enabled
+    from .ordinary_cotton import KEY, LIMITED, NETWORK, PROBABILITIES, RAIL_NETWORK, SETTINGS, enabled
     plan=config['table_plan']
     require(set(plan)==set(TABLE_PLAN)|{'contract','origin_generation','origin_games'}|({KEY} if enabled(config) else set()) and
         plan['contract']==TABLE_CONTRACT and plan['quotas']==QUOTAS and
@@ -27,7 +27,7 @@ def validate_mix(config):
         '70/30 curriculum must preserve the previous schedule through its committed origin')
     require(config.get('v4_history') is not None,'70/30 requires v4 already moved into history')
     if enabled(config):
-        require(plan[KEY] in (LIMITED, NETWORK, *(dict(SETTINGS, probability=rate) for rate in PROBABILITIES))
+        require(plan[KEY] in (LIMITED, NETWORK, RAIL_NETWORK, *(dict(SETTINGS, probability=rate) for rate in PROBABILITIES))
                 and config.get('branching', {}).get('rate_per_decision') == 0,
                 'Ordinary cotton self-play requires a reviewed mix with branching disabled')
     return plan
@@ -65,10 +65,10 @@ def exposure(plan, *, cotton=None):
         scope='PFSP probabilities normalized within history; marginal exposure is 30% tables x 2/4 opponent seats. '
               'Recorded comparison counts and PPO per-row means are not multiplied by the mix again.')
     if cotton:
-        from .ordinary_cotton import LIMITED_CONTRACT, NETWORK_CONTRACT
+        from .ordinary_cotton import LIMITED_CONTRACTS
         standard = 320 * cotton['standard_selfplay'] // 100
         targeted = 320 * cotton['cotton_selfplay'] // 100
-        two = 0 if cotton['contract'] in (LIMITED_CONTRACT, NETWORK_CONTRACT) else targeted//2
+        two = 0 if cotton['contract'] in LIMITED_CONTRACTS else targeted//2
         result['selfplay_exploration'] = dict(standard_tables=standard, cotton_tables=targeted,
                                             one_cotton_seat_tables=targeted-two, two_cotton_seat_tables=two)
     return result

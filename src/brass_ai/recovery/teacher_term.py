@@ -11,6 +11,7 @@ from brass_ai.learning.batching import collate
 from brass_ai.learning.contracts import require
 from .teacher_buffer import sample_indices
 from .teacher_labels import PHASES, softmax
+from . import gc_timing
 
 ACTOR_PREFIXES = ('state_encoder.', 'entity_encoder.', 'entity_projections.', 'action_encoder.', 'policy_scorer.')
 
@@ -128,6 +129,42 @@ def weighted_gradients(model, rows, weights, parameters):
     return total, sums, per_row
 
 
+SLOWEST = 5
+
+
+class StepTiming:
+    """Wall split of each teacher step; diagnostic only, the update is unchanged.
+
+    ``backlog`` is the GPU work the PPO step queued before the term (made explicit by
+    one synchronize that the term's first host-to-device copy would wait on anyway).
+    """
+    PARTS = ('backlog', 'forward', 'backward', 'apply')
+
+    def __init__(self):
+        self.totals = dict.fromkeys(self.PARTS, 0.); self.thread_cpu = 0.; self.gc = 0.; self.steps = []
+
+    def record(self, step, rows, ages, parts, thread_cpu, gc_seconds):
+        for k, v in parts.items(): self.totals[k] += v
+        self.thread_cpu += thread_cpu; self.gc += gc_seconds
+        widths = [len(r.label['legal_ids']) for r in rows]
+        self.steps.append(dict(step=step, seconds=sum(parts.values()), **{k + '_seconds': v for k, v in parts.items()},
+            thread_cpu_seconds=thread_cpu, gc_seconds=gc_seconds, rows=len(rows), max_width=max(widths, default=0),
+            cells=len(rows) * max(widths, default=0), mean_width=float(np.mean(widths)) if widths else 0.,
+            phases=dict(Counter(r.label['phase'] for r in rows)), kinds=dict(Counter(r.label['kind'] for r in rows)),
+            ages=dict(Counter(str(a) for a in ages)), encoded=dict(Counter(type(r.encoded).__name__ for r in rows))))
+
+    def report(self):
+        seconds = [s['seconds'] for s in self.steps]
+        return dict(steps=len(self.steps), **{k + '_seconds': v for k, v in self.totals.items()},
+            thread_cpu_seconds=self.thread_cpu, gc_seconds=self.gc,
+            step_seconds=dict(median=float(np.median(seconds)), p90=float(np.quantile(seconds, .9)), max=max(seconds)) if seconds else None,
+            slowest=sorted(self.steps, key=lambda s: -s['seconds'])[:SLOWEST],
+            fastest=min(self.steps, key=lambda s: s['seconds']) if self.steps else None,
+            scope='Per teacher step: backlog=GPU work queued by the PPO step before the term; forward=sampling, '
+                  'collation/uploads, forward and targets; backward=gradients and the norm sync; apply=gradient '
+                  'accumulation and bookkeeping. thread_cpu is main-thread CPU time; gc is cyclic-GC pause time.')
+
+
 class TeacherTerm:
     def __init__(self, model, config, aged_rows, *, seed, generation, state=None):
         self.config = config; self.mode = config['mode']; self.seed = seed; self.generation = generation
@@ -174,7 +211,7 @@ class TeacherTerm:
                 self.adaptive = adaptive.restore(saved_adaptive, self.beta, basis, prior_basis=prior_basis)
                 self.beta = self.adaptive['beta']
         self.beta_used = 1. if self.mode == 'shadow' else self.beta
-        self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.
+        self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.; self.timing = StepTiming()
         self.presentations = Counter(); self.used = set(); self.improvement_by_phase = {}
         from .training_revision_g1491 import KEY as REVISION
         # g1491: L = a mean(L_long) + (1-a) mean(L_short); None keeps one long-only pool
@@ -225,7 +262,20 @@ class TeacherTerm:
 
     def apply(self, model, actor, step):
         if not self.active: return
-        began = time.perf_counter()
+        began = time.perf_counter(); cpu = time.thread_time()
+        device = next(model.parameters()).device
+        if device.type == 'cuda': torch.cuda.synchronize(device)
+        queued = time.perf_counter()
+        with gc_timing.watch() as collector:
+            forwarded, synced, indices = self._apply(model, actor, step, queued)
+        done = time.perf_counter()
+        self.timing.record(step, [self.rows[i] for i in indices], [self.ages[i] for i in indices],
+                           dict(backlog=queued - began, forward=forwarded - queued, backward=synced - forwarded, apply=done - synced),
+                           time.thread_time() - cpu, collector.seconds())
+        self.seconds += done - began
+
+    def _apply(self, model, actor, step, queued):
+        forwarded = queued
         mix = None
         if self.long_weight is None:
             indices = sample_indices(self.ages, self.config['buffer']['age_weights'], self.config['term']['rows_per_step'],
@@ -239,6 +289,7 @@ class TeacherTerm:
                 logits = forward_policy(model, rows).float()
                 target = torch.zeros_like(logits)
                 for i, r in enumerate(rows): target[i, :len(r.label['target'])] = target.new_tensor(r.label['target'])
+                forwarded = time.perf_counter()
                 logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
                 loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
@@ -266,6 +317,7 @@ class TeacherTerm:
                 g = by_parameter.get(id(p))
                 if g is not None: tn = tn + g.square().sum()
         a, t, d = torch.stack((an.sqrt(), tn.sqrt(), dot)).double().detach().cpu().tolist()
+        synced = time.perf_counter()
         require(all(np.isfinite(v) for v in (a, t, d)), 'Non-finite teacher gradients')
         raw_share = t / a if measured and a > 0 else None
         if self.mode == 'on':
@@ -281,7 +333,7 @@ class TeacherTerm:
         if measured and (self.adaptive_enabled or self.remeasure_pending):
             self.steps[-1]['raw_teacher_norm'] = t
         for i in indices: self.presentations[i] += 1; self.used.add(i)
-        self.seconds += time.perf_counter() - began
+        return forwarded, synced, indices
 
     def finish(self):
         raw = [s['raw_share'] for s in self.steps if s['raw_share'] is not None and s['raw_share'] > 0]
@@ -358,5 +410,5 @@ class TeacherTerm:
             distinct_by_age=dict(Counter(str(self.ages[i]) for i in self.used)),
             distinct_by_phase=dict(Counter(self.rows[i].label['phase'] for i in self.used)),
             first_loss=self.steps[0]['loss'] if self.steps else None, last_loss=self.steps[-1]['loss'] if self.steps else None,
-            outside_share_warning=self.outside >= 3, term_seconds=self.seconds,
+            outside_share_warning=self.outside >= 3, term_seconds=self.seconds, timing=self.timing.report(),
             scope='Policy term before PPO clipping/Adam/KL guard; shadow never applies gradients')

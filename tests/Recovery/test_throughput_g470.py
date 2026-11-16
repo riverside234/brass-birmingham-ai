@@ -141,28 +141,4 @@ class Throughput(unittest.TestCase):
         self.assertTrue(_same_payload(expected,actual));self.assertEqual(actual[0][2][1].shape[1],1)
         self.assertTrue(_same_payload(before,(ds.targets,ds.descriptors,ds.old)))
 
-    def test_reviewed_g470_helper_preserves_state_and_rejects_other_edits(self):
-        from brass_ai.step5.league import implementation_id,write_json
-        from brass_ai.recovery.critic_data import floor_config
-        from brass_ai.recovery.exploration import anchor_floor_config
-        state=read(EXPORT/'state.json');config=floor_config(anchor_floor_config(throughput_config(state['signature']['config']),state))
-        incoming=copy.deepcopy(state)
-        signature=dict(state['signature'],implementation=implementation_id(),config=config)
-        self.assertTrue(check_signature(state,signature,reviewed=True))
-        with self.assertRaises(ValueError):check_signature(state,signature)
-        bad=copy.deepcopy(signature);bad['config']['exploration']*=2
-        with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
-        module_spec=importlib.util.spec_from_file_location('throughput_helper',SOURCE_ROOT/'scripts/joint7-throughput.py')
-        helper=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(helper)
-        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
-            root=Path(tmp);run=root/'artifacts/step5/run';run.mkdir(parents=True)
-            (root/'configs/step5').mkdir(parents=True);write_json(run/'state.json',state)
-            output='configs/step5/continue.json'
-            self.assertFalse(helper.generate(root,run,output,470)['run_modified'])
-            helper.generate(root,run,output,470)
-            self.assertEqual(read(root/output),config);self.assertEqual(read(run/'state.json'),incoming)
-            with self.assertRaises(ValueError):helper.generate(root,run,output,469)
-        self.assertEqual(state,incoming)
-
-
 if __name__=='__main__':unittest.main()

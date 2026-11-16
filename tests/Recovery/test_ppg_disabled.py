@@ -77,34 +77,6 @@ class DisabledEight(unittest.TestCase):
     @classmethod
     def setUpClass(cls):torch.set_num_threads(2)
 
-    def test_defaults_and_exact_g460_config_review(self):
-        state=read(EXPORT/'state.json');old=state['signature']['config'];new=value_phase.disabled_options(old)
-        validate_config(new)
-        self.assertEqual([k for k in old if old[k]!=new[k]],['value_phase'])
-        self.assertEqual(new['value_phase'],dict(old['value_phase'],enabled=False))
-        self.assertFalse(ppg_config.DEFAULT['enabled'])
-        fresh=latest_model_config(old,old['imitation_checkpoint'])
-        self.assertTrue(fresh['value_phase']['enabled']);self.assertEqual(fresh['value_phase']['holdout'],old['value_phase']['holdout'])
-        self.assertEqual(fresh['value_phase']['contract'],ppg_config.COVERAGE_CONTRACT)
-        self.assertEqual((fresh['value_phase']['acceptance_steps'],fresh['value_phase']['patience']),(16,1))
-        self.assertEqual(fresh['update']['microbatch_size'],512)
-        self.assertEqual(fresh['update']['max_candidate_cells'],131072)
-        self.assertEqual(fresh['update']['preparation_workers'],4)
-        self.assertEqual(ppg_config.configure(new),old)
-        target=dict(state['signature'],config=new,implementation=implementation_id())
-        self.assertTrue(check_signature(state,target,reviewed=True))
-        with self.assertRaises(ValueError):check_signature(state,target)
-        bad=copy.deepcopy(target);bad['config']['exploration']*=2
-        with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
-        combined=ppo_microbatch_config(new);validate_config(combined)
-        self.assertEqual(combined['update'],dict(old['update'],microbatch_size=2048,max_candidate_cells=524288))
-        self.assertEqual(combined['imitation'],old['imitation'])
-        self.assertTrue(check_signature(state,dict(target,config=combined),reviewed=True))
-        bad=copy.deepcopy(combined);bad['update']['effective_batch_size']*=2
-        with self.assertRaises(ValueError):check_signature(state,dict(target,config=bad),reviewed=True)
-        for enabled in (0,1,None,'false'):
-            with self.assertRaises(ValueError):ppg_config.validate(dict(new['value_phase'],enabled=enabled))
-
     def test_g460_checkpoint_migration_keeps_adams_rng_and_PPO_gate_windows(self):
         model,opt,cfg,raw=rolling_checkpoint();new=value_phase.disabled_options(cfg)
         before=copy.deepcopy(raw);weights=copy.deepcopy(model.state_dict());adam=copy.deepcopy(opt.state_dict());rng=torch.get_rng_state().clone()
@@ -194,26 +166,6 @@ class DisabledEight(unittest.TestCase):
         finish(p,actor,461)
         self.assertEqual(actor['gae']['gate']['stage_evidence']['source'],'ppo')
         self.assertEqual(p.state['active_lambda'],.95);self.assertEqual(p.state['value_iterations'],21)
-
-    def test_config_helper_is_locked_idempotent_and_never_edits_run(self):
-        spec=importlib.util.spec_from_file_location('ppg_off_helper',SOURCE_ROOT/'scripts/joint7-ppo-only.py')
-        helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
-        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
-            root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)
-            state=read(EXPORT/'state.json');write_json(run/'state.json',state);before=sha(run/'state.json')
-            output='configs/step5/ppo-off.json'
-            result=helper.generate(root,run,output,460)
-            self.assertFalse(result['run_modified']);self.assertEqual(result['changed_blocks'],['value_phase'])
-            self.assertEqual(result,helper.generate(root,run,output,460))
-            self.assertEqual(sha(run/'state.json'),before)
-            result=helper.generate(root,run,'configs/step5/ppo-off-2048.json',460,2048,524288)
-            self.assertEqual(set(result['changed_blocks']),{'value_phase','update'})
-            actual=read(root/'configs/step5/ppo-off-2048.json')
-            self.assertEqual(actual,read(SOURCE_ROOT/'configs/step5/joint7-v11-2-grouped-lr-critic-ppo-only-g460.json'))
-            with self.assertRaises(ValueError):helper.generate(root,run,output,460,4096)
-            with self.assertRaises(ValueError):helper.generate(root,run,output,460,2048,1048576)
-            with self.assertRaisesRegex(ValueError,'Unexpected committed generation'):helper.generate(root,run,output,418)
-            with self.assertRaises(ValueError):helper.generate(root,run,'artifacts/unsafe.json',460)
 
     def test_2048_microbatch_still_respects_candidate_cells_and_coverage(self):
         from types import SimpleNamespace

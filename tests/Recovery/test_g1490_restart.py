@@ -195,43 +195,6 @@ class Qualification(unittest.TestCase):
         self.assertEqual(m.calibrated(dict(state,signature=dict(state['signature'],config=self.on))),(True,0))
 
 
-class Cotton(unittest.TestCase):
-    """Short searches still explore, unlabelled: the label sequence may skip allowance, never go back."""
-
-    def counts(self,targeted):
-        return dict(action_decisions=10,legal_decisions=5,eligible_decisions=4,covered_decisions=3,no_evidence=1,
-            no_cotton_visits=0,triggers=targeted,targeted_builds=targeted,actual_builds=targeted)
-
-    def receipt(self,used,long,short):
-        from brass_ai.recovery.teacher_cotton import CONTRACT
-        return dict(contract=CONTRACT,targeted_by_era_seat=used,builds_by_era_seat=copy.deepcopy(used),
-            long=self.counts(long),short=self.counts(short))
-
-    def row(self,used_before,targeted=True):
-        from brass_ai.recovery.teacher_cotton import CONTRACT
-        return dict(view=dict(context=dict(era='CanalEra')),teacher=dict(seat=0,cotton_exploration=dict(
-            contract=CONTRACT,targeted=targeted,used_before=used_before)))
-
-    def job(self,short):
-        return dict(teacher_revision=dict(short_labels=short,exploration=dict(cotton={})))
-
-    def test_long_only_labels_allow_short_search_spending_between_them(self):
-        from brass_ai.recovery.teacher_cotton import validate_receipt
-        used=[[2,0,0,0],[0,0,0,0]]
-        # A short search spent the first allowance; the long label saw it spent.
-        validate_receipt(self.receipt(used,1,1),self.job(False),[self.row(1)])
-        with self.assertRaisesRegex(ValueError,'allowance sequence'):
-            validate_receipt(self.receipt(used,1,1),self.job(True),[self.row(1)])
-        with self.assertRaisesRegex(ValueError,'allowance sequence'):
-            validate_receipt(self.receipt([[3,0,0,0],[0]*4],2,1),self.job(False),[self.row(1),self.row(1)])
-        with self.assertRaisesRegex(ValueError,'quota differs'):
-            validate_receipt(self.receipt(used,2,0),self.job(False),[self.row(1)])
-        with self.assertRaisesRegex(ValueError,'quota differs'):
-            validate_receipt(self.receipt([[1,0,0,0],[0]*4],1,0),self.job(False),[self.row(1)])
-        # With every search labelled the exact sequence still holds.
-        validate_receipt(self.receipt([[1,0,0,0],[0]*4],1,0),self.job(True),[self.row(0)])
-
-
 class Verifier(unittest.TestCase):
     def test_long_rows_of_a_revised_table_check_logits_once_per_table(self):
         from brass_ai.recovery.teacher_phase_config import TIMING

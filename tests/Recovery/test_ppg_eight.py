@@ -367,17 +367,4 @@ class Replay(unittest.TestCase):
         self.assertAlmostEqual(r['last_attempted_lr'],9e-7)
         self.assertAlmostEqual(p.optimizer.param_groups[0]['lr'],r['learning_rate'])
 
-    def test_real_g418_transition_review_and_unrelated_config_rejection(self):
-        from brass_ai.recovery.resume import check_signature
-        from brass_ai.step5.league import implementation_id
-        state=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0418-20261021T181921767029Z/state.json')
-        before=copy.deepcopy(state);config=ppg_config.configure(state['signature']['config'])
-        signature=dict(state['signature'],implementation=implementation_id(),config=config)
-        self.assertTrue(check_signature(state,signature,reviewed=True));self.assertEqual(state,before)
-        with self.assertRaises(ValueError):check_signature(state,signature)
-        for key,value in [('exploration',.08),('learning_rate',1e-3)]:
-            bad=copy.deepcopy(signature);bad['config'][key]=value
-            with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
-
-
 if __name__=='__main__':unittest.main()

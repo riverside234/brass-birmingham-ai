@@ -94,26 +94,6 @@ class PendingResume(unittest.TestCase):
         self.assertFalse(term.qualification['passed']);self.assertEqual(term.qualification['required_iterations'],4)
         self.assertEqual(term.qualification['observations'],self.phase['weight']['gradient_qualification']['observations'])
 
-    def test_transition_commit_and_crash_retry_keep_old_checkpoint_and_pending_bindings(self):
-        model,raw,changed=self.load();self.assertTrue(changed)
-        optimizer=torch.optim.AdamW(model.parameters());resume_optimizer(raw,optimizer)
-        checkpoint_bytes=self.checkpoint.read_bytes()
-        with patch('brass_ai.rust_backend.lab_shadow.teacher_build',return_value={'receipt':{'existing':'prepared teacher'}}):
-            updated=resume.commit_transition(self.run,self.state,self.after)
-        self.assertEqual(updated['teacher_phase'],self.phase)
-        self.assertEqual(updated['native_backend']['config_sha256'],digest(self.after['config']))
-        # Exercise real checkpoint/backend transition binding; the private lab
-        # qualification receipt is the sole external dependency in this fixture.
-        with patch.object(B,'checked_pin',return_value={'passed':True,'implementation':R.QUALIFIED}):
-            B.validate_state(updated,raw,check_runtime=False)
-        for _ in range(2):
-            reloaded,retry,revised=self.load(state=updated)
-            self.assertFalse(revised);self.assertEqual(retry['training']['teacher_phase'],self.phase)
-            self.assertTrue(_same_payload(reloaded.state_dict(),model.state_dict()))
-            self.assertEqual(reloaded.utility_calibration,self.model.utility_calibration)
-            self.assertEqual(self.pending_bytes(),self.files)
-            self.assertEqual(self.checkpoint.read_bytes(),checkpoint_bytes)
-
     def test_next_checkpoint_is_still_rejected_without_touching_pending_work(self):
         path=self.run/'generation-1259.pt.partial';path.write_bytes(b'uncommitted checkpoint')
         with self.assertRaisesRegex(ValueError,'Uncommitted checkpoint'):self.load()

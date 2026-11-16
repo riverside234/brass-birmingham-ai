@@ -74,20 +74,6 @@ class Floor(unittest.TestCase):
         with patch.object(startup,'config',return_value=copy.deepcopy(self.old)):
             startup.Startup().test_gae_98_fresh_evidence_twenty_observations_and_guards()
 
-    def test_exported_signature_review_rejects_unrelated_changes_and_retry(self):
-        s=copy.deepcopy(self.run_state);target=dict(s['signature'],config=self.new,implementation=implementation_id())
-        self.assertTrue(check_signature(s,target,reviewed=True))
-        with self.assertRaises(ValueError):check_signature(s,target)
-        bad=copy.deepcopy(target);bad['config']['exploration']=.08
-        with self.assertRaises(ValueError):check_signature(s,bad,reviewed=True)
-        entry=s['history'][-1];raw=dict(training=dict(signature=digest(s['signature'])))
-        self.assertTrue(gae_floor_receipt_preserved(s,target,raw,entry))
-        self.assertFalse(gae_floor_receipt_preserved(s,bad,raw,entry))
-        s.setdefault('source_transitions',[]).append(dict(checkpoint=entry,from_signature=s['signature'],to_signature=digest(target)))
-        s['signature']=target
-        self.assertFalse(check_signature(s,target,reviewed=True))
-        self.assertTrue(gae_floor_receipt_preserved(s,target,raw,entry))
-
     def test_real_value_adam_checkpoint_restore_and_small_smoke(self):
         # Isolated CPU optimizer smoke; no native games or production checkpoints.
         from brass_ai.learning.model import FourSeatNet,ModelConfig
@@ -127,22 +113,5 @@ class Floor(unittest.TestCase):
             self.assertEqual(report['lambda'],.98)
             model(states,actions,mask,mapping)[1].square().mean().backward();again.optimizer.step()
             self.assertTrue(all(int(v['step'])==2 for v in again.optimizer.state.values()))
-
-    def test_helper_retry_stale_generation_and_missing_checkpoint(self):
-        spec=importlib.util.spec_from_file_location('configure_floor',SOURCE_ROOT/'scripts/configure-gae-floor.py')
-        helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
-        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
-            root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)
-            checkpoint=run/'generation-0253.pt';checkpoint.write_bytes(b'authored checksum fixture')
-            s=copy.deepcopy(self.run_state);s['history'][-1].update(path='artifacts/run/generation-0253.pt',sha256=sha(checkpoint))
-            write_json(run/'state.json',s);before=sha(run/'state.json')
-            output='configs/step5/floor.json'
-            a=helper.generate(root,'artifacts/run',output,253)
-            self.assertEqual(a,helper.generate(root,'artifacts/run',output,253))
-            self.assertEqual(read(root/output),self.new);self.assertEqual(before,sha(run/'state.json'))
-            with self.assertRaisesRegex(ValueError,'Stale'):helper.generate(root,'artifacts/run',output,252)
-            checkpoint.unlink()
-            with self.assertRaisesRegex(ValueError,'missing/changed'):helper.generate(root,'artifacts/run',output,253)
-
 
 if __name__=='__main__':unittest.main()

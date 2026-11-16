@@ -66,7 +66,7 @@ def inference_choice(args):
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
-            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False):
+            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -130,6 +130,10 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if update_cotton_network:
             from brass_ai.recovery.config import validate_config
             config=validate_config(g2400.configure(config))
+        from brass_ai.recovery import training_revision_g2654 as g2654
+        if update_rail_cotton:
+            from brass_ai.recovery.config import validate_config
+            config=validate_config(g2654.configure(config))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -221,9 +225,14 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=(prefix.replace('-teacher-k8-c010-c070-', '-teacher-k8-c020-c070-').replace('-ppg-epoch2-', '-ppg-epoch1-')
                     .replace('-share', '-g2600-opening13-floor025-share'))
             stages.append(prefix)
+        if g2654.applied(config):
+            if weight is not None and previous_weight is not None and previous_weight != weight:
+                stages.append(prefix.replace(f'-w{weight}-', f'-w{previous_weight}-'))
+            prefix=prefix.replace('-share', '-rail-cotton-l3-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
-                         g2400.applied(config) and not g2400.applied(before))
+                         g2400.applied(config) and not g2400.applied(before) or
+                         g2654.applied(config) and not g2654.applied(before))
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (root/'configs/step5'/(run.name+name+tag+'.json') for name in reversed(stages[:-1])) if p.exists()),None)
@@ -335,6 +344,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'update_opening_sampling',False):kwargs['update_opening_sampling']=True
         if getattr(args,'update_cotton_sampling',False):kwargs['update_cotton_sampling']=True
         if getattr(args,'update_cotton_network',False):kwargs['update_cotton_network']=True
+        if getattr(args,'update_rail_cotton',False):kwargs['update_rail_cotton']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -395,6 +405,10 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g2600.applied(options):
             report['g2600_revision']=g2600.summary(options)
             print('g2600 revision: '+str(report['g2600_revision']),flush=True)
+        from brass_ai.recovery import training_revision_g2654 as g2654
+        if g2654.applied(options):
+            report['g2654_revision']=g2654.summary(options)
+            print('Cotton exploration skips Rail-era builds below level three: '+str(report['g2654_revision']),flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

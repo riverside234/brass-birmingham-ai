@@ -93,11 +93,16 @@ def signature_transition(before,after):
         if g2400.applied(old):return False
         try:old=g2400.configure(old)
         except (ValueError, KeyError, TypeError):return False
+    from brass_ai.recovery import training_revision_g2654 as g2654
+    if g2654.applied(old) != g2654.applied(new):
+        if g2654.applied(old):return False
+        try:old=g2654.configure(old)
+        except (ValueError, KeyError, TypeError):return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False
-    from brass_ai.recovery.ordinary_cotton import KEY as COTTON, LIMITED, NETWORK
+    from brass_ai.recovery.ordinary_cotton import KEY as COTTON, LIMITED, NETWORK, RAIL_NETWORK
     old_cotton, new_cotton = (c.get('table_plan', {}).get(COTTON) for c in (old, new))
-    if old_cotton != new_cotton or (new_cotton in (LIMITED, NETWORK)) != g2240.applied(new):
+    if old_cotton != new_cotton or (new_cotton in (LIMITED, NETWORK, RAIL_NETWORK)) != g2240.applied(new):
         return False
     from brass_ai.learning.post_transfer_reward import previous as previous_reward
     from .lab_teacher_activation import is_on

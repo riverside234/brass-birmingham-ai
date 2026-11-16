@@ -646,8 +646,9 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         None => None,
         Some(settings) if seats.is_some() => {
             let mode = if settings == &CottonMode::Network.settings() { CottonMode::Network }
+                else if settings == &CottonMode::RailNetwork.settings() { CottonMode::RailNetwork }
                 else if single { CottonMode::SingleSeat } else { CottonMode::Seated };
-            check(mode != CottonMode::Network || single, "cotton network requires the single-seat recipe")?;
+            check(!mode.network() || single, "cotton network requires the single-seat recipe")?;
             check(settings == &mode.settings(), "unreviewed seated cotton exploration")?;
             Some(mode)
         }
@@ -811,7 +812,7 @@ pub fn teacher_cotton_prepare(view: &Observation, actual: &Info<Key, String>, fa
             Phase::Continuation if cotton.develop() => state.count[actual.actor],
             _ => 0,
         };
-        let window = index > 0 && (matches!(cotton, CottonMode::SingleSeat | CottonMode::Network) || index <= revision.opening_actions || !fast && revision.long_search);
+        let window = index > 0 && (matches!(cotton, CottonMode::SingleSeat | CottonMode::Network | CottonMode::RailNetwork) || index <= revision.opening_actions || !fast && revision.long_search);
         let limit = state.cotton.prepare(view,&actual.key.choices,fast,window);
         let (develop, build, networks) = state.cotton.coverage();
         (limit, develop, build, networks)

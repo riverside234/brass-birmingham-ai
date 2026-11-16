@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "90c2e72e1544fe682157dec4a5357f620ad429a1f48bfe351c09886864853849",
+  "execution_implementation": "4d9ff9c70e5c1395bce12c4bb1b0b007c43bcae44c3375dce237096c8c8188a4",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -829,6 +829,11 @@
       "implementation": "1cb10da85648d9562dfa9c2c10cec5a0f04c5e3d651bb127376f931b3e5f4f9d",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "07b58d68513f6e4d7f2b04926327f76e8406a5b830265e53569691883e17698c"
+    },
+    {
+      "implementation": "90c2e72e1544fe682157dec4a5357f620ad429a1f48bfe351c09886864853849",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "8dc30440efc6f0efe69b13d56f21fcd60e1c0bb3f624ecdb2980df87a8a8ed92"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1094,6 +1099,14 @@
   },
   "g2600_recipe_and_ppo_performance": {
     "scope": "PPO: the teacher term returns to one padded forward per step (the g2400 32k-cell chunks repeated the encoder forward/backward per chunk), keeping the single target upload and input audit; CPU staging admits only unsealed rows, since sealed rows and value-only views of sealed rows were fully admitted when sealed. Same gradients and batches. Recipe, adopted once at a committed g2400 cotton-network boundary by teacher_search_retune.prepare(g2600=True): PPO opening temperature 1.3 for each neural seat's first three actions with the FORK_T15 objective; teacher single-seat tables sample the same three opening actions from root visits raised to 1/1.3; long C_scale .20 on standard and cotton teacher tables, short .70, K=8; PPG beta floor .25 in every search-head stage and at most one ordinary PPG epoch. Teacher label and search-value buffers (held-out included) retire and refill over eight ages with the search-head stage kept; teacher beta is re-measured with teaching on; model, optimizers, PPG beta/trips/Adam/replay and RNG are preserved.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2654_ppo_rollback_and_diagnostics": {
+    "scope": "PPO CPU preparation and the teacher term return to the exact g2280-g2400 code (RAM-file transport with worker-side admission; per-row teacher targets, one padded forward per step); the g2400-g2600 recipe code is unchanged. Diagnostic-only additions: one CUDA synchronize at the start of each teacher step (the term already waited on it at its first upload) splits its wall time into queued PPO GPU work, forward, backward and apply, with main-thread CPU, GC pauses and the slowest steps row widths/phases/ages; Python cyclic-GC pauses over the whole PPO update are recorded via gc.callbacks and kept in compact summaries. Same batches, gradients and RNG.",
+    "qualified_implementation_unchanged": true
+  },
+  "g2654_rail_cotton_build_level": {
+    "scope": "PPO ordinary cotton tables (ordinary-cotton-exploration/4.0.0) and teacher cotton tables (teacher-cotton-exploration/8.0.0, native RailNetwork mode) target a cotton build only when the seat next cotton tile is at least level 2 in the Canal era and level 3 in the Rail era. Develop and network targets, allowances, quotas, seat draws per contract, labels, buffers and the search-head stage are otherwise the g2400 network recipe; older rows and labels validate under their own contract. Adopted with --update-rail-cotton.",
     "qualified_implementation_unchanged": true
   }
 }

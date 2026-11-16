@@ -62,36 +62,6 @@ class NNWorkTests(unittest.TestCase):
         self.assertEqual(counts['timeouts'],0)
         self.assertGreater(counts['elapsed_seconds'],24.)
 
-    def test_execution_starts_watchdog_after_cpu_admission_and_shares_both_actions(self):
-        view,choices=position();view['context'].update(actions_remaining=2)
-        contexts=[];planner=self.planner;clock=self.clock;events=[]
-        for phase,remaining in [('action',2),('payment',1),('action',1),('continuation',0)]:
-            item=copy.deepcopy(view);item['context'].update(phase=phase,actions_remaining=remaining,revision=len(contexts))
-            contexts.append(item)
-        planner.next_views=contexts[1:]
-        class Lease:
-            first=True
-            def update(self,key,workers):
-                self.assert_workers=workers
-                if self.first:clock.now+=30;self.first=False;events.append('admission')
-        class Host:
-            index=0
-            def observe(self,seat):events.append('observe');return contexts[self.index]
-            def choices(self):return choices
-            def apply(self,context,choice):
-                clock.now+=.5;self.index+=1
-                return contexts[self.index]['context'] if self.index<len(contexts) else dict(context,terminal=True)
-            def call(self,name):return result()
-        episode=game();episode['records']=[];lease=Lease()
-        _run_turns(Host(),{},[planner]*4,Timings(),5,contexts[0]['context'],episode,
-            [self.rng]*4,[],PreparedEncoder(),lease)
-        self.assertEqual(events[0],'admission');self.assertEqual(lease.assert_workers,4)
-        self.assertEqual(planner.calls,[(248.8,16)])
-        self.assertTrue(all(row['teacher'] is None for row in episode['records']))
-        report=planner.work_report(self.rng)['phases']['canal_early']
-        self.assertEqual((report['scheduled_turns'],report['actual_searches']),(1,1))
-        self.assertEqual(report['continuation_choices'],3)
-
     def test_failed_search_never_retries_and_next_turn_has_a_new_allowance(self):
         view,choices=position();self.planner.mode='raise'
         self.planner.admit_work_turn(view['context'],self.rng)

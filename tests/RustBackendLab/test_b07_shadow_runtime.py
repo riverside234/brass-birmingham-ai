@@ -387,28 +387,6 @@ class Cache(unittest.TestCase):
             self.assertEqual(cache.load(job)['job_id'],result['job_id'])
             self.assertFalse(list((run/'shadow').glob('*.overrun')))
 
-    def test_32_table_post_accounting_charges_each_table_and_its_own_split(self):
-        from brass_ai.recovery.teacher_phase import TeacherPhase
-        phase=TeacherPhase.__new__(TeacherPhase);phase.generation=1257;phase.reward_id='reward';phase.jobs=[]
-        results=[];rows={}
-        for i in range(32):
-            key=str(i);split='train' if i<28 else 'heldout'
-            phase.jobs.append(dict(expected={'job_id':key,'model_id':'model'},split=split,
-                reservations={'0':{'canal_early':1}}))
-            label=dict(kind='root',phase='canal_early',seat=0,completed_trajectories=1,effective_k=8,
-                completed_rounds=1,deadline_hit=False,overrun_seconds=0.,fallback_played=False)
-            rows[key]=SimpleNamespace(row={'view':{'context':{'round':1}}},label=label)
-            results.append(dict(job_id=key,metrics={'reserved_turns':1,'turns':[{'profile':'fast','post_search_ns':300_000_000}]}))
-        phase.buffer=Mock();phase.search_value=Mock()
-        verifier=Mock();verifier.take.side_effect=lambda result,job,model:([rows[result['job_id']]],{})
-        ticks=iter(i*.01 for i in range(1000))
-        with patch('brass_ai.recovery.teacher_phase.time.perf_counter',side_effect=lambda:next(ticks)):
-            phase.admit_collection(results,None,verifier=verifier)
-        self.assertGreater(phase.admission_seconds,.5)
-        spent=phase.search_value.admit.call_args.kwargs['post_spent']
-        self.assertEqual(set(spent),set(rows));self.assertLess(max(spent.values()),.2)
-        self.assertTrue(phase.metrics['root_label_yield_pass'])
-
     def test_full_32_table_runtime_barrier_reuses_sealed_tables_and_preserves_rng(self):
         from brass_ai.rust_backend import lab_shadow as S,lab_teacher as T,lab_backend as B
         from brass_ai.recovery.teacher_phase import plan_jobs

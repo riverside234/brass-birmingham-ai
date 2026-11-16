@@ -4,7 +4,7 @@ from . import ordinary_cotton, teacher_cotton, training_revision_g1491 as teache
 
 
 def applied(config):
-    return teacher.cotton_settings(config).get('contract') == teacher_cotton.NETWORK_CONTRACT
+    return teacher.cotton_settings(config).get('contract') in teacher_cotton.NETWORK_CONTRACTS
 
 
 def configure(config):

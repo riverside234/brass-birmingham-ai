@@ -7,12 +7,18 @@ KEY = COTTON_EXPLORATION
 CONTRACT = 'ordinary-cotton-exploration/1.0.0'
 LIMITED_CONTRACT = 'ordinary-cotton-exploration/2.0.0'
 NETWORK_CONTRACT = 'ordinary-cotton-exploration/3.0.0'
+# g2654: the network recipe with Rail-era cotton builds targeted only from level three.
+RAIL_NETWORK_CONTRACT = 'ordinary-cotton-exploration/4.0.0'
+NETWORK_CONTRACTS = (NETWORK_CONTRACT, RAIL_NETWORK_CONTRACT)
+LIMITED_CONTRACTS = (LIMITED_CONTRACT, *NETWORK_CONTRACTS)
+RAIL_MINIMUM_BUILD_LEVEL = 3
 CAP = 3
 PROBABILITIES = (COTTON_PROBABILITY, .10)
 SETTINGS = dict(contract=CONTRACT, probability=COTTON_PROBABILITY, standard_selfplay=50, cotton_selfplay=20)
 LIMITED = dict(contract=LIMITED_CONTRACT, probability=LIMITED_COTTON_PROBABILITY, standard_selfplay=60, cotton_selfplay=10,
                max_per_seat_era=CAP, pause_unflipped=True, minimum_build_level=2)
 NETWORK = dict(LIMITED, contract=NETWORK_CONTRACT, network_max_per_seat_era=1)
+RAIL_NETWORK = dict(NETWORK, contract=RAIL_NETWORK_CONTRACT, rail_minimum_build_level=RAIL_MINIMUM_BUILD_LEVEL)
 
 
 def enabled(config):
@@ -32,11 +38,11 @@ def previous(config):
 
 def assignment(index, sampling_seed, *, probability=COTTON_PROBABILITY, contract=CONTRACT):
     # Use the same interleaved quota points as table_kind.
-    settings = LIMITED if contract in (LIMITED_CONTRACT, NETWORK_CONTRACT) else SETTINGS
+    settings = LIMITED if contract in LIMITED_CONTRACTS else SETTINGS
     point = (index * 35) % 100
     start = settings['standard_selfplay']
     if start <= point < start + settings['cotton_selfplay']:
-        count = 1 if contract in (LIMITED_CONTRACT, NETWORK_CONTRACT) else 1 + ((point - start) // 5) % 2
+        count = 1 if contract in LIMITED_CONTRACTS else 1 + ((point - start) // 5) % 2
         return dict(contract=contract, probability=probability, seats=cotton_seats(sampling_seed, count, contract))
     return None
 
@@ -50,7 +56,7 @@ def validate_assignment(proof):
         return (), 0.
     value = proof[KEY]
     require(proof['kind'] == 'selfplay' and proof['purpose'] == 'training' and isinstance(value, dict)
-            and value.get('contract') in (CONTRACT, LIMITED_CONTRACT, NETWORK_CONTRACT)
+            and value.get('contract') in (CONTRACT, *LIMITED_CONTRACTS)
             and value.get('probability') in ((LIMITED['probability'],) if value['contract'] != CONTRACT else PROBABILITIES)
             and value == planned_assignment(value, proof['ordinary_game_index'], proof['sampling_seed'])
             and all(type(seat) is int for seat in value['seats']), 'Ordinary cotton seat assignment differs')
@@ -76,8 +82,10 @@ class TableExploration:
 
     def __init__(self, proof):
         self.seats, self.probability = validate_assignment(proof)
-        self.network = proof.get(KEY, {}).get('contract') == NETWORK_CONTRACT
-        self.limited = self.network or proof.get(KEY, {}).get('contract') == LIMITED_CONTRACT
+        contract = proof.get(KEY, {}).get('contract')
+        self.network = contract in NETWORK_CONTRACTS
+        self.limited = self.network or contract == LIMITED_CONTRACT
+        self.rail_build_level = RAIL_MINIMUM_BUILD_LEVEL if contract == RAIL_NETWORK_CONTRACT else 2
         self.used = {'CanalEra': 0, 'RailEra': 0} if self.limited else None
         self.network_used = {'CanalEra': 0, 'RailEra': 0} if self.network else None
 
@@ -87,7 +95,8 @@ class TableExploration:
         era = view['context']['era']
         if view['seat'] not in self.seats or has_unflipped_cotton(view, view['seat']):
             return []
-        return network_cotton_candidates(view, choices, industry=self.used[era] < CAP, network=self.network_used[era] < 1)
+        return network_cotton_candidates(view, choices, industry=self.used[era] < CAP, network=self.network_used[era] < 1,
+                                         minimum_build_level=self.rail_build_level if era == 'RailEra' else 2)
 
     def options(self, view, choices):
         if self.network:

@@ -9,7 +9,7 @@ from brass_ai.step5.league import seeds_for
 from brass_ai.step5.policy import cotton_seats
 from .teacher_phase_config import CONTRACT, SCHEDULE, SOURCE, validate, buffer_identity
 from .teacher_buffer import TeacherBuffer
-from .teacher_cotton import NETWORK_CONTRACT, SEATS
+from .teacher_cotton import NETWORK_CONTRACTS, SEATS
 from .teacher_labels import PHASES
 from .teacher_term import TeacherTerm, heldout_measure, summary
 from .search_value_schedule import validation_plan
@@ -85,7 +85,7 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
             job_id = digest(identity); sampling = int(job_id[:8], 16)
             # Interleave cotton tables independently within training and held-out seeds.
             cotton_table = (index + generation) % spacing == 0
-            if cotton.get('contract') == NETWORK_CONTRACT:
+            if cotton.get('contract') in NETWORK_CONTRACTS:
                 # Exactly 3/20 over consecutive training tables (4/5 of 32).
                 # Heldouts retain one cotton and three standard games each time.
                 ordinal = generation * c['tables']['train'] + index

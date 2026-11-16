@@ -11,13 +11,17 @@ MIXED_25_CONTRACT='teacher-cotton-exploration/4.0.0'
 SEATED_CONTRACT='teacher-cotton-exploration/5.0.0'
 SINGLE_SEAT_CONTRACT='teacher-cotton-exploration/6.0.0'
 NETWORK_CONTRACT='teacher-cotton-exploration/7.0.0'
+# g2654: the network recipe with Rail-era cotton builds targeted only from level three.
+RAIL_NETWORK_CONTRACT='teacher-cotton-exploration/8.0.0'
+NETWORK_CONTRACTS=(NETWORK_CONTRACT, RAIL_NETWORK_CONTRACT)
+RAIL_MINIMUM_BUILD_LEVEL=3
 SEATS='cotton_seats'
 PROBABILITY=.2
 DEVELOP_PROBABILITY=.25
 MIXED_PROBABILITY=.3
 CAP=3
 MIXED_CONTRACTS=(MIXED_CONTRACT,MIXED_25_CONTRACT)
-SEATED_CONTRACTS=(SEATED_CONTRACT, SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT)
+SEATED_CONTRACTS=(SEATED_CONTRACT, SINGLE_SEAT_CONTRACT, *NETWORK_CONTRACTS)
 PROBABILITIES={CONTRACT:PROBABILITY, DEVELOP_CONTRACT:DEVELOP_PROBABILITY, MIXED_CONTRACT:MIXED_PROBABILITY,
                MIXED_25_CONTRACT:DEVELOP_PROBABILITY, **dict.fromkeys(SEATED_CONTRACTS, MIXED_PROBABILITY)}
 
@@ -28,10 +32,12 @@ def settings(*, develop=False, mixed=False, contract=None):
     value = dict(contract=contract, probability=PROBABILITIES[contract], max_per_seat_era=CAP,
         long_candidates=2, short_candidates=1, pause_unflipped=True,
         scope='train-and-heldout' if contract in (*MIXED_CONTRACTS, *SEATED_CONTRACTS) else 'train')
-    if contract in (SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT):
+    if contract in (SINGLE_SEAT_CONTRACT, *NETWORK_CONTRACTS):
         value.update(minimum_build_level=2, short_window='all-actions')
-    if contract == NETWORK_CONTRACT:
+    if contract in NETWORK_CONTRACTS:
         value['network_max_per_seat_era'] = 1
+    if contract == RAIL_NETWORK_CONTRACT:
+        value['rail_minimum_build_level'] = RAIL_MINIMUM_BUILD_LEVEL
     return value
 
 
@@ -49,7 +55,7 @@ def validate_label(label, choices, *, view=None):
     if e is None:return
     require(isinstance(e,dict) and type(e.get('contract')) is str and e['contract'] in PROBABILITIES,
             'Invalid cotton exploration contract')
-    network = e['contract'] == NETWORK_CONTRACT
+    network = e['contract'] in NETWORK_CONTRACTS
     single = network or e['contract'] == SINGLE_SEAT_CONTRACT
     fields = {'contract','targeted','probability','used_before','cotton_visits','total_visits','covered_locations'}
     if network:fields.add('network_used_before')
@@ -67,7 +73,8 @@ def validate_label(label, choices, *, view=None):
     if single:
         require(view is not None and not has_unflipped_cotton(view, label['seat'])
                 and any(c['id'] == e['planned_action'] for c in choices), 'Invalid teacher cotton eligibility or plan')
-        builds = cotton_build_available(view, label['seat'])
+        rail = e['contract'] == RAIL_NETWORK_CONTRACT and view['context']['era'] == 'RailEra'
+        builds = cotton_build_available(view, label['seat'], RAIL_MINIMUM_BUILD_LEVEL if rail else 2)
     industry = not network or e['used_before'] < CAP
     links = cotton_network_targets(view) if network and e['network_used_before'] < 1 else ()
     def targeted(c):
@@ -113,7 +120,7 @@ def validate_receipt(receipt, job, rows):
         require(receipt.get(SEATS) == seats, 'Teacher cotton receipt seats differ')
     used=receipt['targeted_by_era_seat'];built=receipt['builds_by_era_seat']
     developed=receipt['develops_by_era_seat'] if contract!=CONTRACT else [[0]*4 for _ in range(2)]
-    network = contract == NETWORK_CONTRACT
+    network = contract in NETWORK_CONTRACTS
     networks = receipt['networks_by_era_seat'] if network else [[0]*4 for _ in range(2)]
     network_used = receipt['network_targeted_by_era_seat'] if network else [[0]*4 for _ in range(2)]
     if network:

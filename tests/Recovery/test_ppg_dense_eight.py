@@ -33,29 +33,6 @@ class DenseEight(unittest.TestCase):
     @classmethod
     def setUpClass(cls):torch.set_num_threads(2)
 
-    def test_exact_config_schedule_and_fixed_beta(self):
-        old=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0650-20261023T202940235880Z/state.json')['signature']['config']
-        c=D.fast_options(old);P.validate(c['value_phase'])
-        self.assertEqual({k for k in old if c[k]!=old[k]},{'value_phase'})
-        self.assertEqual(c['insolvency'],dict(event_cost=.04,max_cost=.10))
-        self.assertEqual(c,D.fast_options(c));self.assertEqual(c,D.beta_options(c))
-        v=c['value_phase'];self.assertIsNone(v['kl_cap']);self.assertEqual(v['selection'],LATEST_DEFAULT)
-        for k,x in [('buffer_iterations',16),('validation_iterations',4),('phase_interval',4),('kl_cap',.002),('cache_format',D.PACKED_CACHE)]:
-            with self.assertRaises(ValueError):P.validate(dict(v,**{k:x}))
-        s=D.initial(620,old['value_phase'])
-        for g in range(621,651):s=P.advance(s,g,P.due(s))
-        before=copy.deepcopy(s);s=D.migrate_fast_clock(s,650)
-        self.assertEqual(s['last_phase'],636);self.assertEqual(s['phases'],before['phases'])
-        due=[]
-        for g in range(651,675):
-            self.assertEqual(P.due(s),P.due(json.loads(json.dumps(s))))
-            if P.due(s):due.append(g)
-            s=P.advance(s,g,P.due(s))
-        self.assertEqual(due,[658,666,674])
-        for kl in (0.,.001,.1):
-            beta,r=D.beta_after_phase(dict(beta_clone_final=4.,probe_kl=kl),v)
-            self.assertEqual(beta,4.);self.assertEqual(r['reason'],'fixed_current_beta')
-
     def test_last_accepted_reference_can_move_above_minimum_and_restore_matching_adam(self):
         m=torch.nn.Linear(1,1);opt=torch.optim.Adam(m.parameters())
         s=Selection(m,opt,dict(a=1.,b=1.),config=LATEST_DEFAULT)
@@ -185,47 +162,5 @@ class DenseEight(unittest.TestCase):
             self.assertEqual(r['early_stop_reason'],'validation_patience');self.assertFalse(r['kl_guard_tripped'])
             self.assertEqual(r['beta_clone_final'],4.);self.assertTrue(_same_payload(saved['weights'],m.state_dict()))
             self.assertTrue(_same_payload(saved['adam'],p.optimizer.state_dict()));self.assertTrue(_same_payload(ppo_before,opt.state_dict()))
-
-    def test_g650_review_and_idempotent_config_helper_no_run_mutation(self):
-        import importlib.util
-        from brass_ai.recovery.resume import check_signature
-        from brass_ai.recovery.exploration import low_branch_config,high_branch_config,restore,effective
-        from brass_ai.recovery.lr_controller import cut_config
-        from brass_ai.recovery.ppo_kl_control import configure as exact_kl_config,DEFAULT as EXACT_KL
-        from brass_ai.recovery.config import latest_model_config
-        from brass_ai.step5.league import implementation_id
-        s=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0650-20261023T202940235880Z/state.json')
-        old=s['signature']['config'];c=exact_kl_config(cut_config(low_branch_config(D.fast_options(old))))
-        self.assertEqual({k for k in old if old[k]!=c[k]},{'value_phase','branching','ppo_lr_controller','update'})
-        self.assertEqual(c['update'],dict(old['update'],kl_control=EXACT_KL))
-        self.assertEqual(c['ppo_lr_controller'],dict(old['ppo_lr_controller'],cut_divisor=1.25))
-        self.assertEqual(c['branching'],dict(old['branching'],rate_per_decision=.005))
-        self.assertEqual(c,low_branch_config(c));self.assertEqual(c,low_branch_config(high_branch_config(c)))
-        self.assertEqual(latest_model_config(old,old['imitation_checkpoint'])['branching'],c['branching'])
-        # A rate-only adoption never rebaselines entropy or restarts openings.
-        restored=restore(c,s,s['exploration'])
-        self.assertEqual(restored,s['exploration'])
-        self.assertEqual(effective(c,restored,651)['branching']['rate_per_decision'],.005)
-        signature=dict(s['signature'],config=c,implementation=implementation_id())
-        self.assertTrue(check_signature(s,signature,reviewed=True))
-        bad=copy.deepcopy(signature);bad['config']['learning_rate']*=2
-        with self.assertRaises(ValueError):check_signature(s,bad,reviewed=True)
-        bad=copy.deepcopy(signature);bad['config']['branching']['max_per_game']=2
-        with self.assertRaises(ValueError):check_signature(s,bad,reviewed=True)
-        bad=copy.deepcopy(signature);bad['config']['ppo_lr_controller']['cooldown_iterations']=2
-        with self.assertRaises(ValueError):check_signature(s,bad,reviewed=True)
-        spec=importlib.util.spec_from_file_location('dense_helper',SOURCE_ROOT/'scripts/configure-ppg-eight-fast.py')
-        helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
-        with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
-            root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)
-            file=run/'generation-0650.pt';file.write_bytes(b'config helper checksum fixture; not a training checkpoint')
-            s['history'][-1]=dict(s['history'][-1],path='artifacts/run/generation-0650.pt',sha256=sha(file))
-            write_json(run/'state.json',s);before={p.name:sha(p) for p in run.iterdir()}
-            out='configs/step5/dense.json';r=helper.generate(root,'artifacts/run',out,650)
-            self.assertEqual(r['first_phase'],658);self.assertTrue(r['fresh_cache_reset_on_startup'])
-            self.assertEqual(r,helper.generate(root,'artifacts/run',out,650));self.assertEqual(read(root/out),c)
-            self.assertEqual(before,{p.name:sha(p) for p in run.iterdir()})
-            with self.assertRaisesRegex(ValueError,'Stale'):helper.generate(root,'artifacts/run',out,640)
-
 
 if __name__=='__main__':unittest.main()

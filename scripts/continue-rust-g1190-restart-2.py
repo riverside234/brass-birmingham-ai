@@ -80,6 +80,11 @@ tables (short stays .70), a .25 PPG beta floor in every search-head stage and
 at most one ordinary PPG epoch. It retires the teacher label and search-value
 buffers (held-out games included), keeps the search-head stage while they
 refill, and re-measures beta with teaching on. The new settings persist.
+
+--update-rail-cotton (at a committed g2600 boundary) stops PPO and teacher cotton
+exploration from targeting Rail-era cotton builds below level three; level-one
+builds stay excluded in both eras. Develop and network targets, allowances,
+labels, buffers and the search-head stage are unchanged. The setting persists.
 """
 import importlib.util
 from pathlib import Path

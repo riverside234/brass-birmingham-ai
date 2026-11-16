@@ -115,8 +115,8 @@ def seated_cotton(config):
 
 
 def cotton_only(config):
-    from .teacher_cotton import SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT
-    return cotton_settings(config).get('contract') in (SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT)
+    from .teacher_cotton import SINGLE_SEAT_CONTRACT, NETWORK_CONTRACTS
+    return cotton_settings(config).get('contract') in (SINGLE_SEAT_CONTRACT, *NETWORK_CONTRACTS)
 
 
 def _mixed_tables(marker, weight, *, seated=False):
@@ -139,6 +139,13 @@ def g2600_marker(marker):
     """The g2400 cotton-network marker with long C_scale .20 and the T1.3 game opening."""
     return dict(marker, count_search=dict(G2600_SEARCH),
                 exploration=dict(marker['exploration'], game_opening=dict(T13_GAME_OPENING)))
+
+
+def rail_cotton_marker(marker):
+    """g2654: the same network cotton tables; Rail-era cotton builds are targeted only from level three."""
+    from .teacher_cotton import RAIL_NETWORK_CONTRACT, settings
+    cotton = dict(settings(contract=RAIL_NETWORK_CONTRACT), table_fraction=marker['exploration']['cotton']['table_fraction'])
+    return dict(marker, exploration=dict(marker['exploration'], cotton=cotton))
 
 
 def configure_teacher_games(config, weight, *, seated=False):
@@ -186,8 +193,9 @@ def validate(config):
             seated = dict(opening, count_search=profile)
             allowed += tuple(cotton_only_marker(_mixed_tables(seated, weight, seated=True)) for weight in (0, 1))
             allowed += tuple(cotton_only_marker(_mixed_tables(seated, weight, seated=True), network=True) for weight in (0, 1))
-        allowed += tuple(g2600_marker(cotton_only_marker(_mixed_tables(dict(opening, count_search=UPDATED_SEARCH), weight,
-                                                                       seated=True), network=True)) for weight in (0, 1))
+        g2600 = tuple(g2600_marker(cotton_only_marker(_mixed_tables(dict(opening, count_search=UPDATED_SEARCH), weight,
+                                                                    seated=True), network=True)) for weight in (0, 1))
+        allowed += g2600 + tuple(rail_cotton_marker(m) for m in g2600)
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',
@@ -342,7 +350,7 @@ def validate_job(job):
     split = job.get('split')
     require(isinstance(revision, dict) and job.get('seating') == 'all-seat-search' and
             not job.get('h2h') and not job.get('shadow_probe'), 'Unreviewed g1491 teacher job revision')
-    from .teacher_cotton import SEATED_CONTRACT, SINGLE_SEAT_CONTRACT, NETWORK_CONTRACT, SEATS, settings as cotton_options
+    from .teacher_cotton import SEATED_CONTRACT, SINGLE_SEAT_CONTRACT, NETWORK_CONTRACTS, SEATS, settings as cotton_options
     weight = revision.get(TEACHER_SEARCH_HEAD_WEIGHT)
     if TEACHER_SEARCH_HEAD_WEIGHT in revision:
         from brass_ai.learning.search_value import binding
@@ -353,9 +361,9 @@ def validate_job(job):
         seats = revision[SEATS]
         cotton_only = revision.get('exploration', {}).get('normal_sampling') is False
         contract, limit = (SINGLE_SEAT_CONTRACT, 1) if cotton_only else (SEATED_CONTRACT, 2)
-        if revision.get('exploration', {}).get('cotton', {}).get('contract') == NETWORK_CONTRACT:
+        if revision.get('exploration', {}).get('cotton', {}).get('contract') in NETWORK_CONTRACTS:
             require(cotton_only, 'Cotton networks require single-seat exploration')
-            contract = NETWORK_CONTRACT
+            contract = revision['exploration']['cotton']['contract']
         require(split in ('train', 'heldout') and type(seats) is list and len(seats) <= limit and
                 all(type(seat) is int for seat in seats) and
                 seats == cotton_seats(job['sampling_seed'], len(seats), contract),
