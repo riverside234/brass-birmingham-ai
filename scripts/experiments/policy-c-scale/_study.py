@@ -4,6 +4,7 @@ import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from functools import partial
 import gzip
 from itertools import islice, zip_longest
 import json
@@ -365,8 +366,12 @@ def compare_roots(sampler, rows, probes, targets, compare, scales, lanes):
     return valid, attempts
 
 
-def main(kind, default_scales, compare, summarize, *, candidate_n, default_targets=TARGETS, default_weight=1):
+def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_choices=None,
+         default_targets=TARGETS, default_weight=1):
     parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study')
+    if candidate_choices is not None:
+        parser.add_argument('--candidate-n', type=int, choices=candidate_choices, default=candidate_n,
+                            help=f'Candidate search trajectories with K={K} (default: {candidate_n})')
     parser.add_argument('--run', default=RUN)
     parser.add_argument('--generation', type=int, default=os.getenv('GEN'),
                         help='Frozen checkpoint (default: GEN or the latest committed generation in the run)')
@@ -387,6 +392,9 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, default_targe
     parser.add_argument('--sampler', default=os.getenv('BRASS_NATIVE_WORKER'))
     parser.add_argument('--toolchain', default='1.99.1')
     args = parser.parse_args()
+    if candidate_choices is not None:
+        candidate_n = args.candidate_n
+        compare = partial(compare, candidate_n=candidate_n)
     run = project_path(ROOT, args.run)
     state = read_json(run / 'state.json')
     if args.generation is None:

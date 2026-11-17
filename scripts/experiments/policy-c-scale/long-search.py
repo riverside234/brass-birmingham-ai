@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Run K8/640 searches at each scale against a K8/3000 reference."""
+"""Run K8/640 (optionally K8/96) searches at each scale against a K8/3000 reference."""
 
 import numpy as np
 
-from _study import LONG_N, REF_N, completed_q, main
+from _study import LONG_N, REF_N, SHORT_N, completed_q, main
 
 SCALES = (0.10, 0.15, 0.20, 0.25, 0.30)
 TARGETS = {'normal': 700, 'cotton': 200}
@@ -16,7 +16,7 @@ def target_kl(reference, log_probabilities):
     return max(float(np.dot(weights, np.log(weights) - log_probabilities[positive])), 0.)
 
 
-def compare(probes, case, scales):
+def compare(probes, case, scales, *, candidate_n=LONG_N):
     _, row, origin = case
     trial = probes.trial(row['teacher'])
     reference = probes.run(trial, origin, row, REF_N, probes.ref_scale)
@@ -32,7 +32,7 @@ def compare(probes, case, scales):
     log_policy = logits - np.logaddexp.reduce(logits)
     comparisons = [(target_kl(reference_target, log_policy), policy == move, policy == label, float(-log_policy[move]))]
     for scale in scales:
-        candidate = probes.run(trial, origin, row, LONG_N, scale)
+        candidate = probes.run(trial, origin, row, candidate_n, scale)
         if candidate is None:
             return None
         # Keep NLL in log space using this candidate's own search statistics.
@@ -59,4 +59,5 @@ def summarize(valid, scales):
 
 
 if __name__ == '__main__':
-    main('long', SCALES, compare, summarize, candidate_n=LONG_N, default_targets=TARGETS, default_weight=0)
+    main('long', SCALES, compare, summarize, candidate_n=LONG_N, candidate_choices=(SHORT_N, LONG_N),
+         default_targets=TARGETS, default_weight=0)
