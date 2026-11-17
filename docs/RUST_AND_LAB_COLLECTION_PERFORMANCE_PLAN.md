@@ -24,6 +24,10 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/benchmarks/p
 
 ## What the current measurements show
 
+### g3140: ordinary games played inside the CPU worker
+
+At g3139 the lane loop cost 1,731 of about 3,150 ordinary core-seconds per iteration: 507 Python↔Rust round trips per game, plus per-decision JSON, hashing and freezing in Python. From g3140 the CPU collector plays each eligible game in one call, using each seat's own Python RNG state. Rows go through the unchanged append path, and the publisher's draw-replay audits are unchanged. On the laptop the lane time per game fell from 2.3–3.2 s to 0.5–0.7 s, with identical rows on all 618 parity decisions. `BRASS_ORDINARY_AUTOPLAY=0` restores the Python loop. The publisher's history decode is now the largest ordinary cost. Details are in [STEP9_ORDINARY_AUTOPLAY.md](../ai-research/STEP9_ORDINARY_AUTOPLAY.md).
+
 ### g2880: search-value lambda .95
 
 From g2880 the search-value head fits λ-returns with λ=.95 (was .8 since the 32-wide head refresh). The change is adopted once with `--update-search-lambda` (`training_revision_g2880`), and the setting persists. The run was at Stage C, w=1, trunk scale 1, and keeps that stage, its head, optimizer, teacher labels and beta. No buffer retires: every fit recomputes each buffered game's targets from its stored per-turn utility, root bootstrap and final utility at the current λ. Dedicated held-out games score realized utility-to-go, which does not depend on λ. With λ=.95, a target leans less on root bootstraps from older heads (weight .05 instead of .2 per step). The stage machine accepts only .8 → .95, and the signature transition refuses a revert. An interrupted iteration at the switch is journalled under `configuration-history/search-lambda-NNNN`. [g2880 export](../results/joint7-v11-2-g1190-restart-3-g2880-20261116T203152003541Z).

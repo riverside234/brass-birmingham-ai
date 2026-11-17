@@ -678,11 +678,16 @@ def validate_config(config):
         fields.add('local_scoring_auxiliary');validate_local(config['local_scoring_auxiliary'])
         require(config.get('architecture')=='brass-four-seat-mlp-resnet/11.2.0' and 'critic_data' in config,
                 'Local scoring requires the v11.2 descriptor critic')
-        if accepted_warmup(config['local_scoring_auxiliary']):
+        from .local_scoring_auxiliary import era_heads
+        if accepted_warmup(config['local_scoring_auxiliary']) or era_heads(config['local_scoring_auxiliary']):
             from .dcpg_config import enabled as preserves_values
             require(preserves_values(config['update']) and config['value_phase']['enabled'],
                 'Fresh auxiliary warmup requires PPO output preservation and PPG target fitting')
     if 'diversity' in config:fields.add('diversity')
+    from .training_revision_g3140 import KEY as VALUE_REVISION,validate as validate_value_revision
+    if VALUE_REVISION in config:
+        fields.add(VALUE_REVISION);validate_value_revision(config[VALUE_REVISION])
+        require('value_phase' in config and config['value_phase'].get('enabled'),'The g3140 value revision needs the value phase')
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

@@ -90,6 +90,20 @@ labels, buffers and the search-head stage are unchanged. The setting persists.
 lambda to .95 (was .8). Each fit recomputes the buffered games' returns at the new
 lambda, so no buffer retires; held-out games still score the realized utility-to-go.
 Labels, the search head, its stage and beta are unchanged. The setting persists.
+
+--value-revision ITEMS (at a committed boundary) adopts g3140 value-phase items,
+comma-separated; adopted items persist and only move forward
+(ai-research/G3140_VALUE_REVISION.md):
+  time        full-buffer train scans every tenth iteration; the search-value
+              head keeps training.
+  validation  the early stop validates on a quarter of the new games, which
+              train in the next iteration (no permanent hold-out).
+  heads       fresh era-separated local-scoring heads (weight .05).
+  targets     win/utility heads train on half outcome, half lambda .95 return.
+  weight=0.15, weight=0.5   local-scoring weight ladder (after heads).
+  vp          total-VP training weight .1 -> .5.
+  rail-end    Canal rows also predict the Rail-end map (after heads).
+The held-out check, PPG cap .003, beta floor .25 and the strict early stop stay.
 """
 import importlib.util
 from pathlib import Path

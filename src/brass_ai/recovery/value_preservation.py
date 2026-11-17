@@ -39,10 +39,9 @@ def divergences(current,old,companion=None):
     utility=(current['utility']-old['utility']).square().mean(-1)
     local=torch.zeros_like(win)
     if companion is not None and companion.active:
-        w=companion.config['loss_weights']
-        for kind in ('slots','links'):
-            local+=w[kind+'_owner']*kl(old[kind+'_owner'],current[kind+'_owner']).mean(-1)
-            local+=w[kind+'_vp']*F.smooth_l1_loss(current[kind+'_vp'],old[kind+'_vp'],reduction='none').mean((1,2))
+        for kind,(owner_weight,vp_weight) in companion.preservation_weights().items():
+            local+=owner_weight*kl(old[kind+'_owner'],current[kind+'_owner']).mean(-1)
+            local+=vp_weight*F.smooth_l1_loss(current[kind+'_vp'],old[kind+'_vp'],reduction='none').mean((1,2))
     return dict(core=win+.25*rank+.1*vp+utility,win=win,rank=rank,vp=vp,utility=utility,local=local)
 
 

@@ -85,3 +85,31 @@ Format: `module.Class.test` (number of errors when a test failed more than once)
 The same 266 tests ran on unmodified HEAD (`baseline.log`) and on the working tree (`after2.log`). Both reported `FAILED (failures=4, errors=107, skipped=1)` and the per-test, per-message comparison had no difference in either direction. The modules were: test_b025, test_b045_failures, test_b07_shadow_resume, test_b07_shadow_runtime, test_diagnostics_cleanup, test_entropy95_revision, test_g1190_restart, test_g1490_restart, test_gae_floor, test_local_scoring_resume, test_nn_work_budget, test_post_transfer_reward, test_ppg_dense_eight, test_ppg_disabled, test_ppg_eight, test_ppg_sixteen, test_ppg_throughput, test_selfplay_major_resume, test_shadow_verification, test_teacher_on_stage_a, test_throughput_g470, test_training_revision_g1307.
 
 To run focused tests: `PYTHONPATH="src;scripts;tests/Recovery;tests/RustBackendLab;tests/FeatureEngineering;tests/R2"` with `artifacts/p6e/Scripts/python.exe -m unittest <module>`.
+
+## Also failing on unmodified HEAD (found 2026-11-17, still in the tree)
+
+Found while testing the g3140 value revision. Each fails the same way with HEAD `1bab411b` and all g3140 edits stashed. They are not among the 111 above and have not been deleted.
+
+| Test | Message | Cause |
+|---|---|---|
+| `test_ppg_g210.Restored.test_exact_g210_options_with_requested_beta_and_rate_changes` | `FileNotFoundError: …grouped-lr-critic-g0660-…\state.json` | Missing old results export |
+| `test_ppg_g210.Restored.test_g660_helper_is_idempotent_narrow_and_preserves_run` | same g0660 export | Missing old results export |
+| `test_dcpg.Delayed.test_config_narrow_strict_defaults_and_fixed_dynamic_rate` | `FileNotFoundError: …grouped-lr-critic-g0590-…\state.json` | Missing old results export |
+| `test_dcpg.Delayed.test_g590_cadence_preserves_origin_phase_counts_and_restart` | `FileNotFoundError: …g0590-…\iteration-0589\report.json` | Missing old results export |
+| `test_dcpg.Delayed.test_g590_config_helper_narrow_review_and_no_run_writes` | same g0590 export | Missing old results export |
+| `test_dcpg.Delayed.test_ppo_has_no_fresh_fitting_uses_frozen_GAE_and_actual_lr` | `AssertionError: 2 != 8` (`len(v['gradients'])` against `optimizer_steps`) | Assertion on old behaviour; not analysed further |
+| `test_value_work_optimization.Targets.test_flat_target_copy_matches_old_recurrence_and_isolates_numeric_and_nested_mutation` | `AssertionError: 999 != 0.0` | Assertion on old behaviour; not analysed further |
+
+## Collection-suite failures not caused by step 9 (found 2026-11-17, still in the tree)
+
+Found while testing build step 9 (ordinary autoplay, [STEP9_ORDINARY_AUTOPLAY.md](../../ai-research/STEP9_ORDINARY_AUTOPLAY.md)). `test_b02`, `test_b06` and `test_b07` give the same 10 failures with `BRASS_ORDINARY_AUTOPLAY=0`, which restores the old code path exactly. None of their tracebacks passes through a file changed since HEAD `1bab411b`. A HEAD worktree fails more of these tests because it lacks the ignored fixture files, so it is not a clean comparison. They have not been deleted.
+
+| Test | Message |
+|---|---|
+| `test_b02.Contract.test_current_search_v1_b01_receipt_is_accepted_without_lab_work` | `FileNotFoundError: …distribution\rust-lab-b01\b01-search-v1-inputs.zip` |
+| `test_b02.Contract.test_reference_route_never_silently_substitutes_unsupported_seat` | `AssertionError: 'rust' != 'reference'` |
+| `test_b02.Publication.test_child_can_finish_first_and_join_exactly_once` | `KeyError: 'branch'` |
+| `test_b02.Publication.test_one_lane_schedules_child_without_waiting_parent_and_reuses_complete_family` | `KeyError: 'branch'` |
+| `test_b06.B06.test_exact_g1250_source_route_preserves_config_restrictions` | `ValueError: This self-play source transition has not been reviewed` |
+| `test_b06.B06.test_native_branch_lane_installs_continuation_window_before_sampling` | `AttributeError: … lab_collection … does not have the attribute 'Collector'` (the test patches a name the module no longer imports) |
+| `test_b07.B07.test_attested_reads_equal_full_validation_including_branches_and_reference_fallback` (4 subtests) | `TypeError: Admitted actor inputs are immutable` |

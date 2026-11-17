@@ -328,7 +328,12 @@ def defer_train_metrics(model,config):
 
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
-        companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None):
+        companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None,
+        bootstrap_share=0.,loss_weights=None,train_metrics=True):
+    """bootstrap_share/loss_weights change the training loss only (g3140 steps 7-8); the held-out
+    check always scores the four main terms on real outcomes with the original weights.
+    train_metrics=False skips the two full-buffer scans (g3140 step 1); held-out evidence then
+    decides the utility receipt."""
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     timings={}
@@ -450,8 +455,13 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     with autocast(update,value_dataset.device):
                         if companion is not None:out,local_loss=companion.forward(model,inputs,value_dataset,ix,dropout=drop)
                         else:out,local_loss=value_output(model,inputs,value_dataset,ix,dropout=drop,heads_only=True),None
-                    loss=value_losses(out,tuple(t[ix] for t in value_dataset.targets))[0]
-                    loss=loss+(out[4].float()-value_dataset.utility[ix]).square().mean(-1)
+                    targets=tuple(t[ix] for t in value_dataset.targets);utility_target=value_dataset.utility[ix]
+                    if bootstrap_share:
+                        boot=value_dataset.bootstrap[ix]
+                        targets=(torch.lerp(targets[0],boot[:,0],bootstrap_share),targets[1],targets[2])
+                        utility_target=torch.lerp(utility_target,boot[:,1],bootstrap_share)
+                    loss=value_losses(out,targets,loss_weights)[0]
+                    loss=loss+(out[4].float()-utility_target).square().mean(-1)
                     if local_loss is not None:
                         loss=loss+local_loss
                         companion.account_loss(local_loss,value_dataset.critic_weights[ix],len(batch),'ppg')
@@ -568,8 +578,12 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     # holdout, and no stale pre-value-phase receipt after trunk movement.
     # A fully rejected phase restored the exact post-PPO weights. Reuse its
     # already measured train metrics instead of scanning the whole buffer again.
+    scanned=train_metrics or not deferred_train
     if deferred_train:
-        if report['optimizer_steps']:
+        if report['optimizer_steps'] and not scanned:
+            train_before=dict(rows=len(value_train_ids),games=None,loss=None,utility_mse=None,explained_variance=None,
+                measured=False,reason='Full-buffer train scans run on scheduled iterations only (g3140); held-out evidence decides the receipt')
+        elif report['optimizer_steps']:
             accepted_weights=copy.deepcopy(model.state_dict())
             try:
                 model.load_state_dict(calibration_source)
@@ -578,13 +592,19 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         else:
             train_before=dict(rows=len(value_train_ids),games=None,loss=None,utility_mse=None,explained_variance=None,
                 measured=False,reason='No retained PPG updates; existing readiness is preserved, so full-training diagnostics are omitted')
-    train_after=measure_train('train_after_seconds') if report['optimizer_steps'] else copy.deepcopy(train_before)
-    if report['optimizer_steps']:
+    train_after=measure_train('train_after_seconds') if report['optimizer_steps'] and scanned else copy.deepcopy(train_before)
+    if report['optimizer_steps'] and scanned:
         ready=train_after['utility_mse']<=train_before['utility_mse']+1e-8
         model.utility_calibration=dict(version=config['contract'],reward_id=digest(model.config.utility),ready=ready,
             decisions=len(value_train_ids),games=train_after['games'],steps=report['optimizer_steps'],
             before=dict(mse=train_before['utility_mse']),after=dict(mse=train_after['utility_mse']),
             scope='Final accepted value-phase weights; ordinary critic-train games only; heldout games excluded')
+    elif report['optimizer_steps']:
+        ready=current['utility_mse']<=before['utility_mse']+1e-8
+        model.utility_calibration=dict(version=config['contract'],reward_id=digest(model.config.utility),ready=ready,
+            decisions=len(value_train_ids),games=None,steps=report['optimizer_steps'],
+            before=dict(heldout_mse=before['utility_mse']),after=dict(heldout_mse=current['utility_mse']),
+            scope='Final accepted value-phase weights; acceptance held-out games (train scans not scheduled this iteration)')
     # With zero retained updates, leave the existing qualification unchanged.
     gate_after=measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else current
     started=time.perf_counter()
@@ -603,7 +623,10 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         current_presentations=presentations-previous_presentations,previous_presentations=previous_presentations,
         epoch_reports=epochs,calibration_receipt=copy.deepcopy(model.utility_calibration),
         train_metrics_reused=not bool(report['optimizer_steps']),
-        train_metrics_deferred=deferred_train,train_metrics_measured=bool(report['optimizer_steps']) or not deferred_train,
+        train_metrics_deferred=deferred_train,train_metrics_measured=(bool(report['optimizer_steps']) and scanned) or not deferred_train,
+        train_metrics_scheduled=bool(train_metrics),
+        training_targets=dict(bootstrap_share=bootstrap_share,loss_weights=list(loss_weights or (.25,.1)),
+            heldout_check='outcome targets, weights (.25, .1)'),
         full_train_metric_rows_avoided=len(value_train_ids) if deferred_train and not report['optimizer_steps'] else 0,
         seconds=time.perf_counter()-began)
     if separate_gate:

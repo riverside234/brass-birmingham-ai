@@ -27,6 +27,12 @@ DEFAULT=dict(contract=CONTRACT,head_contract=HEAD,target=targets.identity(),mode
 def accepted_warmup(config):return config.get('contract')==ACCEPTED_CONTRACT
 
 
+def era_heads(config):
+    """The g3140 3.0.0 companion: era heads with a per-entity trunk slice (local_scoring_v3)."""
+    from .local_scoring_v3 import is_v3
+    return is_v3(config)
+
+
 def fresh_config(config):
     """Opt-in fresh heads; no dependency on panel, branching or GAE startup."""
     validate_config(config)
@@ -46,6 +52,9 @@ def diagnostics_schedule(generation):
 
 
 def validate_config(config):
+    if era_heads(config):
+        from .local_scoring_v3 import validate_config as validate_v3
+        return validate_v3(config)
     work=accepted_warmup(config)
     keys(config,tuple(DEFAULT)+(('minimum_fitting_steps',) if work else ()))
     require(config['mode'] in ('off','shadow','apply'),'Unknown local scoring mode')
@@ -82,7 +91,11 @@ def bundle_id(value):
     visit(value);return h.hexdigest()
 
 
-def head_identity():
+def head_identity(contract=None):
+    if contract is not None and contract not in (CONTRACT,ACCEPTED_CONTRACT):
+        from .local_scoring_v3 import CONTRACT as V3,head_identity as v3_identity
+        require(contract==V3,'Unknown local scoring companion contract')
+        return v3_identity()
     from brass_ai.learning import local_scoring_heads
     return hashlib.sha256(Path(local_scoring_heads.__file__).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
 
@@ -119,7 +132,25 @@ def verify_initialization(state,raw,config):
             'Initial auxiliary weights/identity differ')
 
 
+_ERA_COMPANION=None
+
+
 class Companion:
+    def __new__(cls,model=None,config=None,**kwargs):
+        # A 3.0.0 config builds the era-head companion; every call site stays the same.
+        if cls is Companion and isinstance(config,dict) and era_heads(config):
+            global _ERA_COMPANION
+            if _ERA_COMPANION is None:
+                from .local_scoring_v3 import build
+                _ERA_COMPANION=build(Companion)
+            return object.__new__(_ERA_COMPANION)
+        return object.__new__(cls)
+
+    def preservation_weights(self):
+        """Output name -> (owner weight, VP weight) for PPO's output preservation."""
+        w=self.config['loss_weights']
+        return {kind:(w[kind+'_owner'],w[kind+'_vp']) for kind in ('slots','links')}
+
     def __init__(self,model,config,*,raw=None,generation=0,adopting=False):
         self.config=copy.deepcopy(validate_config(config));self.generation=generation
         saved=(raw or {}).get('training',{}).get(KEY)

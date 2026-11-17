@@ -448,6 +448,8 @@ Each step is one change that can be adopted at a committed boundary.
 | 8 | Local-scoring weight 0.15, then 0.5; total-VP weight 0.5; then the Rail-end result in Canal rows (4.6, items 4 and 5) | 0 | Recipe revisions |
 | 9 | Ordinary games at half their cost; then 480–640 games per iteration | −26 s, or twice the games | Worker and protocol |
 
+**Status (2026-11-17):** steps 1, 5, 6, 7 and 8 are implemented for adoption from g3140 with `--value-revision`; see [G3140_VALUE_REVISION.md](G3140_VALUE_REVISION.md). One change from the table: the search-value head is not paused, so step 1 saves about 5–9 s less than estimated. Step 9's sampling half is implemented: the CPU worker plays each ordinary game, with the same RNG draws and the publisher's audits unchanged. The run stays at 320 games. Workers writing features straight into shared memory, and the publisher's quadratic decode, are still open; see [STEP9_ORDINARY_AUTOPLAY.md](STEP9_ORDINARY_AUTOPLAY.md).
+
 Steps 1, 5, 6, 7 and 9 do not depend on the others, so the value-loss steps 5 to 8 can go before the teacher steps 2 to 4. Step 3 needs step 2, step 4 needs step 3, and step 8 needs step 6. Step 5 is best taken before steps 6 to 8: with a sharper early stop, the share of kept intervals shows sooner whether a change to the loss helps or hurts.
 
 ## 9. Risks and what to watch

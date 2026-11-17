@@ -219,6 +219,16 @@ class Collector(Pipe):
                     'Forced preview binding differs')
             self.current = self.forced[0] if self.forced else reply['current']
 
+    def autoplay(self, settings, *, timeout):
+        """Build step 9: the worker plays this fresh game to its end (lab_autoplay)."""
+        require(self.token is not None and not self.forced and not self.acknowledgements and self.current is not None
+                and not self.current.get('terminal') and self.current.get('step') == 0, 'Autoplay needs a fresh game')
+        limit = self.timeout; self.timeout = max(limit, timeout)
+        try:reply = self.call('autoplay', token=self.token, **settings)
+        finally:self.timeout = limit
+        self.current = dict(terminal=True, token=self.token)
+        return reply
+
     def checkpoint(self, revision): return self.call('checkpoint', token=self.token, revision=revision)
     def release(self):
         if not self.retired:self.call('release')

@@ -116,6 +116,11 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
             if compare: compare(row, encoded, lane)
             lane.append(row, dict(kind='excluded-fork',metadata=meta))
             game.update(game_id=game_id+'/branch/'+seed,branch=copy.deepcopy(meta))
+        # Build step 9: the CPU worker plays the game with these seats' own RNG streams.
+        from .lab_autoplay import request as autoplay_request, play as autoplay
+        settings,_=autoplay_request(job,assigned,rngs,cotton,lane,continuation=continuation,compare=compare,
+            raw_export=raw_export,validation=validation,diagnostic=diagnostic_branch_probe)
+        if settings is not None:autoplay(lane,settings,rngs,timings)
         while not lane.current.get('terminal'):
             require(cancel is None or not cancel.is_set(), 'Collection canceled; incomplete family discarded')
             decision = lane.current['decision']; view, choices = decision['view'],decision['choices']
@@ -199,7 +204,8 @@ def collect_lane(root, executable, bootstrap, job, endpoint, execution, *, origi
                 origin_counts=continuation['counts'] if continuation is not None else [0]*4,
                 diagnostic_branch_probe=diagnostic_branch_probe,
                 branch_expected=forked and continuation is None,
-                actor_validated=validation is None or validation['semantic'],
+                # Autoplayed views never crossed BOUNDARY here; audited games are checked in full by the publisher.
+                actor_validated=settings is None and (validation is None or validation['semantic']),
                 timings=dict(timings,total_seconds=time.monotonic()-start),producer=producer),pages,features)
         record_hash=hashlib.sha256(b'[');evidence_hash=hashlib.sha256(b'[')
         t=time.monotonic()

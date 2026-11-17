@@ -73,6 +73,47 @@ def policy_logits(model, rows, *, batches=None, timings=None):
     return values
 
 
+class StagedRows:
+    """g3140 step 1: every teacher row's inputs and target on the training device once per iteration.
+
+    A step gathers its padded batch on the device instead of packing it on the host
+    and copying it over. The tensors equal collate()/target_tensor() exactly: zero
+    actions, False mask and zero target past each row's legal width. Each row is
+    admitted once (InputAudit), as collate would on its first use.
+    """
+    LIMIT_BYTES = 2 * 1024 ** 3
+
+    def __init__(self, rows, device, audit):
+        for r in rows: audit.check(r.encoded)
+        self.widths = [len(r.encoded.choice_ids) for r in rows]
+        offsets = np.cumsum([1] + self.widths[:-1])
+        actions = np.concatenate([np.zeros((1, rows[0].encoded.actions.shape[-1]), np.float32)] + [r.encoded.actions for r in rows])
+        targets = np.concatenate([np.zeros(1, np.float32)] + [np.asarray(r.label['target'], np.float32) for r in rows])
+        self.states = torch.as_tensor(np.stack([r.encoded.state for r in rows]), device=device)
+        self.actions = torch.as_tensor(np.ascontiguousarray(actions, dtype=np.float32), device=device)
+        self.targets = torch.as_tensor(targets, device=device)
+        self.offsets = torch.as_tensor(offsets, dtype=torch.int64, device=device)
+        self.lengths = torch.as_tensor(self.widths, dtype=torch.int64, device=device)
+        self.bytes = sum(t.numel() * t.element_size() for t in (self.states, self.actions, self.targets))
+
+    @classmethod
+    def build(cls, rows, device, audit):
+        # Duck-typed inputs, and any label narrower or wider than its encoded choices, keep the host collate path.
+        if not rows or any(not isinstance(getattr(r.encoded, 'state', None), np.ndarray)
+                           or not isinstance(getattr(r.encoded, 'actions', None), np.ndarray)
+                           or len(r.encoded.choice_ids) != len(r.label['target']) for r in rows): return None
+        size = sum(len(r.encoded.choice_ids) for r in rows) * rows[0].encoded.actions.shape[-1] * 4
+        return cls(rows, device, audit) if size <= cls.LIMIT_BYTES else None
+
+    def batch(self, indices):
+        width = max(self.widths[i] for i in indices)
+        selected = torch.as_tensor(indices, dtype=torch.int64, device=self.states.device)
+        position = torch.arange(width, device=selected.device)
+        mask = position[None, :] < self.lengths[selected][:, None]
+        index = torch.where(mask, self.offsets[selected][:, None] + position[None, :], torch.zeros_like(position)[None, :])
+        return self.states[selected], self.actions[index], mask, self.targets[index]
+
+
 def kl(p, q):
     p, q = np.asarray(p, dtype=np.float64), np.asarray(q, dtype=np.float64)
     use = p > 0
@@ -183,6 +224,7 @@ class TeacherTerm:
                 self.beta = self.adaptive['beta']
         self.beta_used = 1. if self.mode == 'shadow' else self.beta
         self.rows = []; self.ages = []; self.staleness = {}; self.steps = []; self.seconds = 0.
+        self.staged = None; self.staging = dict(staged=False, bytes=0, seconds=0.)
         from .batch_cache import InputAudit
         self.input_audit = InputAudit()
         self.presentations = Counter(); self.used = set(); self.improvement_by_phase = {}
@@ -249,8 +291,17 @@ class TeacherTerm:
                 # One padded forward per step, however wide the rows. Splitting wide
                 # steps into 32k-cell chunks (g2400) repeated the launch-bound
                 # encoder forward/backward per chunk: 20-30 s per PPO pass, not 1-3 s.
-                logits = forward_policy(model, rows, audit=self.input_audit).float()
-                target = target_tensor(rows, logits)
+                if self.staged is None and not self.staging.get('fallback'):
+                    staged_at = time.perf_counter()
+                    self.staged = StagedRows.build(self.rows, next(model.parameters()).device, self.input_audit)
+                    self.staging = dict(staged=self.staged is not None, fallback=self.staged is None,
+                        bytes=self.staged.bytes if self.staged else 0, seconds=time.perf_counter() - staged_at)
+                if self.staged is not None:
+                    states, actions, mask, target = self.staged.batch(indices)
+                    logits = _score_policy(model, states, actions, mask).float()
+                else:
+                    logits = forward_policy(model, rows, audit=self.input_audit).float()
+                    target = target_tensor(rows, logits)
                 logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
                 loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
@@ -370,5 +421,5 @@ class TeacherTerm:
             distinct_by_age=dict(Counter(str(self.ages[i]) for i in self.used)),
             distinct_by_phase=dict(Counter(self.rows[i].label['phase'] for i in self.used)),
             first_loss=self.steps[0]['loss'] if self.steps else None, last_loss=self.steps[-1]['loss'] if self.steps else None,
-            outside_share_warning=self.outside >= 3, term_seconds=self.seconds,
+            outside_share_warning=self.outside >= 3, term_seconds=self.seconds, staged_rows=copy.deepcopy(self.staging),
             scope='Policy term before PPO clipping/Adam/KL guard; shadow never applies gradients')

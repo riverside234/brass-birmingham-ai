@@ -294,7 +294,7 @@ def slim_checkpoint(root,run,entry,existing=None,*,preserve_auxiliary=False):
     if companion is not None:
         from .local_scoring_auxiliary import bundle_id,head_identity
         require(companion['identity']==bundle_id({k:v for k,v in companion.items() if k!='identity'})
-            and companion['head_sha256']==head_identity(),'Population companion integrity differs')
+            and companion['head_sha256']==head_identity(companion.get('contract')),'Population companion integrity differs')
         auxiliary=dict(auxiliary_heads=dict(contract='saved-companion-heads/1.0.0',
             identity=companion['identity'],generation=companion['generation'],model_id=raw['model_id'],
             head_sha256=companion['head_sha256']))
@@ -492,7 +492,7 @@ def plan(root,run,config=RETENTION,*,_hash_entries=True):
         protected=[dict(path=p.relative_to(run).as_posix(),reason=reasons.get(p,'dependency')) for p in sorted(keep) if p.exists()])
 
 
-def prune(root,run,config=RETENTION,*,apply=False):
+def prune(root,run,config=RETENTION,*,apply=False,defer_purge=False):
     from .retention_digests import PlanDigests,hash_batch
     # In apply mode, hash as part of the journaled move rather than reading
     # every candidate twice. Dry runs still return the complete digest plan.
@@ -545,12 +545,15 @@ def prune(root,run,config=RETENTION,*,apply=False):
     if report_path.exists() and any('development' in e['reason'] for e in decision['entries']):
         report=read(report_path);report.update(raw_records_pruned=True,promotion_eligible=False)
         report['retention_manifest']=manifest.relative_to(root).as_posix();write_json(report_path,report)
-    moved=time.perf_counter();result=purge(root,run,config,automatic=True)
+    moved=time.perf_counter()
+    # g3140 step 1: the caller may run the final purge (rehash and delete) beside the next iteration.
+    result=(dict(permanently_deleted_files=None,permanently_deleted_bytes=None,rescued_dependencies=None,purge='background')
+            if defer_purge else purge(root,run,config,automatic=True))
     return dict(decision,manifest=str(manifest),**result,hash_reuse=digests.report(archived_bytes=sum(e['bytes'] for e in archived)),timings=dict(plan_seconds=planned-began,
         archive_move_seconds=moved-planned,history_seconds=archived_at-planned,purge_seconds=time.perf_counter()-moved))
 
 
-def scheduled_prune(root,run,config=RETENTION):
+def scheduled_prune(root,run,config=RETENTION,*,background=None):
     """General retention only; PPG cache expiry remains per-commit elsewhere.
 
     The small receipt survives process restarts. Publish only after successful
@@ -567,12 +570,62 @@ def scheduled_prune(root,run,config=RETENTION):
         next_cleanup_generation=((generation//interval+1)*interval if last is None else last+interval),
         reason='not_due' if config['enabled'] else 'disabled')
     if not config['enabled'] or not due:return result
-    cleanup=prune(root,run,config,apply=True)
+    cleanup=prune(root,run,config,apply=True,defer_purge=background is not None)
     write_json(receipt,dict(format='automatic-retention/1.0.0',generation=generation,every_iterations=interval))
+    result['purge']=cleanup.get('purge','inline')
+    if result['purge']=='background':background.start(root,run,config,generation)
     result.update(performed=True,last_cleanup_generation=generation,next_cleanup_generation=generation+interval,reason='due')
     result.update({k:cleanup[k] for k in ('reclaimable_bytes','permanently_deleted_files','permanently_deleted_bytes','timings')})
     if 'hash_reuse' in cleanup:result['hash_reuse']=cleanup['hash_reuse']
     return result
+
+
+class BackgroundPurge:
+    """g3140 step 1: the final quarantine purge runs beside the next iteration.
+
+    The purge keeps every check: a fresh reference scan (pins are rescued, never
+    deleted) and a rehash of each quarantined file before it is unlinked. Only the
+    timing moves. The trainer joins it before its next state commit, before the
+    next cleanup, and before it releases the run lock. A purge interrupted by a
+    crash resumes from its journal at the next cleanup, as before. A failure is
+    raised at the join.
+    """
+    def __init__(self):
+        self.thread=None;self.result=None;self.error=None
+
+    def __enter__(self):return self
+
+    def __exit__(self,kind,value,trace):
+        try:self.join()
+        except BaseException:
+            if kind is None:raise
+        return False
+
+    def start(self,root,run,config,generation):
+        require(self.thread is None,'A cleanup purge is already running')
+        import threading
+        def work():
+            began=time.perf_counter()
+            for attempt in range(3):
+                try:
+                    self.result=dict(purge(root,run,config,automatic=True),generation=generation,
+                        attempts=attempt+1,seconds=time.perf_counter()-began)
+                    return
+                except (FileNotFoundError,json.JSONDecodeError) as error:
+                    # A control file replaced mid-read: the journal makes a retry safe.
+                    if attempt==2:self.error=error;return
+                    time.sleep(2.)
+                except BaseException as error:
+                    self.error=error;return
+        self.thread=threading.Thread(target=work,name='retention-purge',daemon=True)
+        self.thread.start()
+
+    def join(self):
+        if self.thread is None:return None
+        self.thread.join();self.thread=None
+        error,self.error=self.error,None;result,self.result=self.result,None
+        if error is not None:raise RuntimeError('Background cleanup purge failed; rerun to resume it from its journal') from error
+        return result
 
 
 def settled(data):

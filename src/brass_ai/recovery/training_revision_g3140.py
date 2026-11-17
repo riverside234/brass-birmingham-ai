@@ -1,0 +1,184 @@
+"""g3140 value-phase revision (ai-research/TRAINING_IMPROVEMENT_PLAN_G2910.md, build steps 1, 5-8).
+
+Each item is adopted at a committed boundary with --value-revision and persists.
+Items only move forward; the value phase's cap, beta floor, schedule and strict
+held-out early stop are unchanged, and its check always scores the four main
+terms on real outcomes with the original weights.
+
+time        step 1: full-buffer train-metric scans every tenth iteration (held-out
+            evidence decides the utility receipt in between). The search-value head
+            keeps training (user decision, g3140): it is not paused.
+validation  step 5: the early stop validates on a quarter of the new games, which
+            train in the next iteration; the permanent 5% hold-out goes.
+heads       step 6: era-separated local-scoring heads with a per-entity trunk slice
+            (local_scoring_v3), fresh at this generation; weight .05.
+targets     step 7: win and utility heads train on half the outcome and half the
+            lambda .95 bootstrapped return from the critic frozen before PPO.
+weight=X    step 8: local-scoring weight .15, then .5 (both eras, owner and VP).
+vp          step 8: total-VP loss weight .1 -> .5 in training (the check keeps .1).
+rail-end    step 8: Canal rows also predict the Rail-end map, at half the Canal weight.
+
+GPU-staged teacher rows and the background cleanup purge (also step 1) are
+code changes with no setting: they change neither numbers nor recipe.
+"""
+import copy
+
+from brass_ai.learning.contracts import keys, require
+
+KEY = 'value_revision'
+CONTRACT = 'value-revision-g3140/1.0.0'
+OFF = dict(contract=CONTRACT, train_metrics_every=1, validation=None, bootstrap=None, value_weights=dict(rank=.25, vp=.1))
+TIME = dict(train_metrics_every=10)
+VALIDATION = dict(contract='new-game-validation/1.0.0', fraction=.25)
+BOOTSTRAP = dict(contract='blended-critic-targets/1.0.0', lam=.95, share=.5)
+VP_WEIGHT = .5
+ITEMS = ('time', 'validation', 'heads', 'targets', 'weight=0.15', 'weight=0.5', 'vp', 'rail-end')
+
+
+def validate(block):
+    keys(block, tuple(OFF))
+    require(block['contract'] == CONTRACT and block['train_metrics_every'] in (1, TIME['train_metrics_every'])
+            and block['validation'] in (None, VALIDATION)
+            and block['bootstrap'] in (None, BOOTSTRAP)
+            and block['value_weights'] in (OFF['value_weights'], dict(OFF['value_weights'], vp=VP_WEIGHT)),
+            'Invalid g3140 value revision')
+    return block
+
+
+def block(config):
+    return validate(config[KEY]) if KEY in config else OFF
+
+
+def applied(config): return KEY in config
+
+
+def parse(text):
+    items = tuple(x.strip() for x in text.split(',') if x.strip())
+    require(items and all(x in ITEMS for x in items) and len(set(items)) == len(items),
+            'Use --value-revision with items from: ' + ', '.join(ITEMS))
+    return items
+
+
+def configure(config, items, generation):
+    """The recipe with the requested items adopted at committed generation `generation`."""
+    from . import local_scoring_v3 as v3
+    from .local_scoring_auxiliary import KEY as LOCAL, accepted_warmup
+    result = copy.deepcopy(config)
+    revision = copy.deepcopy(block(result))
+    for item in items:
+        if item == 'time':
+            revision.update(TIME)
+        elif item == 'validation':
+            revision['validation'] = copy.deepcopy(VALIDATION)
+        elif item == 'targets':
+            from .dcpg_config import enabled as preserves_outputs
+            require(preserves_outputs(result['update']), 'Blended targets read the critic PPO freezes before its update')
+            revision['bootstrap'] = copy.deepcopy(BOOTSTRAP)
+        elif item == 'vp':
+            revision['value_weights'] = dict(revision['value_weights'], vp=VP_WEIGHT)
+        elif item == 'heads':
+            old = result.get(LOCAL)
+            if v3.is_v3(old): continue  # adopted earlier
+            require(old is not None and accepted_warmup(old) and old['mode'] == 'apply',
+                    'Era heads replace the applied 2.0.0 local-scoring companion')
+            result[LOCAL] = v3.default(generation, old, mode=old['mode'])
+        else:
+            local = result.get(LOCAL)
+            require(v3.is_v3(local), item + ' needs the era heads (--value-revision heads)')
+            weights = local['weights']
+            if item == 'rail-end':
+                weights['rail_end'] = weights['canal'] / 2
+            else:
+                value = float(item.split('=')[1])
+                require(v3.LADDER.index(value) >= v3.LADDER.index(weights['canal']), 'The local-scoring weight only moves up')
+                weights.update(canal=value, rail=value, rail_end=value / 2 if weights['rail_end'] else 0.)
+            v3.validate_config(local)
+    result[KEY] = validate(revision)
+    return result
+
+
+def project(old, new):
+    """`old` with the new revision and local-scoring settings if `new` only moves forward; else None."""
+    from . import local_scoring_v3 as v3
+    from .local_scoring_auxiliary import KEY as LOCAL, accepted_warmup
+    if KEY not in new and KEY not in old: return old
+    if KEY in old and KEY not in new: return None
+    try:
+        a, b = block(old), block(new)
+    except (ValueError, KeyError, TypeError): return None
+    forward = ((a['train_metrics_every'], b['train_metrics_every']) in ((1, 1), (1, 10), (10, 10))
+               and not (a['validation'] and not b['validation']) and not (a['bootstrap'] and not b['bootstrap'])
+               and not (a['value_weights']['vp'] > b['value_weights']['vp']))
+    if not forward: return None
+    la, lb = old.get(LOCAL), new.get(LOCAL)
+    if la != lb:
+        if la is None or lb is None: return None
+        try:
+            if v3.is_v3(lb) and not v3.is_v3(la):
+                expected = v3.default(lb['replacement']['generation'], la, mode=la['mode'])
+                ok = accepted_warmup(la) and la['mode'] == 'apply' and (lb == expected or v3.config_forward(expected, lb))
+            else: ok = v3.config_forward(la, lb)
+        except (ValueError, KeyError, TypeError): return None
+        if not ok: return None
+    result = copy.deepcopy(old)
+    result[KEY] = copy.deepcopy(new[KEY])
+    if lb is not None: result[LOCAL] = copy.deepcopy(lb)
+    return result
+
+
+# ---- settings read by the training code --------------------------------------------------------
+
+def train_metrics_due(config, generation):
+    return generation % block(config)['train_metrics_every'] == 0
+
+
+def validation_fraction(config):
+    v = block(config)['validation']
+    return v['fraction'] if v else None
+
+
+def bootstrap(config):
+    return copy.deepcopy(block(config)['bootstrap'])
+
+
+def value_weights(config):
+    w = block(config)['value_weights']
+    return (w['rank'], w['vp'])
+
+
+def previous(config):
+    """The recipe before any g3140 item: the revision key dropped and the replaced 2.0.0 companion restored."""
+    from . import local_scoring_v3 as v3
+    from .local_scoring_auxiliary import KEY as LOCAL
+    if KEY not in config and not v3.is_v3(config.get(LOCAL)): return config
+    result = copy.deepcopy(config); result.pop(KEY, None)
+    if v3.is_v3(result.get(LOCAL)):
+        result[LOCAL] = copy.deepcopy(result[LOCAL]['replacement']['previous'])
+    return result
+
+
+def changed(before, after):
+    from .local_scoring_auxiliary import KEY as LOCAL
+    return (before.get(KEY), before.get(LOCAL)) != (after.get(KEY), after.get(LOCAL))
+
+
+def tag(config):
+    """A filename tag naming every adopted item, so each adoption writes its own recipe file."""
+    from . import local_scoring_v3 as v3
+    from .local_scoring_auxiliary import KEY as LOCAL
+    b = block(config); parts = []
+    if b['train_metrics_every'] != 1: parts.append('scan10')
+    if b['validation']: parts.append('newval25')
+    local = config.get(LOCAL)
+    if v3.is_v3(local):
+        parts.append('eraheads-w' + str(local['weights']['canal']).replace('.', ''))
+        if local['weights']['rail_end']: parts.append('railend')
+    if b['bootstrap']: parts.append('blend50')
+    if b['value_weights']['vp'] != OFF['value_weights']['vp']: parts.append('vp05')
+    return '-'.join(parts) or 'none'
+
+
+def summary(config):
+    from .local_scoring_auxiliary import KEY as LOCAL
+    local = config.get(LOCAL, {})
+    return dict(block(config), local_scoring=dict(contract=local.get('contract'), weights=local.get('weights')))

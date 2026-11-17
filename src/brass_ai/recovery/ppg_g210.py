@@ -485,8 +485,16 @@ def fit(phases,model,preparation_pool):
     from .ppo_preparation import phase_preparation
     require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
     began=time.perf_counter();c=phases.options['value_phase'];rate=getattr(phases,'ppo_peak',None)
+    from .training_revision_g3140 import bootstrap as bootstrap_settings
+    blend=bootstrap_settings(phases.config);boot=boot_report=None
+    if blend is not None:
+        from .critic_bootstrap import lambda_returns,report as bootstrap_report
+        require(getattr(phases,'frozen_outputs',None) is not None,'Blended critic targets need the outputs PPO froze')
+        boot=lambda_returns(phases.critic_dataset,phases.frozen_outputs,blend['lam'])
+        boot_report=dict(bootstrap_report(phases.critic_dataset,boot),**blend)
     cache=phases.buffer.stage(phases.critic_dataset,phases.train_ids,phases.heldout_ids,phases.actor_ids,
-        phases.collection_source,model,phases.split['selection'])
+        phases.collection_source,model,phases.split['selection'],bootstrap=boot)
+    if boot_report is not None:cache['bootstrap']=boot_report
     staged=time.perf_counter()
     clock=None
     if two_iteration(c):
@@ -521,7 +529,16 @@ def fit(phases,model,preparation_pool):
         directory=phases.root/'artifacts',enabled=True)
     with phases.buffer.datasets(phases.dataset.device,policy=False) as (ds,_,receipts), prepare as preparation:
         indices=[];validation=[];validation_support=[];offset=0
-        for r,part in zip(receipts,ds.data.parts):
+        from .training_revision_g3140 import validation_fraction,value_weights as revised_weights,train_metrics_due
+        rolling=validation_fraction(phases.config) is not None
+        require(not rolling or receipts[0]['generation']==phases.state['generation']+1,'New-game validation needs the current age first')
+        for age,(r,part) in enumerate(zip(receipts,ds.data.parts)):
+            if rolling and age:
+                # g3140 step 5: an earlier age's validation games train now; only new games validate.
+                indices.extend(range(offset,offset+r['rows']))
+                validation_support.append(dict(generation=r['generation'],rows=0,games=0,
+                    trained_validation_games=len(r['holdout_selection']['heldout_games'])))
+                offset+=r['rows'];continue
             held=set(r['holdout_selection']['heldout_games'])
             membership=np.array([g not in held for g in r['game_ids']],dtype=bool)
             indices.extend((np.flatnonzero(membership[part.array['game']])+offset).tolist())
@@ -548,7 +565,10 @@ def fit(phases,model,preparation_pool):
             value_dataset=ds,value_train_ids=indices,validation_dataset=ds if pooled else phases.critic_dataset,
             **(dict(gate_dataset=phases.critic_dataset,gate_ids=phases.heldout_ids) if pooled else {}),
             current_count=receipts[0]['rows'],dropout=(phases.state['generation'],phases.config['seat_descriptors']['dropout_games']) if phases.critic_state else None,
-            companion=companion,preparation=preparation,post_fit=getattr(phases,'post_value_fit',None))
+            companion=companion,preparation=preparation,post_fit=getattr(phases,'post_value_fit',None),
+            bootstrap_share=blend['share'] if blend is not None else 0.,loss_weights=revised_weights(phases.config),
+            train_metrics=train_metrics_due(phases.config,phases.state['generation']+1))
+        if blend is not None:report['bootstrap_ages']=ds.bootstrap.available()
         if getattr(phases,'diversity',None) is not None:
             phases.diversity.report['intrinsic_fit']=companion.report()
         report['cpu_preparation']=preparation.report() if preparation is not None else dict(workers=0)

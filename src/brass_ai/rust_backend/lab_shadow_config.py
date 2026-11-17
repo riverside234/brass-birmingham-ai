@@ -32,8 +32,9 @@ def is_shadow(config):
     from brass_ai.recovery.teacher_phase_config import without_utility_qualification
     from brass_ai.recovery.ordinary_cotton import previous as previous_tables
     from brass_ai.recovery.training_revision_g2090 import previous_opening
+    from brass_ai.recovery.training_revision_g3140 import previous as before_value_revision
     try:
-        config=previous_tables(previous_opening(recipe(config)))
+        config=previous_tables(previous_opening(before_value_revision(recipe(config))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -103,6 +104,10 @@ def signature_transition(before,after):
         if g2880.applied(old):return False
         try:old=g2880.configure(old)
         except (ValueError, KeyError, TypeError):return False
+    # g3140 value revision: its items and the local-scoring weight ladder only move forward.
+    from brass_ai.recovery import training_revision_g3140 as g3140
+    old=g3140.project(old,new)
+    if old is None:return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False
     from brass_ai.recovery.ordinary_cotton import KEY as COTTON, LIMITED, NETWORK, RAIL_NETWORK

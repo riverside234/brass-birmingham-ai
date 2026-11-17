@@ -58,7 +58,11 @@ def prepare(root,run,state,raw,config,*,reviewed=False):
     if KEY not in config:
         require(saved is None,'Adopted companion must be explicitly retained or disabled')
         return raw,None,False
-    c=validate_config(config[KEY]);generation=state['iteration'];origin=c['adoption']
+    c=validate_config(config[KEY]);generation=state['iteration']
+    from .local_scoring_v3 import is_v3
+    # 3.0.0 replaces its 2.0.0 heads itself, at its committed generation (local_scoring_v3).
+    if is_v3(c):return raw,None,False
+    origin=c['adoption']
     if saved is not None:return raw,None,False
     if generation==0 and origin is None:return raw,None,False
     require(origin is not None and origin['generation']==generation and c['mode']!='off','Missing active local scoring bundle')

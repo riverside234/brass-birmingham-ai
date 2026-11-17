@@ -121,6 +121,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         help='Use opening temperature 1.3 for three actions in PPO and teacher games, long C_scale=0.20 on all '
              'teacher tables, a .25 PPG beta floor and one-epoch ordinary PPG. Clears both teacher search buffers '
              'and re-measures beta with teaching on.')
+    parser.add_argument('--value-revision', metavar='ITEMS',
+        help='Adopt g3140 value-phase revision items at this committed generation, comma-separated: '
+             'time, validation, heads, targets, weight=0.15, weight=0.5, vp, rail-end. '
+             'Items persist and only move forward (training_revision_g3140).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -177,6 +181,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         print(f'Finishing interrupted iteration g{generation}->g{generation+1} under its own recipe first', flush=True)
         recovery = copy.copy(args); recovery.inference = 'cpu'
         recovery.teacher_fast = PREVIOUS_TEACHER_FAST
+        recovery.value_revision = None  # an interrupted iteration finishes under its own recipe
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

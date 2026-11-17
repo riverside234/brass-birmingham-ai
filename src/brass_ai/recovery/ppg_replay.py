@@ -19,7 +19,7 @@ from . import ppg_sampling
 
 CONTRACT='ppg-eight-disk-buffer/1.0.0'
 OWNER=dict(contract=CONTRACT,purpose='sealed MC critic rows and selected complete policy inputs')
-FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|meta\.npy|games\.npy|state-floats\.npy|state-bits\.npy|critic-actions\.npy|policy-actions\.npy|local-scoring\.json|domino\.json|json)(\.partial|\.tmp)?$')
+FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|meta\.npy|games\.npy|state-floats\.npy|state-bits\.npy|critic-actions\.npy|policy-actions\.npy|local-scoring\.json|domino\.json|bootstrap\.npy|json)(\.partial|\.tmp)?$')
 
 
 class Rows(DiskRows):
@@ -29,7 +29,7 @@ class Rows(DiskRows):
             from .ppg_packing import CriticArray
             self.array=CriticArray(lambda ext:path.with_name(path.name.replace('critic.npy',ext)),receipt)
         else:self.array=np.load(path,mmap_mode='r',allow_pickle=False)
-        self.local={};self.domino={}
+        self.local={};self.domino={};self.bootstrap=None
         try:
             if 'domino.json' in receipt['files']:
                 from .domino_config import CONTRACT as DOMINO_CONTRACT
@@ -55,8 +55,15 @@ class Rows(DiskRows):
                     set(value['games'])<=set(receipt['game_ids']),'Local scoring sidecar input/holdout binding differs')
                 self.local={g:unpack(e) for g,e in value['games'].items()}
                 require(all(g==e['game_id'] and e['sha256']==seal(e) for g,e in self.local.items()),'Invalid cached local scoring envelope')
+            if 'bootstrap.npy' in receipt['files']:
+                self.bootstrap=np.load(path.with_name(path.name.replace('critic.npy','bootstrap.npy')),mmap_mode='r',allow_pickle=False)
+                require(self.bootstrap.dtype==np.dtype('<f4') and self.bootstrap.shape==(receipt['rows'],2,4),'Invalid bootstrap target layout')
             require(self.array.dtype==row_dtype() and self.array.shape==(receipt['rows'],),'Invalid eight-age critic layout')
         except BaseException:self.close();raise
+
+    def close(self):
+        if getattr(self,'bootstrap',None) is not None and getattr(self.bootstrap,'_mmap',None) is not None:self.bootstrap._mmap.close()
+        super().close()
 
     def field(self,i,field):
         value=super().field(i,field)
@@ -95,6 +102,26 @@ class Joined:
         return result
 
 
+class BootstrapColumn:
+    """g3140 step 7: [n,2,4] lambda-return win/utility targets; an age without them uses its outcomes."""
+    def __init__(self,data,device):self.data,self.device=data,device
+    def __getitem__(self,indices):
+        if isinstance(indices,torch.Tensor):indices=indices.detach().cpu().numpy()
+        indices=np.asarray(indices,dtype=np.int64)
+        parts=np.searchsorted(self.data.ends,indices,side='right')
+        result=np.empty((len(indices),2,4),dtype=np.float32)
+        for p in np.unique(parts):
+            selected=np.flatnonzero(parts==p);local=indices[selected]-(self.data.ends[p-1] if p else 0)
+            part=self.data.parts[p]
+            if part.bootstrap is not None:result[selected]=part.bootstrap[local]
+            else:
+                result[selected,0]=part.array['targets'][local][:,0];result[selected,1]=part.array['utility'][local]
+        return torch.as_tensor(result,device=self.device)
+
+    def available(self):
+        return [p.bootstrap is not None for p in self.data.parts]
+
+
 class Column:
     """Gather only a minibatch of small metadata onto the training device."""
     def __init__(self,data,name,device,head=None):self.data,self.name,self.device,self.head=data,name,device,head
@@ -125,6 +152,7 @@ class CriticDataset(Dataset):
         self.seats=Column(self.data,'seat',device);self.descriptors=Column(self.data,'descriptors',device)
         self.utility=Column(self.data,'utility',device);self.remaining=Column(self.data,'remaining',device)
         self.targets=tuple(Column(self.data,'targets',device,j) for j in range(3))
+        self.bootstrap=BootstrapColumn(self.data,device)
         self.roles=[('learner','snapshot')[int(x)] for p in rows for x in p.array['role']]
         self.tables=[('selfplay','historical','legacy')[int(x)] for p in rows for x in p.array['table']]
 
@@ -159,6 +187,13 @@ class CriticDataset(Dataset):
             revision=context['revision'] if target is not None else context.get('revision',int(i))
             result.append((target,key,(game,era,int(revision),int(seat)),m))
         return result
+
+    def scoring_envelopes(self,indices):
+        """Each row's sealed whole-game scoring envelope (None without labels)."""
+        indices=np.asarray(indices,dtype=np.int64)
+        owners=np.searchsorted(self.data.ends,indices,side='right')
+        games=self.data.column(indices,'game')
+        return [self.data.parts[p].local.get(self.data.parts[p].receipt['game_ids'][g]) for p,g in zip(owners,games)]
 
     def diversity_metadata(self,indices):
         """Only sealed identity columns; packed state/action arrays stay untouched."""
@@ -232,6 +267,10 @@ class Buffer:
 
     def path(self,generation,ext):return safe(self.directory,self.directory/f'generation-{generation:06d}.{ext}')
 
+    def holdout_fraction(self):
+        from .training_revision_g3140 import validation_fraction
+        return validation_fraction(self.config) or self.config['value_phase']['holdout_fraction']
+
     def verify(self,r):
         from .critic_holdout import validate_selection
         from .ppg_packing import CONTRACT as PACKED,EXTENSIONS,validate
@@ -239,10 +278,13 @@ class Buffer:
         require((r.get('contract')==CONTRACT or (packed and self.window==16)) and r.get('reward_id')==self.reward_id
             and r.get('compatibility')==digest(compatibility()) and type(r.get('rows')) is int and r['rows']>0,
             'Incompatible eight-age PPG receipt')
-        validate_selection(r['holdout_selection'],self.config['value_phase']['holdout'],self.config['value_phase']['holdout_fraction'])
+        # An age staged before the g3140 new-game validation keeps its own 5% selection.
+        fraction=r['holdout_selection'].get('fraction')
+        require(fraction in (self.config['value_phase']['holdout_fraction'],self.holdout_fraction()),'PPG cache holdout fraction differs')
+        validate_selection(r['holdout_selection'],self.config['value_phase']['holdout'],fraction)
         require(set(r['game_ids'])<=set(r['holdout_selection']['games']),'Unknown PPG cached game')
         expected=set(EXTENSIONS) if packed else {'critic.npy','actions.npy'}
-        require(set(r['files'])-{'local-scoring.json','domino.json'}==expected,'Missing/unknown PPG cache file type')
+        require(set(r['files'])-{'local-scoring.json','domino.json','bootstrap.npy'}==expected,'Missing/unknown PPG cache file type')
         require(('packing' in r)==packed,'PPG packing receipt contract differs')
         if packed:
             validate(r['packing'])
@@ -262,10 +304,10 @@ class Buffer:
         from .value_buffer import DiskBuffer
         return DiskBuffer.source(self,records,policy_id,kinds,model_id)
 
-    def stage(self,dataset,train_ids,heldout_ids,actor_ids,source,model,selection):
+    def stage(self,dataset,train_ids,heldout_ids,actor_ids,source,model,selection,*,bootstrap=None):
         require(self.pending is None and state_value_model(model),'Eight-age PPG needs an unstaged state-only critic')
         from .critic_holdout import validate_selection
-        validate_selection(selection,self.config['value_phase']['holdout'],self.config['value_phase']['holdout_fraction'])
+        validate_selection(selection,self.config['value_phase']['holdout'],self.holdout_fraction())
         ids=sorted(set(train_ids)|set(heldout_ids));index={i:j for j,i in enumerate(ids)}
         require(set(train_ids).isdisjoint(heldout_ids) and ids,'Invalid PPG train/holdout partition')
         held=set(selection['heldout_games']);held_ids=set(heldout_ids)
@@ -345,6 +387,14 @@ class Buffer:
             checksum=critic_checksum if ext=='critic.npy' and critic_checksum is not None else sha(path)
             files[ext]=dict(bytes=path.stat().st_size,sha256=checksum)
         serialization['data_hash_seconds']=critic_hash_seconds+(time.perf_counter()-hash_began)
+        if bootstrap is not None:
+            # g3140 step 7: lambda-return targets in cache row order; older ages keep their own.
+            values=np.ascontiguousarray(np.asarray(bootstrap,dtype='<f4')[ids])
+            require(values.shape==(len(ids),2,4) and np.isfinite(values).all(),'Invalid bootstrap targets')
+            part=self.path(generation,'bootstrap.npy.partial')
+            with open(part,'wb') as stream:np.save(stream,values,allow_pickle=False)
+            part.replace(self.path(generation,'bootstrap.npy'))
+            p=self.path(generation,'bootstrap.npy');files['bootstrap.npy']=dict(bytes=p.stat().st_size,sha256=sha(p))
         from .domino_config import enabled,CONTRACT as DOMINO_CONTRACT
         if enabled(self.config):
             from .domino_sampling import validate_assignment,learner_row

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "734c709512a95d5860dcc2294635737a4bf1931f0d1d96c322d3c496cea7a6a0",
+  "execution_implementation": "759cedbc268c17fbd44b82693b437a207db4a151c791886d5a594d7440cb1ebe",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -849,6 +849,11 @@
       "implementation": "d7305baa5e6e3de54c22bcdc7136c7f76d5385c7bcd48973d87b2a62aa7131fd",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "b58d0401bff7aaebf1c2da74b193511f2c380c2adb63c880e8adcf53b15d423b"
+    },
+    {
+      "implementation": "734c709512a95d5860dcc2294635737a4bf1931f0d1d96c322d3c496cea7a6a0",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "ebd5b626956f55702b83422a6277ea35c15be52b2b596ce822b2a559d46cbdc2"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1134,6 +1139,14 @@
   },
   "g2880_search_value_lambda_095": {
     "scope": "Search-value lambda-returns use lambda .95 (was .8) from g2880 (training_revision_g2880, --update-search-lambda). The stage machine accepts only the .8 -> .95 change. Each fit recomputes buffered games' targets from stored utilities and bootstraps, so no buffer retires; held-out games score realized utility-to-go. No collection, search, label or ordinary PPO change.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3140_value_revision": {
+    "scope": "Value-phase revision items adopted with --value-revision (training_revision_g3140): train scans every tenth generation; early stop on a quarter of the new games, which train next iteration; era-separated local-scoring heads (3.0.0) replacing 2.0.0 at their committed generation; half outcome, half lambda .95 return for the win and utility heads in training; local-scoring weight ladder .05/.15/.5, total-VP training weight .5 and a Rail-end target. The held-out check, KL cap and beta floor are unchanged. Code-only: GPU-staged teacher label rows (identical tensors) and the cleanup purge run beside the next iteration. No collection, search, label or ordinary PPO change; the search-value head keeps training.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3140_ordinary_autoplay": {
+    "scope": "Build step 9: the CPU collector plays each eligible ordinary game in one call (lab_autoplay, ordinary-autoplay/1.0.0, lab-native-cpu/src/cpu_autoplay.rs). It replays NeuralPolicy.sample_training (exploration v3, opening temperature, ordinary cotton recipes 1.0.0-4.0.0) with each seat's own Python Mersenne Twister state, handed over and returned once per game, and appends every row through the unchanged append_compact path. Branching, non-neural or non-v3 seats, GPU inference, strict validation and diagnostic hooks keep the Python loop; BRASS_ORDINARY_AUTOPLAY=0 keeps every game on it. Autoplayed views skip the actor-side BOUNDARY admission, so audited games are checked in full by the publisher, which also replays the draws of cotton seats on every game and of all seats on audited games. Same jobs, RNG streams, rows, features and seals; no recipe, reward, search or PPO change.",
     "qualified_implementation_unchanged": true
   }
 }

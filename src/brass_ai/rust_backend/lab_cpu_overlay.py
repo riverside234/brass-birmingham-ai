@@ -22,7 +22,7 @@ PATCHES = {
          '[dependencies]\n' + ORT + '\nbrass-ai-core = { path = "../native/brass-ai-core" }\n'),
     ),
     'src/lib.rs': (
-        ('pub mod scoring;\n', 'pub mod cpu_cotton;\npub mod cpu_eval;\npub mod scoring;\n'),
+        ('pub mod scoring;\n', 'pub mod cpu_autoplay;\npub mod cpu_cotton;\npub mod cpu_eval;\npub mod scoring;\n'),
         ('impl Lane {\n    pub fn new(',
          'impl Lane {\n'
          '    /// Tensors of the last `feature_arrays` call, for in-process inference.\n'
@@ -37,7 +37,8 @@ PATCHES = {
          '    let mut cpu = brass_lab_collector::cpu_eval::Cache::default();\n'),
         ('"performance_wire":"ordinary-collector-fast/1","export_pages":"ordinary-export-pages/1"}),',
          '"performance_wire":"ordinary-collector-fast/1","export_pages":"ordinary-export-pages/1",\n'
-         '                        "cpu_inference":brass_lab_collector::cpu_eval::CONTRACT}),'),
+         '                        "cpu_inference":brass_lab_collector::cpu_eval::CONTRACT,\n'
+         '                        "autoplay":brass_lab_collector::cpu_autoplay::CONTRACT}),'),
         ('                "checkpoint" => {\n',
          '                "configure_cpu" => cpu.configure(&r),\n'
          '                "load_model" => cpu.load(&r),\n'
@@ -55,6 +56,11 @@ PATCHES = {
          '                    meta["forward_ns"] = json!(forward_ns);\n'
          '                    arrays = Some(vec![bytes]);\n'
          '                    Ok(meta)\n'
+         '                }\n'
+         '                // Build step 9: a whole ordinary game in one call, sampler included.\n'
+         '                "autoplay" => {\n'
+         '                    let l = lane.as_mut().ok_or("missing lane")?;\n'
+         '                    l.autoplay(token, &r, &mut cpu)\n'
          '                }\n'
          '                "checkpoint" => {\n'),
     ),
@@ -322,6 +328,7 @@ def apply(directory, root=SOURCE_ROOT):
             require(text.count(before) == 1, 'CPU overlay drift in '+name+': '+before[:60])
             text = text.replace(before, after)
         path.write_bytes(text.encode('utf-8'))
+    shutil.copyfile(root/OVERLAY_DIR/'src/cpu_autoplay.rs', directory/'src/cpu_autoplay.rs')
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_eval.rs', directory/'src/cpu_eval.rs')
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_cotton.rs', directory/'src/cpu_cotton.rs')
     shutil.copyfile(root/OVERLAY_DIR/'Cargo.lock', directory/'Cargo.lock')

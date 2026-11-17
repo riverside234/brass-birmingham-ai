@@ -59,7 +59,7 @@ def finish_training_diagnostics(model,phases,local_scoring,*,generation=None):
 
 
 def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False,il_kl_probe_from_run=None):
-    from .retention import owned,run_lock
+    from .retention import owned,run_lock,BackgroundPurge
     from .collector_runtime import from_config,recipe,scope,validate_teacher_budget
     runtime=from_config(config)
     validate_teacher_budget(config,runtime.get('native_inference'))
@@ -467,7 +467,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     reader_count=reader_workers(config['audit_workers'])
     with InferenceService(worker_execution,device,profile=run/'profile-collection' if config['profile_steps'] else None,
                           profile_steps=config['profile_steps'],inference_devices=inference_devices) as service,reader_pool(reader_count,admission=service.cpu) as readers:
-        with RoutedPool(root,collection_host,service,config,state,mono=mono,execution=worker_execution) as ordinary,ActorPool(root,collection_host,service,worker_execution,mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool:
+        with RoutedPool(root,collection_host,service,config,state,mono=mono,execution=worker_execution) as ordinary,ActorPool(root,collection_host,service,worker_execution,mono=mono,heavy=True) as heavy,PreparationPool(config['update'].get('preparation_workers',0)) as preparation_pool,BackgroundPurge() as background_purge:
             from .champion import schedule as schedule_champion
             # Resume an interrupted gate for the committed candidate before
             # advancing the learner or writing a new gate specification.
@@ -870,6 +870,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     actor={k:v for k,v in update.items() if k not in ('timings','memory')},
                     search={k:v for k,v in search.items() if k not in ('collection','updates')})])[-2:]
                 if teacher_report is not None:state['recent_training'][-1]['teacher_phase']=teacher_report
+                # The previous cleanup's purge ran beside this iteration; finish it before committing.
+                previous_purge=background_purge.join()
+                if previous_purge is not None:report['previous_cleanup_purge']=previous_purge
                 if revised:
                     from .retention import update_population
                     update_population(root,run,state,config['population'])
@@ -906,7 +909,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
                     from .retention import scheduled_prune
                     cleanup_began=time.monotonic()
-                    report['cleanup']=scheduled_prune(root,run,config['retention'])
+                    report['cleanup']=scheduled_prune(root,run,config['retention'],background=background_purge)
                     report['timings']['cleanup_seconds']=time.monotonic()-cleanup_began
                     service.trim([e['model_id'] for e in state['population']]+[identity]+
                                  ([state['champion']['model_id']] if incumbent else [])+

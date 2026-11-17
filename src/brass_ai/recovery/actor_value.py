@@ -540,10 +540,14 @@ class TrainingPhases:
         if self.critic_state is None:return None
         return self.state['generation'],epoch,self.config['seat_descriptors']['dropout_games'],phase
 
+    def record_frozen(self,values):
+        """g3140 step 7: the critic outputs PPO froze before its update, by critic row."""
+        self.frozen_outputs={k:values[k] for k in ('win','utility') if k in values}
+
     def prepare(self,dataset):
         from .updates import Dataset
         started=time.perf_counter();timings={}
-        self.dataset=dataset
+        self.dataset=dataset;self.frozen_outputs=None
         self.critic_dataset=Dataset(dataset.data+self.snapshot_data,dataset.device,policy=False) if self.snapshot_data else dataset
         critic=self.critic_dataset
         timings['dataset']=time.perf_counter()-started;started=time.perf_counter()
@@ -555,7 +559,10 @@ class TrainingPhases:
                 self.critic_state['snapshot_weight'] if role=='snapshot' else 1. for role in critic.roles
             ],device=dataset.device,dtype=critic.critic_weights.dtype)
         timings['weights']=time.perf_counter()-started;started=time.perf_counter()
-        self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,self.options['value_phase']['holdout_fraction'],
+        from .training_revision_g3140 import validation_fraction
+        # g3140 step 5: a quarter of the new games validate, then train next iteration.
+        fraction=validation_fraction(self.config) or self.options['value_phase']['holdout_fraction']
+        self.train_ids,self.heldout_ids,self.split=value_phase.split(critic.data,fraction,
             self.options['value_phase'].get('holdout'))
         if getattr(self,'retired_tables',()):
             require(all(critic.tables[i] not in self.retired_tables for i in self.heldout_ids),

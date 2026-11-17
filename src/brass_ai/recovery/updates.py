@@ -90,14 +90,16 @@ def prepared(games, predicate=None, neutral=False, insolvency=None, reward=None,
     return data
 
 
-def value_losses(outputs, targets):
+def value_losses(outputs, targets, weights=None):
+    """weights=(rank, total VP); g3140 trains with a heavier VP term, every check keeps (.25, .1)."""
     _, win, rank, vp = outputs[:4]
     win, rank, vp = win.float(), rank.float(), vp.float()
     w, r, v = targets
     ce = -(w * win.clamp_min(1e-9).log()).sum(-1)
     rank_loss = F.smooth_l1_loss((rank-1)/3, (r-1)/3, reduction='none').mean(-1)
     vp_loss = F.smooth_l1_loss(vp/100, v/100, reduction='none').mean(-1)
-    return ce + .25*rank_loss + .1*vp_loss, ce, rank_loss, vp_loss
+    rank_weight, vp_weight = (.25, .1) if weights is None else weights
+    return ce + rank_weight*rank_loss + vp_weight*vp_loss, ce, rank_loss, vp_loss
 
 
 def bc_loss(logits, chosen):
@@ -623,6 +625,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         from .value_preservation import FrozenValues,TrunkGradients
         with timings.phase('ppo.freeze_values'):
             frozen=FrozenValues(model,critic_ds,config,getattr(phases,'local_scoring',None),executor,diversity=diversity)
+        if phases is not None and hasattr(phases,'record_frozen'):phases.record_frozen(frozen.values)
     # Verify likelihoods for ALL rows, including deterministic continuation rows.
     policy_measure(model,ds,range(count),behavior,config,timings,True,None if frozen else advantages,executor)
     if frozen is not None:

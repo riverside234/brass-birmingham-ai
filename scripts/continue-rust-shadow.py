@@ -66,7 +66,7 @@ def inference_choice(args):
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
-            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_search_lambda=False):
+            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_search_lambda=False,value_revision=None):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -138,6 +138,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if update_search_lambda:
             from brass_ai.recovery.config import validate_config
             config=validate_config(g2880.configure(config))
+        from brass_ai.recovery import training_revision_g3140 as g3140
+        if value_revision:
+            # Adopted at this committed generation; earlier items persist with the recipe.
+            from brass_ai.recovery.config import validate_config
+            config=validate_config(g3140.configure(config,g3140.parse(value_revision),state['iteration']))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -237,11 +242,16 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             if weight is not None and previous_weight is not None and previous_weight != weight:
                 stages.append(prefix.replace(f'-w{weight}-', f'-w{previous_weight}-'))
             prefix=prefix.replace('-share', '-search-lambda095-share');stages.append(prefix)
+        if g3140.applied(config):
+            if weight is not None and previous_weight is not None and previous_weight != weight:
+                stages.append(prefix.replace(f'-w{weight}-', f'-w{previous_weight}-'))
+            prefix=prefix.replace('-share', '-value-'+g3140.tag(config)+'-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
-                         g2880.applied(config) and not g2880.applied(before))
+                         g2880.applied(config) and not g2880.applied(before) or
+                         g3140.changed(before,config))
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (root/'configs/step5'/(run.name+name+tag+'.json') for name in reversed(stages[:-1])) if p.exists()),None)
@@ -265,7 +275,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 # Journal the prepared boundary so a retry cannot archive work
                 # that already belongs to the revised recipe.
                 from brass_ai.recovery.retention import safe
-                journal='search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling'
+                journal=('value-revision' if g3140.changed(before,config) else
+                         'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
                 directory=safe(run, run/'configuration-history'/f"{journal}-{state['iteration']:04d}")
                 marker=safe(run, directory/'recipe.json')
                 from brass_ai.learning.contracts import digest
@@ -356,6 +367,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'update_cotton_network',False):kwargs['update_cotton_network']=True
         if getattr(args,'update_rail_cotton',False):kwargs['update_rail_cotton']=True
         if getattr(args,'update_search_lambda',False):kwargs['update_search_lambda']=True
+        if getattr(args,'value_revision',None):kwargs['value_revision']=args.value_revision
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -420,6 +432,10 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g2654.applied(options):
             report['g2654_revision']=g2654.summary(options)
             print('Cotton exploration skips Rail-era builds below level three: '+str(report['g2654_revision']),flush=True)
+        from brass_ai.recovery import training_revision_g3140 as g3140
+        if g3140.applied(options):
+            report['g3140_value_revision']=g3140.summary(options)
+            print('g3140 value revision: '+str(report['g3140_value_revision']),flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),
