@@ -21,7 +21,7 @@ EXPORT=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0410-20261021T151332
 
 
 def helper(name):
-    spec=importlib.util.spec_from_file_location(name,SOURCE_ROOT/'scripts'/f'{name}.py')
+    spec=importlib.util.spec_from_file_location(name,SOURCE_ROOT/'scripts/training/migrations'/f'{name}.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     return module
 

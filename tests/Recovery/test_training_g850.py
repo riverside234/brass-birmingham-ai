@@ -238,7 +238,7 @@ class Recipe(unittest.TestCase):
             self.assertEqual(r['heldout_after']['games'],len({p.critic_dataset.data[i][2][0] for i in p.heldout_ids}))
 
     def test_g850_helper_and_review_are_narrow_and_read_only(self):
-        spec=importlib.util.spec_from_file_location('g850_helper',SOURCE_ROOT/'scripts/configure-training-g850.py')
+        spec=importlib.util.spec_from_file_location('g850_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g850.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         state=read(EXPORT/'state.json')
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:

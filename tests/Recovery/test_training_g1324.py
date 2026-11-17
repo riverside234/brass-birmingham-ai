@@ -150,7 +150,7 @@ class Revision(unittest.TestCase):
             self.assertTrue(_same_payload(before,(m.state_dict(),opt.state_dict(),resumed.optimizer.state_dict(),resumed.state,resumed.critic_state,torch.get_rng_state())))
 
     def test_helper_simulated1324_is_readonly_idempotent_and_generation_bound(self):
-        spec=importlib.util.spec_from_file_location('g1324_helper',SOURCE_ROOT/'scripts/configure-training-g1324.py')
+        spec=importlib.util.spec_from_file_location('g1324_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g1324.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         # User reports g1324; actual checkpoint is verified by the lab helper.
         state=reward_tests.exported_state();state.update(iteration=1324,games_done=423680)

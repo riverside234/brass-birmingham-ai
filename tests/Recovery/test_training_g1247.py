@@ -80,7 +80,7 @@ class Revision(unittest.TestCase):
         from brass_ai.learning.model import FourSeatNet,ModelConfig
         from brass_ai.learning.checkpoint import save_checkpoint,resume_optimizer
         from brass_ai.recovery.utility import migrate,reward_spec
-        spec=importlib.util.spec_from_file_location('g1247_helper',SOURCE_ROOT/'scripts/configure-training-g1247.py')
+        spec=importlib.util.spec_from_file_location('g1247_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g1247.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             run=Path(tmp);state=copy.deepcopy(self.original);old=state['signature']['config'];old['model_size']='small'

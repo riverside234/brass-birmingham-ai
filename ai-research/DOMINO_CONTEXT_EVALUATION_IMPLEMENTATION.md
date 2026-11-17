@@ -238,7 +238,7 @@ reported **g1340** checkpoint, stopped with Ctrl-C:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 1340 --apply && \
-python scripts/configure-training-g1340.py \
+python scripts/training/migrations/configure-training-g1340.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 1340 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-domino-context-g1340.json && \

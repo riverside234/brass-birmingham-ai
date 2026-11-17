@@ -106,7 +106,7 @@ class Reuse(unittest.TestCase):
     def test_resume_at_b03_runs_only_remaining_stages(self):
         import sys
         with patch.object(sys,'path',[str(SOURCE_ROOT/'scripts'),*sys.path]):
-            spec=importlib.util.spec_from_file_location('resume_runner',SOURCE_ROOT/'scripts/run-rust-lab-qualification.py')
+            spec=importlib.util.spec_from_file_location('resume_runner',SOURCE_ROOT/'scripts/legacy/rust-lab/run-rust-lab-qualification.py')
             runner=importlib.util.module_from_spec(spec);spec.loader.exec_module(runner)
         args=SimpleNamespace(stage='all',start_at='b03')
         self.assertEqual(runner.selected_stages(args,{'b01':None,'b02':Path('original'),'b03':None}),('b03','b04'))

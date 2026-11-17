@@ -170,7 +170,7 @@ Add a separately versioned block. Leave the legacy teacher fields unchanged so h
 - **Toggle route.** Add a `teacher_phase_changes` flag to source-review transitions. Handle it the same way as `teacher_value_changes` in `resume.check_signature` (lines 70–79 and 197–199), but let only `teacher_phase.mode` and `teacher_phase.term.share_target` differ. Such a toggle must also keep the utility receipt (section 8).
   - Register the flag as a self-transition for the adopted implementation, and carry it into later revisions.
   - Any other teacher-setting change needs a normal review.
-- **Helper.** Add `scripts/configure-teacher-phase.py --run RUN --expected-generation G --mode shadow|on|off [--share-target X] --output CONFIG`. It follows the `configure-training-g1324.py` pattern: read the locked committed state, check the generation and checkpoint hash, write only the new config, and be safe to repeat.
+- **Helper.** Add `scripts/training/migrations/configure-teacher-phase.py --run RUN --expected-generation G --mode shadow|on|off [--share-target X] --output CONFIG`. It follows the `configure-training-g1324.py` pattern: read the locked committed state, check the generation and checkpoint hash, write only the new config, and be safe to repeat.
 - **Restart.** Resume with `--resume-reviewed-source --expected-generation G` as usual.
 
 | Change | Effect |

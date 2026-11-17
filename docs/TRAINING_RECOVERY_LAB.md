@@ -70,7 +70,7 @@ for configuration keys, diagnostics and the exact command.
 ## Archived g1340 continuation and DOMiNO context evaluation
 
 See [the implementation and continuation command](../ai-research/DOMINO_CONTEXT_EVALUATION_IMPLEMENTATION.md#enable-for-the-continuing-run).
-Use `scripts/configure-training-g1340.py` after the documented Ctrl-C recovery
+Use `scripts/training/migrations/configure-training-g1340.py` after the documented Ctrl-C recovery
 step to adopt **event_cost=0.01, max_cost=0.075, epsilon=0.05**, refresh old-reward
 PPG data and enable matched seven-context panels. Fixed entropy remains 0.10 in
 all groups; the completed IL folder and training progress are preserved.

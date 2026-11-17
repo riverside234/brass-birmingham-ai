@@ -74,7 +74,7 @@ After syncing the revised source and review registry, run from the lab repositor
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 1320 --apply && \
-python scripts/configure-training-g1320.py \
+python scripts/training/migrations/configure-training-g1320.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 1320 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-training-g1320.json && \

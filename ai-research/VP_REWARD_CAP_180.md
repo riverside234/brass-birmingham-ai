@@ -33,8 +33,8 @@ After syncing this revision, from the lab repository, when committed progress is
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 540 --apply && \
-python scripts/joint7-g540-ppg.py --expected-generation 540 && \
-python scripts/joint7-vp-cap.py \
+python scripts/training/migrations/joint7-g540-ppg.py --expected-generation 540 && \
+python scripts/training/migrations/joint7-vp-cap.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-one-se-g540.json \
   --expected-generation 540 && \
 python scripts/step5.py \
@@ -46,7 +46,7 @@ python scripts/step5.py \
 
 This continues g541–560. The new tracked VP-180 config is the prepared one-SE g540 config with only the VP-cap and matching search-reward fields added. Its helpers refuse conflicting outputs and do not modify run/checkpoint files. Repeat only the train command for later clean continuations.
 
-If the g540 recipe has already advanced, recover an incomplete collection using its actual committed generation. Then run `scripts/joint7-vp-cap.py` without `--config`, using `--expected-generation N` and a new `--output configs/step5/joint7-v11-2-grouped-lr-critic-vp180-gN.json`. That derives only the cap from the current committed config. Use that output in the same reviewed train command. Keep the existing completed IL directory; fresh IL is not needed.
+If the g540 recipe has already advanced, recover an incomplete collection using its actual committed generation. Then run `scripts/training/migrations/joint7-vp-cap.py` without `--config`, using `--expected-generation N` and a new `--output configs/step5/joint7-v11-2-grouped-lr-critic-vp180-gN.json`. That derives only the cap from the current committed config. Use that output in the same reviewed train command. Keep the existing completed IL directory; fresh IL is not needed.
 
 ## Validation
 

@@ -77,7 +77,7 @@ run recipe**. This helper writes only the config; it never edits run state,
 weights or caches, and rejects unrelated/unreviewed changes:
 
 ```bash
-python scripts/joint7-ppg-window.py \
+python scripts/training/migrations/joint7-ppg-window.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg-window.json
 

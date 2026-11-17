@@ -37,13 +37,13 @@ The first build may fetch dependencies pinned by `Cargo.lock`. Add `--offline` o
 
 Stop/pause training **after a committed iteration**, using its normal shutdown/recovery procedure. B01 refuses an active run or an unfinished collection; it does not kill training or delete pending work. Replace `YOUR_RUN` with the actual existing run directory. Change the checkout path below if the server uses a different location.
 
-To run both gates in order, use `bash scripts/run-rust-lab-b01-b02.sh artifacts/step5/YOUR_RUN cuda:0` after extracting both updated bundles. It stops if B01 fails and prints both receipt paths. Keep training paused throughout.
+To run both gates in order, use `bash scripts/legacy/rust-lab/run-rust-lab-b01-b02.sh artifacts/step5/YOUR_RUN cuda:0` after extracting both updated bundles. It stops if B01 fails and prints both receipt paths. Keep training paused throughout.
 
 The standalone B01 wrapper supplies the pinned input path/hash and a fresh output directory:
 
 ```bash
 conda activate ai-training
-bash scripts/run-rust-lab-b01.sh artifacts/step5/YOUR_RUN cuda:0
+bash scripts/legacy/rust-lab/run-rust-lab-b01.sh artifacts/step5/YOUR_RUN cuda:0
 ```
 
 Or use the complete equivalent command from the checkout:

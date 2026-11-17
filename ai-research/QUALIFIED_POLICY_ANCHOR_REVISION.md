@@ -56,7 +56,7 @@ Actual sampled behavior probabilities and policy/provenance identities carry 0.0
 With training stopped, from the lab repository:
 
 ```bash
-python scripts/joint7-qualified-anchor.py --apply && \
+python scripts/training/migrations/joint7-qualified-anchor.py --apply && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-qualified-anchor.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
@@ -102,7 +102,7 @@ Rating game count is unchanged. More neural and fewer rule-bot seats may change 
 
 ## Changed files and source review
 
-- New reference/coverage modules: `src/brass_ai/recovery/policy_anchor.py`, `rating_coverage.py`; hotfix entry point: `scripts/joint7-qualified-anchor.py`.
+- New reference/coverage modules: `src/brass_ai/recovery/policy_anchor.py`, `rating_coverage.py`; hotfix entry point: `scripts/training/migrations/joint7-qualified-anchor.py`.
 - Integration: `panel_gates.py`, `ratings.py`, `il_kl_probe.py`, `il_kl_limit.py`, `league.py`, `retention.py`, `history.py`, `resume.py`, `config.py`, `exploration.py`.
 - Configs: `configs/step5/joint7-latest.json` and new `joint7-v11-2-grouped-lr-critic-qualified-anchor.json`. Earlier signed g270 config remains available.
 - Reports/docs: `scripts/reports/export-training-reports.py`, `docs/MLP_V11_LAB.md`, `docs/EXPORT_TRAINING_REPORTS.md`, this report.

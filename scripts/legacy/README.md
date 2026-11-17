@@ -13,3 +13,6 @@ matching the bundle when reproducing its qualification.
 The [R3 pilot summarizer](../reports/summarize-legacy.py) lives with the other
 reports. The [retired R4/R5 launcher](../experiments/searchlab/r4r5.py) is indexed
 under experiments.
+
+The [Rust lab archive](rust-lab/README.md) groups 40 retired bundle,
+qualification, and profiling tools with their shared legacy helpers.

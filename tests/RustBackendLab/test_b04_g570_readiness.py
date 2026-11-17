@@ -19,7 +19,7 @@ from test_b025 import config, model_fixture
 
 def load(name):
     with patch.object(sys, 'path', [str(SOURCE_ROOT/'scripts'), *sys.path]):
-        spec=importlib.util.spec_from_file_location(name.replace('-', '_'), SOURCE_ROOT/'scripts'/name)
+        spec=importlib.util.spec_from_file_location(name.replace('-', '_'), SOURCE_ROOT/'scripts/legacy/rust-lab'/name)
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 

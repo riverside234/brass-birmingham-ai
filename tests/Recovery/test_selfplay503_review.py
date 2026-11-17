@@ -20,7 +20,7 @@ from brass_ai.recovery.utility import migrate,reward_spec,event_cost_upgrade
 from brass_ai.recovery.history import compact
 
 EXPORT=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0503-20261022T051624803527Z'
-spec=importlib.util.spec_from_file_location('joint7_g503',SOURCE_ROOT/'scripts/joint7-g503.py')
+spec=importlib.util.spec_from_file_location('joint7_g503',SOURCE_ROOT/'scripts/training/migrations/joint7-g503.py')
 helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
 
 

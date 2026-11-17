@@ -144,7 +144,7 @@ class SparseProbes(unittest.TestCase):
         with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
 
     def test_generator_retry_missing_checkpoint_and_pending_work(self):
-        spec=importlib.util.spec_from_file_location('sparse_helper',SOURCE_ROOT/'scripts/configure-ppo-probes.py')
+        spec=importlib.util.spec_from_file_location('sparse_helper',SOURCE_ROOT/'scripts/training/migrations/configure-ppo-probes.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
             root=Path(temp);run=root/'artifacts/run';run.mkdir(parents=True)

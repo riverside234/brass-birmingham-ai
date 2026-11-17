@@ -92,7 +92,7 @@ def main():
     write_json(run/'state.json',state)
     before=copy.deepcopy(state);checkpoint_hash=sha(current);weights=copy.deepcopy(model.state_dict())
     adam=copy.deepcopy(opt.state_dict());rng=torch.get_rng_state().clone()
-    spec=importlib.util.spec_from_file_location('anchor_hotfix',SOURCE_ROOT/'scripts/joint7-qualified-anchor.py')
+    spec=importlib.util.spec_from_file_location('anchor_hotfix',SOURCE_ROOT/'scripts/training/migrations/joint7-qualified-anchor.py')
     hotfix=importlib.util.module_from_spec(spec);spec.loader.exec_module(hotfix)
     # Only completed-IL lineage discovery is substituted for this authored run.
     # The actual checkpoint loader, probe loader, hotfix and cache all execute.

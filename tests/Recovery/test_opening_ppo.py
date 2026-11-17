@@ -23,7 +23,7 @@ from brass_ai.recovery.review_metrics import CategoricalProbe,categorical_kl
 from test_gae_value_phase import fixture,examples,ppo,finish
 
 EXPORT=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0503-20261022T051624803527Z'
-spec=importlib.util.spec_from_file_location('g503_openings',SOURCE_ROOT/'scripts/joint7-g503-ppg.py')
+spec=importlib.util.spec_from_file_location('g503_openings',SOURCE_ROOT/'scripts/training/migrations/joint7-g503-ppg.py')
 helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
 
 

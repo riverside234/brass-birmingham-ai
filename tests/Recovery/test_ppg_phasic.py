@@ -193,7 +193,7 @@ class Phasic(unittest.TestCase):
         self.assertTrue(check_signature(state,target,reviewed=True))
         bad=copy.deepcopy(target);bad['config']['exploration']=.02
         with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
-        spec=importlib.util.spec_from_file_location('phasic_helper',SOURCE_ROOT/'scripts/configure-ppg-phasic.py')
+        spec=importlib.util.spec_from_file_location('phasic_helper',SOURCE_ROOT/'scripts/training/migrations/configure-ppg-phasic.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);run=root/'artifacts/step5/run';run.mkdir(parents=True)

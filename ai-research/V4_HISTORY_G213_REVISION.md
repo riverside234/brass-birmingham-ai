@@ -109,7 +109,7 @@ After pulling this revision, run from the lab repository root:
 python scripts/recover-step5-iteration.py \
   --root "$PWD" --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 213 --apply && \
-python scripts/joint7-v4-share.py && \
+python scripts/training/migrations/joint7-v4-share.py && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-v4-history.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

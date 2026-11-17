@@ -25,7 +25,7 @@ The baseline, alpha/window state, origin g185 and arming generation g197 stay un
 
 Implementation adds strict temperature-2 probability admission, per-seat branch counter validation and branch-contract/provenance matching. Old signed recipes keep their original floors, temperatures, fork seeds and inherited counters. The reviewed migration also handles pre-exploration source routes without preventing their existing upgrades. Changed policy/collection identities reject stale cached behavior. No model architecture or IL dataset change is required.
 
-Changed files: `recovery/{exploration,branching,execution,replay,resume,league}.py`, `scripts/joint7-entropy95.py`, `scripts/reports/export-training-reports.py`, the main `joint7-latest.json` template and new `joint7-v11-2-grouped-lr-critic-entropy95.json`, exact source/handoff approvals, focused exploration/export tests and native smoke, and `docs/MLP_V11_LAB.md`. Existing concurrent rating-plot edits are preserved. Full/compact entropy reports include the fixed ratios; console output adds `Hfloor=0.95*baseline(fixed)`. The exporter now includes `exploration/hotfix-report.json` automatically.
+Changed files: `recovery/{exploration,branching,execution,replay,resume,league}.py`, `scripts/training/migrations/joint7-entropy95.py`, `scripts/reports/export-training-reports.py`, the main `joint7-latest.json` template and new `joint7-v11-2-grouped-lr-critic-entropy95.json`, exact source/handoff approvals, focused exploration/export tests and native smoke, and `docs/MLP_V11_LAB.md`. Existing concurrent rating-plot edits are preserved. Full/compact entropy reports include the fixed ratios; console output adds `Hfloor=0.95*baseline(fixed)`. The exporter now includes `exploration/hotfix-report.json` automatically.
 
 ## Validation
 
@@ -40,7 +40,7 @@ Higher fork probability will create more and generally earlier continuations, in
 With training stopped, from the lab repository:
 
 ```bash
-python scripts/joint7-entropy95.py --apply --expected-generation 320 && \
+python scripts/training/migrations/joint7-entropy95.py --apply --expected-generation 320 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-entropy95.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

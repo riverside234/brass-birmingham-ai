@@ -49,7 +49,7 @@ After syncing this reviewed code to the lab, run from the repository root:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 1241 --apply && \
-python scripts/configure-training-g1241.py \
+python scripts/training/migrations/configure-training-g1241.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 1241 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-g1241.json && \

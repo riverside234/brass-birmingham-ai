@@ -96,7 +96,7 @@ Generate from the actual committed run, then continue for twenty additional
 iterations:
 
 ```bash
-python scripts/joint7-v4-share.py && \
+python scripts/training/migrations/joint7-v4-share.py && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-v4-share.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

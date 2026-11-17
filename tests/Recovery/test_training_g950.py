@@ -145,7 +145,7 @@ class Revision(unittest.TestCase):
             self.assertEqual([x['step'] for x in r['kl_checks']],[16,32])
 
     def test_helper_review_and_read_only_exact_generation(self):
-        spec=importlib.util.spec_from_file_location('g950_helper',SOURCE_ROOT/'scripts/configure-training-g950.py')
+        spec=importlib.util.spec_from_file_location('g950_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g950.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         state=read(EXPORT/'state.json')
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:

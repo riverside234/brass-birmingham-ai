@@ -57,7 +57,7 @@ class Feedback(unittest.TestCase):
         report=read(EXPORT/'iteration-0599/report.json');clock=dict(report['value_phase']['schedule']);clock.pop('next_phase')
         self.assertEqual(report['value_phase']['beta_clone_next'],8.)
         self.assertEqual(P.next_phase(clock),604)
-        spec=importlib.util.spec_from_file_location('beta_helper',SOURCE_ROOT/'scripts/configure-dcpg.py')
+        spec=importlib.util.spec_from_file_location('beta_helper',SOURCE_ROOT/'scripts/training/migrations/configure-dcpg.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);run=root/'artifacts/step5/run';run.mkdir(parents=True)

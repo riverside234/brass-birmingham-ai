@@ -21,7 +21,7 @@ from brass_ai.step5.league import write_json,implementation_id
 from test_ppg_eight import setup,stage_only
 
 EXPORT=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0540-20261022T144917069131Z'
-spec=importlib.util.spec_from_file_location('g540_helper',SOURCE_ROOT/'scripts/joint7-g540-ppg.py')
+spec=importlib.util.spec_from_file_location('g540_helper',SOURCE_ROOT/'scripts/training/migrations/joint7-g540-ppg.py')
 helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
 
 

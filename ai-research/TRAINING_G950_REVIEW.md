@@ -143,7 +143,7 @@ Implementation files:
 - `src/brass_ai/recovery/config.py`: fresh-config defaults.
 - `src/brass_ai/recovery/resume.py`, `league.py`: narrow reviewed transition and startup reporting.
 - `configs/learning/selfplay-resume-sources.json`: pinned source approvals, preserving prior approvals and restrictions.
-- `scripts/configure-training-g950.py`: exact-generation, checkpoint-hash-checked config helper; no run mutation.
+- `scripts/training/migrations/configure-training-g950.py`: exact-generation, checkpoint-hash-checked config helper; no run mutation.
 - `tests/Recovery/test_training_g950.py`, `smoke_training_g950.py`, and the fresh-default expectation in `test_training_g850.py`.
 - `docs/TRAINING_RECOVERY_LAB.md`, `docs/MLP_V11_LAB.md`: current instructions.
 
@@ -160,7 +160,7 @@ After syncing these changes to the lab checkout, run from the repository root:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 950 --apply && \
-python scripts/configure-training-g950.py \
+python scripts/training/migrations/configure-training-g950.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 950 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-training-g950.json && \

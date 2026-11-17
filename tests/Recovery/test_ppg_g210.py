@@ -231,7 +231,7 @@ class Restored(unittest.TestCase):
             self.assertEqual(r['heldout_after']['loss'],1.);self.assertTrue(_same_payload(before,m.state_dict()))
 
     def test_g660_helper_is_idempotent_narrow_and_preserves_run(self):
-        spec=importlib.util.spec_from_file_location('g210_config',SOURCE_ROOT/'scripts/configure-ppg-g210.py')
+        spec=importlib.util.spec_from_file_location('g210_config',SOURCE_ROOT/'scripts/training/migrations/configure-ppg-g210.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         state=read(SOURCE_ROOT/EXPORT/'state.json')
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:

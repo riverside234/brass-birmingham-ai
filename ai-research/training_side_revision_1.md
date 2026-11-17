@@ -191,7 +191,7 @@ g660 smoke 保留 PPG steps 为 **3、6、6**，训练行数为 **108、217、21
 | `src/brass_ai/recovery/lr_controller.py` | LR cut divisor 1.25 与现有 controller 状态 |
 | `src/brass_ai/recovery/config.py` / `resume.py` / `value_buffer.py` | 严格配置校验、reviewed migration、受控缓存清理 |
 | `configs/learning/selfplay-resume-sources.json` | 明确 source/config 迁移许可 |
-| `scripts/configure-ppg-g210.py` | 当前 g660 新配置生成入口 |
+| `scripts/training/migrations/configure-ppg-g210.py` | 当前 g660 新配置生成入口 |
 | `scripts/reports/export-training-reports.py` | History 紧凑导出和 manifest / 增量校验 |
 | `tests/Recovery/test_ppg_g210.py` / `smoke_ppg_g210.py` | 当前方案 focused tests / 独立 smoke |
 
@@ -211,7 +211,7 @@ g660 smoke 保留 PPG steps 为 **3、6、6**，训练行数为 **108、217、21
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 660 --apply && \
-python scripts/configure-ppg-g210.py \
+python scripts/training/migrations/configure-ppg-g210.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 660 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg-g210-g660.json && \

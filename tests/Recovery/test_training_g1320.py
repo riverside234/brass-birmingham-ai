@@ -142,7 +142,7 @@ class Revision(unittest.TestCase):
             self.assertTrue(all(r['reward_id']==digest(reward_spec(new)) for r in resumed.buffer.pending))
 
     def test_helper_pins_g1320_read_only_and_rejects_other_changes(self):
-        spec=importlib.util.spec_from_file_location('g1320_helper',SOURCE_ROOT/'scripts/configure-training-g1320.py')
+        spec=importlib.util.spec_from_file_location('g1320_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g1320.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         state=exported_state();self.assertEqual(state['iteration'],1320)
         self.assertEqual(state['signature']['config'],read(EXPORT/'recorded-config.json'))

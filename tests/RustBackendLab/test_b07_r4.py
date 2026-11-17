@@ -1,4 +1,5 @@
 """Short R4 feature handoff, RNG, reuse, V4 routing and comparison regressions."""
+import sys
 import copy
 import json
 import os
@@ -10,6 +11,7 @@ from collections import Counter
 from types import SimpleNamespace
 import numpy as np
 from brass_ai.learning.contracts import SOURCE_ROOT, digest
+sys.path.insert(0, str(SOURCE_ROOT/'scripts/legacy/rust-lab'))
 from brass_ai.recovery.replay import check_game, CheckedGame
 from brass_ai.rust_backend import lab_admission as A, lab_pool as P, lab_features as F
 from brass_ai.rust_backend.lab_collection import route

@@ -17,7 +17,7 @@ import threading
 import time
 
 ROOT=Path(__file__).resolve().parents[2]
-sys.path[:0]=[str(ROOT/p) for p in ('src','scripts','tests/R2','tests/Recovery','tests/FeatureEngineering','tests/RustBackendLab')]
+sys.path[:0]=[str(ROOT/p) for p in ('src','scripts','scripts/legacy/rust-lab','tests/R2','tests/Recovery','tests/FeatureEngineering','tests/RustBackendLab')]
 import torch
 from brass_ai.learning.contracts import digest,require
 from brass_ai.recovery.resources import CPUAdmission
@@ -30,7 +30,7 @@ from test_collector_performance import exported
 def probe_sources():
     return {name:hashlib.sha256((ROOT/name).read_bytes().replace(b'\r\n',b'\n')).hexdigest() for name in
         ('tests/RustBackendLab/profile_collector_performance.py','tests/RustBackendLab/test_collector_performance.py',
-         'tests/RustBackendLab/test_b03.py','scripts/rust_lab_b06_ordinary.py','scripts/rust_lab_b06_metrics.py')}
+         'tests/RustBackendLab/test_b03.py','scripts/legacy/rust-lab/rust_lab_b06_ordinary.py','scripts/rust_lab_b06_metrics.py')}
 
 
 def arm(out,frozen,raw,*,shared,fast,workers):

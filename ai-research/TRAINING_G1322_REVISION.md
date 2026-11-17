@@ -68,7 +68,7 @@ After syncing revised source and the source-review registry, run from the lab re
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 1322 --apply && \
-python scripts/configure-training-g1322.py \
+python scripts/training/migrations/configure-training-g1322.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 1322 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-training-g1322.json && \
@@ -89,7 +89,7 @@ config with the actual committed generation; do not rerun old hotfix helpers.
 Changed source: `training_revision_g1322.py`, `exploration.py`,
 `opening_objective.py`, `branching.py`, `config.py`, `utility.py`, `resume.py`,
 `updates.py`, and effective entropy console reporting in `league.py`.
-Added `scripts/configure-training-g1322.py`, focused regressions and an isolated
+Added `scripts/training/migrations/configure-training-g1322.py`, focused regressions and an isolated
 PPO/PPG migration/restart smoke. Fresh-config assertions in historical tests now
 expect the latest recipe while their archived transition assertions remain intact.
 

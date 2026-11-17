@@ -29,7 +29,8 @@ from test_g1190_restart import committed,PHASES
 
 
 def script(name):
-    spec=importlib.util.spec_from_file_location(name,ROOT/'scripts'/f'{name}.py')
+    folder = 'scripts/training/migrations' if name == 'prepare-rust-g1190-restart-2' else 'scripts'
+    spec=importlib.util.spec_from_file_location(name,ROOT/folder/f'{name}.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     return module
 

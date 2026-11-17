@@ -178,7 +178,7 @@ The main implementation is in `recovery/value_preservation.py` and
 `recovery/dcpg_config.py`, integrated through `updates.py`, `actor_value.py`,
 `ppg_auxiliary.py` and their configuration/resume validators. Companion accounting,
 console/compact history, the lab instructions and explicit source-review registry
-were updated. `scripts/configure-dcpg.py` generates the continuation config;
+were updated. `scripts/training/migrations/configure-dcpg.py` generates the continuation config;
 `scripts/smoke-dcpg.py` and `tests/Recovery/test_dcpg.py` provide isolated validation.
 
 The [isolated smoke report](../artifacts/dcpg-g590-smoke-verified/report.json)
@@ -221,7 +221,7 @@ After syncing the revised code, run from the lab repository to continue **g591â€
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 590 --apply && \
-python scripts/configure-dcpg.py \
+python scripts/training/migrations/configure-dcpg.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 590 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-dcpg-g590.json && \

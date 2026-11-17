@@ -1,4 +1,5 @@
 """Bounded ordinary data-path/check-policy regressions; no training update."""
+import sys
 import copy
 import hashlib
 import json
@@ -12,6 +13,7 @@ from unittest.mock import patch
 
 import numpy as np
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
+sys.path.insert(0, str(SOURCE_ROOT/'scripts/legacy/rust-lab'))
 from brass_ai.recovery.replay import check_game
 from brass_ai.rust_backend import lab_shared as S,lab_pool as P,lab_perf as V,lab_admission as A
 from brass_ai.rust_backend.lab_delta import Decoder

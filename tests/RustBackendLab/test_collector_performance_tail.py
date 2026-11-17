@@ -1,4 +1,5 @@
 """PI04/PI05 CPU regressions: capabilities, exact data, failure boundaries."""
+import sys
 import copy
 from collections import Counter
 import hashlib
@@ -13,6 +14,7 @@ from unittest.mock import patch
 
 import numpy as np
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
+sys.path.insert(0, str(SOURCE_ROOT/'scripts/legacy/rust-lab'))
 from brass_ai.recovery import replay_binding as B
 from brass_ai.recovery.replay import check_game
 from brass_ai.rust_backend import lab_admission as A,lab_features as F

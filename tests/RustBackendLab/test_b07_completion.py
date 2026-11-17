@@ -17,7 +17,7 @@ from brass_ai.step5.league import write_json
 from brass_ai.rust_backend.lab_replay_compat import qualified_implementation as implementation_id
 import rust_lab_b07_completion as C
 
-spec = importlib.util.spec_from_file_location('b07_continue_tests', ROOT/'scripts/continue-rust-lab-b07.py')
+spec = importlib.util.spec_from_file_location('b07_continue_tests', ROOT/'scripts/legacy/rust-lab/continue-rust-lab-b07.py')
 W = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(W)
 

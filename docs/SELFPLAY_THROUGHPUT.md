@@ -55,7 +55,7 @@ collections must be archived by the existing recovery command first.
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 921 --apply && \
-python scripts/configure-selfplay-throughput.py \
+python scripts/training/migrations/configure-selfplay-throughput.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 921 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-throughput-g921.json && \

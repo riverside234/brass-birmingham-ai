@@ -12,7 +12,7 @@ import time
 import traceback
 import uuid
 
-ROOT=Path(__file__).resolve().parents[2];sys.path[:0]=[str(ROOT/'src'),str(ROOT/'scripts')]
+ROOT=Path(__file__).resolve().parents[2];sys.path[:0]=[str(ROOT/'src'),str(ROOT/'scripts'),str(ROOT/'scripts/legacy/rust-lab')]
 
 
 @contextmanager

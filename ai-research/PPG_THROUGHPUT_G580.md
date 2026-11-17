@@ -80,7 +80,7 @@ After syncing the source and matching review registry, with committed generation
 
 ```bash
 cd /data/not_backed_up/yxu209/ai-training
-python scripts/configure-ppg-throughput.py \
+python scripts/training/migrations/configure-ppg-throughput.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 580 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg-throughput-g580.json && \

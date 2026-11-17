@@ -19,6 +19,7 @@ scripts/
 |-- reports/               Report exports, plots, and reviews
 |-- benchmarks/            Performance and matchup measurements
 `-- legacy/                Standalone archival scripts
+    `-- rust-lab/          Retired bundle and qualification workflows
 ```
 
 | Workflow | What to look for |
@@ -76,4 +77,8 @@ top-level tools for their own workflows.
 
 Sealed bundles and recorded receipts retain the paths from the checkout
 that produced them. Use that checkout to reproduce a sealed workflow.
-See [legacy](legacy/README.md) for standalone archival tools.
+The 54 historical recipe and restart commands live in
+[training migrations](training/migrations/README.md). The 40 retired Rust
+bundle and qualification tools are grouped in
+[legacy Rust lab](legacy/rust-lab/README.md). See [legacy](legacy/README.md)
+for the other archival tools.

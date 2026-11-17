@@ -75,7 +75,7 @@ def verify_b01_sources(recorded):
 
 def build_bootstrap(out, env, command, mono):
     # Import explicitly for callers loading this script through importlib.
-    spec=importlib.util.spec_from_file_location('lab_toolchain',ROOT/'scripts/rust_lab_toolchain.py')
+    spec=importlib.util.spec_from_file_location('lab_toolchain',ROOT/'scripts/legacy/rust-lab/rust_lab_toolchain.py')
     toolchain=importlib.util.module_from_spec(spec);spec.loader.exec_module(toolchain)
     compiler=toolchain.restore(out,root=ROOT)
     prefix=[str(compiler)] if os.name=='nt' else [mono,str(compiler)]

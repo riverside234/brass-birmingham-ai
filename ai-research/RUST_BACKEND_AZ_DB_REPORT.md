@@ -55,7 +55,7 @@ From the updated project root:
 
 ```bash
 unzip -o distribution/rust-lab-g1330/rust-lab-az-db-g1330.zip
-python scripts/run-rust-lab-qualification.py --stage all --device cuda:0
+python scripts/legacy/rust-lab/run-rust-lab-qualification.py --stage all --device cuda:0
 ```
 
 Defaults bind g1330 and its exact checkpoint; [the bundle README](../distribution/rust-lab-g1330/README.md) gives explicit generation/hash overrides, individual-stage commands and config-only adoption. The launcher always exports a fresh Git-visible `results/rust-lab-qualification/` directory. Original lab artifacts remain available for subsequent gate checks.

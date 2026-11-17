@@ -42,7 +42,7 @@ The actual recovery/load/commit path was exercised in an isolated run: partial c
 
 The **6.00 s CPU smoke** used the current **5,928,616-parameter v11.2 utility model**, authored mixed-table tensors, real PPO, checkpoint serialization and Adam restoration. Snapshot rows trained immediately at 1.00; the next update after reload matched weights, both optimizer/phase states and RNG bit-for-bit. Both saved checkpoint hashes stayed unchanged. This is a compute/resume check, not native gameplay, a GPU benchmark or playing-strength evidence. No long training or evaluations were launched. Actual lab checkpoints are unavailable in this checkout and are validated by the recovery/trainer on the lab host.
 
-Changed implementation files: `recovery/{config,utility,exploration,critic_data,actor_value,snapshot_r2,snapshot_r2_hotfix,resume,league}.py`; new `scripts/joint7-g503.py` and continuation JSON; explicit source/handoff receipts; focused regressions/smoke and lab instructions. Unrelated working-tree rating chart edits were preserved. Learning compatibility remains `ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54`; reviewed source is `0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f`.
+Changed implementation files: `recovery/{config,utility,exploration,critic_data,actor_value,snapshot_r2,snapshot_r2_hotfix,resume,league}.py`; new `scripts/training/migrations/joint7-g503.py` and continuation JSON; explicit source/handoff receipts; focused regressions/smoke and lab instructions. Unrelated working-tree rating chart edits were preserved. Learning compatibility remains `ef6a1b5126de42da8f3277dc9357b6ffb94a435f3faa7fee8dd312bb5a242a54`; reviewed source is `0175cf43e34fa0cb1a3425158e13399a868c3fe2bdcd27bef58ee10df2bda02f`.
 
 ## Continue from committed g503
 
@@ -53,7 +53,7 @@ cd /data/not_backed_up/yxu209/ai-training
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 503 --apply && \
-python scripts/joint7-g503.py --expected-generation 503 && \
+python scripts/training/migrations/joint7-g503.py --expected-generation 503 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-fixed-snapshots-g503.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

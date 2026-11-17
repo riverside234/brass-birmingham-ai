@@ -217,7 +217,7 @@ class Integration(unittest.TestCase):
     def test_g1326_helper_is_generation_bound_readonly_and_strict(self):
         from brass_ai.recovery.resume import check_signature
         from brass_ai.step5.league import implementation_id
-        spec=importlib.util.spec_from_file_location('domino_helper',SOURCE_ROOT/'scripts/configure-domino.py')
+        spec=importlib.util.spec_from_file_location('domino_helper',SOURCE_ROOT/'scripts/training/migrations/configure-domino.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         state=read(SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g1326-20261029T212054859818Z/state.json')
         m,o,_=fixture()

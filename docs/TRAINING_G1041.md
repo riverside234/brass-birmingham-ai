@@ -67,7 +67,7 @@ conflicting output. It is safe to retry before the first new generation commits.
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 1041 --apply && \
-python scripts/configure-training-g1041.py \
+python scripts/training/migrations/configure-training-g1041.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 1041 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-g1041.json && \

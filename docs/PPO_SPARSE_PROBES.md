@@ -51,7 +51,7 @@ PPG cache refresh is needed for this change.
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 921 --apply && \
-python scripts/configure-ppo-probes.py \
+python scripts/training/migrations/configure-ppo-probes.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 921 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-ppo-probes-g921.json && \

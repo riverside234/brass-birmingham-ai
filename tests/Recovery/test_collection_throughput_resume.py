@@ -51,7 +51,7 @@ class ThroughputResume(unittest.TestCase):
         for key in original_state.keys()-{'signature','source_transitions'}:self.assertEqual(state[key],original_state[key])
 
     def test_configuration_helper_is_retry_safe_and_rejects_pending_work(self):
-        spec=importlib.util.spec_from_file_location('throughput_helper',SOURCE_ROOT/'scripts/configure-selfplay-throughput.py')
+        spec=importlib.util.spec_from_file_location('throughput_helper',SOURCE_ROOT/'scripts/training/migrations/configure-selfplay-throughput.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)

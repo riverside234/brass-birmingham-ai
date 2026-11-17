@@ -46,7 +46,7 @@ The fifth iteration needs the usual reviewed switch from shadow to on: run `cont
 Stop the trainer, commit and pull on the lab. The CPU workers are unchanged, so no prepare step is needed.
 
 ```bash
-python scripts/prepare-rust-branch-restart.py
+python scripts/training/migrations/prepare-rust-branch-restart.py
 ```
 
 ```bash

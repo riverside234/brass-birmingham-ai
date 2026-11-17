@@ -119,7 +119,7 @@ the g1120 export directly; no previous continuation command needs to be run.
 Changed implementation: exploration/opening-objective validation and selection,
 branch execution/replay admission, opening-only KL reporting, PPG version/adoption,
 fresh config generation and reviewed resume handler. Added
-`scripts/configure-training-g1120.py`, the narrow migration module, focused tests
+`scripts/training/migrations/configure-training-g1120.py`, the narrow migration module, focused tests
 and smoke wrapper, and updated both lab guides.
 
 Loss16 halves the periodic held-out evaluations relative to loss8; KL32 halves
@@ -135,7 +135,7 @@ After syncing this code, run from the lab repository root:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 1120 --apply && \
-python scripts/configure-training-g1120.py \
+python scripts/training/migrations/configure-training-g1120.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 1120 --kl-check-steps 32 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-training-g1120-kl32.json && \

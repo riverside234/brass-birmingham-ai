@@ -21,6 +21,7 @@ import torch
 from brass_ai.bank import read
 from brass_ai.learning.batching import model_id
 from brass_ai.learning.contracts import SOURCE_ROOT as ROOT,digest
+sys.path.insert(0, str(ROOT/'scripts/legacy/rust-lab'))
 from brass_ai.recovery.teacher_phase_config import TIMING
 from brass_ai.rust_backend import lab_teacher_finalization as F
 from brass_ai.rust_backend.lab_admission import admit_teacher_rows

@@ -15,6 +15,7 @@ from unittest.mock import Mock, patch
 
 import torch
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
+sys.path.insert(0, str(SOURCE_ROOT/'scripts/legacy/rust-lab'))
 sys.path.insert(0,str(SOURCE_ROOT/'scripts'))
 import rust_lab_b06_metrics as M
 import rust_lab_b06_ordinary as O
@@ -22,7 +23,7 @@ import rust_lab_b06_teacher as T
 
 
 def launcher():
-    spec=importlib.util.spec_from_file_location('b06_tests',SOURCE_ROOT/'scripts/qualify-rust-lab-b06.py')
+    spec=importlib.util.spec_from_file_location('b06_tests',SOURCE_ROOT/'scripts/legacy/rust-lab/qualify-rust-lab-b06.py')
     m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
 
 

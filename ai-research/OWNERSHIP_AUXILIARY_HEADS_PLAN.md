@@ -414,7 +414,7 @@ cd /data/not_backed_up/yxu209/ai-training
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 560 --apply && \
-python scripts/configure-local-scoring-aux.py \
+python scripts/training/migrations/configure-local-scoring-aux.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 560 \
   --mode apply \

@@ -70,7 +70,7 @@ No long training was launched, no remote/live checkpoint was edited, and the fin
 From the lab repository, create the staged config from the actual committed run:
 
 ```bash
-python scripts/joint7-exploration.py \
+python scripts/training/migrations/joint7-exploration.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic
 
 python scripts/step5.py \
@@ -105,6 +105,6 @@ Use a new output directory for a fresh run. [The lab instructions](../docs/MLP_V
 - `BrassTrainingHost/FastHost.cs`, `scripts/build-training-host.py`, both matching throughput runtime bundles: training-only fork support.
 - `recovery/branching.py`, `execution.py`, `replay.py`, `ingress.py`, reward/insolvency helpers, critic holdout and value-phase reporting: branch admission, budgets, sample attribution and independent evidence.
 - `exploration_metrics.py`, `diagnostics.py`, `history.py`, `temperature_rating.py`, `ratings.py`, `retention.py`, report exporter: compact diagnostics and separate evaluation evidence.
-- Fresh/staged configs, exact source/handoff review registries, `scripts/joint7-exploration.py`, lab instructions and focused/native smoke tests.
+- Fresh/staged configs, exact source/handoff review registries, `scripts/training/migrations/joint7-exploration.py`, lab instructions and focused/native smoke tests.
 
 The source review preserves the pre-existing review entries and adds only exact unchanged-config or staged-exploration paths. Learning compatibility is unchanged; no weight or feature reinterpretation is permitted.

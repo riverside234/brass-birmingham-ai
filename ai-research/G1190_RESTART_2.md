@@ -30,7 +30,7 @@ Everything else is the same: placement 0.1, win 1, VP 0.001 (cap 180) with the c
 Stop any trainer, pull the code on the lab, then:
 
 ```bash
-python scripts/prepare-rust-g1190-restart-2.py --run artifacts/step5/joint7-v11-2-g1190-restart-3 --share-target 0.05
+python scripts/training/migrations/prepare-rust-g1190-restart-2.py --run artifacts/step5/joint7-v11-2-g1190-restart-3 --share-target 0.05
 ```
 
 ```bash

@@ -22,9 +22,9 @@ COMPLETION_CHANGES = {
 
 
 def workflow_id():
-    names = ('qualify-rust-lab-b07.py', 'rust_lab_b07_completion.py',
-             'rust_lab_b07_smoke.py', 'qualify-rust-lab-b06.py')
-    return digest({n: (ROOT/'scripts'/n).read_text(encoding='utf-8') for n in names})
+    paths = ('scripts/legacy/rust-lab/qualify-rust-lab-b07.py', 'scripts/rust_lab_b07_completion.py',
+             'scripts/legacy/rust-lab/rust_lab_b07_smoke.py', 'scripts/legacy/rust-lab/qualify-rust-lab-b06.py')
+    return digest({Path(p).name: (ROOT/p).read_text(encoding='utf-8') for p in paths})
 
 
 def reviewed_source(reference=None):

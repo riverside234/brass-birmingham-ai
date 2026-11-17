@@ -471,6 +471,6 @@ receipt 版本。mode/version 进入执行/source review 绑定，不修改旧�
 | `src/brass_ai/rust_backend/lab_admission.py`, `lab_families.py`, `lab_features.py` | 独立接纳、family、数组缓存/凭据 |
 | `src/brass_ai/recovery/ingress.py`, `replay.py`, `inference.py`, `inference_channels.py` | 读取准备、CheckedGame、推理共享槽与生命周期 |
 | `tests/RustBackendLab/profile_b07_publication.py` | 已完成数据的受限 publication/read 组件短测 |
-| `scripts/rust_lab_b06_ordinary.py`, `scripts/qualify-rust-lab-b07.py` | 复用冻结 workload 和实际实现的 qualification 入口 |
+| `scripts/legacy/rust-lab/rust_lab_b06_ordinary.py`, `scripts/legacy/rust-lab/qualify-rust-lab-b07.py` | 复用冻结 workload 和实际实现的 qualification 入口 |
 
 执行时重新阅读当前实现与最新结果；本文件中的计划状态不能替代实际代码检查或 lab 证据。

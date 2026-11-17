@@ -29,7 +29,7 @@ Continuation uses the existing committed counters, without a new rehearsal clock
 
 ## Continuation and provenance
 
-The source keeps the legacy quality-score contract for explicitly unchanged old configs. Fresh config generation adopts PFSP and the interval-60 default. The new `scripts/configure-pfsp.py` helper copies an existing config to a new filename, changing only these recognized settings. It refuses overwrite and does not modify IL, checkpoints or run state.
+The source keeps the legacy quality-score contract for explicitly unchanged old configs. Fresh config generation adopts PFSP and the interval-60 default. The new `scripts/training/migrations/configure-pfsp.py` helper copies an existing config to a new filename, changing only these recognized settings. It refuses overwrite and does not modify IL, checkpoints or run state.
 
 The switch is allowed only at a committed generation divisible by five. Existing members get C=10 and S=10 times their logged five-iteration moving outrank rate, or the 0.5 prior when no comparisons exist. Membership, checkpoint/probe/fingerprint identities, admission ages and the health window are retained. q is never treated as an outrank estimate.
 
@@ -78,7 +78,7 @@ Sampling/estimation adds no model forward pass and measured under 1 ms per simul
 At g85 or another committed multiple of five:
 
 ```bash
-python scripts/configure-pfsp.py \
+python scripts/training/migrations/configure-pfsp.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic.json \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-pfsp.json
 
@@ -94,6 +94,6 @@ Use the actual existing config/run/IL paths if different. Between boundaries, ke
 ## Changed files
 
 - Sampling and configuration: `pfsp_pool.py` (new), `quality_pool.py`, `quality_config.py`, `ordinary.py`, `config.py`, `configs/step5/joint7-latest.json`.
-- Continuation, reporting and schedule: `resume.py`, `league.py`, `review_metrics.py`, `rehearsal.py`, source-resume and IL-handoff review receipts; `scripts/configure-pfsp.py` (new).
+- Continuation, reporting and schedule: `resume.py`, `league.py`, `review_metrics.py`, `rehearsal.py`, source-resume and IL-handoff review receipts; `scripts/training/migrations/configure-pfsp.py` (new).
 - Validation: new `test_pfsp_pool.py` and `benchmark_pfsp.py`; existing quality/default/rehearsal/smoke tests adjusted for the new defaults and the worker-death fixture fix.
 - Documentation: lab guide, report-export guide and this report. Existing generated run configs, exported results, completed IL and production checkpoints are unchanged.

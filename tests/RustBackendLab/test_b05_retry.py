@@ -16,7 +16,7 @@ from brass_ai.rust_backend.lab_snapshot import tree_digest
 
 
 def launcher():
-    spec=importlib.util.spec_from_file_location('b05_retry',SOURCE_ROOT/'scripts/qualify-rust-lab-b05.py')
+    spec=importlib.util.spec_from_file_location('b05_retry',SOURCE_ROOT/'scripts/legacy/rust-lab/qualify-rust-lab-b05.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     return module
 

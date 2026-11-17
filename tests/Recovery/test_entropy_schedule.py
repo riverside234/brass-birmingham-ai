@@ -248,7 +248,7 @@ class Anneal(unittest.TestCase):
         with self.assertRaises(ValueError):E.restore(self.off,self.start(),self.start()['exploration'])
 
     def test_generic_helper_read_only_due_check_and_pending_rejection(self):
-        spec=importlib.util.spec_from_file_location('entropy_helper',SOURCE_ROOT/'scripts/configure-entropy-schedule.py')
+        spec=importlib.util.spec_from_file_location('entropy_helper',SOURCE_ROOT/'scripts/training/migrations/configure-entropy-schedule.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
             root=Path(temp);run=root/'artifacts/run';run.mkdir(parents=True)

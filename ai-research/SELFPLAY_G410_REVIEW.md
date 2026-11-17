@@ -26,7 +26,7 @@ Branching becomes **0.005 per eligible decision**, retaining at most one branch 
 
 The explicit hotfix changes only `entropy_control` and `branching`. Existing signed recipes keep their original behavior. The helper preserves checkpoint bytes, weights, Adam/RNG, progress, population, entropy baseline/alphas/windows/origin, KL reference/calibration and economic/GAE evidence. It does not immediately rewrite entropy coefficients. On the next update, existing regime handling resets the LR decision window and stage-local snapshot-R² evidence for the new branch rate while preserving the LR multiplier/cooldown/warmup, attained snapshot weight and frozen R² reference. The old entropy95 helper refuses to overwrite the adopted new recipe. Existing input-cache/inference work is preserved.
 
-Files: `recovery/{exploration,resume,league,snapshot_r2}.py`, `scripts/joint7-entropy-groups.py`, the superseded helper guard, `configs/step5/joint7-latest.json`, the new `joint7-v11-2-grouped-lr-critic-entropy-groups.json`, exact source/handoff reviews, focused regressions/smoke harness and lab instructions. The exporter already discovers `exploration/group-floors-hotfix-report.json`; a regression checks byte-preserving export.
+Files: `recovery/{exploration,resume,league,snapshot_r2}.py`, `scripts/training/migrations/joint7-entropy-groups.py`, the superseded helper guard, `configs/step5/joint7-latest.json`, the new `joint7-v11-2-grouped-lr-critic-entropy-groups.json`, exact source/handoff reviews, focused regressions/smoke harness and lab instructions. The exporter already discovers `exploration/group-floors-hotfix-report.json`; a regression checks byte-preserving export.
 
 ## Validation
 
@@ -44,7 +44,7 @@ From the repository root on the lab machine, with training stopped:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 410 --apply && \
-python scripts/joint7-entropy-groups.py --apply --expected-generation 410 && \
+python scripts/training/migrations/joint7-entropy-groups.py --apply --expected-generation 410 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-entropy-groups.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

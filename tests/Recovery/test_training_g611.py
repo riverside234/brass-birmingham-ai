@@ -147,7 +147,7 @@ class Revision(unittest.TestCase):
         from brass_ai.recovery.resume import check_signature,commit_transition
         sig=dict(self.original['signature'],config=self.new,implementation=implementation_id())
         check_signature(self.original,sig,reviewed=True)
-        spec=importlib.util.spec_from_file_location('g611_helper',SOURCE_ROOT/'scripts/configure-training-g611.py')
+        spec=importlib.util.spec_from_file_location('g611_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g611.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
             root=Path(temp);run=root/'artifacts/run';run.mkdir(parents=True)

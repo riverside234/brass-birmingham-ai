@@ -1,7 +1,7 @@
 # Rust lab setup and validation
 
-The CPU worker preparation, lab launchers, qualification scripts, and
-their helper modules retain the paths used by the lab commands and bundle checks.
+The CPU worker preparation and qualification commands use the shared
+helpers listed below. Historical bundle tools are indexed under legacy.
 See [training](../README.md) for the current continuation entry points.
 
 ## CPU inference and collector setup
@@ -11,57 +11,22 @@ See [training](../README.md) for the current continuation entry points.
 - [prepare-rust-collector-performance.py](../../prepare-rust-collector-performance.py)
 - [prepare-rust-teacher-verification.py](../../prepare-rust-teacher-verification.py)
 
-## Lab bundle preparation, transfer, and recovery
+## Shared build, qualification, and export helpers
 
-- [prepare-rust-lab-b01.py](../../prepare-rust-lab-b01.py)
-- [prepare-rust-lab-b01-transfer.py](../../prepare-rust-lab-b01-transfer.py)
-- [prepare-rust-lab-b02.py](../../prepare-rust-lab-b02.py)
-- [prepare-rust-lab-b025.py](../../prepare-rust-lab-b025.py)
-- [prepare-rust-lab-b03.py](../../prepare-rust-lab-b03.py)
-- [prepare-rust-lab-b04.py](../../prepare-rust-lab-b04.py)
-- [prepare-rust-lab-b05.py](../../prepare-rust-lab-b05.py)
-- [prepare-rust-lab-b06.py](../../prepare-rust-lab-b06.py)
-- [prepare-rust-lab-b07.py](../../prepare-rust-lab-b07.py)
-- [prepare-rust-lab-results.py](../../prepare-rust-lab-results.py)
-- [restore-rust-lab-b03.py](../../restore-rust-lab-b03.py)
-- [rust_lab_toolchain.py](../../rust_lab_toolchain.py)
+| Helper | Current use |
+| --- | --- |
+| [qualify-rust-lab.py](../../qualify-rust-lab.py) | CPU preparation environment, native test inputs, and bounded commands. |
+| [qualify-rust-lab-b02.py](../../qualify-rust-lab-b02.py) | CPU build dependency checks and historical bootstrap support. |
+| [rust_lab_results.py](../../rust_lab_results.py) | Continuation and qualification evidence export. |
+| [rust_lab_b06_metrics.py](../../rust_lab_b06_metrics.py) | CPU qualification and profiling measurements. |
+| [rust_lab_b07_retry.py](../../rust_lab_b07_retry.py) | Collector, teacher-verification, and reward runtime preparation. |
+| [rust_lab_b07_completion.py](../../rust_lab_b07_completion.py) | Verification of reusable runtime build receipts. |
 
-## Lab launchers and qualifications
+## Retired lab bundles
 
-- [continue-rust-lab-b07.py](../../continue-rust-lab-b07.py)
-- [manage-rust-lab-b07.py](../../manage-rust-lab-b07.py)
-- [qualify-rust-lab.py](../../qualify-rust-lab.py)
-- [qualify-rust-lab-b02.py](../../qualify-rust-lab-b02.py)
-- [qualify-rust-lab-b025.py](../../qualify-rust-lab-b025.py)
-- [qualify-rust-lab-b03.py](../../qualify-rust-lab-b03.py)
-- [qualify-rust-lab-b04.py](../../qualify-rust-lab-b04.py)
-- [qualify-rust-lab-b045.py](../../qualify-rust-lab-b045.py)
-- [qualify-rust-lab-b05.py](../../qualify-rust-lab-b05.py)
-- [qualify-rust-lab-b06.py](../../qualify-rust-lab-b06.py)
-- [qualify-rust-lab-b07.py](../../qualify-rust-lab-b07.py)
-- [run-rust-lab-qualification.py](../../run-rust-lab-qualification.py)
-- [rust_lab_results.py](../../rust_lab_results.py)
-- [run-rust-lab-b01-b02.sh](../../run-rust-lab-b01-b02.sh)
-- [run-rust-lab-b01.sh](../../run-rust-lab-b01.sh)
-- [run-rust-lab-b02.sh](../../run-rust-lab-b02.sh)
-- [run-rust-lab-b025.sh](../../run-rust-lab-b025.sh)
-- [run-rust-lab-b03.sh](../../run-rust-lab-b03.sh)
-- [run-rust-lab-b04.sh](../../run-rust-lab-b04.sh)
-
-## B06 and B07 qualification helpers
-
-- [rust_lab_b06_metrics.py](../../rust_lab_b06_metrics.py)
-- [rust_lab_b06_ordinary.py](../../rust_lab_b06_ordinary.py)
-- [rust_lab_b06_teacher.py](../../rust_lab_b06_teacher.py)
-- [rust_lab_b07_completion.py](../../rust_lab_b07_completion.py)
-- [rust_lab_b07_publication.py](../../rust_lab_b07_publication.py)
-- [rust_lab_b07_r3_publication.py](../../rust_lab_b07_r3_publication.py)
-- [rust_lab_b07_r4_publication.py](../../rust_lab_b07_r4_publication.py)
-- [rust_lab_b07_retry.py](../../rust_lab_b07_retry.py)
-- [rust_lab_b07_sealing.py](../../rust_lab_b07_sealing.py)
-- [rust_lab_b07_smoke.py](../../rust_lab_b07_smoke.py)
-- [rust_lab_b07_transport.py](../../rust_lab_b07_transport.py)
-- [rust_lab_b07_v4.py](../../rust_lab_b07_v4.py)
+The [legacy Rust lab tools](../../legacy/rust-lab/README.md) group the former
+bundle publishers, B01–B07 launchers, and historical qualification helpers.
+Current CPU preparation still reads `distribution/rust-lab-g1250/inputs.zip`.
 
 ## Rust backend inputs and fixtures
 

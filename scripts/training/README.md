@@ -1,7 +1,9 @@
 # Training
 
 See [migrations](migrations/README.md) for historical recipe changes and
-[rust-lab](rust-lab/README.md) for the Rust workers, bundles, and checks.
+[rust-lab](rust-lab/README.md) for current Rust workers and checks.
+The migration folder contains 54 historical recipe and restart commands.
+The 40 retired bundle tools live in [legacy Rust lab](../legacy/rust-lab/README.md).
 Use the [command index](../README.md#common-commands) for current entry points.
 
 ## Step 5 and current continuations

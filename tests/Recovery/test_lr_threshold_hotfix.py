@@ -91,7 +91,7 @@ class Threshold(unittest.TestCase):
         with self.assertRaises(ValueError):check_signature(state,signature)
         bad=copy.deepcopy(signature);bad['config']['exploration']=.02
         with self.assertRaises(ValueError):check_signature(state,bad,reviewed=True)
-        spec=importlib.util.spec_from_file_location('lr_threshold_helper',SOURCE_ROOT/'scripts/configure-ppo-lr-threshold.py')
+        spec=importlib.util.spec_from_file_location('lr_threshold_helper',SOURCE_ROOT/'scripts/training/migrations/configure-ppo-lr-threshold.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             run=Path(tmp);checkpoint=run/'generation-0560.pt';checkpoint.write_bytes(b'authored checksum fixture; not a trained model')

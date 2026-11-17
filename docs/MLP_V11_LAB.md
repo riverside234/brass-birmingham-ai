@@ -223,7 +223,7 @@ cd /data/not_backed_up/yxu209/ai-training
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 560 --apply && \
-python scripts/configure-local-scoring-aux.py \
+python scripts/training/migrations/configure-local-scoring-aux.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 560 --mode apply --fresh-ppg-buffer \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-local-scoring-lr50-g560.json && \
@@ -279,8 +279,8 @@ The following **g540 procedure is archived**; it has already been applied to the
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 540 --apply && \
-python scripts/joint7-g540-ppg.py --expected-generation 540 && \
-python scripts/joint7-vp-cap.py \
+python scripts/training/migrations/joint7-g540-ppg.py --expected-generation 540 && \
+python scripts/training/migrations/joint7-vp-cap.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-one-se-g540.json \
   --expected-generation 540 && \
 python scripts/step5.py \
@@ -292,7 +292,7 @@ python scripts/step5.py \
 
 This continues **g541–560**. The helpers write configs from locked committed state without editing checkpoints; the VP helper adds only `reward.vp_cap=180` and its matching search reward to the prepared g540 recipe. Startup preserves weights, both Adams, RNG, beta, PPO/LR/GAE, population, progress and the original entropy/economic baselines. It explicitly resets PPG's replay/schedule origin to g540, hotfixes its epoch cap to **2**, sets the adaptive floor to **2** (maximum 6), and clears old PPG epoch votes and KL-trip history. After durable reviewed config adoption, startup audits and deletes only owned `.ppg-eight-cache` / `.ppg-value-cache` arrays and partial files; ownership markers stay. Unknown files and links are refused before any deletion. The first eight new collections use fresh **VP-180 and insolvency 0.020/0.080** targets; PPG phases are due at **g548 and g556**. Normal later cache expiry still follows checkpoint commit. Repeat only the train command for later clean continuations; fresh reset is not repeated after the first new checkpoint.
 
-If the g540 recipe is already running at a later committed generation, omit the older g540 helper and `--config` input: `python scripts/joint7-vp-cap.py --expected-generation N --output configs/step5/joint7-v11-2-grouped-lr-critic-vp180-gN.json` derives only the VP cap from the current committed config. Use that output for the reviewed train command, and recover an incomplete collection first using its actual committed generation. The reward change starts a fresh eight-collection PPG window at N, preserves the attained epoch cap, and invalidates only reward-dependent utility calibration and PPG cache/evidence. No fresh IL is required. See [VP-180 behavior and validation](../ai-research/VP_REWARD_CAP_180.md).
+If the g540 recipe is already running at a later committed generation, omit the older g540 helper and `--config` input: `python scripts/training/migrations/joint7-vp-cap.py --expected-generation N --output configs/step5/joint7-v11-2-grouped-lr-critic-vp180-gN.json` derives only the VP cap from the current committed config. Use that output for the reviewed train command, and recover an incomplete collection first using its actual committed generation. The reward change starts a fresh eight-collection PPG window at N, preserves the attained epoch cap, and invalidates only reward-dependent utility calibration and PPG cache/evidence. No fresh IL is required. See [VP-180 behavior and validation](../ai-research/VP_REWARD_CAP_180.md).
 
 PPG checks pooled ordinary learner parent games from all eight cached iterations, normally **144 games**. It keeps the minimum mean game-loss reference separately from the selected state. A candidate within **one paired standard error** of that minimum and within both KL caps can be retained for more distinct critic-row coverage. Ties prefer lower loss, then a later budget position. Neutral checks do not consume patience. A lower minimum rechecks the previous selection; accepting a slightly worse state never raises the reference. Final weights and value Adam come from the same selected checkpoint. `value_phase.selection` reports minimum/selected loss, paired difference/SE, coverage and budget positions; epoch-cap votes continue using the minimum-loss position. See [implementation and validation](../ai-research/PPG_ONE_SE_G540.md).
 
@@ -302,7 +302,7 @@ The following **g503 continuation is archived**. It includes the earlier insolve
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 503 --apply && \
-python scripts/joint7-g503-ppg.py --expected-generation 503 && \
+python scripts/training/migrations/joint7-g503-ppg.py --expected-generation 503 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-ppg-openings-g503.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
@@ -318,7 +318,7 @@ The following **g470 command and zero-floor controller are archived**; use the g
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 470 --apply && \
-python scripts/joint7-throughput.py --expected-generation 470 && \
+python scripts/training/migrations/joint7-throughput.py --expected-generation 470 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-throughput-g470.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
@@ -342,7 +342,7 @@ Archived g418 command:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 418 --apply && \
-python scripts/joint7-ppg-eight.py --expected-generation 418 && \
+python scripts/training/migrations/joint7-ppg-eight.py --expected-generation 418 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-ppg-eight.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
@@ -383,7 +383,7 @@ For an older run that has **not adopted the g410 group-floor/branch hotfix**, th
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 410 --apply && \
-python scripts/joint7-entropy-groups.py --apply --expected-generation 410 && \
+python scripts/training/migrations/joint7-entropy-groups.py --apply --expected-generation 410 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-entropy-groups.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
@@ -432,7 +432,7 @@ The checkpoint now persists `critic_data.weight_recovery` as `snapshot-weight-r2
 This command records the historical g210 switch to PPO only; its checked-in output matches the g210 recipe. For the current run use the g470 command above and its separate output filename. The archived helper also supports v5 eight-age checkpoints, including their decayed value-Adam LR and existing PPO gate evidence.
 
 ```bash
-python scripts/joint7-ppo-only.py \
+python scripts/training/migrations/joint7-ppo-only.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppo-only.json
 
@@ -633,7 +633,7 @@ Probe preparation/validation happens at startup; normal iterations evaluate only
 Run the helper against the **actual committed training directory**. It reads the saved recipe and writes a continuation config, preserving unrelated settings. It includes the previously requested 16-step PPG acceptance intervals and rolling GAE health window if not yet adopted. It does not edit checkpoints or reset training.
 
 ```bash
-python scripts/joint7-exploration.py \
+python scripts/training/migrations/joint7-exploration.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic
 
 python scripts/step5.py \
@@ -667,7 +667,7 @@ To adopt PFSP and the slower rehearsal floor in the existing run, switch at a **
 ```bash
 python scripts/build-shared-search.py --root .
 
-python scripts/configure-pfsp.py \
+python scripts/training/migrations/configure-pfsp.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic.json \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-pfsp.json
 

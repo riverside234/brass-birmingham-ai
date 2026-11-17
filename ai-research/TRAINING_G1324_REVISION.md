@@ -39,7 +39,7 @@ After syncing source and the source-review registry, run from the lab repository
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 1324 --apply && \
-python scripts/configure-training-g1324.py \
+python scripts/training/migrations/configure-training-g1324.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 1324 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-training-g1324.json && \

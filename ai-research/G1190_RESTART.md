@@ -65,11 +65,11 @@ The 0.02 blend steps needed one small CPU-teacher change. The teacher's job chec
 Stop any trainer, pull the code on the lab, then:
 
 ```bash
-python scripts/prepare-rust-g1190-restart.py --share-target 0.75
+python scripts/training/migrations/prepare-rust-g1190-restart.py --share-target 0.75
 ```
 
 ```bash
-python scripts/continue-rust-g1190-restart.py --expected-generation 1491 --iterations 120 --share-target 0.75
+python scripts/training/migrations/continue-rust-g1190-restart.py --expected-generation 1491 --iterations 120 --share-target 0.75
 ```
 
 - **Share target:** pass the same value to both commands.

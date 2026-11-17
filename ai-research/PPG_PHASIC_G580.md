@@ -91,7 +91,7 @@ After syncing sources and the matching review registry, run from the lab repo:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 580 --apply && \
-python scripts/configure-ppg-phasic.py \
+python scripts/training/migrations/configure-ppg-phasic.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 580 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg-phasic-g580.json && \
@@ -133,7 +133,7 @@ The principal changes are in `recovery/ppg_phasic.py`, `ppg_config.py`,
 `actor_value.py`, `ppg_auxiliary.py`, `ppg_epochs.py`, `updates.py` and
 `local_scoring_auxiliary.py`. Configuration/resume/history/console integration
 is updated alongside the source registry. New entry points are
-`scripts/configure-ppg-phasic.py` and `scripts/smoke-ppg-phasic.py`; focused
+`scripts/training/migrations/configure-ppg-phasic.py` and `scripts/smoke-ppg-phasic.py`; focused
 tests are in `tests/Recovery/test_ppg_phasic.py`. The prior throughput files
 and their independent changes remain intact.
 

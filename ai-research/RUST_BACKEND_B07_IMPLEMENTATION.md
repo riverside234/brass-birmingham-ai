@@ -578,7 +578,7 @@ NN verification were excluded from both arms, and cold-reader correctness was
 checked outside the timed finalization. This is neither an end-to-end lab deadline
 pass nor a whole-training throughput claim. Remaining cost includes immutable
 snapshot construction, required encoding and durable shard compression/integrity.
-The probe is `scripts/rust_lab_b07_sealing.py`; shipped evidence is `r6-sealing.json`.
+The probe is `scripts/legacy/rust-lab/rust_lab_b07_sealing.py`; shipped evidence is `r6-sealing.json`.
 
 R6 reuses only the original byte-pinned passing R4 ordinary executable and result.
 Its source review enumerates exactly the changed teacher Python files and Rust
@@ -893,7 +893,7 @@ the nested native replay directory and pins current v4 feature sidecars plus
 backend rollback dependencies.
 
 The local fixture comparison is reproducible with
-`python scripts/rust_lab_b07_publication.py --out artifacts/b07-publication.json`.
+`python scripts/legacy/rust-lab/rust_lab_b07_publication.py --out artifacts/b07-publication.json`.
 It compares three alternating batches of three authored families, including
 historical and V4 fallback, and checks equal prepared tensors/targets. Its
 receipt in the bundle is a CPU component measurement, not a GPU throughput claim.

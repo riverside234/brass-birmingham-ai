@@ -109,7 +109,7 @@ class AutomaticStages(unittest.TestCase):
         self.assertEqual(S.automatic_next(self.old,self.original),self.old)
 
     def test_helper_signature_retry_and_pending_rejection(self):
-        helper=module('g760_helper','scripts/configure-training-g760.py')
+        helper=module('g760_helper','scripts/training/migrations/configure-training-g760.py')
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
             root=Path(temp);run=root/'artifacts/run';run.mkdir(parents=True)
             checkpoint=run/'generation-0760.pt';checkpoint.write_bytes(b'committed fixture')

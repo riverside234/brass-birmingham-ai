@@ -12,7 +12,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT/'scripts'))
 import rust_lab_results as reports
-spec = importlib.util.spec_from_file_location('lab_runner', ROOT/'scripts/run-rust-lab-qualification.py')
+spec = importlib.util.spec_from_file_location('lab_runner', ROOT/'scripts/legacy/rust-lab/run-rust-lab-qualification.py')
 runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
 
 

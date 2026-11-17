@@ -79,7 +79,7 @@ class Startup(unittest.TestCase):
     def test_continuation_command_through_real_cli_and_scheduler_reaches_trainer(self):
         from brass_ai.step5 import cli
         import torch
-        spec=importlib.util.spec_from_file_location('b07_startup_launcher',ROOT/'scripts/continue-rust-lab-b07.py')
+        spec=importlib.util.spec_from_file_location('b07_startup_launcher',ROOT/'scripts/legacy/rust-lab/continue-rust-lab-b07.py')
         launcher=importlib.util.module_from_spec(spec);spec.loader.exec_module(launcher)
         config_path=self.run/'committed-config.json';write_json(config_path,self.config)
         argv=launcher.training_command(ROOT,self.run,config_path,1250,'mono',state=self.state)

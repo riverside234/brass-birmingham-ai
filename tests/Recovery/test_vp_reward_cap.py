@@ -33,7 +33,7 @@ from fixtures import game
 
 EXPORT=SOURCE_ROOT/'results/joint7-v11-2-grouped-lr-critic-g0540-20261022T144917069131Z'
 BASE=SOURCE_ROOT/'configs/step5/joint7-v11-2-grouped-lr-critic-one-se-g540.json'
-module=importlib.util.spec_from_file_location('vp_cap_helper',SOURCE_ROOT/'scripts/joint7-vp-cap.py')
+module=importlib.util.spec_from_file_location('vp_cap_helper',SOURCE_ROOT/'scripts/training/migrations/joint7-vp-cap.py')
 helper=importlib.util.module_from_spec(module);module.loader.exec_module(helper)
 
 

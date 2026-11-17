@@ -54,7 +54,7 @@ Run from the lab project root. Replace `YOUR_RUN` with the existing run director
 
 ```bash
 conda activate ai-training
-bash scripts/run-rust-lab-b01-b02.sh artifacts/step5/YOUR_RUN cuda:0
+bash scripts/legacy/rust-lab/run-rust-lab-b01-b02.sh artifacts/step5/YOUR_RUN cuda:0
 ```
 
 It prints the new evidence directory and both receipt paths. The equivalent separate commands are:
@@ -73,13 +73,13 @@ python scripts/qualify-rust-lab.py \
   --out "$B01_OUT"
 
 # Run after B01 reports passed: true.
-bash scripts/run-rust-lab-b02.sh "$RUN" "$B01_OUT/qualification.json" cuda:0
+bash scripts/legacy/rust-lab/run-rust-lab-b02.sh "$RUN" "$B01_OUT/qualification.json" cuda:0
 ```
 
 For an already passing **search_v1 B01 v2** receipt, B02 alone is:
 
 ```bash
-bash scripts/run-rust-lab-b02.sh \
+bash scripts/legacy/rust-lab/run-rust-lab-b02.sh \
   artifacts/step5/YOUR_RUN \
   artifacts/rust-backend/YOUR_B01_OUTPUT/lab/qualification.json \
   cuda:0

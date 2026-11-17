@@ -45,11 +45,11 @@ In code this is the `g1490-branch-restart` variant of `training-revision-g1491/1
 Stop the source run's trainer, pull the code on the lab, then:
 
 ```bash
-python scripts/prepare-rust-g1490-restart.py --share-target 0.75
+python scripts/training/migrations/prepare-rust-g1490-restart.py --share-target 0.75
 ```
 
 ```bash
-python scripts/continue-rust-g1490-restart.py --expected-generation 1491 --iterations 100 --share-target 0.75
+python scripts/training/migrations/continue-rust-g1490-restart.py --expected-generation 1491 --iterations 100 --share-target 0.75
 ```
 
 0.75 is the share target the g1491 run last used; pass any value above 0 and at most 1, the same in both commands. The second command defaults to `--inference cpu --workers 64 --teacher-fast 96 --teacher-fast-k 8 --teacher-full 640`. It runs the calibration iteration, then teaching for the rest (here to g1591). After a stop, rerun it with `--expected-generation` set to the last committed generation. No Rust code changed, so the CPU teacher needs no rebuild; the command rebuilds it only if the lab's build is stale.

@@ -179,7 +179,7 @@ class Revision(unittest.TestCase):
             prior_tests.Revision().test_refresh_is_after_commit_retry_safe_and_preserves_training_state()
 
     def test_helper_from_simulated_1322_read_only_and_strict(self):
-        spec=importlib.util.spec_from_file_location('g1322_helper',SOURCE_ROOT/'scripts/configure-training-g1322.py')
+        spec=importlib.util.spec_from_file_location('g1322_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g1322.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         # No g1322 export is supplied. Model its stated two g1320-recipe commits;
         # the real helper verifies the actual lab state and checkpoint hash.

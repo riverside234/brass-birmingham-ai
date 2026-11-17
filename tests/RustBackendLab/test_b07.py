@@ -1,4 +1,5 @@
 """Short B07 publication/process/restart/adoption boundary regressions."""
+import sys
 import copy
 from concurrent.futures import ThreadPoolExecutor
 import gzip
@@ -14,6 +15,7 @@ from unittest.mock import Mock,patch
 
 from brass_ai.bank import sha
 from brass_ai.learning.contracts import SOURCE_ROOT,digest
+sys.path.insert(0, str(SOURCE_ROOT/'scripts/legacy/rust-lab'))
 from brass_ai.step5.league import write_json
 from brass_ai.rust_backend.lab_replay_compat import qualified_implementation as implementation_id
 from brass_ai.rust_backend import lab_pool as P,lab_admission as A,lab_backend as B

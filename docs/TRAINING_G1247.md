@@ -32,7 +32,7 @@ Sync reviewed code to the lab, then run from its repository root:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 1247 --apply && \
-python scripts/configure-training-g1247.py \
+python scripts/training/migrations/configure-training-g1247.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 1247 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-g1247.json && \

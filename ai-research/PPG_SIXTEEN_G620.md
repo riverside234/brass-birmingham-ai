@@ -211,7 +211,7 @@ reduced EV volatility nor stronger play is established by this revision.
 After syncing source and the review registry, run from the Linux repository:
 
 ```bash
-python scripts/configure-ppg-sixteen.py \
+python scripts/training/migrations/configure-ppg-sixteen.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 620 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg16-cost040-g620.json && \

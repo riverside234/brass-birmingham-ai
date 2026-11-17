@@ -36,7 +36,7 @@ for **g761–g780** (change `--iterations` to continue longer):
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 760 --apply && \
-python scripts/configure-training-g760.py \
+python scripts/training/migrations/configure-training-g760.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 760 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-g760.json && \
@@ -123,7 +123,7 @@ the reward-step helper correctly refuses an early change.
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 611 --apply && \
-python scripts/configure-training-g611.py \
+python scripts/training/migrations/configure-training-g611.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 611 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-g611.json && \
@@ -272,7 +272,7 @@ production checkpoint or training progress was changed.
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 570 --apply && \
-python scripts/configure-training-g570.py \
+python scripts/training/migrations/configure-training-g570.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 570 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-g570-anneal.json && \
@@ -302,7 +302,7 @@ G=$(python -c 'import json; print(json.load(open("artifacts/step5/joint7-v11-2-g
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration "$G" --apply && \
-python scripts/configure-entropy-schedule.py insolvency-step \
+python scripts/training/migrations/configure-entropy-schedule.py insolvency-step \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation "$G" \
   --output "configs/step5/joint7-v11-2-g1290-trained-restart-anneal-reward-g${G}.json" && \
@@ -379,7 +379,7 @@ After stopping the trainer, run from the Linux repository root:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 370 --apply && \
-python scripts/configure-training-g370.py \
+python scripts/training/migrations/configure-training-g370.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 370 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-g370.json && \
@@ -431,7 +431,7 @@ After Ctrl+C, run from the Linux repository root:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-iteration 253 --apply && \
-python scripts/configure-gae-floor.py \
+python scripts/training/migrations/configure-gae-floor.py \
   --run artifacts/step5/joint7-v11-2-g1290-trained-restart \
   --expected-generation 253 \
   --output configs/step5/joint7-v11-2-g1290-trained-restart-gae098-g253.json && \
@@ -616,7 +616,7 @@ Do not reuse an incompatible previously prepared destination or manifest.
 Run from the repository root:
 
 ```bash
-python scripts/prepare-neutral-selfplay.py \
+python scripts/training/migrations/prepare-neutral-selfplay.py \
   --source-run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-source-generation 1360 \
   --seed-generation 1290 --history-through 1330 \
@@ -684,7 +684,7 @@ the final corrected results cover all 63 cases. `git diff --check` passed.
 Key implementation files are `trained_startup.py`, `local_scoring_warmup.py`,
 `local_scoring_auxiliary.py`, `fresh_selfplay.py`, `league.py`, `value_phase.py`,
 the versioned config/GAE/exploration and panel/PFSP gate modules, and
-`scripts/prepare-neutral-selfplay.py`. The launch instructions and focused tests
+`scripts/training/migrations/prepare-neutral-selfplay.py`. The launch instructions and focused tests
 are updated together. Existing signed configurations keep their old auxiliary
 schedule; no old age counter is silently treated as accepted fitting evidence.
 

@@ -56,7 +56,7 @@ Run from the Linux repository after syncing the changes:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 418 --apply && \
-python scripts/joint7-ppg-eight.py --expected-generation 418 && \
+python scripts/training/migrations/joint7-ppg-eight.py --expected-generation 418 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-ppg-eight.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
@@ -138,7 +138,7 @@ Reports now measure actual critic/action bytes, pre-commit disk peak, phase RSS,
 - `src/brass_ai/recovery/ppg_sampling.py`: disjoint stratified policy samples and inclusion-weight correction.
 - `src/brass_ai/recovery/ppg_auxiliary.py`: uniform epochs, paired eight-age holdouts, raw-policy cloning/KL, bounded beta retries, value-Adam reset/warmup/decay, best weights/Adam retention and resource/sample reports.
 - `src/brass_ai/recovery/actor_value.py`, `value_phase.py`, `config.py`, `resume.py`, `league.py`: lifecycle, gate evidence, fresh defaults, reviewed continuation and console reporting.
-- `scripts/joint7-ppg-eight.py`, `configs/step5/joint7-v11-2-grouped-lr-critic-ppg-eight.json`: exact continuation helper and config.
+- `scripts/training/migrations/joint7-ppg-eight.py`, `configs/step5/joint7-v11-2-grouped-lr-critic-ppg-eight.json`: exact continuation helper and config.
 - `configs/learning/selfplay-resume-sources.json`, `imitation-handoff-sources.json`: source compatibility receipts without model reinterpretation.
 - `tests/Recovery/test_ppg_eight.py`, `smoke_ppg_eight.py`: focused regressions and isolated restart smoke.
 - `tests/Recovery/test_gae_value_phase.py`, `test_ppg_refinement.py`, `test_ppo_only.py`: fresh-default expectations and consistent archived test fixtures; explicit legacy recipes remain testable.

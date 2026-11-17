@@ -156,7 +156,7 @@ class Revision(unittest.TestCase):
         self.assertFalse(check_signature(s,target,reviewed=True));self.assertTrue(gae_floor_receipt_preserved(s,target,raw,entry))
 
     def test_config_helper_retry_readonly_and_integrity_checks(self):
-        spec=importlib.util.spec_from_file_location('g370_helper',SOURCE_ROOT/'scripts/configure-training-g370.py')
+        spec=importlib.util.spec_from_file_location('g370_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g370.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);run=root/'artifacts/run';run.mkdir(parents=True)

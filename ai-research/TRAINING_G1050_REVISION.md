@@ -71,7 +71,7 @@ row/step accounting. Legacy explicit v14/v15/v16 behavior remains supported.
 
 Changed implementation: `src/brass_ai/recovery/ppg_g210.py`, `config.py`,
 `resume.py`, `league.py`, the pinned source-review registry, and
-`scripts/configure-training-g1050.py`. Added focused tests/smoke and updated
+`scripts/training/migrations/configure-training-g1050.py`. Added focused tests/smoke and updated
 fresh-default expectations and the two lab guides. Production checkpoints were
 not edited and no long training or evaluation was launched.
 
@@ -83,7 +83,7 @@ Sync the changes, then run from the lab repository root:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 1050 --apply && \
-python scripts/configure-training-g1050.py \
+python scripts/training/migrations/configure-training-g1050.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 1050 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-training-g1050.json && \

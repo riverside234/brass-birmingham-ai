@@ -53,7 +53,7 @@ The saved g270 rating iteration took 577.0 seconds, including 300.7 seconds of e
 
 - Gates/defaults: `src/brass_ai/recovery/panel_gates.py` (new), `v4_share.py`, `temperature_rating.py`, `exploration.py`, `config.py`; `configs/step5/joint7-latest.json` and new `joint7-v11-2-grouped-lr-critic-g270.json`.
 - Planning/reporting: `pfsp_pool.py`, `quality_pool.py`, `ordinary.py`, `ratings.py`, `league.py`, `history.py`, and `scripts/reports/export-training-reports.py`. Export retains live trigger slots until their evidence moves into the existing checksummed archive.
-- Controller/continuation: `snapshot_r2.py`, `resume.py`, both source-compatibility registries, and new `scripts/joint7-panel-gates.py`. The recognized config transition changes only `panel_gates`, `v4_share_gate`, and `entropy_control`'s comparison-enable field.
+- Controller/continuation: `snapshot_r2.py`, `resume.py`, both source-compatibility registries, and new `scripts/training/migrations/joint7-panel-gates.py`. The recognized config transition changes only `panel_gates`, `v4_share_gate`, and `entropy_control`'s comparison-enable field.
 - Focused regressions: new `tests/Recovery/test_panel_gates.py`; updated archived/default fixtures in `test_v4_share.py`, `test_pfsp_pool.py`, `test_quality_pool.py`, `test_exploration_revision.py`, and trigger coverage in `tests/Reports/test_export_training_reports.py`. `docs/MLP_V11_LAB.md` has current defaults and commands. Concurrent shared plot-renderer changes were preserved separately.
 
 **Validation passed:** 162 focused tests in 170.7 seconds across panel gates, v4 sharing, snapshot R², PFSP, archived quality sampling, strength ratings/retention, PPO-only behavior, exploration, source reviews, interrupted-iteration recovery and report export. The new coverage includes the inclusive 90% boundary, independent panel retirement, full rotated-game support, stale/tampered evidence, retained and archived triggers, interrupted commits, rating backlog, normalized IL sampling and its actual pairwise updates, checkpoint planning/restart, and the R² tolerance without a downward reference ratchet. Historical test fixtures explicitly retain their old configuration contracts. Log: `artifacts/g270-review/final-validation-v2.log`.
@@ -70,7 +70,7 @@ After syncing these files, from `/data/not_backed_up/yxu209/ai-training`, with t
 python scripts/recover-step5-iteration.py \
   --root "$PWD" --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 270 --apply && \
-python scripts/joint7-panel-gates.py && \
+python scripts/training/migrations/joint7-panel-gates.py && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-g270.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

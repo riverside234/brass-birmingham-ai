@@ -125,7 +125,7 @@ From g650, the first new phase is **g658** (data g651–658), then **g666**
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 650 --apply && \
-python scripts/configure-ppg-eight-fast.py \
+python scripts/training/migrations/configure-ppg-eight-fast.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 650 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg8-dense-g650.json && \

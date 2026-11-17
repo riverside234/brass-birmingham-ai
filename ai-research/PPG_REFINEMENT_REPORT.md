@@ -78,7 +78,7 @@ prepared continuation. Repeating the helper cannot multiply the limit again.
 Run in the updated lab checkout:
 
 ```bash
-python scripts/joint7-g110-hotfix.py \
+python scripts/training/migrations/joint7-g110-hotfix.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-g110-ppg.json \
   --refine-ppg --apply && \

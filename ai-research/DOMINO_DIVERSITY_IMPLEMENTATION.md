@@ -87,7 +87,7 @@ Run from the lab repository root, after updating the code:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 1326 --apply && \
-python scripts/configure-domino.py \
+python scripts/training/migrations/configure-domino.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 1326 --mode apply --entropy-010 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-domino-entropy010-g1326.json && \
@@ -208,7 +208,7 @@ modules isolate the contracts, assignment, observable occupancy, committed
 statistics, fingerprint caches, intrinsic training and adoption. Integration spans
 ordinary/execution/replay/ingress/critic data, actor-value/PPO/DCPG/PPG, PFSP,
 resume/league/history, native adapters, ONNX metadata, source-review registration
-and report export. `scripts/configure-domino.py` is the generation-bound helper.
+and report export. `scripts/training/migrations/configure-domino.py` is the generation-bound helper.
 Focused tests and isolated smoke scripts are under `tests/Recovery/*domino*`.
 
 This is DOMiNO-based episodic PPO, not a reproduction of the paper's V-trace

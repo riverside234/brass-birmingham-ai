@@ -115,7 +115,7 @@ class Revision(unittest.TestCase):
             self.assertEqual(r['optimizer_steps'],per_epoch*2);self.assertEqual(r['completed_epochs'],2)
 
     def test_helper_direct_g1120_and_interrupted_adoption_are_read_only(self):
-        spec=importlib.util.spec_from_file_location('g1120_kl32_helper',SOURCE_ROOT/'scripts/configure-training-g1120.py')
+        spec=importlib.util.spec_from_file_location('g1120_kl32_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g1120.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper);original=read(EXPORT/'state.json')
         for adopted in (False,True):
             state=copy.deepcopy(original)

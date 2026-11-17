@@ -82,7 +82,7 @@ are idempotent. Applying with insufficient evidence requires the explicit
 Read-only preview of the received bundle:
 
 ```bash
-python scripts/joint7-snapshot-r2.py \
+python scripts/training/migrations/joint7-snapshot-r2.py \
   --reports results/joint7-v11-2-grouped-lr-critic-g0213-20261020T173708767483Z
 ```
 
@@ -92,8 +92,8 @@ For the stopped lab run at generation 213, after updating the code:
 python scripts/recover-step5-iteration.py \
   --root "$PWD" --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 213 --apply && \
-python scripts/joint7-snapshot-r2.py --apply --defer-until-ready && \
-python scripts/joint7-v4-share.py && \
+python scripts/training/migrations/joint7-snapshot-r2.py --apply --defer-until-ready && \
+python scripts/training/migrations/joint7-v4-share.py && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-v4-history.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
@@ -121,7 +121,7 @@ R² controller without this run-specific hotfix.
   frozen references, strict committed state validation.
 - `critic_data.py`, `actor_value.py`, `league.py`: controller-only migration,
   integration, report/console fields, exact state overlay on resume.
-- `snapshot_r2_hotfix.py`, `scripts/joint7-snapshot-r2.py`: read-only preview,
+- `snapshot_r2_hotfix.py`, `scripts/training/migrations/joint7-snapshot-r2.py`: read-only preview,
   lineage-bound one-time application or deferred calibration.
 - Source-review and IL-handoff registries: append the unchanged-architecture
   continuation routes without replacing earlier reviews.

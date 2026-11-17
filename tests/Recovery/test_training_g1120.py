@@ -198,7 +198,7 @@ class Revision(unittest.TestCase):
             self.assertTrue(_same_payload(captured[16],(m.state_dict(),p.optimizer.state_dict())))
 
     def test_helper_is_generation_bound_narrow_and_read_only(self):
-        spec=importlib.util.spec_from_file_location('g1120_helper',SOURCE_ROOT/'scripts/configure-training-g1120.py')
+        spec=importlib.util.spec_from_file_location('g1120_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g1120.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper);state=read(EXPORT/'state.json')
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             root=Path(tmp);run=root/'artifacts/step5/joint7-v11-2-grouped-lr-critic';run.mkdir(parents=True)

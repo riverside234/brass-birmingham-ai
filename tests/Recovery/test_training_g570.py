@@ -281,7 +281,7 @@ class Revision(unittest.TestCase):
             with self.assertRaises(ValueError):R.seed_reference(SOURCE_ROOT,s,self.new)
 
     def test_config_helper_is_read_only_idempotent_and_rejects_stale_or_changed_artifacts(self):
-        spec=importlib.util.spec_from_file_location('g570_helper',SOURCE_ROOT/'scripts/configure-training-g570.py')
+        spec=importlib.util.spec_from_file_location('g570_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g570.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as temp:
             root=Path(temp);run=root/'artifacts/run';run.mkdir(parents=True)

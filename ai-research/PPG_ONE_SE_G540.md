@@ -87,7 +87,7 @@ cd /data/not_backed_up/yxu209/ai-training
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 540 --apply && \
-python scripts/joint7-g540-ppg.py --expected-generation 540 && \
+python scripts/training/migrations/joint7-g540-ppg.py --expected-generation 540 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-one-se-g540.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

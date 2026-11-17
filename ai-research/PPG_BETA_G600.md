@@ -61,7 +61,7 @@ After syncing the code, run in the lab repository to continue **g601–620**:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 600 --apply && \
-python scripts/configure-dcpg.py \
+python scripts/training/migrations/configure-dcpg.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 600 --adaptive-beta \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-dcpg-beta1-g600.json && \

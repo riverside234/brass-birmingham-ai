@@ -153,7 +153,7 @@ new config. The trainer performs adoption; do not edit `state.json` manually.
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 850 --apply && \
-python scripts/configure-training-g850.py \
+python scripts/training/migrations/configure-training-g850.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-generation 850 --rating-workers 4 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-training-g850.json && \
@@ -171,7 +171,7 @@ committed generation; do not repeat an adoption to reset beta or replay.
 ## Implementation files
 
 - Recipe/config/resume: `training_revision_g850.py`, `config.py`, `resume.py`,
-  `utility.py`, the source-review registry, and `scripts/configure-training-g850.py`.
+  `utility.py`, the source-review registry, and `scripts/training/migrations/configure-training-g850.py`.
 - Behavior: `exploration.py`, `opening_objective.py`, `branching.py`.
 - PPG/reporting: `ppg_g210.py`, `value_phase.py`, `review_metrics.py`.
 - Rating execution: `plackett_luce.py`, `ratings.py`.

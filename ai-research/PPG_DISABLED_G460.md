@@ -36,7 +36,7 @@ After syncing the revision, run from the Linux repository:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 460 --apply && \
-python scripts/joint7-ppo-only.py --expected-generation 460 \
+python scripts/training/migrations/joint7-ppo-only.py --expected-generation 460 \
   --microbatch-size 2048 --max-candidate-cells 524288 \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppo-only-g460.json && \
 python scripts/step5.py \
@@ -58,4 +58,4 @@ Validation: **129 focused regressions passed in 189.13 s**, plus the separately 
 
 The final isolated CPU smoke used the current **5,928,616-parameter v11.2 model**, authored 18-game fixtures and a synthetic g460 checkpoint with nonempty optimizers. It performed **8 PPO steps and zero PPG steps**, retired both old cache formats, verified unchanged incoming checkpoint hashes, and verified an exactly matching next PPO update after checkpoint restoration. It exercised the final configured 2048/524288 limits on small authored data; it is not a full-sized GPU benchmark. Wall time was **11.83 s**, first PPO update **2.18 s**, while focused tests shared this host. Evidence: `artifacts/ppg-off-g460-review/smoke-final/report.json`.
 
-Changed files: recovery `ppg_config.py`, `config.py`, `actor_value.py`, `value_phase.py`, `value_buffer.py`, `league.py`, `resume.py`; `scripts/joint7-ppo-only.py`; the new `configs/step5/joint7-v11-2-grouped-lr-critic-ppo-only-g460.json`; source/handoff review registries; PPO/PPG tests and smoke; this report and `docs/MLP_V11_LAB.md`.
+Changed files: recovery `ppg_config.py`, `config.py`, `actor_value.py`, `value_phase.py`, `value_buffer.py`, `league.py`, `resume.py`; `scripts/training/migrations/joint7-ppo-only.py`; the new `configs/step5/joint7-v11-2-grouped-lr-critic-ppo-only-g460.json`; source/handoff review registries; PPO/PPG tests and smoke; this report and `docs/MLP_V11_LAB.md`.

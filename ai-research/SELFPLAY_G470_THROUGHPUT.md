@@ -101,7 +101,7 @@ After syncing the revision, from the repository root on the lab machine:
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 470 --apply && \
-python scripts/joint7-throughput.py --expected-generation 470 && \
+python scripts/training/migrations/joint7-throughput.py --expected-generation 470 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-throughput-g470.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

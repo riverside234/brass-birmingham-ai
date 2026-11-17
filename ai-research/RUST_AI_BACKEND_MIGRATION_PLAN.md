@@ -1077,7 +1077,7 @@ Use the existing project relocation resolver and reject any adoption-time change
 to that dependency. The launcher records its exact training command. Twelve
 focused debug checks passed; no local benchmark/game/training session ran.
 The training implementation and native binaries are unchanged. Pull Git and retry
-`python scripts/continue-rust-lab-b07.py --expected-generation 1250`; it skips
+`python scripts/legacy/rust-lab/continue-rust-lab-b07.py --expected-generation 1250`; it skips
 completed qualification/adoption for the selected backend. **Only the real next
 commit/restart remains Pending.** No new bundle is needed. See
 [commands, including the corrected g1251 resume](../distribution/rust-lab-b07-g1250/README.md).
@@ -1230,7 +1230,7 @@ Use [restart bundle instructions](../distribution/rust-lab-g570/README.md), [ref
 
 | Source | Purpose |
 | --- | --- |
-| `scripts/run-rust-lab-qualification.py`, `scripts/prepare-rust-lab-g570.py`, `src/brass_ai/rust_backend/lab_transfer.py` | Current g570 bundle, full fingerprint inventory, actionable drift diagnostics, exact lab commands and automatic result export |
+| `scripts/legacy/rust-lab/run-rust-lab-qualification.py`, `scripts/legacy/rust-lab/prepare-rust-lab-g570.py`, `src/brass_ai/rust_backend/lab_transfer.py` | Current g570 bundle, full fingerprint inventory, actionable drift diagnostics, exact lab commands and automatic result export |
 | `lab_snapshot.py`, `lab_jobs.py`, `lab_b02_smoke.py`, `lab_families.py`, `lab_admission.py` | Committed source/runtime binding, neutral planner, ordinary family publication/admission |
 | `lab_continuation.py`, `lab_recipe.py`, `training_revision_g370.py`, `actor_value.py`, `ppg_g210.py` | Complete isolated restore and exact pending g370 GAE/beta handling; extend for B05 |
 | `lab-native/src/teacher.rs`, `lab-native/core-overlay/teacher.rs`, `lab_teacher*.py` | Task-only exports, 4s+1s lifecycle, GPU adapter and once-only verification |

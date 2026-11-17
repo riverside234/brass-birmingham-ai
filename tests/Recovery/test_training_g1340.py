@@ -73,7 +73,7 @@ class Revision(unittest.TestCase):
         self.assertEqual(D.change_regime(out,new['diversity'],D.regime(new)),out)
 
     def test_helper_from_1340_is_read_only_generation_bound_and_reviewed(self):
-        spec=importlib.util.spec_from_file_location('g1340_helper',SOURCE_ROOT/'scripts/configure-training-g1340.py')
+        spec=importlib.util.spec_from_file_location('g1340_helper',SOURCE_ROOT/'scripts/training/migrations/configure-training-g1340.py')
         helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
         state=read(SOURCE_ROOT/RUN/'state.json');state.update(iteration=1340)
         state['history'][-1].update(generation=1340,path='artifacts/step5/demo/generation-1340.pt')

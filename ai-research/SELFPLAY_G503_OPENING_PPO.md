@@ -42,7 +42,7 @@ Reports separate `temperature1_categorical_kl`, `behavior_categorical_kl` and op
 
 ## Continuation and changed files
 
-`scripts/joint7-g503-ppg.py` reads locked committed state, composes this revision with the previously requested g503 changes, validates the exact reviewed transition, and writes only the new config. It preserves weights, PPO/value Adam state, RNG, counters, population and lineage. The existing per-phase value-Adam reset still occurs when a scheduled auxiliary phase begins.
+`scripts/training/migrations/joint7-g503-ppg.py` reads locked committed state, composes this revision with the previously requested g503 changes, validates the exact reviewed transition, and writes only the new config. It preserves weights, PPO/value Adam state, RNG, counters, population and lineage. The existing per-phase value-Adam reset still occurs when a scheduled auxiliary phase begins.
 
 Re-enabling PPG at committed g503 starts an empty cache window without backfilling old reward/behavior data. Phases are due at **g511 and g519**. GAE evidence survives re-enable; the LR controller's measurement window resets for the new collection/objective identity while its multiplier and warmup state are retained. The original entropy baseline is not reset. Unchanged old signed recipes remain valid under their old contracts.
 
@@ -52,7 +52,7 @@ Principal files:
 - `ordinary.py`, `replay.py`, `branching.py`, `ingress.py`: durable objective provenance.
 - `ppg_config.py`, `actor_value.py`, `value_phase.py`: versioned 16-step/patience-1 PPG enablement and continuation.
 - `config.py`, `exploration.py`, `resume.py`, `lr_controller.py`, `history.py`, `league.py`: explicit defaults, reviewed transitions, data identity, checkpoint recipe and reporting.
-- `scripts/joint7-g503-ppg.py`, `configs/step5/joint7-v11-2-grouped-lr-critic-ppg-openings-g503.json`, the learning source-review registries, and `docs/MLP_V11_LAB.md`.
+- `scripts/training/migrations/joint7-g503-ppg.py`, `configs/step5/joint7-v11-2-grouped-lr-critic-ppg-openings-g503.json`, the learning source-review registries, and `docs/MLP_V11_LAB.md`.
 - `tests/Recovery/test_opening_ppo.py`, `smoke_opening_ppo.py`, and updated fresh-default assertions in `test_ppg_disabled.py` / `test_exploration_revision.py`.
 
 Unrelated existing chart edits and the completed g503 fixes were preserved. Training checkpoints and exported results were not modified.
@@ -110,7 +110,7 @@ cd /data/not_backed_up/yxu209/ai-training
 python scripts/recover-step5-iteration.py --root "$PWD" \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --expected-iteration 503 --apply && \
-python scripts/joint7-g503-ppg.py --expected-generation 503 && \
+python scripts/training/migrations/joint7-g503-ppg.py --expected-generation 503 && \
 python scripts/step5.py \
   --config configs/step5/joint7-v11-2-grouped-lr-critic-ppg-openings-g503.json train \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \

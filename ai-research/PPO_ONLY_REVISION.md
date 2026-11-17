@@ -73,7 +73,7 @@ Feature/model compatibility and completed IL identity are unchanged.
 From the repository directory on the lab machine:
 
 ```bash
-python scripts/joint7-ppo-only.py \
+python scripts/training/migrations/joint7-ppo-only.py \
   --run artifacts/step5/joint7-v11-2-grouped-lr-critic \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppo-only.json
 
@@ -139,7 +139,7 @@ the learning/feature compatibility digest is unchanged.
 ## Changed files
 
 - Defaults and continuation: `configs/step5/joint7-latest.json`, new
-  `joint7-v11-2-grouped-lr-critic-ppo-only.json`, `scripts/joint7-ppo-only.py`,
+  `joint7-v11-2-grouped-lr-critic-ppo-only.json`, `scripts/training/migrations/joint7-ppo-only.py`,
   `recovery/config.py`, `resume.py`, and the two source-review registries.
 - Execution and evidence: `recovery/actor_value.py`, `value_phase.py`,
   `value_buffer.py`, `updates.py`, `gae.py`, `gae_health.py`, `ev_evidence.py`,
