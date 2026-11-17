@@ -85,7 +85,7 @@ The four-game PPO smoke uses current native code with a small ordinary-only, old
 The relevant repository verification commands, with the dependencies and native runtimes already installed, are:
 
 ```sh
-PYTHONPATH=src:tests/R2:tests/Recovery python scripts/verify-recovery.py
+PYTHONPATH=src:tests/R2:tests/Recovery python scripts/training/checks/verify-recovery.py
 PYTHONPATH=src:tests/R2:tests/Recovery:tests/Personality \
   python -m unittest discover -s tests/Personality -p 'test_*.py' -v
 PYTHONPATH=src:tests/R2:tests/Recovery \

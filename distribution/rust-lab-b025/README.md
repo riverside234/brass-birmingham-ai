@@ -44,4 +44,4 @@ Future mode/share toggles use this helper and the existing `--resume-reviewed-so
 
 The future teacher profile remains search_v1, 4 seconds/K16, one session × one thread, one pending path, V205 disabled. It is independent of the installed game's selectable profiles.
 
-See [implementation and scope](../../ai-research/RUST_BACKEND_B025_REPORT.md), [migration milestone](../../ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md#b025--revise-the-teacher-distillation-phase), and the [detailed teacher specification](../../ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md).
+See [implementation and scope](../../ai-research/RUST_BACKEND_B025_REPORT.md), [migration milestone](../../ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md#b025--revise-the-teacher-distillation-phase), and the [detailed teacher specification](../../ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md).

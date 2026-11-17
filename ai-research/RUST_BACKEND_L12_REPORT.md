@@ -59,7 +59,7 @@ allocation attribution has its own executable.
 ## Reference and verification
 
 The independent small
-[`reproduce-gumbel-coordinator.py`](../scripts/reproduce-gumbel-coordinator.py)
+[`reproduce-gumbel-coordinator.py`](../scripts/experiments/gumbel-is-mcts/reproduce-gumbel-coordinator.py)
 and [`coordinator-v1.json`](../tests/GumbelISMCTS/fixtures/coordinator-v1.json)
 define five merger cases and two reservation/retirement traces. The detailed
 [versioned contract](../configs/contracts/rust-backend/gumbel-coordinator-v1.md)
@@ -219,7 +219,7 @@ training are preserved by before/after receipts. This milestone does not promote
 the backend to training or treat the temporary NN as final.
 
 ```powershell
-python scripts/qualify-rust-coordinator.py --out artifacts/rust-backend/my-new-l12-run
+python scripts/training/rust-lab/validation/qualify-rust-coordinator.py --out artifacts/rust-backend/my-new-l12-run
 ```
 
 Use a fresh output directory with the pinned local toolchain/model/corpus. The

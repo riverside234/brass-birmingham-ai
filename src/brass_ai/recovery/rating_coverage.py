@@ -58,7 +58,7 @@ def prepare(root, state, config):
     return saved
 
 
-def lineups(rating, agents, candidate, scores, generation, anchor=None,coverage_config=None):
+def lineups(rating, agents, candidate, scores, generation, anchor=None,coverage_config=None,slot=None):
     """One balanced list per setup, rotated identically through all four seats."""
     c=rating['config']; seeds=rating['seeds']
     g1290=coverage_config==G1290_BASELINE
@@ -80,7 +80,8 @@ def lineups(rating, agents, candidate, scores, generation, anchor=None,coverage_
         if len(available)==c['nearest_opponents']:break
     # Spread reference setups every four positions, and rotate that pattern
     # through all fixed seeds over successive slots, rather than pinning IL/v4.
-    offset=(generation//c['every_iterations'])%len(seeds)
+    # `slot` counts rated generations (rating_cadence.ordinal); one step per slot, as before.
+    offset=(generation//c['every_iterations'] if slot is None else slot)%len(seeds)
     if g1290:
         pattern=[SEED]*coverage_config['seed_reference']['setups']
         fallback_references=(SEED,)

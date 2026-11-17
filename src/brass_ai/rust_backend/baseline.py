@@ -49,7 +49,7 @@ def model_receipt(checkpoint):
     from brass_ai.recovery.utility import calibration_ready
     from brass_ai.learning.seat_descriptors import CONTRACT as DESCRIPTORS
     checkpoint=Path(checkpoint).resolve(); bundle=checkpoint.parent
-    spec=importlib.util.spec_from_file_location('migration_test_nn_export', SOURCE_ROOT/'scripts/export-test-nn.py')
+    spec=importlib.util.spec_from_file_location('migration_test_nn_export', SOURCE_ROOT/'scripts/training/checkpoints/export-test-nn.py')
     exporter=importlib.util.module_from_spec(spec);spec.loader.exec_module(exporter)
     manifest=exporter.verify_bundle(bundle)
     require(file_sha(checkpoint)==manifest['checkpoint']['sha256'] and checkpoint.stat().st_size==manifest['checkpoint']['bytes'],
@@ -92,7 +92,7 @@ def freeze(root, out, checkpoint, upstream, *, save_root=None):
         and p!='configs/references/rust-engine.lock.json' and (p.startswith(('src/brass_ai/','src/BrassHost/',
         'src/BrassSearchHost/','src/BrassTrainingHost/','src/BrassLocalAI/','configs/','training/runtime/'))
         or p.startswith('requirements-') or p in ('scripts/build-training-host.py','scripts/build-search-host.py',
-        'scripts/build-local-scoring-host.py','scripts/export-test-nn.py','tests/FeatureEngineering/fe_fixtures.py'))]
+        'scripts/build-local-scoring-host.py','scripts/training/checkpoints/export-test-nn.py','tests/FeatureEngineering/fe_fixtures.py'))]
     files=snapshot_files(root,references,out/'reference-source.zip')
     source=dict(commit=git(root,'rev-parse','HEAD'), status=git(root,'status','--short'), files=files, digest=digest(files),
                 archive=receipt(out/'reference-source.zip',root))
@@ -184,8 +184,12 @@ def freeze(root, out, checkpoint, upstream, *, save_root=None):
 def verify_reference(baseline, root=SOURCE_ROOT):
     provenance_drift=[]
     for item in baseline['reference_source']['files']:
-        actual=file_sha(Path(root)/item['path'])
-        if actual!=item['sha256'] and item['path']=='scripts/export-test-nn.py':
+        path=Path(root)/item['path']
+        if item['path']=='scripts/export-test-nn.py' and not path.is_file():
+            path=Path(root)/'scripts/training/checkpoints/export-test-nn.py'
+        actual=file_sha(path)
+        if actual!=item['sha256'] and item['path'] in (
+                'scripts/export-test-nn.py','scripts/training/checkpoints/export-test-nn.py'):
             # This helper was executed ONLY during L01 bundle verification. It
             # is not imported by capture/replay/inference/search. Keep its exact
             # frozen bytes in the verified archive when unrelated export work

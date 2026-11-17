@@ -48,7 +48,7 @@ Allow the current iteration to finish, then stop the trainer before updating its
 
 ```bash
 conda activate ai-training
-python /data/not_backed_up/yxu209/ai-training/scripts/verify-step5.py
+python /data/not_backed_up/yxu209/ai-training/scripts/training/checks/verify-step5.py
 
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda --config /data/not_backed_up/yxu209/ai-training/configs/step5/lab.json train --run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main-scaled --from-run /data/not_backed_up/yxu209/ai-training/artifacts/step5/main --iterations 2
 ```
@@ -128,7 +128,7 @@ The new tests cover strict config fields, exact table quotas, filling 32-worker 
 An optional small real-engine check compares two identical setups under serial and parallel collection, then runs two independent short-search games:
 
 ```bash
-python /data/not_backed_up/yxu209/ai-training/scripts/check-step5-scaling.py --device cuda --with-search
+python /data/not_backed_up/yxu209/ai-training/scripts/training/checks/check-step5-scaling.py --device cuda --with-search
 ```
 
 It writes evidence beneath `/data/not_backed_up/yxu209/ai-training/artifacts/step5/scaling-checks/`. The search smoke uses one-second budgets and accepts properly labeled incomplete searches; it verifies execution and isolation, not useful teacher strength. It does not rerun a qualification tournament. For results executed locally, see [scaling checks](STEP5_SCALING_CHECKS.md).

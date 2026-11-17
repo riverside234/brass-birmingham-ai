@@ -60,7 +60,7 @@ def main():
     report = dict(passed=True, purpose='integration only; fresh untrained neural model',
                   games=len(games), decisions=sum(counts.values()), behavior_counts=dict(counts),
                   policy_ids=declared, shard_sha256=sha(shard),
-                  collector_sha256=sha(root / 'scripts/collect-legacy-bank.py'),
+                  collector_sha256=sha(root / 'scripts/training/opponent-banks/collect-legacy-bank.py'),
                   verifier_sha256=sha(Path(__file__)), exact_model_identity=True,
                   all_four_seat_trajectories=True, mixed_on_policy_rejected=True)
     write_new(below(root, args.output), report)

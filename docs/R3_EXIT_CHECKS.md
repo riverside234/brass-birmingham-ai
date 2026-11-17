@@ -82,9 +82,9 @@ The [final admission check](../training/opponents/evaluations/qualification-d9db
 ./scripts/local-game/legacy-bridge/check-legacy-bridge.ps1 -Unity -Overlay
 # Wait for the isolated Unity process and inspect its newly written result.
 ./scripts/local-game/legacy-bridge/check-legacy-overlay-ui.ps1
-python scripts/check-frozen-bank.py --root . --bank bank-804c85204da65824cb9b --output artifacts/legacy-ai/new-platform-check.json
-python scripts/verify-r3.py --root . --bank bank-804c85204da65824cb9b --unit-report artifacts/legacy-ai/new-platform-check.json --output artifacts/legacy-ai/new-correctness.json
-python scripts/check-legacy-admission.py --root . --output artifacts/legacy-ai/new-admission-check.json
+python scripts/training/opponent-banks/check-frozen-bank.py --root . --bank bank-804c85204da65824cb9b --output artifacts/legacy-ai/new-platform-check.json
+python scripts/training/opponent-banks/verify-r3.py --root . --bank bank-804c85204da65824cb9b --unit-report artifacts/legacy-ai/new-platform-check.json --output artifacts/legacy-ai/new-correctness.json
+python scripts/training/opponent-banks/check-legacy-admission.py --root . --output artifacts/legacy-ai/new-admission-check.json
 ```
 
 The aggregate check additionally requires the separately executed replay/style diagnostics described in the guide and the R2 regression report. Use new output paths so evidence is not overwritten. The matching private game dependencies/compiler and Python dependencies must already be available.

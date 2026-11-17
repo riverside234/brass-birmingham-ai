@@ -113,3 +113,16 @@ Found while testing build step 9 (ordinary autoplay, [STEP9_ORDINARY_AUTOPLAY.md
 | `test_b06.B06.test_exact_g1250_source_route_preserves_config_restrictions` | `ValueError: This self-play source transition has not been reviewed` |
 | `test_b06.B06.test_native_branch_lane_installs_continuation_window_before_sampling` | `AttributeError: … lab_collection … does not have the attribute 'Collector'` (the test patches a name the module no longer imports) |
 | `test_b07.B07.test_attested_reads_equal_full_validation_including_branches_and_reference_fallback` (4 subtests) | `TypeError: Admitted actor inputs are immutable` |
+
+## Rating-suite errors with no local export (found 2026-11-17, still in the tree)
+
+Found while testing the g3170 publisher and rating-cadence work ([G3170_PUBLISHER_LEASES_RATING.md](../../ai-research/G3170_PUBLISHER_LEASES_RATING.md)). `test_panel_gates` gives the same 6 errors on the tree without these edits. Each reads `results/joint7-v11-2-grouped-lr-critic-g0270-20261020T233304700657Z`, which is not on this laptop. They have not been deleted. The 10 collection-suite failures above are also unchanged by this work.
+
+| Test | Message |
+|---|---|
+| `test_panel_gates.PanelGates.test_config_upgrade_exact_blocks_and_temperature_default` | `FileNotFoundError: …grouped-lr-critic-g0270…` |
+| `test_panel_gates.PanelGates.test_generation270_reviewed_transition_preserves_counters_and_pool` | same |
+| `test_panel_gates.PanelGates.test_schedule_partial_retry_restart_and_main_only_next_slot` | same |
+| `test_panel_gates.PanelGates.test_v4_share_90_boundary_and_threshold_migration_rechecks_latest` | same |
+| `test_panel_gates.RecoveryTolerance.test_g270_evidence_and_compact_fields` | same |
+| `test_panel_gates.ScoredIL.test_real_g270_planner_quotas_probabilities_and_checkpoint_plan_restart` | same |

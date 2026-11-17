@@ -2,7 +2,7 @@
 
 27 September 2026. Scope: standard four-player rules host, legal decisions, restoration, permitted observations and initial H0 capture. Runtime contract `0.2.0`; existing installed rules patch `1.1.0`. See [implementation and usage](R1_HOST.md).
 
-**Outcome: passed for the declared Windows runtime.** The implementation and checks below have run locally. The [versioned machine-readable summary](R1_EXIT_CHECKS.json) records the final results and hashes. Its generated original is `artifacts/r1-host/exit-checks.json`, produced by `scripts/verify-r1.py`; that verifier rejects stale host hashes, changed source, mismatched traces, failed reports and changed installed patch files. Generated game-state records remain ignored by Git.
+**Outcome: passed for the declared Windows runtime.** The implementation and checks below have run locally. The [versioned machine-readable summary](R1_EXIT_CHECKS.json) records the final results and hashes. Its generated original is `artifacts/r1-host/exit-checks.json`, produced by `scripts/training/rules-host/verify-r1.py`; that verifier rejects stale host hashes, changed source, mismatched traces, failed reports and changed installed patch files. Generated game-state records remain ignored by Git.
 
 | Exit gate | Evidence |
 | --- | --- |
@@ -31,17 +31,17 @@ Reproduce the exit checks from this workspace (or supply `-GameRoot` / `--game-r
 
 ```powershell
 python -m pip install -r requirements-r1.txt
-pwsh -NoProfile -File scripts/build-host.ps1
-python scripts/check-r1-traces.py
-python scripts/test-r1.py
-pwsh -NoProfile -File scripts/check-r1-runtime.ps1
-pwsh -NoProfile -File scripts/check-r1-runtime.ps1 -Unity
+pwsh -NoProfile -File scripts/training/rules-host/build-host.ps1
+python scripts/training/rules-host/check-r1-traces.py
+python scripts/training/rules-host/test-r1.py
+pwsh -NoProfile -File scripts/training/rules-host/check-r1-runtime.ps1
+pwsh -NoProfile -File scripts/training/rules-host/check-r1-runtime.ps1 -Unity
 # The Unity command launches the isolated check. Wait for its process to exit
 # and artifacts/r1-unity/unity-result.json to report passed before aggregating.
-pwsh -NoProfile -File scripts/capture-h0.ps1 -Games 5
-python scripts/verify-r1.py
+pwsh -NoProfile -File scripts/training/opponent-banks/capture-h0.ps1 -Games 5
+python scripts/training/rules-host/verify-r1.py
 python -m unittest discover -s tests/R0 -p 'test_*.py' -v
-python scripts/verify-r0.py --check-cache --game-root .
+python scripts/training/rules-host/verify-r0.py --check-cache --game-root .
 ```
 
 The local run used the bundled Python interpreter and already-installed pinned validator packages via `PYTHONPATH=artifacts/r0-validation-deps;src`; the portable commands above use an ordinary Python environment with the same requirements. No Torch or GPU was involved.

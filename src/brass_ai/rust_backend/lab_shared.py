@@ -3,6 +3,13 @@
 The parent allocates *before* an actor writes: even an actor killed during export
 cannot strand an unknown shared segment. Publishers detach each sealed chunk
 once into immutable bytes. This keeps NumPy views alive after lease retirement.
+
+The parent issues each ordinary game's lease with the job (reserve), sized from the
+largest export so far. The lane then writes its export inside the CPU ticket it played
+the game under: no allocation round trip to the parent and no second ticket wait. The
+parent shrinks the lease to the written chunks when the result arrives (settle). An
+export that does not fit takes the original exact allocation path. Each chunk is hashed
+once; the part's seal binds the ordered chunk sizes and hashes.
 """
 import hashlib
 import json
@@ -13,17 +20,35 @@ import uuid
 
 from brass_ai.learning.contracts import require
 
-FORMAT = 'brass-ordinary-shared-part/1'
+FORMAT = 'brass-ordinary-shared-part/2'
+SHARED_ROWS = 'BRASS_SHARED_ROWS'          # '0': publishers parse every row in full (json.loads)
+PREISSUED = 'BRASS_PREISSUED_LEASES'       # '0': every export asks the parent for an exact lease
+
+
+def switch(name):
+    import os
+    value = os.environ.get(name, '1')
+    require(value in ('0', '1'), name + ' must be 0 or 1')
+    return value == '1'
 CHUNK = 16 * 1024**2
 LIMIT = 512 * 1024**2
 BUDGET = 6 * 1024**3
+OFFER = 64 * 1024**2      # first pre-issued lease; then 1.25 x the largest export so far
+_TIMING_KEYS = ('capacity_wait_seconds', 'mapping_setup_seconds')
+
+
+def seal(chunks, hashes):
+    """One digest over the ordered chunk sizes and SHA-256 hashes, each chunk hashed once."""
+    return hashlib.sha256(json.dumps([[c['size'], h] for c, h in zip(chunks, hashes, strict=True)],
+                                     separators=(',', ':')).encode()).hexdigest()
 
 
 class Registry:
     def __init__(self, cancel, *, budget=BUDGET):
         self.cancel, self.budget = cancel, budget
         self.condition = threading.Condition(); self.leases = {}; self.used = self.peak = 0
-        self.waiting = 0
+        self.waiting = 0; self.largest = 0
+        self.offers = dict(issued=0, used=0, released=0, too_small=0)
 
     def allocate(self, size):
         require(type(size) is int and 0 < size <= min(self.budget, LIMIT), 'Shared part exceeds bound')
@@ -55,13 +80,63 @@ class Registry:
                 self.used -= size; self.condition.notify_all()
             raise
 
-    def verify(self, handle):
+    def offer_size(self):
+        with self.condition:largest = self.largest
+        size = OFFER if not largest else -(-(largest * 5 // 4) // 2**20) * 2**20
+        return min(size, LIMIT, self.budget)
+
+    def reserve(self):
+        """A lease issued with a job, before the game is played. It counts fully against the budget."""
+        handle = self.allocate(self.offer_size())
+        with self.condition:self.offers['issued'] += 1
+        return handle
+
+    def _expected(self, handle):
         with self.condition:
             require(handle.get('lease') in self.leases, 'Unknown shared lease')
-            expected, _ = self.leases[handle['lease']]
-            require({k:v for k,v in handle.items() if k not in ('sha256', 'chunk_hashes', 'branch_expected', 'transfer_timings',
-                                                              'capacity_wait_seconds', 'mapping_setup_seconds')}
-                    == expected, 'Shared lease identity changed')
+            return self.leases[handle['lease']]
+
+    def verify(self, handle):
+        """The handle names this lease's leading chunks: all full but the last, which is not empty."""
+        expected, _ = self._expected(handle)
+        chunks = handle.get('chunks')
+        require(handle.get('format') == FORMAT and type(handle.get('size')) is int and type(chunks) is list
+                and 0 < len(chunks) <= len(expected['chunks']) and 0 < handle['size'] <= expected['size']
+                and sum(c['size'] for c in chunks) == handle['size']
+                and all(set(c) == {'name', 'size'} and c['name'] == e['name'] and type(c['size']) is int
+                        and 0 < c['size'] <= e['size'] and (c['size'] == e['size'] or i == len(chunks)-1)
+                        for i, (c, e) in enumerate(zip(chunks, expected['chunks']))),
+                'Shared lease identity changed')
+
+    def settle(self, offered, result):
+        """After a lane's reply: shrink a used pre-issued lease to its written chunks, else release it."""
+        if offered is None:return
+        shared = isinstance(result, dict) and result.get('format') == FORMAT
+        if not (shared and result.get('lease') == offered['lease']):
+            # Unused: a larger export took the exact allocation path, or the part is not shared.
+            self.release(offered)
+            with self.condition:self.offers['too_small' if shared else 'released'] += 1
+            return
+        self.verify(result)
+        with self.condition:
+            expected, owners = self.leases[result['lease']]
+            names = {c['name'] for c in result['chunks']}
+            dropped = [s for s in owners if s.name not in names]
+            kept = [s for s in owners if s.name in names]
+            self.leases[result['lease']] = (dict(expected, size=result['size'], chunks=result['chunks']), kept)
+        for s in dropped:
+            try:s.close()
+            finally:
+                try:s.unlink()
+                except FileNotFoundError:pass
+        with self.condition:
+            self.used -= expected['size'] - result['size']; self.largest = max(self.largest, result['size'])
+            self.offers['used'] += 1; self.condition.notify_all()
+
+    def observe(self, handle):
+        """Record an exactly allocated export's size, so later offers fit it."""
+        if isinstance(handle, dict) and handle.get('format') == FORMAT and type(handle.get('size')) is int:
+            with self.condition:self.largest = max(self.largest, handle['size'])
 
     def release(self, handle):
         with self.condition:
@@ -86,7 +161,8 @@ class Registry:
 
     def report(self):
         with self.condition:return dict(active_bytes=self.used, peak_bytes=self.peak,
-                                         budget_bytes=self.budget, active_leases=len(self.leases))
+                                         budget_bytes=self.budget, active_leases=len(self.leases),
+                                         preissued_leases=dict(self.offers), largest_part_bytes=self.largest)
 
 
 class Export:
@@ -95,8 +171,12 @@ class Export:
         self.metadata, self.records, self.features = metadata, records, features
 
 
-def write(part, allocate, *, admit=None, cancel=None):
-    """Actor writes only a parent-owned lease; control IPC carries no history."""
+def write(part, allocate=None, *, admit=None, cancel=None, lease=None):
+    """Actor writes only a parent-owned lease; control IPC carries no history.
+
+    With `lease` (issued with the job, written inside the caller's CPU ticket) it returns
+    None when the export does not fit; the caller then takes the allocate path.
+    """
     import struct
     began = time.perf_counter()
     require(isinstance(part, Export), 'Shared export requires native wire pages')
@@ -108,34 +188,44 @@ def write(part, allocate, *, admit=None, cancel=None):
     values = [struct.pack('<I', len(header)), header,
               *(raw for _, raw in part.records), *part.features]
     size = sum(map(len, values))
-    queued=time.perf_counter(); handle = dict(allocate(size)); allocated=time.perf_counter()
+    from contextlib import nullcontext
+    if lease is not None:
+        require(lease.get('format') == FORMAT and type(lease.get('size')) is int, 'Invalid pre-issued lease')
+        if size > lease['size']:return None
+        handle = dict(lease); queued = allocated = time.perf_counter(); context = nullcontext()
+    else:
+        queued=time.perf_counter(); handle = dict(allocate(size)); allocated=time.perf_counter()
+        # Capacity waits happen outside CPU admission, so a full buffer cannot
+        # consume every actor slot and starve the publishers that would free it.
+        context = admit() if admit else nullcontext()
     capacity_wait=handle.pop('capacity_wait_seconds',None)
     mapping_setup=handle.pop('mapping_setup_seconds',None)
-    from contextlib import nullcontext
-    sources = iter(values); source = memoryview(next(sources)); hashes = []; total = hashlib.sha256()
-    # Capacity waits happen outside CPU admission, so a full buffer cannot
-    # consume every actor slot and starve the publishers that would free it.
-    with (admit() if admit else nullcontext()):
+    sources = iter(values); source = memoryview(next(sources)); hashes = []; chunks = []; remaining = size
+    with context:
         for chunk in handle['chunks']:
+            if not remaining:break
             require(cancel is None or not cancel.is_set(),'Shared export canceled')
+            count_chunk = min(chunk['size'], remaining)
             shm = shared_memory.SharedMemory(name=chunk['name'])
             try:
                 offset = 0; hashed = hashlib.sha256()
-                while offset < chunk['size']:
+                while offset < count_chunk:
                     if not len(source):source = memoryview(next(sources))
-                    count = min(len(source), chunk['size']-offset)
+                    count = min(len(source), count_chunk-offset)
                     shm.buf[offset:offset+count] = source[:count]
-                    hashed.update(source[:count]); total.update(source[:count])
+                    hashed.update(source[:count])
                     offset += count; source = source[count:]
                 hashes.append(hashed.hexdigest())
             finally:shm.close()
-    require(not len(source) and next(sources, None) is None, 'Shared export length differs')
-    return dict(handle, sha256=total.hexdigest(), chunk_hashes=hashes,
-                branch_expected=part.metadata['branch_expected'],
+            chunks.append(dict(name=chunk['name'], size=count_chunk)); remaining -= count_chunk
+    require(not remaining and not len(source) and next(sources, None) is None, 'Shared export length differs')
+    return dict(format=FORMAT, lease=handle['lease'], size=size, chunks=chunks, sha256=seal(chunks, hashes),
+                chunk_hashes=hashes, branch_expected=part.metadata['branch_expected'],
                 transfer_timings=dict(shared_write_seconds=time.perf_counter()-began,
                                       shared_allocate_wait_seconds=allocated-queued,
                                       shared_capacity_wait_seconds=capacity_wait,
                                       shared_mapping_setup_seconds=mapping_setup,
+                                      shared_preissued=lease is not None,
                                       shared_bytes=size, temporary_payload_write_bytes=0))
 
 
@@ -144,8 +234,9 @@ def read(handle):
     import struct
     require(handle.get('format') == FORMAT and 0 < handle['size'] <= LIMIT and
             len(handle['chunks']) == len(handle['chunk_hashes']) and
-            sum(x['size'] for x in handle['chunks']) == handle['size'], 'Invalid shared descriptor')
-    buffers = []; total = hashlib.sha256()
+            sum(x['size'] for x in handle['chunks']) == handle['size'] and
+            seal(handle['chunks'], handle['chunk_hashes']) == handle['sha256'], 'Invalid shared descriptor')
+    buffers = []
     for chunk, fingerprint in zip(handle['chunks'], handle['chunk_hashes'], strict=True):
         require(0 < chunk['size'] <= CHUNK, 'Invalid shared chunk size')
         shm = shared_memory.SharedMemory(name=chunk['name'])
@@ -154,8 +245,7 @@ def read(handle):
             raw = bytes(shm.buf[:chunk['size']])
         finally:shm.close()
         require(hashlib.sha256(raw).hexdigest() == fingerprint, 'Shared chunk changed')
-        total.update(raw); buffers.append(memoryview(raw))
-    require(total.hexdigest() == handle['sha256'], 'Shared part changed')
+        buffers.append(memoryview(raw))
     index = offset = consumed = 0
     def take(size):
         nonlocal index, offset, consumed
@@ -180,20 +270,28 @@ def read(handle):
 def decode(part):
     """Publisher-only materialization, with the original Rust byte seals."""
     import numpy as np
-    from .lab_delta import Decoder
+    from .lab_delta import Decoder, SharedRows
     from .lab_transport import decode_arrays
     from brass_ai.recovery.replay import CheckedGame
     value = dict(part.metadata); receipt = value['native_receipt']
-    decoder = Decoder(); records = []; evidence = []; start = 0
+    decoder = Decoder(); shared = SharedRows() if switch(SHARED_ROWS) else None
+    records = []; evidence = []; start = 0
     hashes = [hashlib.sha256(b'['),hashlib.sha256(b'[')]
     for meta, raw in part.records:
         require(meta['token']==receipt['token'] and meta['rows']==receipt['rows'] and meta['start']==start
                 and start < meta['end'] <= min(start+64,receipt['rows']) and
                 len(meta['lengths'])==meta['end']-start, 'Shared record page binding differs')
-        for row, proof in decoder.records(meta,raw):
-            for destination, hashed, raw_json in zip((records,evidence),hashes,(row,proof),strict=True):
-                if start:hashed.update(b',')
-                hashed.update(raw_json);destination.append(json.loads(bytes(raw_json)))
+        for prefix, history, suffix, base, proof in decoder.split_records(meta,raw):
+            if start:
+                for hashed in hashes:hashed.update(b',')
+            # The seal covers the row's exact bytes; hash them in place, without joining.
+            for piece in ((prefix,) if history is None else (prefix,history,suffix)):hashes[0].update(piece)
+            hashes[1].update(proof)
+            # Unchanged history events, board fields, players and choices are parsed once and shared.
+            records.append(json.loads(bytes(prefix)) if history is None else
+                           json.loads(b''.join((prefix,history,suffix))) if shared is None else
+                           shared.row(prefix,history,suffix,base))
+            evidence.append(json.loads(bytes(proof)))
             start += 1
         require(start==meta['end'],'Shared page row count differs')
     for hashed in hashes:hashed.update(b']')
@@ -211,5 +309,8 @@ def decode(part):
     value['game'] = CheckedGame(game).bind(arrays)
     value['game'].actor_validated = value.pop('actor_validated')
     value['game']._native_arrays = arrays
+    # Not part of the replay: an attribute, reported in the publication timings.
+    value['game'].decode_sharing = (dict(parsed=shared.parsed, reused=shared.reused, fallbacks=shared.fallbacks)
+                                    if shared is not None else dict(disabled=True))
     value['evidence'] = evidence
     return value

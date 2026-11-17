@@ -16,7 +16,7 @@ trained model, or OpenSpiel game adapter. See the [exit-check record](R0_EXIT_CH
 | [Rules profile](../configs/rules/steam-brass-patch-1.1.0.json) | Exact installed patch pair, stock provenance, standard-game scope and remaining R1 gates |
 | [Python validator](../src/brass_ai/contracts.py) | Structural checks plus cross-message, seat, value, result and budget consistency |
 | [Multiplayer prototypes](../src/brass_ai/multiplayer.py) | Original small arithmetic fixtures for acting-seat selection, backup and chance expectation |
-| [Verifier](../scripts/verify-r0.py) | Offline metadata checks, explicit optional reference fetching and read-only installed-file checks |
+| [Verifier](../scripts/training/rules-host/verify-r0.py) | Offline metadata checks, explicit optional reference fetching and read-only installed-file checks |
 
 Use Python 3.10 or newer in an isolated environment. The executed checks used
 Python 3.12.14 on Windows; Linux has not been executed here. Install
@@ -25,7 +25,7 @@ No Torch, GPU, Unity process or OpenSpiel installation is needed for R0:
 
 ```sh
 python -m pip install -r requirements-r0.txt
-python scripts/verify-r0.py
+python scripts/training/rules-host/verify-r0.py
 python -m unittest discover -s tests/R0 -p "test_*.py" -v
 ```
 
@@ -33,9 +33,9 @@ The default verifier and unit tests need neither network access nor game files.
 The following checks are explicit opt-ins:
 
 ```sh
-python scripts/verify-r0.py --fetch-references
-python scripts/verify-r0.py --check-cache
-python scripts/verify-r0.py --game-root "/path/to/Brass Birmingham"
+python scripts/training/rules-host/verify-r0.py --fetch-references
+python scripts/training/rules-host/verify-r0.py --check-cache
+python scripts/training/rules-host/verify-r0.py --game-root "/path/to/Brass Birmingham"
 ```
 
 The fetcher reads only commit-pinned raw GitHub files into

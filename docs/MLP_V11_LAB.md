@@ -113,7 +113,7 @@ Skip this section when v11.1 IL is already complete; use the upgrade below. For 
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
 
-python scripts/feature-engineering.py inspect
+python scripts/training/imitation/feature-engineering.py inspect
 
 python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
   --manifest artifacts/il-replay/features4-compact-v8-batch7/manifest.json \
@@ -152,7 +152,7 @@ conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
 python -m pip install -r requirements-step5.txt
 
-python scripts/feature-engineering.py configure \
+python scripts/training/imitation/feature-engineering.py configure \
   --imitation-run artifacts/step5/features4-v11-2-batch7-il \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-ppg-openings-fresh.json
 
@@ -166,7 +166,7 @@ python scripts/step5.py --config configs/step5/joint7-v11-2-grouped-lr-critic-pp
 Only if the v11.2 IL directory does not yet exist:
 
 ```bash
-python scripts/feature-engineering.py upgrade-imitation \
+python scripts/training/imitation/feature-engineering.py upgrade-imitation \
   --imitation-run artifacts/step5/features4-v11-1-batch7-il \
   --output artifacts/step5/features4-v11-2-batch7-il
 ```

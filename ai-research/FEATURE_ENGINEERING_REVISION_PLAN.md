@@ -266,7 +266,7 @@ uses its own revised 3.1M cap with the existing 100k extension allowance.
 
 Learning/model/source fingerprints, encoded-version checks and `.features-v2.*`
 caches reject old weights, encoded arrays, mixed batches and stale teacher/source
-identities. `scripts/feature-engineering.py convert` provides explicit heuristic-only
+identities. `scripts/training/imitation/feature-engineering.py convert` provides explicit heuristic-only
 raw conversion with full native replay/label/split validation and new outputs.
 Two archived complete games (345 training / 346 validation decisions) were converted
 without changing raw game objects, action IDs or source bytes. Negative cases reject

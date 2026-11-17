@@ -18,10 +18,10 @@ Validated platform: Windows, Python 3, PowerShell 7 and .NET Framework; no .NET 
 
 ```powershell
 python -m pip install -r requirements-r1.txt
-pwsh -NoProfile -File scripts/build-host.ps1 -GameRoot 'D:\SteamLibrary\steamapps\common\Brass Birmingham'
-python scripts/check-r1-traces.py
+pwsh -NoProfile -File scripts/training/rules-host/build-host.ps1 -GameRoot 'D:\SteamLibrary\steamapps\common\Brass Birmingham'
+python scripts/training/rules-host/check-r1-traces.py
 python -m unittest discover -s tests/R1 -p 'test_*.py' -v
-pwsh -NoProfile -File scripts/check-r1-runtime.ps1
+pwsh -NoProfile -File scripts/training/rules-host/check-r1-runtime.ps1
 ```
 
 When the repository itself is the game directory, omit `-GameRoot`. The dependencies and generated records stay under `artifacts/`, which Git excludes. A clean clone alone cannot run the engine: provide the locally owned, matching game DLLs. The client accepts a `mono=` executable on non-Windows systems as an experimental launch path; Linux and the lab computer have **not** been validated. [R2's training scaffold](R2_TRAINING.md) now consumes this interface and can train transferred compatible replay shards without the engine.
@@ -87,6 +87,6 @@ S1/S2/S3, neural inputs/targets, opponent action probabilities and policy-cache 
 
 ## H0 capture and remaining milestones
 
-Run `pwsh scripts/capture-h0.ps1 -Games 5` with the verified original assembly at ignored `artifacts/patch-baseline/Assembly-CSharp.dll`. Original and guarded Hard run in separate directories/processes. The runner records one selected rule, action/event trace, timings, explicit setup, scores and failures, and runs an uninstrumented control. A selector wrapper calls the original selector exactly once and records its returned rule; it never reruns applicability, priority or print methods for explanation.
+Run `pwsh scripts/training/opponent-banks/capture-h0.ps1 -Games 5` with the verified original assembly at ignored `artifacts/patch-baseline/Assembly-CSharp.dll`. Original and guarded Hard run in separate directories/processes. The runner records one selected rule, action/event trace, timings, explicit setup, scores and failures, and runs an uninstrumented control. A selector wrapper calls the original selector exactly once and records its returned rule; it never reruns applicability, priority or print methods for explanation.
 
 These are diagnostic all-Hard tables, not a revised legacy bank or a fairness-qualified training pool. H0 has begun; independent candidate-alternative diagnosis, mixed tables, seat rotations and promotion remain. H1–H3, live replacement integration, model training, difficulty/personality calibration and GPU inference are unchanged future work.

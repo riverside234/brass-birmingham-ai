@@ -688,6 +688,10 @@ def validate_config(config):
     if VALUE_REVISION in config:
         fields.add(VALUE_REVISION);validate_value_revision(config[VALUE_REVISION])
         require('value_phase' in config and config['value_phase'].get('enabled'),'The g3140 value revision needs the value phase')
+    from .rating_cadence import KEY as RATING_CADENCE,validate as validate_rating_cadence
+    if RATING_CADENCE in config:
+        require(config.get('rating',{}).get('enabled') is True,'A rating cadence needs strength ratings')
+        fields.add(RATING_CADENCE);validate_rating_cadence(config[RATING_CADENCE],config['rating'])
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

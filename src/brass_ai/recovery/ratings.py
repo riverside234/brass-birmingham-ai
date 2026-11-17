@@ -178,7 +178,9 @@ def slot_spec(root,run,rating,entry,config,*,anchor_agent=None):
     coverage=None
     if 'rating_coverage' in config and (baseline==SEED or rating.get('coverage',{}).get('activated')):
         from .rating_coverage import lineups as competitive_lineups
-        lineups,coverage=competitive_lineups(rating,agents,agent,scores,generation,anchor_agent,config['rating_coverage'])
+        from .rating_cadence import ordinal
+        lineups,coverage=competitive_lineups(rating,agents,agent,scores,generation,anchor_agent,config['rating_coverage'],
+                                             slot=ordinal(config,generation))
         nearest=coverage['nearest'];estimate_theta=coverage['estimated_theta']
     else:
         checkpoints=[a for a in agents if a not in (IL,V4,SEED,agent) and a in scores]
@@ -377,8 +379,9 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
     completed={s['generation'] for s in archived_history(root,rating)['slots']+rating['slots']}
     available={e['generation']:e for e in state['history']}
     last_report=None
+    from .rating_cadence import due
     for generation in range(c['every_iterations'],state['iteration']+1,c['every_iterations']):
-        if generation in completed:continue
+        if generation in completed or not due(config,generation):continue
         require(generation in available,'Missing checkpoint for uncommitted rating slot '+str(generation))
         began=time.perf_counter();entry=available[generation];timing={}
         from .resume import evidence_directory

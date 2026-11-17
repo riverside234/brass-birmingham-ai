@@ -75,7 +75,7 @@ From this checkout, with the matching private runtime/tool dependencies already 
 
 ```powershell
 ./scripts/local-game/legacy-bridge/build-legacy.ps1
-./scripts/capture-h0.ps1 -Seed 9301 -Games 2
+./scripts/training/opponent-banks/capture-h0.ps1 -Seed 9301 -Games 2
 python scripts/experiments/legacy-style/diagnose-legacy.py --root .
 python -m unittest discover -s tests/legacy-ai -v
 ./scripts/local-game/legacy-bridge/build-legacy-overlay.ps1

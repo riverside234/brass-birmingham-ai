@@ -10,12 +10,12 @@ import runpy
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
-BASE=runpy.run_path(str(ROOT/'scripts/capture-rust-states.py'))
+BASE=runpy.run_path(str(ROOT/'scripts/training/rust-lab/reference-capture/capture-rust-states.py'))
 read,sha=BASE['read'],BASE['sha']
 STATE_ROOT=ROOT/'artifacts/rust-backend/20261024-l04/states'
 REGRESSIONS=ROOT/'artifacts/rust-backend/20261024-l04/regressions-v2/regressions.json'
 FIXTURES=BASE['FROZEN']/'local/fixtures'
-COMPLETE=runpy.run_path(str(ROOT/'scripts/complete-rust-state-capture.py'))['complete']
+COMPLETE=runpy.run_path(str(ROOT/'scripts/training/rust-lab/reference-capture/complete-rust-state-capture.py'))['complete']
 
 
 def build(out):

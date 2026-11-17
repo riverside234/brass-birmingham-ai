@@ -45,14 +45,14 @@ Install the dependencies using [R2_TRAINING.md](R2_TRAINING.md). Unit/contract/e
 checks require no game files:
 
 ```sh
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/verify-r2.py
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/verify-r2.py
 ```
 
 The full integration suite additionally requires the fingerprinted R1 runtime
 and generated R1 restoration traces under the same project root:
 
 ```sh
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/verify-r2.py --integration
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/verify-r2.py --integration
 ```
 
 On Windows, supply an absolute local checkout path with `--project-root`; this is

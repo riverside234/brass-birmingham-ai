@@ -1,6 +1,6 @@
 # Local Rust migration reference harness
 
-This implements L01 and L02 of the [migration plan](../../ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md).
+This implements L01 and L02 of the [migration plan](../../ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md).
 It freezes and exercises the existing C#/Python oracle. It does not install a
 Rust backend, modify the game, train a model or contact the lab.
 
@@ -35,17 +35,17 @@ $run = 'artifacts/rust-backend/20261024-g890-l01-l02'
 
 # Freeze into a NEW run directory. Reads upstream and copies original saves;
 # it never writes to the upstream checkout or original save directory.
-& $python scripts/qualify-rust-backend.py freeze --run $run `
+& $python scripts/training/rust-lab/validation/qualify-rust-backend.py freeze --run $run `
   --checkpoint test_nn/joint7-v11-2-grouped-lr-critic-1b96e228-g890-ecad3b932a8d-6bd7b0105b58/checkpoint.pt `
   --upstream C:\Users\BobXu\Desktop\brass `
   --save-root 'C:\Users\BobXu\AppData\LocalLow\Cublo\Brass Birmingham'
 
-& $python scripts/qualify-rust-backend.py capture --run $run
-& $python scripts/qualify-rust-backend.py qualify --run $run
-& $python scripts/qualify-rust-backend.py traces --run $run
-& $python scripts/qualify-rust-backend.py tests --run $run
-& $python scripts/qualify-rust-backend.py benchmark --run $run
-& $python scripts/qualify-rust-backend.py report --run $run
+& $python scripts/training/rust-lab/validation/qualify-rust-backend.py capture --run $run
+& $python scripts/training/rust-lab/validation/qualify-rust-backend.py qualify --run $run
+& $python scripts/training/rust-lab/validation/qualify-rust-backend.py traces --run $run
+& $python scripts/training/rust-lab/validation/qualify-rust-backend.py tests --run $run
+& $python scripts/training/rust-lab/validation/qualify-rust-backend.py benchmark --run $run
+& $python scripts/training/rust-lab/validation/qualify-rust-backend.py report --run $run
 ```
 
 Freeze, sealed capture and benchmark outputs refuse overwriting. Capture can

@@ -85,7 +85,7 @@ The helper also includes the already requested PPG acceptance/window changes if 
 For a future fresh run, use the normal config generator with the completed IL:
 
 ```bash
-python scripts/feature-engineering.py configure \
+python scripts/training/imitation/feature-engineering.py configure \
   --imitation-run artifacts/step5/features4-v11-2-batch7-il \
   --output configs/step5/joint7-v11-2-grouped-lr-critic-exploration-fresh.json
 

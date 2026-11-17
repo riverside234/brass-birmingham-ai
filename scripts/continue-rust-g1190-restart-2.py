@@ -104,6 +104,10 @@ comma-separated; adopted items persist and only move forward
   vp          total-VP training weight .1 -> .5.
   rail-end    Canal rows also predict the Rail-end map (after heads).
 The held-out check, PPG cap .003, beta floor .25 and the strict early stop stay.
+
+--rating-every 20 (at a rated generation, a multiple of ten) runs the PL strength
+rating every 20 committed iterations from that generation on (was every 10):
+from g3170, ratings run at g3190, g3210, ... Committed slots stay; set once.
 """
 import importlib.util
 from pathlib import Path

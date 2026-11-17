@@ -26,7 +26,7 @@ See [implementation and compatibility notes](RUST_BACKEND_B045_IMPLEMENTATION.md
 and run state are unchanged; production integration remains gated by B05/B07.
 
 This plan inserts a new step, **B04.5**, between B04 (passed) and B05 in
-[RUST_AI_BACKEND_MIGRATION_PLAN.md](RUST_AI_BACKEND_MIGRATION_PLAN.md). It extends
+[RUST_AI_BACKEND_MIGRATION_PLAN.md](migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md). It extends
 the [teacher search phase revision](TEACHER_SEARCH_PHASE_REVISION_PLAN.md).
 Everything not changed here stays exactly as written there: policy labels, π′,
 the PPO teacher term and its weight calibration, the 4-age label buffer, and

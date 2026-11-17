@@ -1,6 +1,6 @@
 # search_v1 default restored — 1.4.42
 
-Installed and verified on 2026-10-29 (local date). The user's requested **old `search_v1`** is again the game default. Part 2 of the [migration plan](RUST_AI_BACKEND_MIGRATION_PLAN.md#part-2--lab-server-migrate-training-after-local-acceptance) now selects search_v1 for explicitly enabled training teachers and other neural-search consumers. Search_v2 adaptive focus and V205 are not selected.
+Installed and verified on 2026-10-29 (local date). The user's requested **old `search_v1`** is again the game default. Part 2 of the [migration plan](migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md#part-2--lab-server-migrate-training-after-local-acceptance) now selects search_v1 for explicitly enabled training teachers and other neural-search consumers. Search_v2 adaptive focus and V205 are not selected.
 
 ## Installed change
 

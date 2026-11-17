@@ -2,7 +2,7 @@
 
 This workspace isolates the existing upstream rules and provides an opt-in
 diagnostic worker. It is the foundation for the local-first migration in
-[`RUST_AI_BACKEND_MIGRATION_PLAN.md`](../ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md).
+[`RUST_AI_BACKEND_MIGRATION_PLAN.md`](../ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md).
 The existing C#/Python backend remains the default. L04 adds complete trusted
 state import/export and private save/restore. L05 adds staged legal choices,
 transitions and explicit chance. L06 adds permitted views, own-hand recall and
@@ -78,10 +78,10 @@ For the current L04 implementation, first materialize diagnostic fixtures and
 then use its dedicated qualifier (choose fresh evidence directories):
 
 ```powershell
-python scripts/capture-rust-states.py --out artifacts/rust-backend/my-l04/raw
-python scripts/complete-rust-state-capture.py --raw artifacts/rust-backend/my-l04/raw --out artifacts/rust-backend/my-l04/states
-python scripts/capture-rust-state-regressions.py --capture artifacts/rust-backend/my-l04/states --out artifacts/rust-backend/my-l04/regressions
-python scripts/qualify-rust-state.py --capture artifacts/rust-backend/my-l04/states --regressions artifacts/rust-backend/my-l04/regressions/regressions.json --out artifacts/rust-backend/my-l04/qualification
+python scripts/training/rust-lab/reference-capture/capture-rust-states.py --out artifacts/rust-backend/my-l04/raw
+python scripts/training/rust-lab/reference-capture/complete-rust-state-capture.py --raw artifacts/rust-backend/my-l04/raw --out artifacts/rust-backend/my-l04/states
+python scripts/training/rust-lab/reference-capture/capture-rust-state-regressions.py --capture artifacts/rust-backend/my-l04/states --out artifacts/rust-backend/my-l04/regressions
+python scripts/training/rust-lab/validation/qualify-rust-state.py --capture artifacts/rust-backend/my-l04/states --regressions artifacts/rust-backend/my-l04/regressions/regressions.json --out artifacts/rust-backend/my-l04/qualification
 ```
 
 The frozen C# runtime is referenced by separate diagnostic executables; it is
@@ -98,8 +98,8 @@ all native profiles. Each output directory must be new:
 
 ```powershell
 python scripts/capture-rust-rules.py --out artifacts/rust-backend/my-l05/capture
-python scripts/capture-rust-rule-branches.py --capture artifacts/rust-backend/my-l05/capture --out artifacts/rust-backend/my-l05/branches
-python scripts/qualify-rust-rules.py --capture artifacts/rust-backend/my-l05/capture --branches artifacts/rust-backend/my-l05/branches --out artifacts/rust-backend/my-l05/qualification
+python scripts/training/rust-lab/reference-capture/capture-rust-rule-branches.py --capture artifacts/rust-backend/my-l05/capture --out artifacts/rust-backend/my-l05/branches
+python scripts/training/rust-lab/validation/qualify-rust-rules.py --capture artifacts/rust-backend/my-l05/capture --branches artifacts/rust-backend/my-l05/branches --out artifacts/rust-backend/my-l05/qualification
 ```
 
 The L05 capture reuses the hash-verified L04 roots and records complete private
@@ -123,9 +123,9 @@ observations plus continuations. Its capture and qualifier both use the isolated
 reference archive so unrelated training changes cannot affect the oracle:
 
 ```powershell
-python scripts/capture-rust-privacy.py --out artifacts/rust-backend/my-l06/capture
-python scripts/capture-rust-privacy-edges.py --out artifacts/rust-backend/my-l06/edges
-python scripts/qualify-rust-privacy.py --capture artifacts/rust-backend/my-l06/capture --edges artifacts/rust-backend/my-l06/edges --out artifacts/rust-backend/my-l06/qualification
+python scripts/training/rust-lab/reference-capture/capture-rust-privacy.py --out artifacts/rust-backend/my-l06/capture
+python scripts/training/rust-lab/reference-capture/capture-rust-privacy-edges.py --out artifacts/rust-backend/my-l06/edges
+python scripts/training/rust-lab/validation/qualify-rust-privacy.py --capture artifacts/rust-backend/my-l06/capture --edges artifacts/rust-backend/my-l06/edges --out artifacts/rust-backend/my-l06/qualification
 ```
 
 The existing sealed L06 captures can also be reused by omitting `--capture` and `--edges` from
@@ -146,7 +146,7 @@ L07 qualifies the usable diagnostic simulator, including full games through
 the actual adapter and fixed-work comparisons through unchanged Python search:
 
 ```powershell
-python scripts/qualify-rust-simulation.py --out artifacts/rust-backend/my-l07/qualification
+python scripts/training/rust-lab/validation/qualify-rust-simulation.py --out artifacts/rust-backend/my-l07/qualification
 ```
 
 It uses the isolated frozen Python reference and existing sealed captures.

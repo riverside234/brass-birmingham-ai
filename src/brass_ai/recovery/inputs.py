@@ -89,7 +89,8 @@ class InputBoundary:
         from .admitted_inputs import admitted_digest
         admitted=admitted_digest(view,choices)
         if admitted is not None:return admitted
-        key = digest(dict(view=view, choices=choices))
+        from .canonical_inputs import input_digest as canonical_digest
+        key = canonical_digest(view, choices)
         with self.lock:
             if key in self.frames:
                 self.frames.move_to_end(key); self.frame_hits += 1
@@ -141,4 +142,5 @@ BOUNDARY = InputBoundary()
 def input_digest(view,choices):
     from .admitted_inputs import admitted_digest
     admitted=admitted_digest(view,choices)
-    return admitted if admitted is not None else digest(dict(view=view,choices=choices))
+    from .canonical_inputs import input_digest as canonical_digest
+    return admitted if admitted is not None else canonical_digest(view,choices)

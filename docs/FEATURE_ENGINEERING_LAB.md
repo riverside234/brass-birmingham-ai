@@ -22,7 +22,7 @@ That Features-4 dataset remains compatible. Its directory name can still contain
 Use your actual converted manifest path if different. The unconverted original v4-batch7-joint dataset still needs the original conversion step; this width revision does not make older feature versions compatible. Conversion is needed only when no Features-4 conversion exists:
 
 ~~~bash
-python scripts/feature-engineering.py convert \
+python scripts/training/imitation/feature-engineering.py convert \
   --manifest artifacts/il-replay/v4-batch7-joint/manifest.json \
   --output artifacts/il-replay/features4-compact-v8-batch7 \
   --workers 48
@@ -57,7 +57,7 @@ The width change requires fresh model weights. Existing v8 IL/self-play checkpoi
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
 
-python scripts/feature-engineering.py inspect
+python scripts/training/imitation/feature-engineering.py inspect
 
 python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
   --manifest artifacts/il-replay/features4-compact-v8-batch7/manifest.json \
@@ -87,7 +87,7 @@ See [the loader repair and validation report](IL_LOADER_RECOVERY_2026-10-15.md).
 After IL completes, generate a new configuration. This binds initialization and rehearsal to that completed v9 IL checkpoint and the same existing dataset, and applies the new teacher settings, including `teacher_value.enabled: true` (`diagnostics: false`). An already-completed compatible v9 IL run does not need retraining:
 
 ~~~bash
-python scripts/feature-engineering.py configure \
+python scripts/training/imitation/feature-engineering.py configure \
   --imitation-run artifacts/step5/features4-compact-v9-batch7-il \
   --output configs/step5/joint7-features4-compact-v9-batch7.json
 
@@ -149,7 +149,7 @@ See [the implementation report and fresh-start/continuation commands](TEACHER_AU
 Choose a retained v9 utility checkpoint and a new destination:
 
 ~~~bash
-python scripts/feature-engineering.py export \
+python scripts/training/imitation/feature-engineering.py export \
   --checkpoint artifacts/step5/joint7-features4-compact-v9/generation-0001.pt \
   --output artifacts/exports/compact-v9-g0001 \
   --include-personality

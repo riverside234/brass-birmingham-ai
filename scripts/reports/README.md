@@ -34,7 +34,10 @@ exports and publication.
 - [write-r3-summary.py](write-r3-summary.py)
 - [summarize-legacy.py](summarize-legacy.py)
 
-## Source pins at the original paths
+## Rust study evidence
 
-- [report-l14-smoke.py](../report-l14-smoke.py) — L14 source archive.
-- [report-rust-backend.py](../report-rust-backend.py) — L14 assessment source pin.
+- [report-l14-smoke.py](report-l14-smoke.py) — L14 source archive.
+- [report-rust-backend.py](report-rust-backend.py) — L14 assessment source pin.
+
+The study callers and new source archives use these paths. Reproduce sealed
+historical assessments with their matching checkout and recorded sources.

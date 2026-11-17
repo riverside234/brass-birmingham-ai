@@ -40,7 +40,7 @@ The Git distribution contains the three existing R2 bootstrap/scaffold weights,
 the selected Step 5 smoke weights, current v3 original source/profiles/manifests,
 and the project-authored R1/v3 executables. The original Hard implementation and
 game rules DLLs are in the separately ignored, fingerprint-checked private ZIP.
-`scripts/check-step5-distribution.py` checks the required paths against Git ignore
+`scripts/training/checks/check-step5-distribution.py` checks the required paths against Git ignore
 rules; unignored files still need to be committed/pushed before a server clone
 can receive them.
 

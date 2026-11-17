@@ -86,14 +86,14 @@ All default lab paths begin at `/data/not_backed_up/yxu209/ai-training/`. Privat
 
 ```bash
 cd /data/not_backed_up/yxu209/ai-training/
-python scripts/prepare-legacy-bank.py --bank bank-af17b1aadbe7f9b21fa7 \
+python scripts/training/opponent-banks/prepare-legacy-bank.py --bank bank-af17b1aadbe7f9b21fa7 \
   --managed artifacts/private-managed --mono mono
-python scripts/check-frozen-bank.py --bank bank-af17b1aadbe7f9b21fa7 \
+python scripts/training/opponent-banks/check-frozen-bank.py --bank bank-af17b1aadbe7f9b21fa7 \
   --mono mono --output artifacts/legacy-ai/v3-lab-check.json
-python scripts/sample-legacy-pool.py --seed 71 --purpose training
+python scripts/training/opponent-banks/sample-legacy-pool.py --seed 71 --purpose training
 ```
 
-The sampler returns only v3 identities from the active pool. Old pool snapshots and frozen v2 sources/runtimes remain available for historical comparisons. Use the sampled identities with `scripts/collect-legacy-bank.py`; external-policy provenance, four-seat targets and the rejection of legacy replay as on-policy neural data remain part of the R2 contract.
+The sampler returns only v3 identities from the active pool. Old pool snapshots and frozen v2 sources/runtimes remain available for historical comparisons. Use the sampled identities with `scripts/training/opponent-banks/collect-legacy-bank.py`; external-policy provenance, four-seat targets and the rejection of legacy replay as on-policy neural data remain part of the R2 contract.
 
 ## Local release reproduction
 

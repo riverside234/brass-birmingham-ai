@@ -238,8 +238,9 @@ def publish(path, family, admission, *, cache=True, validation_receipt=False, ti
     # One canonical family encoding serves its original digest AND durable
     # replay bytes. Append sha256 outside that hashed object, preserving the
     # original digest formula and JSON replay format.
-    canonical=json.dumps({k:v for k,v in family.items() if k!='sha256'},sort_keys=True,
-                         separators=(',',':'),allow_nan=False).encode()
+    # The same bytes as json.dumps(sort_keys=True); each frozen history event is encoded once.
+    from brass_ai.recovery.canonical_inputs import dumps_family
+    canonical=dumps_family({k:v for k,v in family.items() if k!='sha256'})
     encoded_header=json.dumps(header,separators=(',',':'),allow_nan=False).encode()
     timings['json_encoding_seconds']=time.perf_counter()-began
     began=time.perf_counter();family_sha=hashlib.sha256(canonical).hexdigest()

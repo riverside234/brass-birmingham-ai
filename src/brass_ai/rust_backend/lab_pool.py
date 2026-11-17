@@ -174,6 +174,8 @@ class Publisher:
         if validation is not None:lab_perf.check(validation,job)
         parent=part_read(parts,parent);child=part_read(parts,child) if child else None
         timings['part_read_seconds']=time.perf_counter()-began;began=time.perf_counter()
+        sharing=getattr(parent['game'],'decode_sharing',None)
+        if sharing is not None:timings['decode_sharing']=dict(sharing)
         value=dict(format=FORMAT,job_id=frozen_id(job),frozen_job={k:v for k,v in job.items() if k!='path'},
             producer=self.producer,parent=parent,child=child,training_admitted=False,sha256=None)
         timings['family_assembly_seconds']=time.perf_counter()-began
@@ -290,7 +292,9 @@ def _actors(connections, root, build, execution, mono, lease, cpu, stop, directo
                     command=connection.recv()
                     if command is None:return
                     job,continuation=command['job'],command['continuation']
+                    offered=command.get('shared_lease')
                     try:
+                        result=None
                         with cpu.acquire(1,Timings()):
                             if route(job)[0]=='rust':
                                 part=collect_lane(root,build['collector']['path'],bootstrap,job,endpoint,execution,
@@ -301,7 +305,12 @@ def _actors(connections, root, build, execution, mono, lease, cpu, stop, directo
                                 require(continuation is None,'Reference continuation unsupported')
                                 from .lab_b02_smoke import reference_part
                                 part=reference_part(root,job,endpoint,execution,mono)
-                        if isinstance(part,lab_shared.Export):
+                            if offered is not None and isinstance(part,lab_shared.Export):
+                                # The lease came with the job: write under this game's CPU ticket,
+                                # with no allocation round trip. None when the export does not fit.
+                                result=lab_shared.write(part,lease=offered,cancel=stop)
+                        if result is not None:pass
+                        elif isinstance(part,lab_shared.Export):
                             def allocate(size):
                                 connection.send(dict(shared_allocate=dict(size=size)))
                                 while not connection.poll(.05):require(not stop.is_set(),'Shared allocation canceled')
@@ -622,9 +631,19 @@ class NativePool:
                 connection=None
                 try:
                     connection=available.get()
-                    connection.send(dict(job=job,continuation=continuation,validation=validations[job['index']]))
-                    return self.receive(connection,submit=submit,timeout=360,shared_allocate=self.shared.allocate,
-                                        on_ready=on_ready if progressive else None)['result']
+                    # Issue the export's lease with the job: the lane writes without asking again.
+                    offered=self.shared.reserve() if route(job)[0]=='rust' and lab_shared.switch(lab_shared.PREISSUED) else None
+                    try:
+                        connection.send(dict(job=job,continuation=continuation,validation=validations[job['index']],
+                                             shared_lease=offered))
+                        result=self.receive(connection,submit=submit,timeout=360,shared_allocate=self.shared.allocate,
+                                            on_ready=on_ready if progressive else None)['result']
+                    except BaseException:
+                        if offered is not None:self.shared.release(offered)
+                        raise
+                    self.shared.settle(offered,result)
+                    if offered is None or result.get('lease')!=offered['lease']:self.shared.observe(result)
+                    return result
                 except BaseException as error:
                     fail(error);raise
                 finally:

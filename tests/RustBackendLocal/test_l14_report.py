@@ -4,7 +4,7 @@ import runpy
 import unittest
 
 ROOT=Path(__file__).resolve().parents[2]
-report=runpy.run_path(str(ROOT/'scripts/report-rust-backend.py'))
+report=runpy.run_path(str(ROOT/'scripts/reports/report-rust-backend.py'))
 
 
 class ReportTests(unittest.TestCase):

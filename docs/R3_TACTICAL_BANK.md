@@ -55,33 +55,33 @@ All Python entry points default to `/data/not_backed_up/yxu209/ai-training/`. On
 ```bash
 cd /data/not_backed_up/yxu209/ai-training/
 # Rebuild from frozen source using private dependencies already below the lab root.
-python scripts/prepare-legacy-bank.py --bank bank-af17b1aadbe7f9b21fa7 \
+python scripts/training/opponent-banks/prepare-legacy-bank.py --bank bank-af17b1aadbe7f9b21fa7 \
   --managed artifacts/private-managed --mono mono
 
-python scripts/check-frozen-bank.py --bank bank-af17b1aadbe7f9b21fa7 \
+python scripts/training/opponent-banks/check-frozen-bank.py --bank bank-af17b1aadbe7f9b21fa7 \
   --mono mono --output artifacts/legacy-ai/lab-platform-check.json
 
 # Inspect/reproduce the exact preregistered tournament, without changing its profile settings.
-python scripts/qualify-legacy-bank.py run \
+python scripts/training/opponent-banks/qualify-legacy-bank.py run \
   --spec training/opponents/evaluations/qualification-c487cd9f12a201a5690c/spec.json \
   --output artifacts/legacy-ai/lab-qualification --mono mono
 
 # Select four frozen versions from the admitted training pool.
-python scripts/sample-legacy-pool.py --seed 71 --purpose training
+python scripts/training/opponent-banks/sample-legacy-pool.py --seed 71 --purpose training
 
 # Load each admitted version, commit a legal turn and check rejected pool uses.
-python scripts/check-legacy-admission.py --mono mono \
+python scripts/training/opponent-banks/check-legacy-admission.py --mono mono \
   --output artifacts/legacy-ai/lab-admission-check.json
 ```
 
-Pass the returned four full `bank/profile` identities to `scripts/collect-legacy-bank.py --policies ... --seeds 41001 41002 --workers 2 --purpose training --output artifacts/r3/replay.jsonl.gz --mono mono`. It rechecks admission before collection, freezes assignments within each game, cyclically rotates seats across games, and writes complete R2-compatible shards with four-seat targets, behavior provenance, style and intent. Supply `model:artifacts/r2/checkpoint.pt` in any policy slot to mix a frozen neural checkpoint with bank opponents. `random` is available for diagnostics. `--device cuda` affects neural inference only.
+Pass the returned four full `bank/profile` identities to `scripts/training/opponent-banks/collect-legacy-bank.py --policies ... --seeds 41001 41002 --workers 2 --purpose training --output artifacts/r3/replay.jsonl.gz --mono mono`. It rechecks admission before collection, freezes assignments within each game, cyclically rotates seats across games, and writes complete R2-compatible shards with four-seat targets, behavior provenance, style and intent. Supply `model:artifacts/r2/checkpoint.pt` in any policy slot to mix a frozen neural checkpoint with bank opponents. `random` is available for diagnostics. `--device cuda` affects neural inference only.
 
 `--purpose diagnostic` permits testing unqualified frozen versions and explicitly marks the output. It must not be presented as qualification. Evaluation uses the separate held-out pool. The R2 training reader rejects evaluation-only shards even if their setup hashes would otherwise fall into its training partition. The original guarded stock remains a historical benchmark outside the strict-observation policy adapter.
 
 For example, R2 can learn outcome values from the collected shard:
 
 ```bash
-python scripts/r2.py train --shards artifacts/r3/replay.jsonl.gz \
+python scripts/training/imitation/r2.py train --shards artifacts/r3/replay.jsonl.gz \
   --mode value --steps 100 --checkpoint artifacts/r3/value-bootstrap.pt
 ```
 

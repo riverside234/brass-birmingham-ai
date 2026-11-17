@@ -5,7 +5,7 @@ $managed=if($ManagedPath){$ExecutionContext.SessionState.Path.GetUnresolvedProvi
 $deps=Get-Content -LiteralPath (Join-Path $repo 'configs/rules/runtime-dependencies-1.1.0.json') -Raw|ConvertFrom-Json
 foreach($file in $deps.files){if((Get-FileHash -LiteralPath (Join-Path $managed $file.name)).Hash -ne $file.sha256){throw "Dependency changed: $($file.name)"}}
 $compiler=Join-Path $repo 'artifacts/patch-tools/microsoft.net.compilers.toolset.4.12.0/tasks/net472/csc.exe'
-if(-not(Test-Path -LiteralPath $compiler)){throw 'Run build-host.ps1 first to provision the pinned compiler.'}
+if(-not(Test-Path -LiteralPath $compiler)){throw 'Run scripts/training/rules-host/build-host.ps1 first to provision the pinned compiler.'}
 $out=Join-Path $repo 'artifacts/legacy-ai/runtime'
 New-Item -ItemType Directory -Force -Path $out|Out-Null
 Get-ChildItem -LiteralPath $managed -Filter '*.dll'|Copy-Item -Destination $out -Force

@@ -84,7 +84,7 @@ def main():
         DIRECTORY+'/prerequisite-reuse.json',
         'results/rust-lab-qualification/README.md',REPORT+'/state.json',REPORT+'/export-manifest.json',REPORT+'/recorded-config.json',
         'native/brass-ai-core/tests/data/initial-state.json','tests/GumbelISMCTS/fixtures/session-v1.json',
-        'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
+        'ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
         'ai-research/RUST_BACKEND_G570_REFRESH.md',
         'ai-research/RUST_BACKEND_B01_G570_FIX.md',
         'ai-research/RUST_BACKEND_B01_G570_PYTHON_FIX.md',

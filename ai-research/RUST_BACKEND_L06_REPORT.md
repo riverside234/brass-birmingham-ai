@@ -121,11 +121,11 @@ Frozen OpenSpiel adapter SHA-256:
 `7c0756a81061c9b01c49fc54a64c143ffc39e30557cd51b56247c1b52b1d84ac`.
 
 ```powershell
-python scripts/qualify-rust-privacy.py --out artifacts/rust-backend/my-new-l06-run
+python scripts/training/rust-lab/validation/qualify-rust-privacy.py --out artifacts/rust-backend/my-new-l06-run
 ```
 
 This reuses the sealed capture. To regenerate it with the pinned exporter and
-isolated reference, run `scripts/capture-rust-privacy.py --out <fresh-directory>`
+isolated reference, run `scripts/training/rust-lab/reference-capture/capture-rust-privacy.py --out <fresh-directory>`
 and pass that directory through the qualifier's `--capture` option. Builds use
 the existing offline toolchain. Completed evidence cannot be overwritten.
 
@@ -152,4 +152,4 @@ checkpoint remains a temporary test model; its live/strength calibration gate
 and the local-before-lab promotion order are unchanged.
 
 See the [interface contract](../configs/contracts/rust-backend/permitted-observation-v1.md)
-and [migration plan](RUST_AI_BACKEND_MIGRATION_PLAN.md).
+and [migration plan](migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md).

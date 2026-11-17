@@ -22,7 +22,7 @@ class LabReviewTests(unittest.TestCase):
     def test_verification_entry_point_is_safe_for_spawn_imports(self):
         import runpy
         with patch('argparse.ArgumentParser.parse_args',side_effect=AssertionError('Spawn imported the CLI')):
-            module=runpy.run_path(str(SOURCE_ROOT/'scripts/verify-step5.py'),run_name='__mp_main__')
+            module=runpy.run_path(str(SOURCE_ROOT/'scripts/training/checks/verify-step5.py'),run_name='__mp_main__')
         self.assertTrue(callable(module['main']))
 
     def test_serial_audit_commits_only_complete_shards_and_deduplicates(self):

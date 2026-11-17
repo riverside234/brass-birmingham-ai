@@ -25,7 +25,8 @@ from . import il_replay_storage
 
 
 def row_key(row):
-    return digest(dict(input=digest(dict(view=row['view'],choices=row['choices'])),style=row['style'],intent=row['intent']))
+    from .canonical_inputs import input_digest
+    return digest(dict(input=input_digest(row['view'],row['choices']),style=row['style'],intent=row['intent']))
 
 
 def label_key(row):
@@ -40,12 +41,13 @@ class CheckedGame(dict):
 
     def bind(self, arrays):
         from .replay_binding import count
+        from .canonical_inputs import input_digest
         self.__dict__.pop('_immutable_binding',None)
         self.features={};self.seals={}
         self.header_seal=digest({k:v for k,v in self.items() if k!='records'})
         count('metadata_hash_executed')
         for r,e in zip(self['records'],arrays):
-            source=digest(dict(view=r['view'],choices=r['choices']))
+            source=input_digest(r['view'],r['choices'])
             count('input_hash_executed');count('label_hash_executed')
             self.features[digest(dict(input=source,style=r['style'],intent=r['intent']))]=e
             self.seals[(r['step'],r['seat'])]=dict(input=source,label=label_key(r),style=r['style'][:],intent=r['intent'][:])
@@ -66,7 +68,8 @@ class CheckedGame(dict):
         proof=binding.row(self,row,allow_context=allow_context) if type(binding) is GameBinding else None
         seal=self.seals.get((row['step'],row['seat']))
         if proof is None:
-            source=digest(dict(view=row['view'],choices=row['choices']));count('input_hash_executed');count('label_hash_executed')
+            from .canonical_inputs import input_digest
+            source=input_digest(row['view'],row['choices']);count('input_hash_executed');count('label_hash_executed')
             require(seal and source==seal['input'] and label_key(row)==seal['label'],'Validated replay record changed')
             require(allow_context or (row['style']==seal['style'] and row['intent']==seal['intent']),'Validated policy context changed')
         else:source=proof.source

@@ -17,7 +17,7 @@ def main():
         'src/brass_ai/rust_backend/lab_families.py','src/brass_ai/rust_backend/lab_jobs.py',
         'src/brass_ai/rust_backend/lab_b02_smoke.py','tests/RustBackendLab/test_b02.py',
         'ai-research/RUST_BACKEND_B01_REPORT.md','ai-research/RUST_BACKEND_B02_REPORT.md',
-        'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md']
+        'ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md']
     names += [p.relative_to(ROOT).as_posix() for p in sorted((ROOT/'lab-native').rglob('*'))
               if p.is_file() and p.suffix in ('.rs','.toml','.lock') and 'target' not in p.parts]
     files={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in names}

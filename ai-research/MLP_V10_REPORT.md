@@ -117,7 +117,7 @@ These measurements establish that the implementation runs on the current CPU env
 - `src/brass_ai/learning/batching.py`, `utility_model.py`, `src/brass_ai/personality/model.py`: common prepared-state/head path for chunked, utility and personality inference.
 - `src/brass_ai/learning/contracts.py`: local-entity source participates in the MLP architecture fingerprint.
 - `src/brass_ai/recovery/league.py`, `configs/step5/joint7-latest.json`: current v10 admission messaging and architecture selection.
-- `scripts/feature-engineering.py`: local layout and role reporting.
+- `scripts/training/imitation/feature-engineering.py`: local layout and role reporting.
 - `tests/FeatureEngineering/test_mlp_v10.py`, `benchmark_mlp_v10.py`: new focused checks and bounded timing diagnostic.
 - Current-model assertions in `test_factored_scorer.py`, `test_grouped_projection.py`, `test_compact_widths.py`, `test_compaction.py`, `test_six_group_rollback.py`, `test_fe4.py`, `smoke_fe5.py`, `tests/R2/test_learning.py`, `tests/Recovery/test_training_performance_resume.py` and `tests/Transformer/test_transformer_checkpoint.py`.
 - `ai-research/GROUPED_PROJECTION_CONTRACT.md`, this report, `docs/MLP_V10_LAB.md` and an archival banner in `docs/FEATURE_ENGINEERING_LAB.md`.

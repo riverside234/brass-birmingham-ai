@@ -14,6 +14,7 @@ from brass_ai.learning.contracts import compatibility, digest, require
 from brass_ai.learning.features import Encoded, check_encoded
 from brass_ai.learning.local_entities import check_action_selectors
 from brass_ai.recovery.replay import CheckedGame, _cache_paths, cache_version, label_key
+from brass_ai.recovery.canonical_inputs import input_digest
 
 LIMIT = 512*1024**2
 
@@ -85,7 +86,7 @@ def pack(games, replay_sha256, *, compressed=True, _owned=False):
                 arrays.append(e);keys.append(key);sealed=sealed and checked_encoded(e)
                 count('publication_row_binding_reused');continue
             # One source hash verifies mutation and provides the cache row key.
-            source=digest(dict(view=row['view'],choices=row['choices']))
+            source=input_digest(row['view'],row['choices'])
             count('input_hash_executed');count('label_hash_executed')
             seal=game.seals[(row['step'],row['seat'])]
             require(seal==dict(input=source,label=label_key(row),style=row['style'],intent=row['intent']),
@@ -148,7 +149,7 @@ def unpack(raw,games,meta,*,combined=False,deep=True):
     rows=[r for g in games for r in g['records']]
     bindings=[]
     for row in rows:
-        source=digest(dict(view=row['view'],choices=row['choices']))
+        source=input_digest(row['view'],row['choices'])
         count('input_hash_executed');count('label_hash_executed')
         key=digest(dict(input=source,style=row['style'],intent=row['intent']))
         bindings.append((key,source,label_key(row),tuple(row['style']),tuple(row['intent'])))

@@ -4,7 +4,7 @@ import runpy
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-REF = runpy.run_path(str(ROOT/'scripts/reproduce-gumbel-coordinator.py'))
+REF = runpy.run_path(str(ROOT/'scripts/experiments/gumbel-is-mcts/reproduce-gumbel-coordinator.py'))
 
 
 class CoordinatorReferenceTests(unittest.TestCase):

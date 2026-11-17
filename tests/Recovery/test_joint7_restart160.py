@@ -21,7 +21,7 @@ from brass_ai.recovery.resume import load_resume
 from brass_ai.recovery.utility import reward_spec
 from brass_ai.step5.league import write_json,implementation_id
 
-sys.path.insert(0,str(SOURCE_ROOT/'scripts'))
+sys.path.insert(0,str(SOURCE_ROOT/'scripts/training/migrations'))
 from joint7_restart160 import reconstruct,resolve_models,reduce_population,publish,main,EXPORT,TARGET_SHA,REVIEWED_MISSING_GENERATIONS
 
 

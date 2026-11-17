@@ -47,7 +47,7 @@ def main():
         'configs/learning/selfplay-resume-sources.json',
         'scripts/qualify-rust-lab-b02.py', 'scripts/legacy/rust-lab/qualify-rust-lab-b025.py', 'scripts/legacy/rust-lab/qualify-rust-lab-b03.py',
         'scripts/legacy/rust-lab/run-rust-lab-b03.sh', 'scripts/legacy/rust-lab/restore-rust-lab-b03.py', 'scripts/legacy/rust-lab/prepare-rust-lab-b03.py',
-        'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md', 'ai-research/RUST_BACKEND_B03_REPORT.md',
+        'ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md', 'ai-research/RUST_BACKEND_B03_REPORT.md',
         'distribution/rust-lab-b03/README.md',
         'results/joint7-v11-2-grouped-lr-critic-g1320-20261027T075134827445Z/recorded-config.json',
     } | fixture_dependencies('tests/RustBackendLab/test_b03.py')

@@ -129,7 +129,7 @@ database, PUCT or training stacks, or the benchmark allocation instrumentation.
 Final preservation checks cover all **462 frozen reference files**, **40 imported
 modules**, the **g890 checkpoint and pinned metadata**, **three installed DLLs**,
 the recovery archives and **98 original save files**. The previously documented
-change to `scripts/export-test-nn.py` remains separate; its freeze-time bytes are
+change to `scripts/training/checkpoints/export-test-nn.py` remains separate; its freeze-time bytes are
 preserved in the verified L01 archive and were not executed by L03.
 
 ## Boundary for subsequent work

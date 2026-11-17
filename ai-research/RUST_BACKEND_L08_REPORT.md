@@ -156,7 +156,7 @@ Run with the project's Python/dependency environment and pinned offline native
 toolchain, choosing a new evidence directory:
 
 ```powershell
-python scripts/qualify-rust-features.py --out artifacts/rust-backend/<new-l08-run>
+python scripts/training/rust-lab/validation/qualify-rust-features.py --out artifacts/rust-backend/<new-l08-run>
 ```
 
 The script verifies preservation, creates the immutable reference, checks generated

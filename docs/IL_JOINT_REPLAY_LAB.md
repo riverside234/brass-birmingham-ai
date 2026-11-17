@@ -2,14 +2,14 @@
 
 This experiment continues **batch7's selected weights** on the full audited union of batches **4, 5, 6 and 7**. Batches 2 and 3 are no longer included in the default dataset source list. It does not initialize a random model. With sufficient compute, all unique training games are retained rather than imposing a 50% latest / 50% historical sample cap. The existing trainer globally shuffles decisions each epoch and preserves its teacher/era/action balancing. This is full-data supervised rehearsal inspired by [Experience Replay for Continual Learning (CLEAR, NeurIPS 2019)](https://proceedings.neurips.cc/paper_files/paper/2019/hash/fa7cdfad1a5aaf8370ebeda47a1ff1c3-Abstract.html); it is **not** the paper's complete off-policy RL algorithm, and its strength advantage is not guaranteed.
 
-The helper is isolated in `scripts/il_replay.py`; it does not change the existing IL/PPO source or presets, source fingerprints, installed game, original manifests or checkpoints. All actions use the conda environment and project root below. No training starts until you run the `train` action.
+The helper is isolated in `scripts/training/imitation/il_replay.py`; it does not change the existing IL/PPO source or presets, source fingerprints, installed game, original manifests or checkpoints. All actions use the conda environment and project root below. No training starts until you run the `train` action.
 
 ## 1. Prepare the union
 
 ```sh
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
-python /data/not_backed_up/yxu209/ai-training/scripts/il_replay.py prepare
+python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/il_replay.py prepare
 ```
 
 Default source directories are `/data/not_backed_up/yxu209/ai-training/artifacts/step5/v4-batch7` and the corresponding batch6, batch5 and batch4 directories. The helper reads each completed run's `state.json` and `report.json` to locate its **actual** manifest and verify its recorded hash; it does not assume that the dataset file has the same name as the run. Keep these source runs and their manifests/replay shards available. If the runs live elsewhere, use `--latest-run` and `--history-runs` with their paths inside this project.
@@ -23,7 +23,7 @@ Preparation only inspects manifest receipts and file existence. Actual replay by
 ## 2. Continue IL on the full pool
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/il_replay.py train --device cuda
+python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/il_replay.py train --device cuda
 ```
 
 This calls the existing `step5.py imitate` entry point with `--from-imitation-run` pointing to batch7. Defaults for this separate experiment are **LR 3e-5**, **at most 6 epochs**, **minimum 2 epochs**, and **patience 2**. These are a conservative starting recipe, not claimed optimal hyperparameters. All unique training examples are seen each completed epoch, so this is more work than a single-batch epoch. Batch size, precision, CPU loading and GPU batching inherit `configs/step5/lab.json`; `--workers` optionally overrides loader processes. The existing 20/40/60/80/100% logs remain available. The trainer creates a new optimizer for this new IL run, just as ordinary new-dataset continuation does.
@@ -33,7 +33,7 @@ The candidate is saved separately to `/data/not_backed_up/yxu209/ai-training/art
 ## 3. Check old and new held-out data
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/il_replay.py validate --device cuda
+python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/il_replay.py validate --device cuda
 ```
 
 This is also run automatically after `train`; the separate command is useful if validation was interrupted or needs to be repeated. It compares **original 7, original 6, and the joint candidate**, without optimizer updates, on the same union validation partition. It reports each batch separately, including policy loss and action accuracy, plus the aggregate using the existing BC loss denominators. An overlapping game is counted once under its retained source, not once per copy. Inspect old-batch loss/accuracy as well as batch7's metrics; this makes a forgetting hypothesis testable rather than assuming that lower game VP proves forgetting.
@@ -43,7 +43,7 @@ This is also run automatically after `train`; the separate command is useful if 
 ## 4. Compare actual gameplay separately
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/il_replay.py evaluate --device cuda
+python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/il_replay.py evaluate --device cuda
 ```
 
 Default evaluation uses **40 fresh validation setups × four seat rotations = 160 games per panel** with seed cursor `1947000`, shared across candidates. All three models play the same v4 panel. The joint candidate also faces three copies of its own `initial.pt`, which contains the original batch7 weights with the correct child-run identity. This avoids the existing evaluator's prohibition on arbitrary cross-run references. The total is **640 evaluation games** by default, kept separate from training. `--setups` and `--seed` configure this independent evaluation; changing them requires a fresh `--experiment` output location.

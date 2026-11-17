@@ -32,7 +32,7 @@ def main():
         'scripts/qualify-rust-lab-b02.py','scripts/legacy/rust-lab/qualify-rust-lab-b025.py','scripts/legacy/rust-lab/qualify-rust-lab-b03.py',
         'scripts/legacy/rust-lab/qualify-rust-lab-b04.py','scripts/legacy/rust-lab/run-rust-lab-b04.sh','scripts/legacy/rust-lab/prepare-rust-lab-b04.py',
         'tests/GumbelISMCTS/fixtures/session-v1.json',
-        'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
+        'ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
         'ai-research/RUST_BACKEND_B04_REPORT.md','distribution/rust-lab-b04/README.md',
     }|helper.fixture_dependencies('tests/RustBackendLab/test_b04.py')
     names|={p.relative_to(ROOT).as_posix() for p in (ROOT/'lab-native').rglob('*') if p.is_file()

@@ -11,7 +11,7 @@ Implement a strategy-conditioned, diversity-aware **policy-only** teacher using 
 The inputs to this revision are:
 
 - [Teacher search phase revision plan](TEACHER_SEARCH_PHASE_REVISION_PLAN.md), including its implemented T1/B02.5 and T2/B04 contracts.
-- [Migration plan B02.5, B03 and B04](RUST_AI_BACKEND_MIGRATION_PLAN.md#b025--revise-the-teacher-distillation-phase).
+- [Migration plan B02.5, B03 and B04](migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md#b025--revise-the-teacher-distillation-phase).
 - [B02.5 report](RUST_BACKEND_B025_REPORT.md), [B03 report](RUST_BACKEND_B03_REPORT.md) and [B04 report](RUST_BACKEND_B04_REPORT.md).
 - [DOMiNO implementation](DOMINO_DIVERSITY_IMPLEMENTATION.md) and [its design](DOMINO_DIVERSITY_TRAINING_PLAN.md).
 

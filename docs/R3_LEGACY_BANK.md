@@ -8,7 +8,7 @@ The H0–H2 foundation below is now extended by [H3–H5 tactical profiles, mand
 
 ## H0: baseline and diagnosis
 
-`scripts/capture-h0.ps1` runs the original and guarded stock policies in separate directories. `scripts/experiments/legacy-style/diagnose-legacy.py` adds a four-player control/recorded/diagnosed comparison. Stock `GetNextAIMove` and its selector are invoked exactly once per action. Logging records the returned rule, publicly played cards, context, latency, outcomes and independently generated legal alternatives with evaluator ledgers. It never calls stock applicability/printing again for an explanation.
+`scripts/training/opponent-banks/capture-h0.ps1` runs the original and guarded stock policies in separate directories. `scripts/experiments/legacy-style/diagnose-legacy.py` adds a four-player control/recorded/diagnosed comparison. Stock `GetNextAIMove` and its selector are invoked exactly once per action. Logging records the returned rule, publicly played cards, context, latency, outcomes and independently generated legal alternatives with evaluator ledgers. It never calls stock applicability/printing again for an explanation.
 
 Diagnosis reconstructs a separate world from the acting player's allowed observation. The live canonical state, including its RNG, is checked before and after every diagnostic decision. Entire public action/state/outcome traces must match the control. Wildcard plays are captured even though spent wildcards return to their decks rather than entering the discard pile. Guarded stock retains its original liquidation strategy; in mixed games its debtor's choices are obtained from an isolated trusted copy. Failures remain reliability failures and are never credited as wins.
 

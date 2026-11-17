@@ -12,7 +12,7 @@ from test_native_transfer import NativeTransfer,ROOT,transfer
 from brass_ai.learning import post_transfer_reward as P
 from brass_ai.recovery import transfer_resume as R
 
-spec=importlib.util.spec_from_file_location('inplace_revised_driver',ROOT/'scripts/continue-rust-revised.py')
+spec=importlib.util.spec_from_file_location('inplace_revised_driver',ROOT/'scripts/training/migrations/continue-rust-revised.py')
 driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
 
 

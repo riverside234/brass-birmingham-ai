@@ -10,7 +10,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location('export_test_nn', ROOT / 'scripts/export-test-nn.py')
+spec = importlib.util.spec_from_file_location('export_test_nn', ROOT / 'scripts/training/checkpoints/export-test-nn.py')
 exporter = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(exporter)
 
@@ -217,7 +217,7 @@ class CheckpointExportTests(unittest.TestCase):
     def test_il_cli_export_verify_restore_without_utility_validation(self):
         self.il_upgrade()
         for mode in ((), ('--verify',), ('--restore',)):
-            result = subprocess.run([sys.executable, str(ROOT / 'scripts/export-test-nn.py'),
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/training/checkpoints/export-test-nn.py'),
                                      '--root', str(self.root), '--select', 'IL', *mode],
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)

@@ -62,7 +62,7 @@ cd "$ROOT" || exit 1
 export CUDA_VISIBLE_DEVICES=0
 
 # The driver discovers the source export; no DOWNLOAD shell variable is needed.
-python scripts/continue-rust-revised.py \
+python scripts/training/migrations/continue-rust-revised.py \
   --expected-generation 1284 --preserve-current-generation 1286 \
   --iterations 5 --share-target 0.25 --device cuda
 ```
@@ -72,7 +72,7 @@ The driver discovers archives under `$ROOT/artifacts/step5-transfer/`, including
 Unsplit ZIP/zstd candidates must contain a valid `transfer.json` with the Step 5 transfer format/digest and matching run/generation. Runtime-only archives such as `private-rules-runtime.zip` and `private-rules-runtime-v4.zip` are excluded; their presence must not make the migration archive ambiguous. Discovery reads the small manifest, not model payloads. All file/part checksums are still verified by the normal restore before a run can move. The reported source export can also be selected directly without another code update:
 
 ```bash
-python scripts/continue-rust-revised.py \
+python scripts/training/migrations/continue-rust-revised.py \
   --bundle "$ROOT/artifacts/step5-transfer/retry-20261108T225938Z/selfplay-migration.tar.zst.parts.json" \
   --expected-generation 1284 --preserve-current-generation 1286 \
   --iterations 5 --share-target 0.25 --device cuda

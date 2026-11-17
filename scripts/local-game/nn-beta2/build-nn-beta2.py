@@ -40,7 +40,7 @@ def export():
     from brass_ai.native.features import SCHEMA, GROUP, ENTITY
     directory = STUDY / 'model'
     assert not directory.exists(), 'Preserve export evidence'
-    exporter = runpy.run_path(str(ROOT / 'scripts/export-test-nn.py'))
+    exporter = runpy.run_path(str(ROOT / 'scripts/training/checkpoints/export-test-nn.py'))
     source = exporter['verify_bundle'](BUNDLE)
     assert source['checkpoint']['sha256'] == sha(BUNDLE / 'checkpoint.pt') == CHECKPOINT
     assert source['recorded_checkpoint']['generation'] == 1190

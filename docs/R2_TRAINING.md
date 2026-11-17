@@ -61,7 +61,7 @@ python3.12 -m venv /data/not_backed_up/yxu209/ai-training/.venv
 /data/not_backed_up/yxu209/ai-training/.venv/bin/python -m pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu128
 /data/not_backed_up/yxu209/ai-training/.venv/bin/python -m pip install -r /data/not_backed_up/yxu209/ai-training/requirements-r2.txt
 /data/not_backed_up/yxu209/ai-training/.venv/bin/python -c "import torch; print(torch.__version__, torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CUDA unavailable')"
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/verify-r2.py
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/verify-r2.py
 ```
 
 For CPU-only installation, use `https://download.pytorch.org/whl/cpu` for the first
@@ -83,7 +83,7 @@ not claim to have tested the lab, CUDA, or Intel graphics.
 Initialize fresh default-sized weights:
 
 ```sh
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/r2.py --device cuda init --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/fresh.pt
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/r2.py --device cuda init --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/fresh.pt
 ```
 
 Collect complete four-player games with the qualified host. Omit `--checkpoint`
@@ -92,7 +92,7 @@ processes; neural requests from concurrent games are batched. No unsafe shared
 engine clones or simultaneous calls on one host are used.
 
 ```sh
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/r2.py --seed 2100 collect --games 8 --workers 4 --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/fresh.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/r2/games-2100.jsonl.gz
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/r2.py --seed 2100 collect --games 8 --workers 4 --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/fresh.pt --output /data/not_backed_up/yxu209/ai-training/artifacts/r2/games-2100.jsonl.gz
 ```
 
 Train the outcome heads from complete games, retaining valid losses. A new model
@@ -101,8 +101,8 @@ contributes gradients. `--mode teacher` requires explicit fresh-finalist targets
 the R2 collector does not manufacture search labels from random selections.
 
 ```sh
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/r2.py --device cuda train --shards /data/not_backed_up/yxu209/ai-training/artifacts/r2/games-2100.jsonl.gz --from-checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/fresh.pt --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/value.pt --steps 100
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/r2.py --device cuda train --resume --shards /data/not_backed_up/yxu209/ai-training/artifacts/r2/games-2100.jsonl.gz --from-checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/value.pt --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/value-resumed.pt --steps 100
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/r2.py --device cuda train --shards /data/not_backed_up/yxu209/ai-training/artifacts/r2/games-2100.jsonl.gz --from-checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/fresh.pt --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/value.pt --steps 100
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/r2.py --device cuda train --resume --shards /data/not_backed_up/yxu209/ai-training/artifacts/r2/games-2100.jsonl.gz --from-checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/value.pt --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/value-resumed.pt --steps 100
 ```
 
 Value-only fitting does not teach the choice scorer a better policy. For an
@@ -113,7 +113,7 @@ under a new run directory. This is an experiment before R3 search, not the
 recommended final population trainer or a strength claim.
 
 ```sh
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/r2.py --device cuda --seed 3100 iterate --from-checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/fresh.pt --iterations 2 --games 4 --workers 4
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/r2.py --device cuda --seed 3100 iterate --from-checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/fresh.pt --iterations 2 --games 4 --workers 4
 ```
 
 Every seat gets its own terminal win-share reward and baseline. Decisions are
@@ -128,7 +128,7 @@ Export for local CPU inference, verifying multiple batch/candidate shapes agains
 PyTorch before publishing the ONNX file and matching JSON manifest:
 
 ```sh
-/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/r2.py export --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/value.pt --shards /data/not_backed_up/yxu209/ai-training/artifacts/r2/games-2100.jsonl.gz --output /data/not_backed_up/yxu209/ai-training/artifacts/r2/model.onnx
+/data/not_backed_up/yxu209/ai-training/.venv/bin/python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/r2.py export --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/r2/value.pt --shards /data/not_backed_up/yxu209/ai-training/artifacts/r2/games-2100.jsonl.gz --output /data/not_backed_up/yxu209/ai-training/artifacts/r2/model.onnx
 ```
 
 `evaluate --opponents` takes exactly four checkpoint paths or `random`, rotates

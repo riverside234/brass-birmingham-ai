@@ -18,7 +18,7 @@ The current local implementation is release **1.4.36**, using the intermediate *
 | Unity lifecycle | **818 checks** in the retained smoke suite, plus **45 validation/event** and **65 checkpoint** checks; cancellation, stale identities, action two, save/load, failures, and resource retirement | [Validation optimization](../ai-research/RUST_BACKEND_L14_REPORT.md), [L15 checks](../ai-research/RUST_BACKEND_L15_REPORT.md) |
 | Local release and recovery | Actual-search complete games, package tamper rejection, exact rollback, interrupted native/managed publication recovery, installed startup, and **106 existing save files unchanged** | [Local release report](../ai-research/RUST_BACKEND_LOCAL_RELEASE.md) |
 
-Earlier milestones retain their original source identities and qualification status. The final release reuses the corrected L15 runtime binaries; packaging and additional release checks are identified separately. See the [migration plan](../ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md) for the sequence and contracts.
+Earlier milestones retain their original source identities and qualification status. The final release reuses the corrected L15 runtime binaries; packaging and additional release checks are identified separately. See the [migration plan](../ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md) for the sequence and contracts.
 
 ## Training architecture and recovery
 

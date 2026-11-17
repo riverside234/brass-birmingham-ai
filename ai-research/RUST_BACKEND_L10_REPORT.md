@@ -109,8 +109,8 @@ qualification; development artifacts remain separate.
 The reproducible command is:
 
 ```powershell
-python scripts/verify-rust-search.py --prepare --fixtures artifacts/rust-backend/<fresh-capture>
-python scripts/qualify-rust-search.py --fixtures artifacts/rust-backend/<capture> --out artifacts/rust-backend/<fresh-run>
+python scripts/training/rust-lab/validation/verify-rust-search.py --prepare --fixtures artifacts/rust-backend/<fresh-capture>
+python scripts/training/rust-lab/validation/qualify-rust-search.py --fixtures artifacts/rust-backend/<capture> --out artifacts/rust-backend/<fresh-run>
 ```
 
 Use the project tool environment and frozen L09 Python reference source, as recorded

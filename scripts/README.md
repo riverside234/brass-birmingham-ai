@@ -8,14 +8,23 @@ script's runnable path, including entry points kept at the top level.
 ```text
 scripts/
 |-- training/
+|   |-- imitation/         IL, rehearsal preparation, and model tools
+|   |-- opponent-banks/    Frozen opponent maintenance and qualification
+|   |-- checks/            Training regression and smoke commands
+|   |-- rules-host/        Reference rules hosts and contracts
+|   |-- checkpoints/       Checkpoint export and read-only calibration
 |   |-- migrations/        Historical recipe changes and restarts
-|   |-- rust-lab/          Rust lab setup, fixtures, and validation
+|   `-- rust-lab/          Rust lab setup, fixtures, and validation
+|       |-- reference-capture/
+|       |-- fixtures/
+|       `-- validation/
 |-- local-game/            Build, install, and verification by patch feature
 |   |-- managed-patch/     Shared managed build, staging, and installation
 |   |-- turn-history/      Turn history hotfix build, install, and qualification
 |   `-- ...                Other patch features and P6 laptop deployment
 |-- experiments/           One folder per standalone experiment
 |   |-- policy-c-scale/    Shared reader and short- and long-search studies
+|   |-- gumbel-is-mcts/    Independent session and coordinator references
 |-- reports/               Report exports, plots, and reviews
 |-- benchmarks/            Performance and matchup measurements
 `-- legacy/                Standalone archival scripts
@@ -77,8 +86,15 @@ top-level tools for their own workflows.
 
 Sealed bundles and recorded receipts retain the paths from the checkout
 that produced them. Use that checkout to reproduce a sealed workflow.
-The 54 historical recipe and restart commands live in
+The 56 historical recipe and restart commands live in
 [training migrations](training/migrations/README.md). The 40 retired Rust
 bundle and qualification tools are grouped in
 [legacy Rust lab](legacy/rust-lab/README.md). See [legacy](legacy/README.md)
 for the other archival tools.
+
+The [migration-plan index](../ai-research/migration-plans/README.md) groups the
+completed plans and the [further migration plan](../ai-research/migration-plans/FURTHER_SCRIPT_MIGRATION_PLAN.md).
+The further migration moved 76 of the reviewed 120 top-level scripts.
+The 44 retained paths supply current continuation, transfer/CI, runtime
+preparation, release installation, or shared and locked reference functions.
+The plan records the complete retained list and verification results.

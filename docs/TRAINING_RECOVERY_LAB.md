@@ -841,7 +841,7 @@ identical models do not count as new entries. Once full, normal retention resume
 From the lab repository, inspect first (no training or run replacement):
 
 ```bash
-python scripts/joint7_restart160.py --allow-reduced-population
+python scripts/training/migrations/joint7_restart160.py --allow-reduced-population
 ```
 
 If retention removed a required file, supply `--backup-run /path/to/old-run-backup`
@@ -851,7 +851,7 @@ learner checkpoint stops recovery; optimizer state is never fabricated. Omit
 approved 47-model recovery, use:
 
 ```bash
-python scripts/joint7_restart160.py --allow-reduced-population --apply && \
+python scripts/training/migrations/joint7_restart160.py --allow-reduced-population --apply && \
 python scripts/step5.py --config configs/step5/joint7-g150-gate72.json train \
   --run artifacts/step5/v4-selfplay-joint \
   --imitation-run artifacts/step5/v4-batch7-joint \
@@ -1911,8 +1911,8 @@ These commands document earlier S1/Masked diagnostics. They are not required for
 Run eight matched four-player games (two setups Ãƒâ€” four seat rotations). Each table has one Balanced serial 1s/240-work opponent, one Balanced 1s/two-worker/720-total-work opponent, and two rotating serial S1 styles.
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/smoke-s1-training.py --tables 16 --setups 2 --output /data/not_backed_up/yxu209/ai-training/artifacts/s1-training-smoke/lab
-python /data/not_backed_up/yxu209/ai-training/scripts/smoke-s1-training.py --compare-masked --tables 16 --setups 2 --output /data/not_backed_up/yxu209/ai-training/artifacts/s1-vs-masked-smoke/lab
+python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/smoke-s1-training.py --tables 16 --setups 2 --output /data/not_backed_up/yxu209/ai-training/artifacts/s1-training-smoke/lab
+python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/smoke-s1-training.py --compare-masked --tables 16 --setups 2 --output /data/not_backed_up/yxu209/ai-training/artifacts/s1-vs-masked-smoke/lab
 ```
 
 The second command compares S1 with Masked ISMCTS, both at one second and two private workers, alongside the same serial S1 anchors. Selection uses official win rate, then lower mean rank, then higher mean VP; a complete tie keeps S1. The previous threefold work multiplier applies only to the S1 control's 240-to-720 node allowance; it does not multiply Masked simulations. Active presets keep this compatibility field at one.

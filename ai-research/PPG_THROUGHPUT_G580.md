@@ -121,7 +121,7 @@ checkpoints, run native evaluations or establish improved playing strength.
 Run the bounded check locally with the existing training environment:
 
 ```bash
-python scripts/smoke-ppg-throughput.py --output artifacts/ppg-throughput-isolated-check
+python scripts/training/checks/smoke-ppg-throughput.py --output artifacts/ppg-throughput-isolated-check
 ```
 
 Final focused validation: **37 passed, 1 skipped** (CUDA unavailable), covering

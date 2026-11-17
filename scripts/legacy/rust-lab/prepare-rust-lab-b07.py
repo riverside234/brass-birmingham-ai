@@ -43,7 +43,7 @@ def main():
         'scripts/legacy/rust-lab/rust_lab_b07_smoke.py','scripts/legacy/rust-lab/rust_lab_b07_sealing.py',
         'tests/RustBackendLab/test_b07_completion.py','tests/RustBackendLab/test_b07_sealing.py',
         'tests/RustBackendLab/test_b045_failures.py','tests/RustBackendLab/test_b07_checkpoint.py',
-        'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md',
+        'ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B07_IMPLEMENTATION.md',
         'ai-research/RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md',
         *('distribution/rust-lab-b07-g1250/'+n for n in ('README.md','reference.json','local-checks.json','source-review.json'))}
     # Keep all unrelated inputs exactly as sealed; no broader qualification rerun.

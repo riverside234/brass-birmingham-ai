@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "95a8a6d17061d4c62810eeee906ac5a47e3f1b55008f97fac507f6b1bf55c1c3",
+  "execution_implementation": "a6e6eba62e4f6bc45c6c2170b223e09e6aa9240efb6b99f4f86f3561d9fc18f5",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -74,7 +74,7 @@
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
-      "after": "8a1b95b402c883779dd66a626fc4a6743662187a857d181b20ca3f429b2b8fe0"
+      "after": "228b23ba9f3c09724af381977c3ff4c06d5b4e8d0eed474928e6d2d8a1d1da32"
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
@@ -110,7 +110,7 @@
     },
     "src/brass_ai/recovery/inputs.py": {
       "before": "6927a6388be1dd9a93f0aecc8a4551d58563250b69197a4a17f0af23804b22b3",
-      "after": "ec09cae29171b0e82b869a8781f278fa5b83c292260edf72532f5e75547cd93e"
+      "after": "ae310072870262a45a49473004b6e4e7ee5a2320ff8cee6c08086f759064fead"
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
@@ -138,7 +138,7 @@
     },
     "src/brass_ai/recovery/replay.py": {
       "before": "28e7ea9e2bb92f064717c6c7d7cd258a38026c03ae95fe00ba2b6178921f7f7c",
-      "after": "5b5c8701d04cc01c2786cb54a8c7639c4086771d7ebffd29bb05c09b727a7e33"
+      "after": "9168dc9629fd17c7b2a50acb1d00a3615b5882bd95ac314648a36b434c9f8b62"
     },
     "src/brass_ai/recovery/replay_binding.py": {
       "before": null,
@@ -230,7 +230,7 @@
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
-      "after": "431454ef2f287466656d353708ff9680cb2db935c7c0e08c36a73d30f118dda0"
+      "after": "497548db5d4cf7be5ec2258a45d6cd9cd5aa3f3e1fa7ce363e73e085f1e0717b"
     },
     "src/brass_ai/rust_backend/lab_backend.py": {
       "before": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3",
@@ -250,7 +250,7 @@
     },
     "src/brass_ai/rust_backend/lab_delta.py": {
       "before": null,
-      "after": "b1bc56128f695b25090771ed875211ad8899d0bd286faf898e9d7f05bd015265"
+      "after": "d0e9d500236c57527ae115a30f50f8d9351926f30d538fe0ceb332bc6755d0f3"
     },
     "src/brass_ai/rust_backend/lab_families.py": {
       "before": "a3ee17f38fbd524785ff41450eda6cdfb1f829b469b586777cf5d681863e27d8",
@@ -258,7 +258,7 @@
     },
     "src/brass_ai/rust_backend/lab_features.py": {
       "before": "c763fb68343ed383be22ce42f13ce0e606ab235254c275e6a36b187cba393b84",
-      "after": "84d85086e219f53ba8c2002c06716e00248a7c04f944c8907e0a36201c215cbc"
+      "after": "992a251075b6d56397b28d78423b49cff8a4ebb3a14e09178f6867c4600fb505"
     },
     "src/brass_ai/rust_backend/lab_paths.py": {
       "before": null,
@@ -274,7 +274,7 @@
     },
     "src/brass_ai/rust_backend/lab_pool.py": {
       "before": "1561e48d93b258d57511f4c79e6b0e5de98baedbc9dda0b1cfe325ec57af22f1",
-      "after": "c9e0d8d78bc461d88fcf07ec960a565f64e2a66276fffa9d55f4cb78d3aeca33"
+      "after": "9a0cf7c4afed2e63de172ab32863f737369bd3a66bc4ec6177cd1758ffceada5"
     },
     "src/brass_ai/rust_backend/lab_replay_compat.py": {
       "before": null,
@@ -290,11 +290,11 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "acbca759b2e1b5fdd600784d1b6f10ff9d55c875fe1275b2dff18a6af4d0ab39"
+      "after": "defcc938fb49907bfa31a0a5eead77fb441967b75b78af3335afea241501e0aa"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
-      "after": "4f2dcc7ef1aa4789ff4c29ef1812ab0080d6ebb60c83707c17ca3960fb5dc7e0"
+      "after": "25a5f46e8390dac753ee217077d44036a8d7892304cc0d0ea1d463e1db9524ab"
     },
     "src/brass_ai/rust_backend/lab_teacher.py": {
       "before": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb",
@@ -446,7 +446,7 @@
     },
     "src/brass_ai/recovery/rating_coverage.py": {
       "before": "7bc31d21ebf17e69a3db8ffa6699e64f0e271188030e6f1917f37505743a39c0",
-      "after": "546bbd09d59a2cf01dd41dd679b9eb2563ba84de87a27c17f4fcf97ab29f4929"
+      "after": "6eda624d61cbe4475087abf5ec9e5e717394c84ea353514499f68f0e77bc1a7a"
     },
     "src/brass_ai/recovery/rating_plot.py": {
       "before": "4fc9dd1a86c9d24c735cc04089bd5dbf03211a6bf98dfa5665aaa008f03f446e",
@@ -454,7 +454,7 @@
     },
     "src/brass_ai/recovery/ratings.py": {
       "before": "aa3a2b635bea1b3bf5418215994e02df155a2863724a95e28bdd2fa6f293435f",
-      "after": "77220b40d230e8563e8c35a05a1b8d139c58f77dcc973b11349b9c2ad4d2b645"
+      "after": "c0cddd330d5bac436dbaae3ba56c65f867fa0b2ac65076cfaff50ce1e8573a26"
     },
     "tests/Recovery/test_rating_plot.py": {
       "before": "74e8e07077139d647095ab00fc3c4bc9b7d7d41805ba8617b2d1f3ff5c1367ee",
@@ -859,6 +859,11 @@
       "implementation": "759cedbc268c17fbd44b82693b437a207db4a151c791886d5a594d7440cb1ebe",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "839b944b61780867b5f7af56fdc61d1375e5701a763c80deb64f26874431d6f1"
+    },
+    {
+      "implementation": "95a8a6d17061d4c62810eeee906ac5a47e3f1b55008f97fac507f6b1bf55c1c3",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "562984bea54a316291038e0ac1343de4fcedf29b198cb24b09447f6a354f2d59"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1156,6 +1161,14 @@
   },
   "g3140_background_purge_import_fix": {
     "scope": "Import BackgroundPurge in the inner trainer that owns the cleanup context, instead of the outer entry point. Fixes startup NameError without changing collection, training, cleanup checks, checkpoint/Adam/RNG, counters, or buffers.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3170_publisher_shared_rows_and_leases": {
+    "scope": "Publisher decode shares every unchanged subtree with the previous row (lab_delta.SharedRows): history events, top-level view fields, players and choices are reused when their JSON text is byte-identical, parsed once and frozen; rows equal json.loads of their bytes (values, types, key order). Each frozen view carries its exact canonical bytes and input digest (canonical_inputs.CanonicalInput, not an actor Admission, so input-boundary audits still validate in full); seals, the structural re-bind and the replay encoding reuse them, byte-identical to json.dumps(sort_keys=True) and contracts.digest. Shared parts (brass-ordinary-shared-part/2): the parent issues each ordinary game's lease with the job and shrinks it to the written chunks on the result; the lane writes inside the CPU ticket it played the game under; each chunk is hashed once and the part seal binds ordered chunk sizes and hashes. Exports that do not fit take the original exact allocation. Same jobs, RNG, rows, features, replay bytes and seals; no recipe, reward, search or PPO change. Environment switches: BRASS_SHARED_ROWS=0 parses every row in full; BRASS_PREISSUED_LEASES=0 asks the parent for every lease.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3170_rating_cadence": {
+    "scope": "--rating-every 20 adds rating_cadence (rating-cadence/1.0.0): from the committed generation it is adopted at, PL strength ratings run every 20 iterations (g3190, g3210, ...); the rating block, its state, committed slots and the reference-setup rotation per slot are unchanged. Recipe recognition peels the key; it is excluded from the collection signature.",
     "qualified_implementation_unchanged": true
   }
 }

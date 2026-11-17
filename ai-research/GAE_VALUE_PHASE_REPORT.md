@@ -79,7 +79,7 @@ The extra Adam moments add roughly **45 MiB** at this model size, plus a roughly
 Generate the new config without rerunning or renaming IL:
 
 ```bash
-python scripts/feature-engineering.py configure \
+python scripts/training/imitation/feature-engineering.py configure \
   --imitation-run artifacts/step5/features4-v11-1-batch7-il \
   --output configs/step5/joint7-v11-1-grouped-lr-gae-ppg-buffer2.json
 ```

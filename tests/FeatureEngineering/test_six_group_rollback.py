@@ -82,7 +82,7 @@ class FeatureLabConfigTests(unittest.TestCase):
         base=read_json(SOURCE_ROOT/'configs/step5/joint7-latest.json');before=copy.deepcopy(base)
         origin=dict(base['imitation_checkpoint'],bc_run='artifacts/six-group-five-block-il',
             path='artifacts/six-group-five-block-il/epoch-0001.pt',manifest='artifacts/six-group-data/manifest.json')
-        main=runpy.run_path(str(SOURCE_ROOT/'scripts/feature-engineering.py'))['main']
+        main=runpy.run_path(str(SOURCE_ROOT/'scripts/training/imitation/feature-engineering.py'))['main']
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as directory:
             output=Path(directory)/'recipe.json'
             with patch.object(sys,'argv',['feature-engineering.py','configure',

@@ -4,7 +4,7 @@ import runpy
 import unittest
 
 ROOT=Path(__file__).resolve().parents[2]
-REF=runpy.run_path(str(ROOT/'scripts/reproduce-gumbel-sessions.py'))
+REF=runpy.run_path(str(ROOT/'scripts/experiments/gumbel-is-mcts/reproduce-gumbel-sessions.py'))
 
 class SessionReferenceTests(unittest.TestCase):
     def test_recorded_contract(self):

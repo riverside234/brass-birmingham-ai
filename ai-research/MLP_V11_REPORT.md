@@ -116,7 +116,7 @@ A subsequent [ONNX Runtime measurement](MLP_V11_ONNX_RUNTIME_REPORT.md) reused t
 - Model/layout/topology: `src/brass_ai/learning/{model,state_layout,local_entities,board_topology,contracts,utility_model}.py`; new `configs/learning/{state-groups-6.0.0,local-entity-topology-2.0.0}.json`.
 - Admission/provenance: `src/brass_ai/runtime_contracts.py`, `src/brass_ai/recovery/{encoding,replay}.py`, `src/brass_ai/step5/league.py`.
 - Training: `src/brass_ai/recovery/{learning_rate,config,demonstrations,league,resume,updates,history}.py`, `src/brass_ai/step5/cli.py`, `configs/step5/joint7-latest.json`.
-- Export/package and inspection: `src/brass_ai/personality/{model,laptop/package}.py`, `scripts/feature-engineering.py`.
+- Export/package and inspection: `src/brass_ai/personality/{model,laptop/package}.py`, `scripts/training/imitation/feature-engineering.py`.
 - Focused checks: `tests/FeatureEngineering/{test_mlp_v11,test_v11_architecture,test_factored_scorer,test_grouped_projection,test_compact_widths,test_compaction,test_six_group_rollback,test_fe4,smoke_fe5,smoke_mlp_v11,benchmark_mlp_v11}.py`; `tests/Recovery/test_v11_learning_rate.py`; updated current-version assertions in `tests/R2/test_learning.py` and `tests/Recovery/test_training_performance_resume.py`.
 - Documentation: this report, `GROUPED_PROJECTION_CONTRACT.md`, `docs/MLP_V11_LAB.md`, and current-target links in the prior lab documents.
 

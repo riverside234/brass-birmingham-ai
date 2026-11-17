@@ -25,7 +25,7 @@ CONFIG = ROOT / 'configs/search/search-v2-study.json'
 
 def process(binary, source, target, log_path, watchdog):
     """Process CPU/peak memory include startup; native per-owner spans are separate."""
-    memory_type = runpy.run_path(str(ROOT/'scripts/benchmark-rust-coordinator.py'))['Memory']
+    memory_type = runpy.run_path(str(ROOT/'scripts/benchmarks/benchmark-rust-coordinator.py'))['Memory']
     kernel=ctypes.WinDLL('kernel32',use_last_error=True);psapi=ctypes.WinDLL('psapi',use_last_error=True)
     kernel.GetProcessTimes.argtypes=[wintypes.HANDLE,*[ctypes.POINTER(wintypes.FILETIME)]*4]
     psapi.GetProcessMemoryInfo.argtypes=[wintypes.HANDLE,ctypes.POINTER(memory_type),wintypes.DWORD]

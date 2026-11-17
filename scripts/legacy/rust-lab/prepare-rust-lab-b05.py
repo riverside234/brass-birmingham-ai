@@ -53,7 +53,7 @@ def main():
         names.update((Path(folder)/n).as_posix() for n in ('state.json','recorded-config.json','export-manifest.json') if (ROOT/folder/n).is_file())
     names.update(p.relative_to(ROOT).as_posix() for p in evidence.iterdir())
     names.update('distribution/rust-lab-b05-g1250/'+n for n in ('reference.json','README.md','local-checks.json'))
-    names.update(['ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B05_IMPLEMENTATION.md',
+    names.update(['ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B05_IMPLEMENTATION.md',
                   'native/brass-ai-core/tests/data/initial-state.json'])
     def data(name):
         p=ROOT/name;value=p.read_bytes()

@@ -53,7 +53,7 @@ def main():
     model,origin=completed_imitation(root,out/'imitation')
     require(bc['history'][0]['train']['optimizer_steps']==1,'Expected one tiny IL update')
     # Use the actual documented configuration CLI, binding both IL and rehearsal.
-    command=[sys.executable,str(root/'scripts/feature-engineering.py'),'configure',
+    command=[sys.executable,str(root/'scripts/training/imitation/feature-engineering.py'),'configure',
              '--imitation-run',str(out/'imitation'),'--output',str(out/'selfplay.json')]
     subprocess.run(command,cwd=root,check=True,capture_output=True,text=True)
     resolved=validate_config(read_json(out/'selfplay.json'))

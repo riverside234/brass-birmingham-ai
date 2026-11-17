@@ -67,8 +67,8 @@ generations. For routine continuation, see [training](../README.md).
 
 - [continue-rust-g1190-restart.py](continue-rust-g1190-restart.py)
 - [continue-rust-g1490-restart.py](continue-rust-g1490-restart.py)
-- [continue-rust-revised.py](../../continue-rust-revised.py)
-- [joint7_restart160.py](../../joint7_restart160.py)
+- [continue-rust-revised.py](continue-rust-revised.py)
+- [joint7_restart160.py](joint7_restart160.py)
 - [prepare-neutral-selfplay.py](prepare-neutral-selfplay.py)
 - [prepare-rust-branch-restart.py](prepare-rust-branch-restart.py)
 - [prepare-rust-g1190-restart.py](prepare-rust-g1190-restart.py)
@@ -77,9 +77,9 @@ generations. For routine continuation, see [training](../README.md).
 
 ## Retained recovery entry points
 
-`prepare-rust-post-transfer-reward.py`, `continue-rust-revised.py`, and
-`joint7_restart160.py` keep the top-level paths linked above for transfer and
-in-place rollback workflows.
+`prepare-rust-post-transfer-reward.py` keeps its top-level path because current
+transfer output and the reward runtime name it. The earlier in-place rollback
+and g160 reconstruction commands now live here with the historical restarts.
 
 ## Retired lab bundles
 

@@ -199,7 +199,9 @@ class RecoverySpeed(unittest.TestCase):
         def digesting(value):
             if isinstance(value,dict) and set(value)=={'view','choices'}:calls.append(1)
             return original(value)
-        with patch.object(F,'digest',side_effect=digesting),patch.object(replay_module,'digest',side_effect=digesting):
+        from brass_ai.recovery import canonical_inputs
+        with patch.object(F,'digest',side_effect=digesting),patch.object(replay_module,'digest',side_effect=digesting),\
+                patch.object(canonical_inputs,'digest',side_effect=digesting):
             arrays=F.unpack(raw,[game],meta)
             checked=F.bind(game,arrays)
         self.assertEqual(len(calls),len(game['records']))

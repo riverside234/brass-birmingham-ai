@@ -24,14 +24,20 @@ for the Windows profile and local collection probe.
 - [seal-search-v205.py](seal-search-v205.py)
 - [run-nn-k-tournament.py](run-nn-k-tournament.py)
 
-## Qualification and release scripts at the original paths
+## Rust qualification studies
 
-- [benchmark-rust-backend.py](../benchmark-rust-backend.py) — L14 source archive and host-delivery qualification.
-- [benchmark-rust-coordinator.py](../benchmark-rust-coordinator.py) — L12 qualification.
-- [benchmark-rust-inference.py](../benchmark-rust-inference.py) — L09 qualification.
-- [benchmark-rust-providers.py](../benchmark-rust-providers.py) — L14.5 provider qualification.
-- [profile-rust-simulation.py](../profile-rust-simulation.py) — L07 qualification.
+- [benchmark-rust-backend.py](benchmark-rust-backend.py) — L14 source archive and host-delivery qualification.
+- [benchmark-rust-coordinator.py](benchmark-rust-coordinator.py) — L12 qualification.
+- [benchmark-rust-inference.py](benchmark-rust-inference.py) — L09 qualification.
+- [benchmark-rust-providers.py](benchmark-rust-providers.py) — L14.5 provider qualification.
+- [profile-rust-simulation.py](profile-rust-simulation.py) — L07 qualification.
+- [l14-search-controls.py](l14-search-controls.py) — L14 pinned runner and its qualification callers.
+- [l14-smoke.py](l14-smoke.py) — L14 source archive.
+- [seal-l14-smoke.py](seal-l14-smoke.py) — L14 source archive.
+
+## Retained release source
+
 - [measure-mono-allocation.py](../measure-mono-allocation.py) — Local Rust release source pin.
-- [l14-search-controls.py](../l14-search-controls.py) — L14 pinned runner and its qualification callers.
-- [l14-smoke.py](../l14-smoke.py) — L14 source archive.
-- [seal-l14-smoke.py](../seal-l14-smoke.py) — L14 source archive.
+
+New study source archives use the current script paths. Sealed historical
+receipts and archives retain their original member names and hashes.

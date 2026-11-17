@@ -56,7 +56,7 @@ Existing-source/config files changed in this revision:
 - src/brass_ai/personality/laptop/package.py
 - configs/step5/joint7-latest.json
 
-Also added static_profile.py, features-4.0.0.json, state-groups-4.0.0.json, test_compaction.py and smoke_compaction.py. Updated scripts/feature-engineering.py inspection output; synchronized existing model/feature test expectations and variable-length semantic offsets; updated the active contract/lab documents and this receipt. Previous uncommitted performance, source-review and training updates were preserved. Earlier frozen manifests and source-review receipts are byte-unchanged.
+Also added static_profile.py, features-4.0.0.json, state-groups-4.0.0.json, test_compaction.py and smoke_compaction.py. Updated scripts/training/imitation/feature-engineering.py inspection output; synchronized existing model/feature test expectations and variable-length semantic offsets; updated the active contract/lab documents and this receipt. Previous uncommitted performance, source-review and training updates were preserved. Earlier frozen manifests and source-review receipts are byte-unchanged.
 
 The checked-in recipe changed **only architecture**. The generated fresh-run binding uses the new completed IL checkpoint **and its re-encoded rehearsal dataset**. No existing production checkpoint, population, dataset or run was edited. Current reward, curriculum, exploration, teacher settings, search budgets and all guards are preserved, including search_wall_fraction=null. Exact values are recorded in the active contract and resolved smoke configuration.
 

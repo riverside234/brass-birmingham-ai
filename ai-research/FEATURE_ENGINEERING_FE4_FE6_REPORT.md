@@ -51,7 +51,7 @@ remain **12/12/16/24 seconds**, five games, cadence 160, eight distillation step
 and `search_wall_fraction=null`. Latest-model continuation preserves these explicit
 clocks rather than applying archived gated-run migrations.
 
-`scripts/feature-engineering.py convert` is an explicit heuristic-only raw
+`scripts/training/imitation/feature-engineering.py convert` is an explicit heuristic-only raw
 re-encoding workflow. It checks old contract/rules/source hashes, reconstructs
 every native transition, validates full permitted observations/legal lists and
 terminal results, then writes a new manifest/cache directory. Two archived games
@@ -61,7 +61,7 @@ and missing required facts are rejected; failed conversions commit no manifest.
 Normal training retains qualified-bank/admission checks. Old encoded caches,
 weights and optimizer states are not migrated into the new schema.
 
-`scripts/feature-engineering.py configure` binds a completed new IL checkpoint
+`scripts/training/imitation/feature-engineering.py configure` binds a completed new IL checkpoint
 and its lineage to a separate current-recipe config. Production source-review
 registries were not expanded to admit v1 weights. Historical migration unit tests
 use explicit test-only receipts for synthetic same-contract states.

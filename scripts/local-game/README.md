@@ -78,7 +78,7 @@ allocation probe. The L15 and final local release audits pin several of
 these files by path and SHA-256 and use the related tools for deployment
 checks. The shared `scripts/patch-install-common.ps1` stays where those
 installers load it. See the
-[migration plan](../../ai-research/LOCAL_GAME_SCRIPT_MIGRATION_PLAN.md) for
+[migration plan](../../ai-research/migration-plans/LOCAL_GAME_SCRIPT_MIGRATION_PLAN.md) for
 the source pins and the first-pass inventory.
 
 For a fresh finalization, use upgrade-test receipts generated with the

@@ -20,8 +20,8 @@ def module(name, file):
     return loaded
 
 
-calibration = module('calibration_adapter', 'scripts/test_nn_calibration.py')
-exporter = module('checkpoint_export', 'scripts/export-test-nn.py')
+calibration = module('calibration_adapter', 'scripts/training/checkpoints/test_nn_calibration.py')
+exporter = module('checkpoint_export', 'scripts/training/checkpoints/export-test-nn.py')
 TORCH = importlib.util.find_spec('torch') is not None
 
 

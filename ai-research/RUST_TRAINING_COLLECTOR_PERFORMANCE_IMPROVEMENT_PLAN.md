@@ -13,7 +13,7 @@
 [distribution 操作说明](../distribution/rust-collector-performance/README.md)。
 
 本计划承接 [B07 实现与测量记录](RUST_BACKEND_B07_IMPLEMENTATION.md) 和
-[Rust 后端迁移计划](RUST_AI_BACKEND_MIGRATION_PLAN.md)，优化正式训练的普通自博弈采集路径。
+[Rust 后端迁移计划](migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md)，优化正式训练的普通自博弈采集路径。
 目标是消除重复传输、序列化、文件中转和验证，使 Rust 引擎的收益能够体现在
 **最终被训练器接纳的数据所需的总时间**上。只增加 publisher 数量不等于减少工作量。
 

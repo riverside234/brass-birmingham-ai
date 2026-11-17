@@ -301,7 +301,7 @@ regressions await server execution; no local tests or benchmarks were run.
 See [transfer-frozen-runtime-fix.json](transfer-frozen-runtime-fix.json) and
 the transfer guide for commands.
 
-Old-machine full revision: `scripts/continue-rust-revised.py` keeps the original
+Old-machine full revision: `scripts/training/migrations/continue-rust-revised.py` keeps the original
 project ROOT, preserves the newer g1286 run under ignored `.training-rollback/`,
 restores the chosen g1284 export at its original run path and explicitly adopts
 the complete revised rewards/fresh-buffer instruction. It journals the move and

@@ -1275,19 +1275,33 @@ class RealLane(unittest.TestCase):
                 self.assertGreater(startup['mono_bootstrap_seconds'], 0)
                 self.assertGreater(startup['total_seconds'], startup['mono_bootstrap_seconds'])
                 # Strict games are audited in full. Training validates most games the fast way.
-                for number, validation in enumerate((None, dict(semantic=False, branch=False))):
-                    parent.send(dict(job=dict(job, seed=19+number, stable_game_id=f'lane-fixture-{number}'), continuation=None, validation=validation))
-                    result = None
+                # The third game comes with its lease, as the pool issues it: no allocation round trip.
+                fast = dict(semantic=False, branch=False)
+                for number, (validation, preissued) in enumerate(((None, False), (fast, False), (fast, True))):
+                    offered = registry.reserve() if preissued else None
+                    parent.send(dict(job=dict(job, seed=19+number, stable_game_id=f'lane-fixture-{number}'), continuation=None,
+                                     validation=validation, shared_lease=offered))
+                    result = None; allocations = 0
                     while result is None:
                         self.assertTrue(parent.poll(240), 'lane stopped answering')
                         message = parent.recv()
                         self.assertNotIn('error', message, message.get('error'))
                         if 'shared_allocate' in message:
+                            allocations += 1
                             parent.send(dict(shared_lease=registry.allocate(message['shared_allocate']['size'])))
                         elif 'result' in message:
                             result = message['result']
                     self.assertEqual(result['format'], lab_shared.FORMAT)
                     self.assertGreater(result['size'], 0)
+                    if preissued:
+                        self.assertEqual((allocations, result['lease']), (0, offered['lease']))
+                        self.assertTrue(result['transfer_timings']['shared_preissued'])
+                        registry.settle(offered, result); registry.verify(result)
+                        self.assertEqual(registry.report()['preissued_leases']['used'], 1)
+                    value = lab_shared.decode(lab_shared.read(result))
+                    self.assertEqual(len(value['game']['records']), value['native_receipt']['rows'])
+                    self.assertEqual(value['game'].decode_sharing['fallbacks'], 0)
+                    registry.release(result)
             finally:
                 stop.set()
                 parent.send(None)

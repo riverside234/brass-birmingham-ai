@@ -53,7 +53,7 @@ standard-library collections/clock primitives. The count-v1 oracle is retained.
 ## References and validation
 
 The small independent
-[`reproduce-gumbel-sessions.py`](../scripts/reproduce-gumbel-sessions.py) and
+[`reproduce-gumbel-sessions.py`](../scripts/experiments/gumbel-is-mcts/reproduce-gumbel-sessions.py) and
 [`session-v1.json`](../tests/GumbelISMCTS/fixtures/session-v1.json) were written
 before session integration. They cover ten quota/round interruption scenarios
 and six startup/completed-cost quota examples. The detailed contract is
@@ -118,7 +118,7 @@ previous completed milestone evidence was not rewritten.
 Reproduction entry point:
 
 ```powershell
-python scripts/qualify-rust-sessions.py --out artifacts/rust-backend/my-new-l11-run
+python scripts/training/rust-lab/validation/qualify-rust-sessions.py --out artifacts/rust-backend/my-new-l11-run
 ```
 
 Use a new output directory and the pinned local toolchain/model/corpus. The

@@ -112,7 +112,7 @@ python -m pip install -r /data/not_backed_up/yxu209/ai-training/requirements-ste
 
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py import-runtime --bundle /data/not_backed_up/yxu209/ai-training/artifacts/step5-transfer/private-rules-runtime.zip
 python /data/not_backed_up/yxu209/ai-training/scripts/reports/check_qualification_reports.py
-python /data/not_backed_up/yxu209/ai-training/scripts/verify-step5.py
+python /data/not_backed_up/yxu209/ai-training/scripts/training/checks/verify-step5.py
 python /data/not_backed_up/yxu209/ai-training/scripts/step5.py --device cuda preflight
 python /data/not_backed_up/yxu209/ai-training/scripts/check-transferred-legacy.py
 ```
@@ -155,7 +155,7 @@ After transferring/pulling the fix into the lab checkout, run:
 ```bash
 conda activate ai-training
 python /data/not_backed_up/yxu209/ai-training/scripts/reports/check_qualification_reports.py --repair-line-endings
-python /data/not_backed_up/yxu209/ai-training/scripts/check-step5-distribution.py
+python /data/not_backed_up/yxu209/ai-training/scripts/training/checks/check-step5-distribution.py
 ```
 
 The repair accepts only an LF/CRLF conversion that produces the **existing exact
@@ -403,7 +403,7 @@ or an on-laptop adaptive release.
 Use R2's checked ONNX export with real permitted-view examples from the run:
 
 ```bash
-python /data/not_backed_up/yxu209/ai-training/scripts/r2.py export --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --shards /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/iteration-0019/actor-0000.jsonl.gz --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/model-g20.onnx
+python /data/not_backed_up/yxu209/ai-training/scripts/training/imitation/r2.py export --checkpoint /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/generation-0020.pt --shards /data/not_backed_up/yxu209/ai-training/artifacts/step5/main/iteration-0019/actor-0000.jsonl.gz --output /data/not_backed_up/yxu209/ai-training/artifacts/step5/model-g20.onnx
 ```
 
 Keep ordinary run data under ignored `artifacts/step5/`. Select weights and their

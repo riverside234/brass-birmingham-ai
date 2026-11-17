@@ -82,8 +82,8 @@ The source directory must be your actual existing run, and the destination must 
 ## Focused checks
 
 ```bash
-python /data/not_backed_up/yxu209/ai-training/scripts/verify-step5.py
-python /data/not_backed_up/yxu209/ai-training/scripts/check-step5-evaluation.py --device cuda
+python /data/not_backed_up/yxu209/ai-training/scripts/training/checks/verify-step5.py
+python /data/not_backed_up/yxu209/ai-training/scripts/training/checks/check-step5-evaluation.py --device cuda
 ```
 
 The second command plays one real setup in all four seats against one untrained reference, with legacy disabled. It verifies completion and rotation, not playing strength. Its generated report is under `/data/not_backed_up/yxu209/ai-training/artifacts/step5/evaluation-checks/`. See [local check results](STEP5_EVALUATION_CHECKS.md) for executed evidence and remaining lab measurements.

@@ -48,7 +48,7 @@ def main():
         'distribution/rust-lab-g1250/training-reference.json','distribution/rust-lab-g1250/local-checks.json',
         'distribution/rust-lab-toolchain/microsoft.net.compilers.toolset.4.12.0.nupkg',
         'distribution/rust-lab-toolchain/License.txt','distribution/rust-lab-toolchain/README.md',
-        'ai-research/RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md','ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md',
+        'ai-research/RUST_BACKEND_B045_SEARCH_VALUE_PLAN.md','ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md',
         'ai-research/RUST_BACKEND_B045_IMPLEMENTATION.md','native/brass-ai-core/tests/data/initial-state.json'])
     # No proprietary runtime/checkpoint is shipped. The lab already owns its
     # reference runtime; build_bootstrap verifies every dependency before use.

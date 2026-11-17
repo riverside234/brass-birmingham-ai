@@ -42,7 +42,7 @@ IL is already complete; no retraining or dataset regeneration is needed. After s
 
 ```bash
 cd /data/not_backed_up/yxu209/ai-training/
-python scripts/feature-engineering.py configure \
+python scripts/training/imitation/feature-engineering.py configure \
   --imitation-run artifacts/step5/features4-compact-v9-batch7-il \
   --output configs/step5/joint7-features4-compact-v9-batch7-teacher-value.json
 

@@ -27,7 +27,7 @@ def main():
         'tests/RustBackendLab/test_b025.py', 'tests/R2/fixtures.py', 'tests/Recovery/test_teacher_value.py',
         'scripts/reproduce-gumbel-is-mcts.py', 'tests/GumbelISMCTS/fixtures/reference-v1.json',
         'results/joint7-v11-2-grouped-lr-critic-g1320-20261027T075134827445Z/recorded-config.json',
-        'ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md', 'ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
+        'ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md', 'ai-research/TEACHER_SEARCH_PHASE_REVISION_PLAN.md',
         'ai-research/RUST_BACKEND_B025_REPORT.md', 'distribution/rust-lab-b025/README.md']
     # Config/receipt JSON retains its repository bytes; source/shell text uses LF.
     files = {name: ((ROOT / name).read_bytes() if name.endswith('.json') else

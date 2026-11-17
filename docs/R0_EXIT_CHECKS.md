@@ -20,9 +20,9 @@ fixtures. R1 and later implementation stages have not been started by this work.
 Reproduction commands, using an environment with `requirements-r0.txt` installed:
 
 ```sh
-python scripts/verify-r0.py
+python scripts/training/rules-host/verify-r0.py
 python -m unittest discover -s tests/R0 -p "test_*.py" -v
-python scripts/verify-r0.py --check-cache --game-root "/path/to/Brass Birmingham"
+python scripts/training/rules-host/verify-r0.py --check-cache --game-root "/path/to/Brass Birmingham"
 ```
 
 Use `--fetch-references` once when the ignored source cache is absent. The first

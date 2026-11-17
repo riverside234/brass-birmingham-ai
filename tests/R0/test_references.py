@@ -25,7 +25,7 @@ class ReferenceTests(unittest.TestCase):
         return lock, data
 
     def test_project_manifest_map_and_all_examples(self):
-        spec = importlib.util.spec_from_file_location("verify_r0", ROOT / "scripts/verify-r0.py")
+        spec = importlib.util.spec_from_file_location("verify_r0", ROOT / "scripts/training/rules-host/verify-r0.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         _, _, components, examples = module.verify_project()

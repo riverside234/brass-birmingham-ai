@@ -148,7 +148,7 @@ It uses the pinned Rust 1.99.1 GNU toolchain and the L03 build profiles.
 The installed fallback, original saves, g890 checkpoint and frozen L01/L02/L03
 evidence passed before/after preservation checks. All 40 imported upstream
 modules remain byte-identical. The previously recorded unrelated
-`scripts/export-test-nn.py` drift remains unchanged; its frozen source is still
+`scripts/training/checkpoints/export-test-nn.py` drift remains unchanged; its frozen source is still
 preserved. The C#/Python backend stays
 the default. No Unity integration, model change, NN evaluation, search or lab
 training is part of L04.

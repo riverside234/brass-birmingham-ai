@@ -207,7 +207,7 @@ native hot path; retain this adapter as the differential reference.
 ## Reproduction and remaining work
 
 ```powershell
-python scripts/qualify-rust-simulation.py --out artifacts/rust-backend/my-new-l07-run
+python scripts/training/rust-lab/validation/qualify-rust-simulation.py --out artifacts/rust-backend/my-new-l07-run
 ```
 
 The output directory must be new. Qualification uses the offline pinned native
@@ -223,4 +223,4 @@ deployment settings remain **4/8/10/12s**. The new plan requirement for V4-only 
 NN-only deployment tables remains assigned to L13/L15.
 
 See the [simulator contract](../configs/contracts/rust-backend/simulation-v1.md)
-and [migration plan](RUST_AI_BACKEND_MIGRATION_PLAN.md).
+and [migration plan](migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md).

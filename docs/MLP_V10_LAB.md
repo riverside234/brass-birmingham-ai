@@ -22,7 +22,7 @@ Use the actual converted manifest path if yours differs. The commands below use 
 conda activate ai-training
 cd /data/not_backed_up/yxu209/ai-training/
 
-python scripts/feature-engineering.py inspect
+python scripts/training/imitation/feature-engineering.py inspect
 
 python scripts/step5.py --config configs/step5/joint7-latest.json imitate \
   --manifest artifacts/il-replay/features4-compact-v8-batch7/manifest.json \
@@ -37,7 +37,7 @@ These epoch/worker arguments are an example lab invocation, not changed model de
 After IL completes successfully, generate a configuration pinned to that run's accepted checkpoint. Use a new output filename; the helper does not overwrite an existing config.
 
 ```bash
-python scripts/feature-engineering.py configure \
+python scripts/training/imitation/feature-engineering.py configure \
   --imitation-run artifacts/step5/features4-v10-batch7-il \
   --output configs/step5/joint7-features4-v10-batch7.json
 

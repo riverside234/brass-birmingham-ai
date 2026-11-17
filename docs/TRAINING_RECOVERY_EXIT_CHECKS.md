@@ -16,7 +16,7 @@
 
 ## Complete four-player execution
 
-`scripts/verify-recovery.py --integration` completed ten games:
+`scripts/training/checks/verify-recovery.py --integration` completed ten games:
 
 - Two current-v3 demonstration games in distinct train/validation setup partitions, then an exact observation/choice/transition/terminal-result audit.
 - One short actual imitation epoch with a compatible fresh small-model initialization.

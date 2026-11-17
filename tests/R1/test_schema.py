@@ -29,7 +29,7 @@ class SchemaTests(unittest.TestCase):
     def test_all_recorded_phase_checkpoints(self):
         # Populated by check-r1-traces.py. No proprietary snapshots are versioned.
         traces = ROOT / "artifacts/r1-host/traces.json"
-        self.assertTrue(traces.exists(), "Run scripts/check-r1-traces.py first")
+        self.assertTrue(traces.exists(), "Run scripts/training/rules-host/check-r1-traces.py first")
         rows = json.loads(traces.read_text())
         with RulesHost() as host:
             for row in rows:

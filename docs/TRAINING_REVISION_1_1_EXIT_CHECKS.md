@@ -6,9 +6,9 @@
 
 | Check | Result |
 | --- | --- |
-| `scripts/verify-recovery.py` | 20 passed: ingress/privacy and mutation rejection, all-seat feature parity, nonforced learning, KL guards, central routing, BC resume, retention/pins/restore and private matched search workers |
+| `scripts/training/checks/verify-recovery.py` | 20 passed: ingress/privacy and mutation rejection, all-seat feature parity, nonforced learning, KL guards, central routing, BC resume, retention/pins/restore and private matched search workers |
 | `scripts/verify-searchlab.py` | 18 passed: four-seat selection/backups, observation privacy, fresh matched confirmation, legal timeout incumbents, distillation provenance and unchanged promotion requirements |
-| `scripts/verify-step5.py` | 35 passed: legacy recipe compatibility, frozen qualification checks, BC/PPO separation, Pottery support, seat rotation, evaluation resumption and source/checkpoint integrity |
+| `scripts/training/checks/verify-step5.py` | 35 passed: legacy recipe compatibility, frozen qualification checks, BC/PPO separation, Pottery support, seat rotation, evaluation resumption and source/checkpoint integrity |
 | Versioned configurations | All 21 training/evaluation/search configurations accepted by their strict validators; invalid fields and CPU-cap violations remain rejected |
 | Python compilation | Changed modules and CLI helpers compiled |
 | Source formatting | CR-aware Git whitespace check passed; pinned JSON bytes retain their existing newline rules |

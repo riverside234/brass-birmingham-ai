@@ -5,7 +5,7 @@ Status: **L01 complete for mechanical testing; L02 complete**. The test model's
 live/strength admission remains pending utility calibration.
 
 This implements the reference freeze and comparison harness from the
-[migration plan](RUST_AI_BACKEND_MIGRATION_PLAN.md). The installed game remains
+[migration plan](migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md). The installed game remains
 on patch 1.4.34. Rust integration starts at L03; local deployment and lab work
 remain later gates.
 
@@ -56,7 +56,7 @@ The upstream pin is also tracked in
 
 ## Implemented harness
 
-The [driver](../scripts/qualify-rust-backend.py) supports `freeze`, `capture`,
+The [driver](../scripts/training/rust-lab/validation/qualify-rust-backend.py) supports `freeze`, `capture`,
 `qualify`, `traces`, `tests`, `benchmark` and read-only `report` operations.
 [Run instructions](../tests/RustBackend/README.md) give the exact local Python
 and dependency setup. Generated private states, game saves and binaries stay

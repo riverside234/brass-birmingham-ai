@@ -528,6 +528,9 @@ build/
 
 # Training data, checkpoints and generated experiment output.
 checkpoints/
+!/scripts/training/checkpoints/
+/scripts/training/checkpoints/*
+!/scripts/training/checkpoints/*.py
 datasets/
 replays/
 runs/

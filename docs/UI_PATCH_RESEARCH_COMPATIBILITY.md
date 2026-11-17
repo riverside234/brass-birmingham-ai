@@ -38,7 +38,7 @@ Keep the private 1.1.0 research dependencies for reproducible training. The hist
 Use the preserved runtimes for normal collection/training and `check-frozen-bank.py` for current bank validation:
 
 ```powershell
-python scripts/check-frozen-bank.py --root . --bank bank-804c85204da65824cb9b --output artifacts/research-compatibility/new-bank-check.json
+python scripts/training/opponent-banks/check-frozen-bank.py --root . --bank bank-804c85204da65824cb9b --output artifacts/research-compatibility/new-bank-check.json
 ```
 
 For the lab, keep `/data/not_backed_up/yxu209/ai-training/` as the root and follow [the frozen-bank preparation guide](R3_TACTICAL_BANK.md) with the matching private research DLLs. The installed deployment's saves/observations are not automatically R2 replay data; importing them or deploying a trained model through `local-game/0.3.0` requires an explicit adapter and separate validation. Existing checkpoints and research replay need no conversion.

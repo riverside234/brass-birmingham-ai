@@ -33,8 +33,9 @@ def is_shadow(config):
     from brass_ai.recovery.ordinary_cotton import previous as previous_tables
     from brass_ai.recovery.training_revision_g2090 import previous_opening
     from brass_ai.recovery.training_revision_g3140 import previous as before_value_revision
+    from brass_ai.recovery.rating_cadence import previous as before_rating_cadence
     try:
-        config=previous_tables(previous_opening(before_value_revision(recipe(config))))
+        config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(recipe(config)))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -63,6 +64,8 @@ def collection_signature(signature):
     """Diagnostic window/gradient mode do not change frozen collection or RNG."""
     if not is_active(signature['config']):return signature
     result=copy.deepcopy(signature)
+    from brass_ai.recovery.rating_cadence import KEY as RATING_CADENCE
+    result['config'].pop(RATING_CADENCE,None)  # rating cost only; no collection setting
     phase=result['config']['teacher_phase']
     phase['mode']='shadow'
     phase['term']['shadow_iterations']=2
@@ -107,6 +110,10 @@ def signature_transition(before,after):
     # g3140 value revision: its items and the local-scoring weight ladder only move forward.
     from brass_ai.recovery import training_revision_g3140 as g3140
     old=g3140.project(old,new)
+    if old is None:return False
+    # g3170 rating cadence: adopted once, then kept; it changes only how often ratings run.
+    from brass_ai.recovery import rating_cadence
+    old=rating_cadence.project(old,new)
     if old is None:return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False

@@ -48,6 +48,8 @@ The worker itself takes about 0.40 s per game. The rest is the export and the ha
 
 ## Not done in this step, and why
 
+Both parts were finished at g3170; see [G3170_PUBLISHER_LEASES_RATING.md](G3170_PUBLISHER_LEASES_RATING.md). The lab showed that the history is only about a quarter of a row's JSON, so the publisher fix shares every unchanged subtree, not only the history, and the shared-memory fix removes the waits rather than the copy.
+
 - **Workers writing features straight into shared memory.** The copy is small: writing a game's 45 MB took 0.05 s here. On the lab the 2 s per write is mostly waiting, about 1 s for the parent's allocation round trip plus CPU tickets. Removing that wait needs a new lease-ownership design, not a faster copy. Decide this after the first autoplay iterations show whether the wait limits throughput.
 - **The publisher's decode, now the largest ordinary cost.** Every row carries the game's full history, so parsing and sealing a game is quadratic in its length: 0.8–1.2 s per game here (`json.loads` 0.33 s, row seals 0.2 s). Sharing the history between rows would roughly halve the remaining cost. It touches the replay seal format, so it is its own change. Do it before raising the game count to 480–640.
 

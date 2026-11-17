@@ -228,7 +228,7 @@ Use the project's existing Python dependencies and pinned native toolchain,
 choosing a new evidence directory:
 
 ```powershell
-python scripts/qualify-rust-inference.py --out artifacts/rust-backend/<new-l09-run>
+python scripts/training/rust-lab/validation/qualify-rust-inference.py --out artifacts/rust-backend/<new-l09-run>
 ```
 
 The script exports into a fresh immutable bundle, prepares golden tensors, checks

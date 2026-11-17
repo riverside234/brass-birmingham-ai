@@ -133,7 +133,7 @@ The principal changes are in `recovery/ppg_phasic.py`, `ppg_config.py`,
 `actor_value.py`, `ppg_auxiliary.py`, `ppg_epochs.py`, `updates.py` and
 `local_scoring_auxiliary.py`. Configuration/resume/history/console integration
 is updated alongside the source registry. New entry points are
-`scripts/training/migrations/configure-ppg-phasic.py` and `scripts/smoke-ppg-phasic.py`; focused
+`scripts/training/migrations/configure-ppg-phasic.py` and `scripts/training/checks/smoke-ppg-phasic.py`; focused
 tests are in `tests/Recovery/test_ppg_phasic.py`. The prior throughput files
 and their independent changes remain intact.
 

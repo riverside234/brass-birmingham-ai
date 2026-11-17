@@ -179,7 +179,7 @@ The main implementation is in `recovery/value_preservation.py` and
 `ppg_auxiliary.py` and their configuration/resume validators. Companion accounting,
 console/compact history, the lab instructions and explicit source-review registry
 were updated. `scripts/training/migrations/configure-dcpg.py` generates the continuation config;
-`scripts/smoke-dcpg.py` and `tests/Recovery/test_dcpg.py` provide isolated validation.
+`scripts/training/checks/smoke-dcpg.py` and `tests/Recovery/test_dcpg.py` provide isolated validation.
 
 The [isolated smoke report](../artifacts/dcpg-g590-smoke-verified/report.json)
 completed 16 authored iterations on CPU in 389.6 seconds, with two CPU threads.

@@ -57,11 +57,16 @@ verification commands.
 - [personality/personality_deployment.py](personality/personality_deployment.py)
 - [personality/personality_difficulty.py](personality/personality_difficulty.py)
 
-## Source and installation paths retained
+## Independent Gumbel references
 
 - [reproduce-gumbel-is-mcts.py](../reproduce-gumbel-is-mcts.py) — Gumbel reference lock.
-- [reproduce-gumbel-coordinator.py](../reproduce-gumbel-coordinator.py) — Qualified coordinator reference.
-- [reproduce-gumbel-sessions.py](../reproduce-gumbel-sessions.py) — Qualified session reference.
-- [export-test-nn.py](../export-test-nn.py) — Frozen Rust baseline and NN package builder.
-- [test_nn_calibration.py](../test_nn_calibration.py) — Sibling helper used by the pinned NN bundle exporter.
+- [reproduce-gumbel-coordinator.py](gumbel-is-mcts/reproduce-gumbel-coordinator.py) — Qualified coordinator reference.
+- [reproduce-gumbel-sessions.py](gumbel-is-mcts/reproduce-gumbel-sessions.py) — Qualified session reference.
+
+The original count-mode oracle retains its locked path; the session and
+coordinator references live together in the experiment folder.
+
+## Related training and installation tools
+- [export-test-nn.py](../training/checkpoints/export-test-nn.py) — Frozen Rust baseline and NN package builder.
+- [test_nn_calibration.py](../training/checkpoints/test_nn_calibration.py) — Sibling helper used by the checkpoint exporter.
 - [personality_laptop.py](../local-game/personality-laptop/personality_laptop.py) — Local install and rollback entry point.

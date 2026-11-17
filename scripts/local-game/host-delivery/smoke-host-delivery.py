@@ -67,7 +67,7 @@ def invoke(build, label, fixture, k, scenario='normal', profile=False):
 
 
 def profiles():
-    module = runpy.run_path(str(ROOT / 'scripts/benchmark-rust-backend.py'))
+    module = runpy.run_path(str(ROOT / 'scripts/benchmarks/benchmark-rust-backend.py'))
     for arm in ('baseline', 'candidate'):
         module['profile_build'](STUDY, STUDY / arm, arm, validate_study=False)
         invoke(STUDY / (arm + '-profile-build'), 'profile-' + arm, CASES['canal-k32'][0], 32, profile=True)

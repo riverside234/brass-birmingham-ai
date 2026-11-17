@@ -18,7 +18,7 @@ from brass_ai.recovery.config import UPDATE_V21
 from brass_ai.recovery.replay import write_shard, cache_receipt
 from brass_ai.step5.league import seeds_for, write_json, implementation_id
 
-spec = importlib.util.spec_from_file_location('il_replay', SOURCE_ROOT / 'scripts/il_replay.py')
+spec = importlib.util.spec_from_file_location('il_replay', SOURCE_ROOT / 'scripts/training/imitation/il_replay.py')
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 

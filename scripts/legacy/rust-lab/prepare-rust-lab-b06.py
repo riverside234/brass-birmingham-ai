@@ -74,7 +74,7 @@ def main():
         names.update((Path(folder)/n).as_posix() for n in ('state.json','recorded-config.json','export-manifest.json') if (ROOT/folder/n).is_file())
     names.update(p.relative_to(ROOT).as_posix() for p in inputs.iterdir())
     names.update('distribution/rust-lab-b06-g1250/'+n for n in ('reference.json','README.md','local-checks.json','source-reuse.json','requirements.txt'))
-    names.update(['ai-research/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B06_IMPLEMENTATION.md',
+    names.update(['ai-research/migration-plans/RUST_AI_BACKEND_MIGRATION_PLAN.md','ai-research/RUST_BACKEND_B06_IMPLEMENTATION.md',
                   'native/brass-ai-core/tests/data/initial-state.json'])
     blobs={}
     for name in sorted(names):
