@@ -878,11 +878,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     from .retention import update_population
                     update_population(root,run,state,config['population'])
                 write_json(state_path,state)
-                if search_values is not None: search_values.committed(state)
-                if teacher_phase is not None:teacher_phase.committed(iteration+1)
-                if local_scoring is not None:local_scoring.committed(iteration+1)
-                if phases is not None:phases.committed(iteration+1)
-                if diversity is not None:diversity.committed(iteration+1)
+                commit_cleanups(state_path,state,iteration+1,search_values=search_values,
+                                owners=(teacher_phase,local_scoring,phases,diversity))
                 if revised:
                     evaluation_began=time.monotonic()
                     from .champion import schedule as schedule_champion
@@ -1059,6 +1056,22 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     return dict(run=str(run),completed_iteration=state['iteration'],checkpoint=state['history'][-1],
                 best=state.get('champion'),summaries=summaries,
                 summary_scope='latest two iterations; bounded compact older metrics in retention-history.json')
+
+
+def commit_cleanups(state_path,state,generation,*,search_values=None,owners=()):
+    """Run the cleanups that wait for a durable commit, then save what they recorded.
+
+    The cleanups delete superseded files and write what they deleted into this
+    iteration's reports, which state['recent_training'] shares (the value phase's
+    `buffer.committed_cleanup`). Saving again keeps state.json equal to the live
+    state. Rating compaction's stale-writer guard compares the two. A rated
+    iteration saved its slot before compacting and hid this; an iteration the
+    rating cadence skips (g3180) does not.
+    """
+    if search_values is not None:search_values.committed(state)
+    for owner in owners:
+        if owner is not None:owner.committed(generation)
+    write_json(state_path,state)
 
 
 def schedule_evaluations(root,run,state,device,mono,*,inference_devices=None):

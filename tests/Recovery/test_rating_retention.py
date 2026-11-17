@@ -131,6 +131,40 @@ class RatingRetention(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'escapes owned run'):r.compact_history(self.root,self.run,self.state)
         self.assertEqual(outside.read_text(),'{}')
 
+    def test_unrated_cadence_generation_compacts_after_post_commit_cleanups(self):
+        # The g3180 failure: the 20-iteration cadence skips the slot while an old
+        # slot (g3080) expires, so nothing saves state between the trainer's
+        # post-commit cleanups and compaction.
+        from brass_ai.recovery import league,rating_cadence
+        self.through(110)
+        self.cfg=rating_cadence.configure(self.cfg,20,110)
+        self.assertFalse(rating_cadence.due(self.cfg,120))
+        class Phases:
+            """Like ActorValuePhases.committed: records its deletions in the report state shares."""
+            def __init__(self,report):self.report=report
+            def committed(self,generation):
+                self.report['buffer']['committed_cleanup']=dict(deleted_files=[f'generation-{generation-1:06d}.json'])
+        path=self.root/'candidate-120.pt';path.write_bytes(b'120')
+        self.state['history'].append(dict(generation=120,path=path.name,sha256=sha(path),model_id='model-120'))
+        self.state.update(iteration=120,recent_training=[dict(iteration=119,value_phase=dict(buffer=dict(committed_cleanup=None)))])
+        write_json(self.run/'state.json',self.state)
+        live=lambda:self.state['recent_training'][-1]['value_phase']
+        with patch.object(r,'collect_slot',side_effect=AssertionError('An unrated generation plays no rating games')):
+            # Cleaning up without saving leaves the live state ahead of state.json.
+            Phases(live()).committed(120)
+            with self.assertRaisesRegex(ValueError,'Run advanced'):r.schedule(self.root,self.run,self.state,self.cfg)
+            self.state=read(self.run/'state.json')
+            self.assertEqual([s['generation'] for s in self.state['ratings']['slots']],list(range(20,111,10)))
+            league.commit_cleanups(self.run/'state.json',self.state,120,owners=(None,Phases(live())))
+            self.assertIsNone(r.schedule(self.root,self.run,self.state,self.cfg))
+        self.assertEqual([s['generation'] for s in self.state['ratings']['slots']],list(range(30,111,10)))
+        saved=read(self.run/'state.json')
+        self.assertEqual(saved,json.loads(json.dumps(self.state)))
+        self.assertEqual(saved['recent_training'][-1]['value_phase']['buffer']['committed_cleanup'],
+                         dict(deleted_files=['generation-000119.json']))
+        self.assertEqual([s['generation'] for s in r.archived_history(self.root,saved['ratings'])['slots']],[10,20])
+        r.validate_state(self.root,saved['ratings'],self.c)
+
     def test_live_GAE_rating_tuples_compact_and_resume_without_recollecting(self):
         self.through(100)
         # gae.rating_evidence returns pairs as tuples in the live trainer.

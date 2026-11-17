@@ -126,3 +126,16 @@ Found while testing the g3170 publisher and rating-cadence work ([G3170_PUBLISHE
 | `test_panel_gates.PanelGates.test_v4_share_90_boundary_and_threshold_migration_rechecks_latest` | same |
 | `test_panel_gates.RecoveryTolerance.test_g270_evidence_and_compact_fields` | same |
 | `test_panel_gates.ScoredIL.test_real_g270_planner_quotas_probabilities_and_checkpoint_plan_restart` | same |
+
+## Review-suite failures on unmodified HEAD (found 2026-11-17, still in the tree)
+
+Found while testing the g3180 post-commit save fix ([G3170_PUBLISHER_LEASES_RATING.md](../../ai-research/G3170_PUBLISHER_LEASES_RATING.md), section "g3180 fix"). Each fails the same way with HEAD `ec3ee71f` and the fix stashed. They have not been deleted.
+
+| Test | Message | Cause |
+|---|---|---|
+| `test_reviewed_resume.ReviewedResumeTests` (setUpClass) | `FileNotFoundError: …results\selfplay-v2\state.json` | Missing old results export |
+| `test_source_reviews.CompactResumeTests.test_committed_weights_optimizer_rng_population_and_progress_survive` | `ValueError: This self-play source transition has not been reviewed` | Not analysed further |
+| `test_source_reviews.CompactResumeTests.test_review_does_not_admit_changed_config_contracts_or_unknown_source` | same | Not analysed further |
+| `test_source_reviews.SourceReviewTests.test_repository_registry_is_canonical_and_keeps_pinned_history` | `AssertionError` (the compacted registry differs from the stored one) | Not analysed further |
+| `test_lab_review.LabReviewTests.test_bc_eligibility_needs_no_per_row_device_scalar_reads` | `ValueError: V11 link topology differs: CanalBelperDerby` | Not analysed further |
+| `test_lab_review.LabReviewTests.test_neural_rows_never_enter_a_heuristic_audit_manifest` | same | Not analysed further |

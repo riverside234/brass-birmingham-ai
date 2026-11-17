@@ -69,6 +69,16 @@ The Rust worker still sends its pages to the lane over the pipe. Writing them fr
 - **Recipe review.** Recipe recognition peels the key, and the key is left out of the collection signature, so the adoption preserves pending collection.
 - **Cost and side effect.** The saving is about 85 s every 20 iterations. Generations that are no longer rated no longer leave rating snapshots, so restart weights exist every 20 iterations from now on.
 
+### g3180 fix: save the state after the post-commit cleanups
+
+The continuation stopped at g3180 with `ValueError: Run advanced during rating compaction`. The g3180 checkpoint and state were already committed, so nothing was lost.
+
+- **Cause.** After each iteration's state is saved, the cleanups that wait for that save run. These are search values, the teacher phase, local scoring, the value phases and diversity. The value phase records the files it deleted in `buffer.committed_cleanup` of the iteration's value report. `state['recent_training']` holds that same report object, so the live state moved ahead of `state.json`, where `committed_cleanup` was still `null`. Rating compaction refuses to run unless the two are equal (its stale-writer guard).
+- **Why g3180.** With ratings every 10 iterations, a slot expires (100 iterations old) only on a rated iteration, and the rated slot saves the state just before compaction. g3180 was the first unrated iteration on which a slot (g3080) expired. g3200, g3220 and so on would have failed the same way.
+- **Fix.** `league.commit_cleanups` runs those cleanups and then saves the state again. This is the state rated iterations already saved, and the g3170 resume started from one. It costs about 0.3 s per iteration (15 MB of state). No collection, training, checkpoint, Adam/RNG, buffer or rating change.
+- **Resume.** At startup the trainer saves the state before the rating step, so the expired g3080 slot is compacted there. The g3180 iteration's last steps were skipped: its `report.json` has no `strength_rating`, cleanup or final timings, and nothing reads those fields from an old report. The next iteration's cleanup covers what g3180 skipped.
+- **Test.** `test_rating_retention.test_unrated_cadence_generation_compacts_after_post_commit_cleanups` reproduces the error without the second save and checks that the slot is compacted with it.
+
 ## Evidence (Windows laptop, fixture weights)
 
 **One captured production-like game (299 rows), publisher work per game.**
@@ -116,4 +126,5 @@ On that game:
 | `src/brass_ai/recovery/rating_cadence.py` (new), `ratings.py`, `rating_coverage.py`, `config.py` | Rating cadence |
 | `src/brass_ai/rust_backend/lab_shadow_config.py` | Recipe recognition and transition for the cadence; left out of the collection signature |
 | `scripts/continue-rust-g1491.py`, `continue-rust-shadow.py`, `continue-rust-g1190-restart-2.py` | `--rating-every 20` |
-| `configs/learning/b07-replay-location-review.json` | Execution identity re-recorded; g3170 checkpoint identity added as a predecessor; review notes |
+| `src/brass_ai/recovery/league.py` | g3180 fix: `commit_cleanups` saves the state after the post-commit cleanups |
+| `configs/learning/b07-replay-location-review.json` | Execution identity re-recorded (`f93f6a05…` after the g3180 fix); the g3170 and g3180 checkpoint identities added as predecessors; review notes |

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "a6e6eba62e4f6bc45c6c2170b223e09e6aa9240efb6b99f4f86f3561d9fc18f5",
+  "execution_implementation": "f93f6a05470ca26db97152b70c69974fb55b7516d545cb63605fdddb3172306e",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "cd957e1276499551ed1cb4b201d960f6ac1604a437b853f309b57c3e486f2632"
+      "after": "375364d8301f1cab9b6f900bdd3c06dbec7465ea92f9238b6876687b90226235"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -864,6 +864,11 @@
       "implementation": "95a8a6d17061d4c62810eeee906ac5a47e3f1b55008f97fac507f6b1bf55c1c3",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "562984bea54a316291038e0ac1343de4fcedf29b198cb24b09447f6a354f2d59"
+    },
+    {
+      "implementation": "a6e6eba62e4f6bc45c6c2170b223e09e6aa9240efb6b99f4f86f3561d9fc18f5",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "decd691390a113dc66102b3d4ba83af879660173a580cbbf75d2bcacbd28c81e"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1169,6 +1174,10 @@
   },
   "g3170_rating_cadence": {
     "scope": "--rating-every 20 adds rating_cadence (rating-cadence/1.0.0): from the committed generation it is adopted at, PL strength ratings run every 20 iterations (g3190, g3210, ...); the rating block, its state, committed slots and the reference-setup rotation per slot are unchanged. Recipe recognition peels the key; it is excluded from the collection signature.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3180_post_commit_state_save": {
+    "scope": "After the durable iteration commit, the trainer runs the cleanups that wait for it (search values, teacher phase, local scoring, value phases, diversity) and then saves state.json again (league.commit_cleanups). The value phase records what it deleted in the report that state['recent_training'] shares, so the live state was ahead of state.json; rating compaction's stale-writer guard compares the two and failed at g3180, the first generation the 20-iteration rating cadence skips while an old slot (g3080) expires. Rated iterations already saved this same state before compacting. No collection, training, checkpoint, Adam/RNG, buffer or rating change.",
     "qualified_implementation_unchanged": true
   }
 }
