@@ -14,7 +14,7 @@ $record|ConvertTo-Json -Depth 15|Set-Content -LiteralPath $receipt -Encoding utf
 'Saved-game sentinel: preserve byte for byte.'|Set-Content -LiteralPath (Join-Path $target 'saves/unchanged.storage')
 $saved=(Get-FileHash -LiteralPath (Join-Path $target 'saves/unchanged.storage')).Hash
 $prior=(Get-FileHash -LiteralPath $receipt).Hash
-$installer=Join-Path $root 'scripts/install-fixed-reserve.ps1'
+$installer=Join-Path $root 'scripts/local-game/fixed-game-reserve/install-fixed-reserve.ps1'
 function VerifyPrior {
  if((Get-FileHash -LiteralPath $receipt).Hash -ne $prior){throw 'Prior receipt not restored exactly.'}
  foreach($pin in $record.files){if((Get-FileHash -LiteralPath (Join-Path $managed $pin.name)).Hash -ne $pin.sha256){throw 'Prior managed runtime differs.'}}

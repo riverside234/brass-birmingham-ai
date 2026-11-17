@@ -9,12 +9,13 @@ function Prior-File([string]$name){if(Test-Path -LiteralPath (Join-Path $previou
 $fixture=Join-Path $root ('artifacts/packaging-upgrade-tests/'+[Guid]::NewGuid().ToString('N'))
 $game=Join-Path $fixture 'game'
 $managed=Join-Path $game 'BrassBirminghamUnity_Data/Managed'
-$scripts=Join-Path $fixture 'scripts'
+$scripts=Join-Path $fixture 'scripts/local-game/managed-patch'
 $candidate=Join-Path $fixture 'artifacts/patch-build'
 $baseline=Join-Path $fixture 'artifacts/patch-baseline'
 $saves=Join-Path $fixture 'artificial-saves'
 New-Item -ItemType Directory -Path $managed,$scripts,(Join-Path $candidate 'Managed'),$baseline,$saves -Force | Out-Null
-foreach($name in @('install-patch.ps1','install-combined-patch.ps1','uninstall-patch.ps1','patch-install-common.ps1')){Copy-Item -LiteralPath (Join-Path $root ('scripts/'+$name)) -Destination $scripts}
+foreach($name in 'install-patch.ps1','install-combined-patch.ps1','uninstall-patch.ps1'){Copy-Item -LiteralPath (Join-Path $root ('scripts/local-game/managed-patch/'+$name)) -Destination $scripts}
+Copy-Item -LiteralPath (Join-Path $root 'scripts/patch-install-common.ps1') -Destination (Join-Path $fixture 'scripts')
 foreach($name in @('Assembly-CSharp.dll','BrassPatch.dll')){
  Copy-Item -LiteralPath (Prior-File $name) -Destination $managed
  Copy-Item -LiteralPath (Join-Path $build ('Managed/'+$name)) -Destination (Join-Path $candidate 'Managed')

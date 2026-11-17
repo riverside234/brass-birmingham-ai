@@ -73,7 +73,7 @@ def main():
         prior=json.loads((ROOT/base/'transfer-manifest.json').read_text(encoding='utf-8'))
         names|={n for n in prior['files'] if (ROOT/n).is_file() and n not in RETIRED}
     # A separate in-progress local UI patch is not part of lab qualification.
-    names={n for n in names if (ROOT/n).is_file() and n != 'scripts/build-mixed-ai.py'}
+    names={n for n in names if (ROOT/n).is_file() and n != 'scripts/local-game/mixed-ai/build-mixed-ai.py'}
     checks=json.loads((out/'local-development.json').read_text(encoding='utf-8'))
     implementation=implementation_id();producer=source_fingerprint()
     require(checks['passed'] and checks['implementation']==implementation and checks['producer']==producer,

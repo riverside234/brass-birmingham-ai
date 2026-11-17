@@ -36,13 +36,13 @@ The private `artifacts/patch-releases/1.4.9/` archive contains the binaries, com
 The current game already has 1.4.9 installed. For later installation, close the game, verify/stage the archive, then use the existing transactional installer:
 
 ```powershell
-& ./scripts/stage-archived-patch.ps1 -Version 1.4.9 -VerifyOnly
-& ./scripts/stage-archived-patch.ps1 -Version 1.4.9
-& ./scripts/install-patch.ps1
-& ./scripts/test-installed-local-ai.ps1 -Smoke
+& ./scripts/local-game/managed-patch/stage-archived-patch.ps1 -Version 1.4.9 -VerifyOnly
+& ./scripts/local-game/managed-patch/stage-archived-patch.ps1 -Version 1.4.9
+& ./scripts/local-game/managed-patch/install-patch.ps1
+& ./scripts/local-game/managed-patch/test-installed-local-ai.ps1 -Smoke
 ```
 
-To return to the preserved 1.4.8 combined patch, use the same first three commands with `-Version 1.4.8`. Staging changes only the build directory; installation records and live DLLs change only through the installer. Its durable intent and coherent previous-package backup support interrupted replacement. Do not mix individual DLLs from different packages. Original stock restoration remains available through `scripts/uninstall-patch.ps1`, subject to its existing save-compatibility checks.
+To return to the preserved 1.4.8 combined patch, use the same first three commands with `-Version 1.4.8`. Staging changes only the build directory; installation records and live DLLs change only through the installer. Its durable intent and coherent previous-package backup support interrupted replacement. Do not mix individual DLLs from different packages. Original stock restoration remains available through `scripts/local-game/managed-patch/uninstall-patch.ps1`, subject to its existing save-compatibility checks.
 
 ## Research and training
 

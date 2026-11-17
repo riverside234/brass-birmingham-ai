@@ -114,7 +114,7 @@ def main():
         names|={n for n in prior['files'] if (ROOT/n).is_file() and n not in RETIRED}
     names |= set(implementation_sources())
     names |= set(b01.TEST_FIXTURES)
-    names={n for n in names if (ROOT/n).is_file() and n != 'scripts/build-mixed-ai.py'}
+    names={n for n in names if (ROOT/n).is_file() and n != 'scripts/local-game/mixed-ai/build-mixed-ai.py'}
     checks=json.loads((out/'local-development.json').read_text(encoding='utf-8'))
     implementation=implementation_id();producer=source_fingerprint()
     require(checks['passed'] and checks['implementation']==implementation and checks['producer']==producer,

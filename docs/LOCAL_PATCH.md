@@ -9,7 +9,7 @@ The [1.4.0 cash repair](LOCAL_AI_V3_CASH_MANAGEMENT.md), [1.3.2](LOCAL_AI_1.3.2_
 The build uses the installed game's original assemblies, pinned Roslyn 4.12.0, and Mono.Cecil 0.11.6. Downloaded packages are checked against fixed SHA-256 values. It writes a candidate under `artifacts/patch-build`; it never recompiles the decompiled source tree.
 
 ```powershell
-pwsh -NoProfile -File scripts/build-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/build-patch.ps1
 # Run the managed, AI, native UI, complete-game and packaging qualification
 # scoped sequence documented in LOCAL_AI_V3_CONVERSION.md before installing this build.
 ```
@@ -21,7 +21,7 @@ The previous 1.0.0, 1.1.0, 1.2.0, 1.3.0, 1.3.1, 1.3.2 and 1.4.0 binaries and ins
 To restore the original game:
 
 ```powershell
-pwsh -NoProfile -File scripts/uninstall-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/uninstall-patch.ps1
 ```
 
 Restoration changes the three package files only. It does not delete saves. **Games created with this patch require the patch to continue**, because they use versioned, collision-free identifiers and may have saved strategy assignments. Restoration is blocked while new-strategy games or pending recovery journals exist. Reinstall a matching combined patch to continue those games. Steam file verification or a game update can replace the patched assembly; rebuild/install only when the original version fingerprint is supported.

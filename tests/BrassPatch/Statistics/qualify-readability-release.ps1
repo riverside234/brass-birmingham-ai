@@ -13,7 +13,7 @@ function Assert-Files($files){
  foreach($file in $candidate.files){if(@($files|Where-Object {$_.name -eq $file.name -and $_.sha256 -eq $file.sha256}).Count -ne 1){throw 'Evidence belongs to a different candidate.'}}
 }
 Assert-Files $validation.files
-& (Join-Path $root 'scripts/stage-archived-patch.ps1') -Version 1.4.9 -VerifyOnly
+& (Join-Path $root 'scripts/local-game/managed-patch/stage-archived-patch.ps1') -Version 1.4.9 -VerifyOnly
 foreach($file in $candidate.files){if((Get-FileHash -LiteralPath (Join-Path $build ('Managed/'+$file.name))).Hash -ne $file.sha256){throw 'Candidate changed.'}}
 foreach($name in 'BrassLegacyAI.dll','Assembly-CSharp.dll'){
  if(($candidate.files|Where-Object name -eq $name).sha256 -ne ($previous.files|Where-Object name -eq $name).sha256){throw ('Unrelated binary changed: '+$name)}

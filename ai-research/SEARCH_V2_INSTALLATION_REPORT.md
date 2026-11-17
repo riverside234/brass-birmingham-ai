@@ -23,8 +23,8 @@ Evidence: [installed verification](../artifacts/search-v2/20261028/installed-smo
 
 ## Recovery
 
-The scoped [installer](../scripts/install-search-v2.ps1) verified the selected candidate/evidence hashes, preserved an exact rollback copy and published the native directory and managed replacement with an interruption recovery journal. An install followed by exact rollback passed in a disposable directory before the real installation: [receipt](../artifacts/search-v2/20261028/deployment-check/result.json).
+The scoped [installer](../scripts/local-game/search-v2/install-search-v2.ps1) verified the selected candidate/evidence hashes, preserved an exact rollback copy and published the native directory and managed replacement with an interruption recovery journal. An install followed by exact rollback passed in a disposable directory before the real installation: [receipt](../artifacts/search-v2/20261028/deployment-check/result.json).
 
-The real rollback copy is under `artifacts/patch-recovery/search-v2-a4a21b372fe743bab7edb65fc12dfcb3/`. With the game closed, `pwsh -NoProfile -File scripts/install-search-v2.ps1 -Action Rollback` restores the prior runtime and receipt. `-Action Recover` handles an interrupted installation with a pending journal. Neither path changes saved games.
+The real rollback copy is under `artifacts/patch-recovery/search-v2-a4a21b372fe743bab7edb65fc12dfcb3/`. With the game closed, `pwsh -NoProfile -File scripts/local-game/search-v2/install-search-v2.ps1 -Action Rollback` restores the prior runtime and receipt. `-Action Recover` handles an interrupted installation with a pending journal. Neither path changes saved games.
 
-The [installed smoke runner](../scripts/smoke-installed-search-v2.ps1) can repeat the same short check with a fresh evidence directory. No lab deployment or final-model promotion was performed.
+The [installed smoke runner](../scripts/local-game/search-v2/smoke-installed-search-v2.ps1) can repeat the same short check with a fresh evidence directory. No lab deployment or final-model promotion was performed.

@@ -37,7 +37,7 @@ Candidate end-game Statistics: **5,805 checks passed**. Game History: **3,999 ch
 
 The new checks verify physical pixel dimensions across both viewer canvases, city spacing, compact tag bounds, occupancy/flip symbols, selected VP values, input behavior and stable object counts during repeated hover. A native pixel test renders the shipping line code at eight angles with MSAA disabled, checking blended boundary pixels, solid centers and preserved apparent width; it also tests circle edges. Existing scoring, filtering, codec and viewer-lifecycle checks continue to run.
 
-Build: `scripts/build-statistics-geography-refinement.ps1`  
+Build: `scripts/local-game/statistics/build-statistics-geography-refinement.ps1`\
 Candidate: `artifacts/statistics-geography-refinement-build/`  
 Release archive: `artifacts/patch-releases/1.4.30/`  
 Installation and recoverable prior-version backup: `artifacts/patch-installation.json`

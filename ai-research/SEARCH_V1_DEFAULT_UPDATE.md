@@ -37,12 +37,12 @@ Existing B01/B02 bundles were pinned to the earlier cache-only profile and are r
 
 ## Reproduction and recovery
 
-Source tooling: `scripts/build-search-v1-default.py`, `scripts/qualify-search-v1-default.py`, `scripts/install-search-v1-default.ps1`, `scripts/smoke-installed-search-v1.ps1`. Builders preserve existing evidence rather than overwriting it; build from the exact preceding release in a fresh artifact directory when reproducing.
+Source tooling: `scripts/local-game/search-v1/build-search-v1-default.py`, `scripts/local-game/search-v1/qualify-search-v1-default.py`, `scripts/local-game/search-v1/install-search-v1-default.ps1`, `scripts/local-game/search-v1/smoke-installed-search-v1.ps1`. Builders preserve existing evidence rather than overwriting it; build from the exact preceding release in a fresh artifact directory when reproducing.
 
 The installation receipt records the exact prior-release backup as `searchV1DefaultRecovery`. With the game closed, restore 1.4.41 using:
 
 ```powershell
-./scripts/install-search-v1-default.ps1 -Action Rollback
+./scripts/local-game/search-v1/install-search-v1-default.ps1 -Action Rollback
 ```
 
 Use `-Action Recover` only for an interrupted installation with its matching pending record. These commands restore the recorded prior runtime, policy files and receipt; they do not rewrite saved games.

@@ -11,6 +11,9 @@ scripts/
 |   |-- migrations/        Historical recipe changes and restarts
 |   |-- rust-lab/          Rust lab setup, fixtures, and validation
 |-- local-game/            Build, install, and verification by patch feature
+|   |-- managed-patch/     Shared managed build, staging, and installation
+|   |-- turn-history/      Turn history hotfix build, install, and qualification
+|   `-- ...                Other patch features and P6 laptop deployment
 |-- experiments/           One folder per standalone experiment
 |   |-- policy-c-scale/    Shared reader and short- and long-search studies
 |-- reports/               Report exports, plots, and reviews
@@ -47,10 +50,10 @@ release's qualification steps, and close the game before installing. See the
 [local patch guide](../docs/LOCAL_PATCH.md) and [feature index](local-game/README.md).
 
 ```powershell
-pwsh -NoProfile -File scripts/build-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/build-patch.ps1
 # Run the release's candidate checks before installing.
-pwsh -NoProfile -File scripts/install-patch.ps1
-pwsh -NoProfile -File scripts/test-unity-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/install-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/test-unity-patch.ps1
 ```
 
 Use a fresh output directory for the Windows profile. The C-scale entry points
@@ -64,11 +67,12 @@ python scripts/experiments/policy-c-scale/long-search.py --help
 
 ## Paths retained for compatibility
 
-Training, patch installation, and the
+Active training and the
 [Step 5 release workflow](../.github/workflows/step5-transfer-release.yml)
-continue to use the top-level entry points. The workflow indexes also list
-the Rust qualification, reference, and NN packaging scripts that keep
-their paths for source pins or shared callers.
+use the top-level entry points. The [local game index](local-game/README.md)
+lists the Rust release tools and installer helper retained at the top level
+for source pins and shared callers. The other workflow indexes list the
+top-level tools for their own workflows.
 
 Sealed bundles and recorded receipts retain the paths from the checkout
 that produced them. Use that checkout to reproduce a sealed workflow.

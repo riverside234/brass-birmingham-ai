@@ -64,4 +64,4 @@ verification commands.
 - [reproduce-gumbel-sessions.py](../reproduce-gumbel-sessions.py) — Qualified session reference.
 - [export-test-nn.py](../export-test-nn.py) — Frozen Rust baseline and NN package builder.
 - [test_nn_calibration.py](../test_nn_calibration.py) — Sibling helper used by the pinned NN bundle exporter.
-- [personality_laptop.py](../personality_laptop.py) — Local install and rollback entry point.
+- [personality_laptop.py](../local-game/personality-laptop/personality_laptop.py) — Local install and rollback entry point.

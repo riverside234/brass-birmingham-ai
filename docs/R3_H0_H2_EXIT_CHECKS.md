@@ -74,15 +74,15 @@ Tests ran on Windows .NET Framework and Unity **2019.1.7f1** Mono. These are CPU
 From this checkout, with the matching private runtime/tool dependencies already available:
 
 ```powershell
-./scripts/build-legacy.ps1
+./scripts/local-game/legacy-bridge/build-legacy.ps1
 ./scripts/capture-h0.ps1 -Seed 9301 -Games 2
 python scripts/experiments/legacy-style/diagnose-legacy.py --root .
 python -m unittest discover -s tests/legacy-ai -v
-./scripts/build-legacy-overlay.ps1
-./scripts/check-legacy-bridge.ps1 -Overlay
-./scripts/check-legacy-bridge.ps1 -Unity -Overlay
+./scripts/local-game/legacy-bridge/build-legacy-overlay.ps1
+./scripts/local-game/legacy-bridge/check-legacy-bridge.ps1 -Overlay
+./scripts/local-game/legacy-bridge/check-legacy-bridge.ps1 -Unity -Overlay
 # Wait for the isolated Unity process to exit and inspect its new result file.
-./scripts/check-legacy-overlay-ui.ps1
+./scripts/local-game/legacy-bridge/check-legacy-overlay-ui.ps1
 # Again wait for the process and inspect the newly written result.
 python scripts/experiments/legacy-style/run-legacy.py --root . --profile balanced-v1 --seeds 9801 9802 --seats 0 1 2 3 --milliseconds 3000 --output new-balanced-pilot
 python scripts/experiments/legacy-style/run-legacy.py --root . --profile rail-tempo-v1 --seeds 9801 9802 --seats 0 1 2 3 --milliseconds 3000 --output new-rail-pilot

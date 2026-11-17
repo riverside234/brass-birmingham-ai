@@ -51,7 +51,7 @@ Completed candidate qualification:
 
 Patch 1.4.31 is installed. Results, reviewed captures and tested-file fingerprints accompany the release archive.
 
-Build: `scripts/build-statistics-geography-polish.ps1`  
+Build: `scripts/local-game/statistics/build-statistics-geography-polish.ps1`\
 Candidate: `artifacts/statistics-geography-polish-build/`  
 Archive: `artifacts/patch-releases/1.4.31/`  
 Installation and previous-version recovery backup: `artifacts/patch-installation.json`

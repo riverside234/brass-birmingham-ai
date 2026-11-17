@@ -24,8 +24,8 @@ The native search, ONNX Runtime CPU provider, temporary g890 model, two independ
 
 ## Reproduce and recover
 
-`scripts/build-turn-history-fix.py` builds from the sealed 1.4.36 sources and overlays only this update. `tests/BrassPatch/TurnHistory/run.ps1` runs focused domain/use-case checks. `tests/RustBackendLocal/run-unity.ps1 -BuildDirectory artifacts/city-cancel-fix/candidate -TurnHistory -MaxSeconds 60 -EvidenceDirectory <fresh-directory>` runs the short Unity coverage. The default build is sealed; preserve it before choosing a fresh output for further development.
+`scripts/local-game/turn-history/build-turn-history-fix.py` builds from the sealed 1.4.36 sources and overlays only this update. `tests/BrassPatch/TurnHistory/run.ps1` runs focused domain/use-case checks. `tests/RustBackendLocal/run-unity.ps1 -BuildDirectory artifacts/city-cancel-fix/candidate -TurnHistory -MaxSeconds 60 -EvidenceDirectory <fresh-directory>` runs the short Unity coverage. The default build is sealed; preserve it before choosing a fresh output for further development.
 
-With the game closed, `scripts/install-turn-history-fix.ps1 -Action Rollback` restores exact 1.4.36 managed binaries and its receipt. `-Action Recover` repairs an interrupted hotfix installation. The prior release's own rollback chain remains available after restoring it. Neither operation modifies saved games.
+With the game closed, `scripts/local-game/turn-history/install-turn-history-fix.ps1 -Action Rollback` restores exact 1.4.36 managed binaries and its receipt. `-Action Recover` repairs an interrupted hotfix installation. The prior release's own rollback chain remains available after restoring it. Neither operation modifies saved games.
 
 The 1.4.36 reports and sealed receipts retain their original save-policy results as historical evidence. This report and the current migration plan describe 1.4.37 behavior.

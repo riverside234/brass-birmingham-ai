@@ -49,7 +49,7 @@ The package consists of `Assembly-CSharp.dll`, `BrassPatch.dll`, and `BrassLegac
 To reinstall this validated candidate with the game closed:
 
 ```powershell
-pwsh -NoProfile -File scripts/install-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/install-patch.ps1
 ```
 
 Stock restoration refuses pending recovery journals and games carrying the new AI state. Those games require a compatible combined runtime to retain their chosen strategies. Recovery scripts do not delete saves.
@@ -57,7 +57,7 @@ Stock restoration refuses pending recovery journals and games carrying the new A
 ## Reproduce the checks
 
 ```powershell
-pwsh -NoProfile -File scripts/build-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/build-patch.ps1
 pwsh -NoProfile -File tests/BrassPatch/validate-patch.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/run-runtime.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/run-live.ps1
@@ -66,9 +66,9 @@ pwsh -NoProfile -File tests/BrassLocalAI/run-unity.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/run-unity.ps1 -ExistingSuites
 pwsh -NoProfile -File tests/BrassLocalAI/qualify-release.ps1
 pwsh -NoProfile -File tests/BrassPatch/packaging-regression.ps1
-pwsh -NoProfile -File scripts/install-patch.ps1
-pwsh -NoProfile -File scripts/test-installed-local-ai.ps1 -Smoke
-pwsh -NoProfile -File scripts/test-unity-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/install-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/test-installed-local-ai.ps1 -Smoke
+pwsh -NoProfile -File scripts/local-game/managed-patch/test-unity-patch.ps1
 pwsh -NoProfile -File tests/BrassPatch/CityLocator/verify-release.ps1
 ```
 

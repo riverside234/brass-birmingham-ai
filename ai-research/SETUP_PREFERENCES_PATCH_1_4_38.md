@@ -17,4 +17,4 @@ Only menu code in `BrassLegacyAI.dll` changed. Both other managed DLLs, all 48 e
 - [Runtime preservation](../artifacts/setup-preferences/preserved-runtime.json)
 - [Installation/recovery checks](../artifacts/setup-preferences/upgrade-test.json)
 
-With the game closed, `scripts/install-setup-preferences-patch.ps1 -Action Rollback` restores the preceding managed runtime and installation receipt. Use `-Action Recover` after an interrupted installation. Neither operation edits saved games or menu preferences.
+With the game closed, `scripts/local-game/setup-preferences/install-setup-preferences-patch.ps1 -Action Rollback` restores the preceding managed runtime and installation receipt. Use `-Action Recover` after an interrupted installation. Neither operation edits saved games or menu preferences.

@@ -15,7 +15,7 @@ $saved=(Get-FileHash -LiteralPath (Join-Path $target 'saves/untouched.storage'))
 $prior=(Get-FileHash -LiteralPath (Join-Path $target 'artifacts/patch-installation.json')).Hash
 $base=Get-Content -LiteralPath (Join-Path $evidence 'candidate/build-manifest.json') -Raw|ConvertFrom-Json
 $base.nativeFiles=$base.baseNative
-$installer=Join-Path $root 'scripts/install-search-v1-default.ps1'
+$installer=Join-Path $root 'scripts/local-game/search-v1/install-search-v1-default.ps1'
 function VerifyPrior {
  if((Get-FileHash -LiteralPath (Join-Path $target 'artifacts/patch-installation.json')).Hash -ne $prior){throw 'Prior receipt was not restored exactly.'}
  foreach($entry in $record.files){if((Get-FileHash -LiteralPath (Join-Path $managed $entry.name)).Hash -ne $entry.sha256){throw 'Prior managed runtime differs.'}}

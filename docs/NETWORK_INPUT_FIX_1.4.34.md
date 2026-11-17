@@ -66,14 +66,14 @@ as fresh captures. A method-by-method comparison verifies their code is preserve
 
 ## Build and installation
 
-1. Run `scripts/build-network-input-fix.ps1` against frozen 1.4.33.
+1. Run `scripts/local-game/network-input/build-network-input-fix.ps1` against frozen 1.4.33.
 2. Run `tests/BrassPatch/InformationUI/run-native.ps1` for `link`, `presentation`
    and `menu -Quick` using `artifacts/network-input-build`.
 3. Run `tests/BrassPatch/Presentation/qualify-network-input.ps1`, then the
    InformationUI packaging tests against that build.
-4. Install with `scripts/install-combined-patch.ps1 -BuildDirectory
+4. Install with `scripts/local-game/managed-patch/install-combined-patch.ps1 -BuildDirectory
    artifacts/network-input-build`; verify the installed link and menu suites.
-5. Archive with `scripts/archive-network-input-release.ps1` and stage the release.
+5. Archive with `scripts/local-game/network-input/archive-network-input-release.ps1` and stage the release.
 
 The installer verifies the baseline, backs up its three DLLs, publishes the new
 files atomically and keeps online play disabled. Personal saves are not modified

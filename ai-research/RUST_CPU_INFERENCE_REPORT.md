@@ -96,7 +96,7 @@ Measured on the lab at g1290, before the startup fix:
 | Mono bootstrap per lane | median 0.126 s |
 | Peak memory, whole process tree | 71 GB |
 
-**search_v3 was not adopted.** The lab and the game stay on search_v1, and nothing was installed. `scripts/search_v3_patch.py`, `build-search-v3.py` and `run-search-v3-smoke.py` remain for later.
+**search_v3 was not adopted.** The lab and the game stay on search_v1, and nothing was installed. `scripts/local-game/search-v3/search_v3_patch.py`, `build-search-v3.py` and `run-search-v3-smoke.py` remain for later.
 
 ## 5. What to read after the first lab iteration
 

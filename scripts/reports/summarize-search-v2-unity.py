@@ -3,7 +3,7 @@ import runpy
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[2]
-T=runpy.run_path(str(ROOT/'scripts/search-v2-tools.py'));read,write,receipt=(T[k] for k in ('read','write','receipt'))
+T=runpy.run_path(str(ROOT/'scripts/local-game/search-v2/search-v2-tools.py'));read,write,receipt=(T[k] for k in ('read','write','receipt'))
 rows=[]
 for name in ('unity-control-4s-profile','unity-candidate-4s-profile',
     'unity-search_v2_focus_only-8s-k8','unity-search_v1-8s-k8',

@@ -64,7 +64,7 @@ Installed verification confirms all 116 prior hooks, six merchant-bonus rewrites
 ## Reproduce this scoped qualification
 
 ```powershell
-pwsh -NoProfile -File scripts/build-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/build-patch.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/run-runtime.ps1 -GameplayOnly
 pwsh -NoProfile -File tests/BrassLocalAI/run-tactical.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/run-search-gameplay.ps1
@@ -76,8 +76,8 @@ pwsh -NoProfile -File tests/BrassLocalAI/run-gameplay-matrices.ps1 -Players 4
 pwsh -NoProfile -File tests/BrassLocalAI/run-unity.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/qualify-release.ps1
 pwsh -NoProfile -File tests/BrassPatch/packaging-regression.ps1
-pwsh -NoProfile -File scripts/install-patch.ps1
-pwsh -NoProfile -File scripts/test-installed-local-ai.ps1 -Smoke
+pwsh -NoProfile -File scripts/local-game/managed-patch/install-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/test-installed-local-ai.ps1 -Smoke
 pwsh -NoProfile -File tests/BrassLocalAI/verify-h5-provenance.ps1 -Installed
 pwsh -NoProfile -File tests/BrassPatch/CityLocator/verify-release.ps1
 ```

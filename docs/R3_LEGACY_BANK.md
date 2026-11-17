@@ -37,11 +37,11 @@ Rail Tempo may prefer links only within 1.5 evaluator points of the best plan. B
 On this Windows checkout:
 
 ```powershell
-./scripts/build-legacy.ps1 -ManagedPath artifacts/r1-host/guarded
+./scripts/local-game/legacy-bridge/build-legacy.ps1 -ManagedPath artifacts/r1-host/guarded
 python scripts/experiments/legacy-style/run-legacy.py --root . --profile balanced-v1 --seeds 9501 9502 --seats 0 1 2 3 --milliseconds 3000 --output my-pilot
 python scripts/experiments/legacy-style/diagnose-legacy.py --root .
 python -m unittest discover -s tests/legacy-ai -v
-./scripts/check-legacy-bridge.ps1
+./scripts/local-game/legacy-bridge/check-legacy-bridge.ps1
 ```
 
 Each `--seats 0 1 2 3` run seats one candidate against three guarded stock bots in four seat assignments per setup. `--seats 4` is an all-candidate reliability run; `--seats -1` is all guarded stock. `--fixed-work --work 240` is deterministic regression mode, not a wall-clock measurement. Output directories must be new so a previous report cannot be silently overwritten.
@@ -57,13 +57,13 @@ The lab requires a **private copy of the matching runtime/dependencies**, kept u
 
 ## Optional game bridge
 
-`scripts/build-legacy-overlay.ps1` produces a separate optional overlay in `artifacts/legacy-ai/overlay/`. It patches AI routing only and verifies the method diff. It does not install the overlay. The factory hook preserves the vendor behavior types for save compatibility; profile resolution and four-player/Hard-only routing happen at the asynchronous turn hook, including loaded games. Two-/three-player and other AI settings retain their existing path.
+`scripts/local-game/legacy-bridge/build-legacy-overlay.ps1` produces a separate optional overlay in `artifacts/legacy-ai/overlay/`. It patches AI routing only and verifies the method diff. It does not install the overlay. The factory hook preserves the vendor behavior types for save compatibility; profile resolution and four-player/Hard-only routing happen at the asynchronous turn hook, including loaded games. Two-/three-player and other AI settings retain their existing path.
 
 `TurnCoordinator` copies observations/choices, searches on a worker, publishes complete incumbents, and rejects stale game/revision/actor/request/profile/schema responses. `LegacyBehavior` executes a prepared action once. The Unity adapter applies one action on the game thread, revalidates the second action on a later frame, retains one turn deadline, and offers Play Now when an incumbent exists. End-turn/round handling remains with the vendor presenter. Debt selection in the optional UI overlay retains the guarded game's existing debt flow; the headless bank has its explicit liquidation interface.
 
 The live observer merges saved event history with uncommitted events at the current revision, so wildcard knowledge and Rail discard accounting survive save/load and undo. It does not inspect opponents' hidden cards to reconstruct that knowledge. Profile hashes are persisted in a game-keyed sidecar; no custom AI object enters vendor saves. Sidecar mismatch stops visibly. Unexpected mid-application failure stops the turn visibly rather than pretending cancellation rolled it back.
 
-`live.example.json` is disabled by default. The optional overlay must pass its remaining interactive acceptance checks before installation: rendered one-human/three-bot games, menu/restart during thinking, Play Now UI, event animations/bonus/debt presentation, and save/load of supported interactive boundaries. Headless Unity tests alone do not establish that acceptance. Disable by removing/turning off the local `live.json`; `scripts/restore-legacy-overlay.ps1` restores a known overlay to the exact patched 1.1.0 assembly and retains saves/sidecars. It rejects unknown installed files. Do not overwrite the installed rules patch with unqualified files.
+`live.example.json` is disabled by default. The optional overlay must pass its remaining interactive acceptance checks before installation: rendered one-human/three-bot games, menu/restart during thinking, Play Now UI, event animations/bonus/debt presentation, and save/load of supported interactive boundaries. Headless Unity tests alone do not establish that acceptance. Disable by removing/turning off the local `live.json`; `scripts/local-game/legacy-bridge/restore-legacy-overlay.ps1` restores a known overlay to the exact patched 1.1.0 assembly and retains saves/sidecars. It rejects unknown installed files. Do not overwrite the installed rules patch with unqualified files.
 
 ## Evidence and next gate
 

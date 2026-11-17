@@ -47,7 +47,7 @@ Stage H remains optional: individual historical sale-feasibility probes, exact p
 ## Rebuild or reinstall
 
 ```powershell
-pwsh -NoProfile -File scripts/build-statistics-review.ps1
+pwsh -NoProfile -File scripts/local-game/statistics/build-statistics-review.ps1
 pwsh -NoProfile -File tests/BrassPatch/Statistics/run-review-native.ps1 -Suite statistics
 pwsh -NoProfile -File tests/BrassPatch/Statistics/run-review-native.ps1 -Suite tracker
 pwsh -NoProfile -File tests/BrassPatch/Statistics/run-review-native.ps1 -Suite presentation
@@ -55,7 +55,7 @@ pwsh -NoProfile -File tests/BrassPatch/Statistics/run-review-native.ps1 -Suite l
 pwsh -NoProfile -File tests/BrassPatch/Statistics/run-review-native.ps1 -Suite menu
 pwsh -NoProfile -File tests/BrassPatch/Statistics/qualify-review-release.ps1
 pwsh -NoProfile -File tests/BrassPatch/Statistics/packaging-review.ps1
-pwsh -NoProfile -File scripts/install-combined-patch.ps1 -BuildDirectory artifacts/statistics-review-build
+pwsh -NoProfile -File scripts/local-game/managed-patch/install-combined-patch.ps1 -BuildDirectory artifacts/statistics-review-build
 ```
 
-Close the game before installation. To verify the completed archive without changing the game or shared staging, run `scripts/stage-archived-patch.ps1 -Version 1.4.17 -VerifyOnly`.
+Close the game before installation. To verify the completed archive without changing the game or shared staging, run `scripts/local-game/managed-patch/stage-archived-patch.ps1 -Version 1.4.17 -VerifyOnly`.

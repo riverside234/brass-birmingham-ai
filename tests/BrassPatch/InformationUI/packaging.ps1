@@ -9,11 +9,12 @@ $trackerFixture=Join-Path $trackerRoot ('artifacts/information-ui-packaging/'+[G
 $trackerFixtureGame=Join-Path $trackerFixture 'game'
 $trackerFixtureManaged=Join-Path $trackerFixtureGame 'BrassBirminghamUnity_Data/Managed'
 $trackerFixtureBuild=Join-Path $trackerFixture 'artifacts/information-ui-build'
-$trackerFixtureScripts=Join-Path $trackerFixture 'scripts'
+$trackerFixtureScripts=Join-Path $trackerFixture 'scripts/local-game/managed-patch'
 $trackerFixtureBaseline=Join-Path $trackerFixture 'artifacts/patch-baseline'
 $trackerFixtureSaves=Join-Path $trackerFixture 'artificial-saves'
 New-Item -ItemType Directory -Path $trackerFixtureManaged,(Join-Path $trackerFixtureBuild 'Managed'),$trackerFixtureScripts,$trackerFixtureBaseline,$trackerFixtureSaves -Force|Out-Null
-foreach($name in 'install-combined-patch.ps1','install-patch.ps1','patch-install-common.ps1'){Copy-Item -LiteralPath (Join-Path $trackerRoot ('scripts/'+$name)) -Destination $trackerFixtureScripts}
+foreach($name in 'install-combined-patch.ps1','install-patch.ps1'){Copy-Item -LiteralPath (Join-Path $trackerRoot ('scripts/local-game/managed-patch/'+$name)) -Destination $trackerFixtureScripts}
+Copy-Item -LiteralPath (Join-Path $trackerRoot 'scripts/patch-install-common.ps1') -Destination (Join-Path $trackerFixture 'scripts')
 Copy-Item -LiteralPath (Join-Path $trackerRoot 'artifacts/patch-baseline/Assembly-CSharp.dll') -Destination $trackerFixtureBaseline
 foreach($name in 'build-manifest.json','validation.json'){Copy-Item -LiteralPath (Join-Path $trackerBuild $name) -Destination $trackerFixtureBuild}
 foreach($file in $trackerManifest.files){Copy-Item -LiteralPath (Join-Path $trackerBuild ('Managed/'+$file.name)) -Destination (Join-Path $trackerFixtureBuild 'Managed')}

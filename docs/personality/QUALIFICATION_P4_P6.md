@@ -431,7 +431,7 @@ The [P5/P6 implementation audit](AUDIT_HISTORY.md#audit-2026-10-12-p5-p6) fixes 
 | P5 | Tier profiles, every-Easy-member versus original Hard gates, mixture/equivalence/order gates, public intent interface | Complete untouched panels and human evidence for the exact two-worker laptop profiles and hint mode |
 | P6 | Export, persistent local service, staged game helper, benchmarks, validation, installation and rollback | Actual-model export parity, representative laptop/backend tests, interactive Unity acceptance and release certificate |
 
-P6 adds `src/brass_ai/personality/laptop/`, `src/BrassPersonalityGame/` and `scripts/personality_laptop.py`. It reuses the existing P0–P5 implementation and does not change Step 5, its datasets, optimizer/checkpoint continuation, reward, architecture or training settings. Staging reads the accepted **1.4.31** game archive, so unrelated uninstalled source changes are not imported.
+P6 adds `src/brass_ai/personality/laptop/`, `src/BrassPersonalityGame/` and `scripts/local-game/personality-laptop/personality_laptop.py`. It reuses the existing P0–P5 implementation and does not change Step 5, its datasets, optimizer/checkpoint continuation, reward, architecture or training settings. Staging reads the accepted **1.4.31** game archive, so unrelated uninstalled source changes are not imported.
 
 The candidate package contains one shared float32 ONNX actor for all 128 members and the small frozen rollout-reference pool required by the qualified P2 controller. It preserves policy, official win/placement/VP, raw remaining utility, goal factors and confidence. It does not ship 128 copies of the actor, an optimizer, discovery archive or behavior-encoder weights. The bundled Python library remains byte-pinned; no learner entry point is launched by the game.
 
@@ -451,12 +451,12 @@ ROOT=/data/not_backed_up/yxu209/ai-training
 cd "$ROOT"
 python -m pip install -r "$ROOT/requirements-personality-p6.txt"
 
-python "$ROOT/scripts/personality_laptop.py" export \
+python "$ROOT/scripts/local-game/personality-laptop/personality_laptop.py" export \
   --roster "$ROOT/artifacts/personality/p4/qualified-roster" \
   --qualification "$ROOT/artifacts/personality/p5/qualified-report" \
   --output "$ROOT/artifacts/personality/p6/candidate-001"
 
-python "$ROOT/scripts/personality_laptop.py" validate \
+python "$ROOT/scripts/local-game/personality-laptop/personality_laptop.py" validate \
   --package "$ROOT/artifacts/personality/p6/candidate-001"
 ```
 
@@ -483,7 +483,7 @@ $Python = (Get-Command python).Source
 $Package = "$Project/artifacts/personality/p6/candidate-001"
 $Build = "$Project/artifacts/personality/p6/game-build-001"
 
-python "$Project/scripts/personality_laptop.py" stage-game `
+python "$Project/scripts/local-game/personality-laptop/personality_laptop.py" stage-game `
   --base-version 1.4.31 --output $Build
 ```
 
@@ -515,7 +515,7 @@ Optional Intel comparisons require a working Intel driver and OpenVINO:
 
 ```powershell
 python -m pip install 'openvino>=2025,<2027'
-python "$Project/scripts/personality_laptop.py" benchmark `
+python "$Project/scripts/local-game/personality-laptop/personality_laptop.py" benchmark `
   --package $Package --cases "$Project/artifacts/personality/p6/laptop-cases.json" `
   --output "$Project/artifacts/personality/p6/laptop-benchmark-001.json" `
   --backends ort-cpu openvino-cpu openvino-gpu --tiers easy medium hard `
@@ -538,7 +538,7 @@ Actual Unity layout, four-player play, pending-action restore and presentation/r
 $ReviewGame = "$Project/artifacts/p6-review"
 # Only after preparing the isolated copy:
 New-Item -ItemType File -Path "$ReviewGame/.p6-fixture-sandbox"
-python "$Project/scripts/personality_laptop.py" install `
+python "$Project/scripts/local-game/personality-laptop/personality_laptop.py" install `
   --package $Package --build $Build --game $ReviewGame --python $Python `
   --review-copy --review-backend ort-cpu
 # Review the dry-run output, then repeat with --apply for this isolated copy.
@@ -572,13 +572,13 @@ Once qualified real P4/P5 artifacts, matching real laptop benchmarks and human a
 
 ```powershell
 $Certificate = "$Project/artifacts/personality/p6/release-001.json"
-python "$Project/scripts/personality_laptop.py" certify `
+python "$Project/scripts/local-game/personality-laptop/personality_laptop.py" certify `
   --package $Package --build $Build `
   --benchmark "$Project/artifacts/personality/p6/laptop-benchmark-001.json" `
   --acceptance "$Project/artifacts/personality/p6/laptop-acceptance-001.json" `
   --backend ort-cpu --output $Certificate
 
-python "$Project/scripts/personality_laptop.py" install `
+python "$Project/scripts/local-game/personality-laptop/personality_laptop.py" install `
   --package $Package --build $Build --game $Project --python $Python `
   --certificate $Certificate
 # Future release installation, with the game closed: repeat with --apply.
@@ -587,7 +587,7 @@ python "$Project/scripts/personality_laptop.py" install `
 Installation is a dry run by default. `--apply` requires exact real qualification/certificate pins and the expected installed helpers. It copies an immutable package, saves both prior helpers and the pointer, replaces `BrassLegacyAI.dll` and `BrassPatch.dll`, adds `BrassPersonality/`, and writes a rollback journal. `Assembly-CSharp.dll`, saves and training are untouched. Short content-addressed paths avoid the old Windows runtime's path limit; full hashes remain checked. Copy validation precedes replacement; ordinary failures restore both helpers/pointer. Hashes detect changed bytes; they are not a publisher-signature system.
 
 ```powershell
-python "$Project/scripts/personality_laptop.py" rollback `
+python "$Project/scripts/local-game/personality-laptop/personality_laptop.py" rollback `
   --journal 'ABSOLUTE-JOURNAL-PATH-PRINTED-BY-INSTALL'
 # After reviewing the dry run, repeat with --apply and the game closed.
 # For a fixture review sandbox, also supply --review-copy.
@@ -642,7 +642,7 @@ Installation dry runs and applied installations now probe the **supplied interpr
 ```bash
 conda activate ai-training
 ROOT=/data/not_backed_up/yxu209/ai-training
-python "$ROOT/scripts/personality_laptop.py" check-runtime \
+python "$ROOT/scripts/local-game/personality-laptop/personality_laptop.py" check-runtime \
   --package "$ROOT/artifacts/personality/p6/package" --backend ort-cpu
 # Add --fixture only for a clearly labeled fixture/review package.
 ```

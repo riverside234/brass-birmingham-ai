@@ -33,5 +33,5 @@ Tests use the existing self-test startup, without initializing user persistence.
 To restore the exact prior 1.4.48 managed runtime and installation receipt:
 
 ```powershell
-./scripts/install-sell-replay-speed.ps1 -Action Rollback
+./scripts/local-game/sell-replay-speed/install-sell-replay-speed.ps1 -Action Rollback
 ```

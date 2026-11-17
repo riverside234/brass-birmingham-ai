@@ -22,7 +22,7 @@ The actual installed player passed **753 checks per K setting at T1.5**. Both ac
 With the game closed, exact rollback is available through:
 
 ```powershell
-& ./scripts/install-nn-temperature.ps1 -Action Rollback
+& ./scripts/local-game/nn-temperature/install-nn-temperature.ps1 -Action Rollback
 ```
 
 Use `-Action Recover` after an interrupted installation. Rollback restores the prior native binary, source archive, managed runtime, policy manifest and receipt. Games created with the temperature field require the temperature-capable release to resume; their saves are preserved by rollback.

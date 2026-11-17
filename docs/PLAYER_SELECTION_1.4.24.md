@@ -41,12 +41,12 @@ The menu checks exercise Human/V4 switching, draft Apply/Cancel, difficulty-only
 
 ## Build and install
 
-1. Run `scripts/build-player-selection.ps1`.
+1. Run `scripts/local-game/player-selection/build-player-selection.ps1`.
 2. Run `tests/BrassPatch/InformationUI/run-native.ps1` for `menu`, `statistics`, `history` and `tracker`, using `-BuildDirectory artifacts/player-selection-build`.
 3. Review the captured 1200p images, then run `tests/BrassLocalAI/qualify-player-selection-release.ps1`.
 4. Run `tests/BrassPatch/InformationUI/packaging.ps1 -BuildDirectory artifacts/player-selection-build`.
-5. With the game closed, run `scripts/install-combined-patch.ps1 -BuildDirectory artifacts/player-selection-build`.
-6. Verify the installed menu with the native runner's `-Installed` switch, then archive with `scripts/archive-player-selection-release.ps1`.
+5. With the game closed, run `scripts/local-game/managed-patch/install-combined-patch.ps1 -BuildDirectory artifacts/player-selection-build`.
+6. Verify the installed menu with the native runner's `-Installed` switch, then archive with `scripts/local-game/player-selection/archive-player-selection-release.ps1`.
 
 The installer keeps a recoverable copy of the previous installed release and records exact installed fingerprints. Personal saves are not edited by this revision.
 

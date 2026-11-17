@@ -14,4 +14,4 @@ The actual installed game completed both actions and completed-turn save/load at
 
 Evidence: [installed verification](../artifacts/nn-k32/installed-verification.json), [qualification](../artifacts/nn-k32/candidate-v2/qualification.json), [reserve tests/build](../artifacts/nn-k32/native-build.json), [recovery test](../artifacts/nn-k32/upgrade-test.json), and [panel preview](../artifacts/nn-k32/candidate-v2/evidence/images/setup-nn-1080-largest.png). Initial failed/late smokes remain under `artifacts/nn-k32/live-t10*`.
 
-With the game closed, exact rollback is `& ./scripts/install-nn-k32.ps1 -Action Rollback`; use `-Action Recover` after an interrupted installation. User saves are preserved. The separately frozen lab/training bundles are not changed.
+With the game closed, exact rollback is `& ./scripts/local-game/nn-k32/install-nn-k32.ps1 -Action Rollback`; use `-Action Recover` after an interrupted installation. User saves are preserved. The separately frozen lab/training bundles are not changed.

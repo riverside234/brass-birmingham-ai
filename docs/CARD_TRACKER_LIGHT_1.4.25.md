@@ -47,11 +47,11 @@ Evidence: `artifacts/card-tracker-light-build`. Accepted release archive: `artif
 
 ## Reproduce this release
 
-1. Run `scripts/build-card-tracker-light.ps1`.
+1. Run `scripts/local-game/card-tracker/build-card-tracker-light.ps1`.
 2. Run `tests/BrassPatch/InformationUI/run-native.ps1` for `tracker`, `menu`, `statistics` and `history`, each with `-BuildDirectory artifacts/card-tracker-light-build`.
 3. Review the actual Unity captures at 1920 × 1200, then run `tests/BrassPatch/CardTracker/qualify-card-tracker-light.ps1`.
 4. Run `tests/BrassPatch/InformationUI/packaging.ps1 -BuildDirectory artifacts/card-tracker-light-build`.
-5. With the game closed, run `scripts/install-combined-patch.ps1 -BuildDirectory artifacts/card-tracker-light-build`.
-6. Run the tracker and menu native suites with `-Installed`; archive with `scripts/archive-card-tracker-light-release.ps1`, then stage the accepted 1.4.25 archive.
+5. With the game closed, run `scripts/local-game/managed-patch/install-combined-patch.ps1 -BuildDirectory artifacts/card-tracker-light-build`.
+6. Run the tracker and menu native suites with `-Installed`; archive with `scripts/local-game/card-tracker/archive-card-tracker-light-release.ps1`, then stage the accepted 1.4.25 archive.
 
 Native fixtures use disposable games. The installer verifies the previous release, backs it up, atomically publishes the qualified binaries and records their fingerprints.

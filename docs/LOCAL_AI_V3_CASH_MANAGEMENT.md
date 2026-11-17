@@ -59,7 +59,7 @@ A preliminary native run timed out while other tests were running. The final iso
 Reproduce the candidate checks from the project root:
 
 ```powershell
-pwsh -NoProfile -File scripts/build-patch.ps1
+pwsh -NoProfile -File scripts/local-game/managed-patch/build-patch.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/run-runtime.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/run-tactical.ps1
 pwsh -NoProfile -File tests/BrassLocalAI/run-search-gameplay.ps1

@@ -57,7 +57,7 @@ Evidence: [export receipt](../artifacts/nn-il/20261102/model/export-receipt.json
 The earlier layout attempt is retained separately and is excluded from final
 qualification evidence.
 
-With the game closed, `scripts/install-nn-il.ps1 -Action Recover` handles an
+With the game closed, `scripts/local-game/nn-il/install-nn-il.ps1 -Action Recover` handles an
 interrupted installation; `-Action Rollback` restores the exact previous 1.4.49
 runtime and receipt using the recorded backup. Corresponding native/export
 sources and dependency notices accompany `BrassNative/il-v11-2/`.

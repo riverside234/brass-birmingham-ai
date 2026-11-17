@@ -16,7 +16,7 @@ import time
 from ctypes import wintypes
 
 ROOT = Path(__file__).resolve().parents[2]
-TOOLS = runpy.run_path(str(ROOT / 'scripts/search-v2-tools.py'))
+TOOLS = runpy.run_path(str(ROOT / 'scripts/local-game/search-v2/search-v2-tools.py'))
 sha, read, write, receipt = (TOOLS[k] for k in ('sha', 'read', 'write', 'receipt'))
 OUT = TOOLS['OUT']
 L10 = ROOT / 'artifacts/rust-backend/20261025-l10-capture'

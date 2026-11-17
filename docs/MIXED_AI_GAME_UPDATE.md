@@ -35,16 +35,16 @@ not a strength or long-match claim.
 Build/evidence: `artifacts/mixed-ai/20261102/`. Reproduction:
 
 ```powershell
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py build
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py ui-write
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py ui-read
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py live
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py qualify
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py upgrade
-./scripts/install-mixed-ai.ps1
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py installed-read
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py installed-live
-./artifacts/p6e/Scripts/python.exe scripts/build-mixed-ai.py audit
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py build
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py ui-write
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py ui-read
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py live
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py qualify
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py upgrade
+./scripts/local-game/mixed-ai/install-mixed-ai.ps1
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py installed-read
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py installed-live
+./artifacts/p6e/Scripts/python.exe scripts/local-game/mixed-ai/build-mixed-ai.py audit
 ```
 
 The builder preserves existing evidence. Reproduction needs fresh artifact labels
@@ -52,4 +52,4 @@ or a clean matching baseline. Installation verifies the exact 1.4.50 receipt and
 files, records a recovery backup, and atomically updates only Assembly-CSharp.dll,
 BrassLegacyAI.dll and the installation receipt. The unchanged BrassPatch.dll,
 native packages and user save/history files are fingerprinted. Rollback/recovery:
-`./scripts/install-mixed-ai.ps1 -Action Rollback` / `-Action Recover`.
+`./scripts/local-game/mixed-ai/install-mixed-ai.ps1 -Action Rollback` / `-Action Recover`.

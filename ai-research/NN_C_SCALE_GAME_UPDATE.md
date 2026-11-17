@@ -23,7 +23,7 @@ The search adds `c2 × (50 + max visits) × Q` to each action's prior when ranki
 With the game closed:
 
 ```powershell
-& ./scripts/install-nn-c-scale.ps1 -Action Rollback
+& ./scripts/local-game/nn-c-scale/install-nn-c-scale.ps1 -Action Rollback
 ```
 
 After an interrupted installation, use `-Action Recover`. Saves are not touched.

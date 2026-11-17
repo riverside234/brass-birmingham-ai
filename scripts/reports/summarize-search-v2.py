@@ -5,7 +5,7 @@ import statistics
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[2]
-T=runpy.run_path(str(ROOT/'scripts/search-v2-tools.py'));read,write=(T[k] for k in ('read','write'))
+T=runpy.run_path(str(ROOT/'scripts/local-game/search-v2/search-v2-tools.py'));read,write=(T[k] for k in ('read','write'))
 folder=T['OUT']/'study';protocol=read(folder/'protocol.json')
 rows=[]
 amended=T['OUT']/'fixture-correction-v2/protocol.json'

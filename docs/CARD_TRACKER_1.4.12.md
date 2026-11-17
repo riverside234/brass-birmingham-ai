@@ -48,9 +48,9 @@ The final reports and screenshots are archived with the release. Accepted baseli
 Build and qualification use `artifacts/card-tracker-build`, separate from the shared AI staging directory. Install with the game closed:
 
 ```powershell
-./scripts/install-combined-patch.ps1 -BuildDirectory ./artifacts/card-tracker-build
+./scripts/local-game/managed-patch/install-combined-patch.ps1 -BuildDirectory ./artifacts/card-tracker-build
 ```
 
 The installer checks the qualified baseline and candidate fingerprints, retains a complete previous-release backup under `artifacts/patch-recovery`, publishes the dependencies and game DLL atomically and keeps online play disabled. The installation record is `artifacts/patch-installation.json`. It rejects an unrelated later installed release so that concurrent changes cannot be silently overwritten.
 
-To reinstall the archived release, verify/stage `1.4.12` with `scripts/stage-archived-patch.ps1`, then run `scripts/install-patch.ps1` with the game closed. Preserve the three previous-release DLLs together if restoring 1.4.11. Do not restore stock binaries over saves that require the combined patch.
+To reinstall the archived release, verify/stage `1.4.12` with `scripts/local-game/managed-patch/stage-archived-patch.ps1`, then run `scripts/local-game/managed-patch/install-patch.ps1` with the game closed. Preserve the three previous-release DLLs together if restoring 1.4.11. Do not restore stock binaries over saves that require the combined patch.

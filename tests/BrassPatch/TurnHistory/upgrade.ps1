@@ -13,7 +13,7 @@ $record|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $target 'ar
 'Preserve this saved-game sentinel.'|Set-Content -LiteralPath (Join-Path $target 'saves/untouched.storage')
 $saved=(Get-FileHash -LiteralPath (Join-Path $target 'saves/untouched.storage')).Hash
 $prior=(Get-FileHash -LiteralPath (Join-Path $target 'artifacts/patch-installation.json')).Hash
-$installer=Join-Path $root 'scripts/install-turn-history-fix.ps1'
+$installer=Join-Path $root 'scripts/local-game/turn-history/install-turn-history-fix.ps1'
 $interrupted=$false
 try{& $installer -GameRoot $target -TestInterrupt}catch{if($_.Exception.Message -notlike '*TEST INTERRUPT*'){throw};$interrupted=$true}
 if(-not $interrupted){throw 'Expected interrupted publication.'}

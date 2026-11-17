@@ -55,7 +55,7 @@ Evidence: [qualification](../artifacts/nn-industry-focus/20261031/release-1.4.46
 [installation recovery/rollback](../artifacts/nn-industry-focus/20261031/upgrade-test.json),
 [installed verification](../artifacts/nn-industry-focus/20261031/installed-verification.json).
 
-With the game closed, `scripts/install-nn-industry-focus.ps1 -Action Rollback`
+With the game closed, `scripts/local-game/nn-industry-focus/install-nn-industry-focus.ps1 -Action Rollback`
 restores the exact previous runtime and installation receipt. `-Action Recover`
 handles an interrupted installation. The installed receipt pins the retained
 backup. Industry-tagged saves require the corresponding tag-capable runtime.

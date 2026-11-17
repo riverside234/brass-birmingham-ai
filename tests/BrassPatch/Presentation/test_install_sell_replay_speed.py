@@ -6,7 +6,7 @@ import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[3]
-H = runpy.run_path(str(ROOT / 'scripts/fix-sell-replay-speed.py'))
+H = runpy.run_path(str(ROOT / 'scripts/local-game/sell-replay-speed/fix-sell-replay-speed.py'))
 STUDY, OUT, NAMES = (H[k] for k in ('STUDY', 'OUT', 'NAMES'))
 read, write, sha, pins = (H[k] for k in ('read', 'write', 'sha', 'pins'))
 
@@ -25,7 +25,7 @@ def main():
     before = dict(files={n: sha(managed / n) for n in NAMES}, receipt=sha(record), native=pins(game / 'BrassNative'), saves=pins(data))
     phases = []
     for action, interrupt in (('Install', True), ('Recover', False), ('Install', False), ('Rollback', False)):
-        args = [shutil.which('pwsh'), '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(ROOT / 'scripts/install-sell-replay-speed.ps1'), '-GameRoot', str(game), '-Action', action]
+        args = [shutil.which('pwsh'), '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(ROOT / 'scripts/local-game/sell-replay-speed/install-sell-replay-speed.ps1'), '-GameRoot', str(game), '-Action', action]
         if interrupt: args.append('-TestInterrupt')
         result = subprocess.run(args, capture_output=True, text=True, timeout=55, creationflags=subprocess.CREATE_NO_WINDOW)
         label = action.lower() + ('-interrupted' if interrupt else '')
@@ -41,7 +41,7 @@ def main():
         phases.append(dict(phase=label, passed=True, exit_code=result.returncode))
     write(STUDY / 'upgrade-test.json', dict(passed=True, phases=phases,
         candidate_sha256=sha(OUT / 'build-manifest.json'), qualification_sha256=sha(OUT / 'qualification.json'),
-        installer_sha256=sha(ROOT / 'scripts/install-sell-replay-speed.ps1'), exact_rollback=True, user_data_unchanged=True, native_unchanged=True))
+        installer_sha256=sha(ROOT / 'scripts/local-game/sell-replay-speed/install-sell-replay-speed.ps1'), exact_rollback=True, user_data_unchanged=True, native_unchanged=True))
     print(json.dumps(dict(passed=True, phases=phases)), flush=True)
 
 

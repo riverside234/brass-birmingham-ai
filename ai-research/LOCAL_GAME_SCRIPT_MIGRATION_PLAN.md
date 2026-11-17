@@ -1,7 +1,12 @@
 # Local game script migration plan
 
-Draft for implementation and revision. Inventory checked on 2026-11-16 at
-`1ff3fbd`.
+Initial inventory checked on 2026-11-16 at `1ff3fbd`.
+
+The first pass moved **145 files into 38 feature folders** and updated live
+callers, fixtures, and command examples. The
+[local-game index](../scripts/local-game/README.md) lists the new runnable
+paths and the 11 retained files for the Rust release audit and its shared
+installer helper.
 
 ## Scope and target
 
@@ -11,8 +16,8 @@ scripts by default and revise their root lookup, imports, callers, tests, and
 command examples where needed. Preserve filenames, CLI arguments and defaults,
 exit behavior, candidate outputs, and install, recovery, and rollback behavior.
 
-The [local-game index](../scripts/local-game/README.md) contains **154 files**
-across 49 rows. It lists 99 PowerShell scripts, 54 Python scripts, and the
+The initial local-game index listed **154 files** across 49 rows.
+It included 99 PowerShell scripts, 54 Python scripts, and the
 legacy C# weaver. Include the P6 laptop install and rollback CLI and the
 Mono allocation probe used in the Rust release audit, for **156 candidates**
 in total. Target **145 moves in the first pass**, reserving the nine Rust
@@ -27,10 +32,9 @@ of sealed releases and historical lab bundles intact.
 
 ## Destination map
 
-Every file in the named index rows goes to the indicated folder under
-`scripts/local-game/`. The index supplies the exact filenames and roles.
-Keep variants of the same patch in the same folder. This covers all 154
-indexed files, including helpers and the C# weaver.
+The original index rows map to the folders below under `scripts/local-game/`.
+The index shows the exact paths and roles. The counts cover the original
+154 files, including helpers and the C# weaver.
 
 ### Package and runtime
 
@@ -86,7 +90,7 @@ indexed files, including helpers and the C# weaver.
 | `search-v2/` | Search v2 | 7 |
 | `search-v3/` | Search v3 | 3 |
 
-Also move [personality_laptop.py](../scripts/personality_laptop.py) to
+Also move [personality_laptop.py](../scripts/local-game/personality-laptop/personality_laptop.py) to
 `personality-laptop/` with its P6 deployment role. The P0–P5 experiments
 stay in their experiment folder. Place [measure-mono-allocation.py](../scripts/measure-mono-allocation.py)
 in `rust-runtime/` if its release audit can still verify the original receipt.
@@ -118,12 +122,12 @@ in `rust-runtime/` if its release audit can still verify the original receipt.
    at its chosen location. Move the helper and its remaining callers in one
    change when it can move safely.
 4. **Separate the source copy path from the archive member name.** For
-   example, `archive-era-release.ps1` currently copies multiple scripts
-   from its own directory and records them under `scripts/<name>`. After
-   the move, the live sources will be in several feature folders. Update the
-   source list explicitly. Preserve member paths required by existing archive
-   readers. If a new source snapshot uses the new layout, record those paths
-   in its new receipt and test staging and qualified installation from it.
+   example, the original `archive-era-release.ps1` copied multiple scripts
+   from its own directory and recorded them under `scripts/<name>`. The
+   relocated archive command lists the live source paths in their feature
+   folders and records those paths in new archives. Preserve member paths
+   required by existing archive readers. Test staging and qualified
+   installation against the new receipt.
    If a captured script is executed, stage it with the directory layout it
    expects so its repository and sibling lookups work. Keep old ZIPs,
    member inventories, source hashes, and installer receipts as recorded.
@@ -138,7 +142,7 @@ in `rust-runtime/` if its release audit can still verify the original receipt.
 - Search v2's `search-v2-tools.py` is used by its local builders and
   verification, the v2 and V205 benchmarks, and the two search v2 summaries.
   Move it with the feature and switch those callers together.
-  [Search v2 builder](../scripts/build-search-v2-managed.py) ·
+  [Search v2 builder](../scripts/local-game/search-v2/build-search-v2-managed.py) ·
   [Search v2 benchmark](../scripts/benchmarks/benchmark-search-v2.py) ·
   [Search v2 summary](../scripts/reports/summarize-search-v2.py)
 - The managed package tests copy installers into a disposable
@@ -236,3 +240,24 @@ fixed directory depth, revise the path and move the script.
 Revise folder assignments, batch order, and the retained list when the caller
 audit finds a concrete dependency. Update this plan and the index in the same
 batch so the inventory reflects what actually shipped.
+
+## First-pass verification
+
+- Parsed all 94 relocated PowerShell scripts and compiled all 50 relocated
+  Python scripts. Verified the C# weaver's original contents and ran 27 CLI
+  help checks from a separate working directory.
+- Compared turn-history and NN C-scale builds before and after relocation.
+  All 502 turn-history candidate files checked and all 682 C-scale native file
+  hashes matched. Both Search v2 summary outputs matched byte-for-byte.
+- Passed 237 assertions in the managed, Information UI, Card Tracker, and
+  Statistics packaging fixtures. Turn history, NN K32, and NN C-scale passed
+  interrupted installation recovery and exact rollback in disposable game
+  copies. The 14 focused P6 laptop tests passed.
+- Verified sealed 1.4.8 and 1.4.34 archives. Recreated and staged a 1.4.34
+  archive in a fixture using the new relative source paths. The Step 5
+  implementation ID and CPU worker overlay fingerprint matched the baseline.
+
+The full managed build stops when the old builder reaches the three missing
+`Host` personality APIs, with the same compiler errors after relocation.
+The original Masked ISMCTS command also reproduced the relocated command's
+three failures in the config, CPU gate report, and model-size checks.

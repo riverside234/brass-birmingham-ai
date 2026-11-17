@@ -43,4 +43,4 @@ Installed runtime fingerprints:
 
 The verified prior-release backup is artifacts/patch-recovery/136d49180f87482eb06e7a130af46bbd/.
 
-The release archive is artifacts/patch-releases/1.4.10/. To stage the preserved prior release, run scripts/stage-archived-patch.ps1 -Version 1.4.9, then scripts/install-patch.ps1 with the game closed.
+The release archive is artifacts/patch-releases/1.4.10/. To stage the preserved prior release, run scripts/local-game/managed-patch/stage-archived-patch.ps1 -Version 1.4.9, then scripts/local-game/managed-patch/install-patch.ps1 with the game closed.

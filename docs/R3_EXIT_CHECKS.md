@@ -76,12 +76,12 @@ The [final admission check](../training/opponents/evaluations/qualification-d9db
 ## Reproduction and limits
 
 ```powershell
-./scripts/build-legacy.ps1
-./scripts/build-legacy-overlay.ps1
-./scripts/check-legacy-bridge.ps1 -Overlay
-./scripts/check-legacy-bridge.ps1 -Unity -Overlay
+./scripts/local-game/legacy-bridge/build-legacy.ps1
+./scripts/local-game/legacy-bridge/build-legacy-overlay.ps1
+./scripts/local-game/legacy-bridge/check-legacy-bridge.ps1 -Overlay
+./scripts/local-game/legacy-bridge/check-legacy-bridge.ps1 -Unity -Overlay
 # Wait for the isolated Unity process and inspect its newly written result.
-./scripts/check-legacy-overlay-ui.ps1
+./scripts/local-game/legacy-bridge/check-legacy-overlay-ui.ps1
 python scripts/check-frozen-bank.py --root . --bank bank-804c85204da65824cb9b --output artifacts/legacy-ai/new-platform-check.json
 python scripts/verify-r3.py --root . --bank bank-804c85204da65824cb9b --unit-report artifacts/legacy-ai/new-platform-check.json --output artifacts/legacy-ai/new-correctness.json
 python scripts/check-legacy-admission.py --root . --output artifacts/legacy-ai/new-admission-check.json

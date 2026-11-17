@@ -23,7 +23,7 @@ foreach($name in @('BrassBirminghamUnity.exe','UnityPlayer.dll','MonoBleedingEdg
     if(-not(Test-Path -LiteralPath $destination)){Copy-Item -LiteralPath (Join-Path $GameRoot $name) -Destination $destination -Recurse}
 }
 $copyManaged=Join-Path $isolated 'BrassBirminghamUnity_Data/Managed'
-. (Join-Path $PSScriptRoot 'sync-research-managed.ps1')
+. (Join-Path $PSScriptRoot 'local-game/legacy-bridge/sync-research-managed.ps1')
 Sync-BrassResearchManaged -ProjectRoot $repo -Source $managed -Destination $copyManaged
 Copy-Item -LiteralPath (Join-Path $managed 'BrassHost.exe'),(Join-Path $managed 'R1.RuntimeChecks.exe') -Destination $copyManaged -Force
 $cecil=Join-Path $repo 'artifacts/patch-tools/mono.cecil.0.11.6/lib/net40/Mono.Cecil.dll'

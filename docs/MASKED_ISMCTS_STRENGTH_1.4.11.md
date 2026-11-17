@@ -54,7 +54,7 @@ The authored workers, bank sources and configuration are Git-ready. The refreshe
 To reproduce the compact checks locally:
 
 ```powershell
-python scripts/verify-masked-ismcts.py --integration
+python scripts/local-game/masked-ismcts/verify-masked-ismcts.py --integration
 python scripts/experiments/masked-ismcts/masked-strength-check.py diagnose --positions 16
 python scripts/experiments/masked-ismcts/masked-strength-check.py clocks
 python scripts/experiments/masked-ismcts/masked-strength-check.py screen --workers 4

@@ -4,7 +4,7 @@ import re
 import runpy
 
 ROOT=Path(__file__).resolve().parents[2]
-T=runpy.run_path(str(ROOT/'scripts/search-v2-tools.py'))
+T=runpy.run_path(str(ROOT/'scripts/local-game/search-v2/search-v2-tools.py'))
 read,write,sha,receipt=(T[k] for k in ('read','write','sha','receipt'))
 OUT=T['OUT'];study=OUT/'v205';protocol=read(study/'protocol.json')
 assert protocol==read(ROOT/'configs/search/search-v205-smoke.json')

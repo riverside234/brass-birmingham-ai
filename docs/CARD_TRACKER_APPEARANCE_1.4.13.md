@@ -27,9 +27,9 @@ Reports are in `artifacts/card-tracker-build`. Final binaries, sources, reports,
 Dedicated staging keeps unrelated ongoing AI research out of this patch. Install the qualified candidate with the game closed:
 
 ```powershell
-./scripts/install-combined-patch.ps1 -BuildDirectory ./artifacts/card-tracker-build
+./scripts/local-game/managed-patch/install-combined-patch.ps1 -BuildDirectory ./artifacts/card-tracker-build
 ```
 
 The installer verifies the prior release, keeps all three previous DLLs together in a verified recovery backup, publishes the candidate and records its fingerprints in `artifacts/patch-installation.json`. Online play remains disabled. This revision does not change save formats or AI behavior.
 
-To reinstall the archived release, use `scripts/stage-archived-patch.ps1 -Version 1.4.13`, then `scripts/install-patch.ps1`, with the game closed. Restore the previous release as a coherent set of three DLLs if recovery is needed.
+To reinstall the archived release, use `scripts/local-game/managed-patch/stage-archived-patch.ps1 -Version 1.4.13`, then `scripts/local-game/managed-patch/install-patch.ps1`, with the game closed. Restore the previous release as a coherent set of three DLLs if recovery is needed.

@@ -100,8 +100,8 @@ The sampler returns only v3 identities from the active pool. Old pool snapshots 
 Use the Windows game checkout for these commands. Keep the preserved R1 rules dependencies at `artifacts/r1-host/guarded`; the newly installed game assemblies are a different runtime profile.
 
 ```powershell
-./scripts/build-patch.ps1
-./scripts/build-legacy.ps1 -ManagedPath artifacts/r1-host/guarded
+./scripts/local-game/managed-patch/build-patch.ps1
+./scripts/local-game/legacy-bridge/build-legacy.ps1 -ManagedPath artifacts/r1-host/guarded
 ./tests/BrassLocalAI/run-runtime.ps1
 ./tests/BrassLocalAI/run-cash.ps1 -Mode regression
 ./tests/BrassLocalAI/run-tactical.ps1
@@ -119,8 +119,8 @@ The frozen-bank suite, `verify-v3-bank.py`, declared qualification report, R2 in
 ```powershell
 ./tests/BrassLocalAI/qualify-release.ps1
 ./tests/BrassPatch/packaging-regression.ps1 -PreviousRelease 1.4.0
-./scripts/install-patch.ps1
-./scripts/test-installed-local-ai.ps1 -Smoke
+./scripts/local-game/managed-patch/install-patch.ps1
+./scripts/local-game/managed-patch/test-installed-local-ai.ps1 -Smoke
 ./tests/BrassLocalAI/verify-h5-provenance.ps1 -Installed
 ./tests/BrassPatch/CityLocator/verify-release.ps1
 ```

@@ -13,7 +13,7 @@ $record|ConvertTo-Json -Depth 15|Set-Content -LiteralPath (Join-Path $target 'ar
 'Preserve this saved-game sentinel.'|Set-Content -LiteralPath (Join-Path $target 'saves/untouched.storage')
 $saved=(Get-FileHash -LiteralPath (Join-Path $target 'saves/untouched.storage')).Hash
 $prior=(Get-FileHash -LiteralPath (Join-Path $target 'artifacts/patch-installation.json')).Hash
-$installer=Join-Path $root 'scripts/install-nn-temperature.ps1'
+$installer=Join-Path $root 'scripts/local-game/nn-temperature/install-nn-temperature.ps1'
 function VerifyPrior {
  if((Get-FileHash -LiteralPath (Join-Path $target 'artifacts/patch-installation.json')).Hash -ne $prior){throw 'Prior receipt was not restored exactly.'}
  foreach($entry in $record.files){if((Get-FileHash -LiteralPath (Join-Path $managed $entry.name)).Hash -ne $entry.sha256){throw 'Prior managed runtime differs.'}}

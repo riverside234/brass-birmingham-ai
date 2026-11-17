@@ -51,4 +51,4 @@ Evidence: artifacts/search-delivery-grace/20261029/assessment.json, release-1.4.
 
 ## Recovery
 
-Close the game before recovery. Run scripts/install-search-delivery-grace.ps1 with -Action Rollback to restore the exact previous 1.4.44 DLL, native package and installation receipt. Use -Action Recover if an installation was interrupted. The installed receipt identifies the retained backup at C:\Program Files (x86)\Steam\steamapps\common\Brass Birmingham\artifacts\patch-recovery\search-delivery-grace-0fa3d0c9859e46718bd7d174daf37b98.
+Close the game before recovery. Run scripts/local-game/search-delivery-grace/install-search-delivery-grace.ps1 with -Action Rollback to restore the exact previous 1.4.44 DLL, native package and installation receipt. Use -Action Recover if an installation was interrupted. The installed receipt identifies the retained backup at C:\Program Files (x86)\Steam\steamapps\common\Brass Birmingham\artifacts\patch-recovery\search-delivery-grace-0fa3d0c9859e46718bd7d174daf37b98.

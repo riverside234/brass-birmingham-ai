@@ -25,6 +25,6 @@ Evidence: [qualification](../artifacts/nn-neutral-ui/20261031/release-1.4.47/qua
 [installation checks](../artifacts/nn-neutral-ui/20261031/upgrade-test.json), and
 [installed smoke](../artifacts/nn-neutral-ui/20261031/installed-neutral/verification.json).
 
-`scripts/install-nn-neutral-ui.ps1 -Action Recover` handles an interrupted install.
+`scripts/local-game/nn-neutral-ui/install-nn-neutral-ui.ps1 -Action Recover` handles an interrupted install.
 `-Action Rollback` restores the exact previous 1.4.46 runtime and receipt using the
 backup recorded by the installer. Run these commands with the game closed.

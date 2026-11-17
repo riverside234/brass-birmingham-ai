@@ -43,19 +43,19 @@ Existing native packages, Assembly-CSharp and BrassPatch are preserved exactly.
 Reproduction, in order, using the existing local dependency environment:
 
 ```powershell
-& ./artifacts/p6e/Scripts/python.exe -B scripts/build-nn-beta2.py export
-& ./artifacts/p6e/Scripts/python.exe -B scripts/package-nn-beta2.py native
-& ./artifacts/p6e/Scripts/python.exe -B scripts/package-nn-beta2.py package
+& ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/build-nn-beta2.py export
+& ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/package-nn-beta2.py native
+& ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/package-nn-beta2.py package
 foreach ($case in 'ui-write','ui-read','live-beta2','cancel-beta2','load-beta2','live-old-beta') {
-    & ./artifacts/p6e/Scripts/python.exe -B scripts/package-nn-beta2.py $case
+    & ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/package-nn-beta2.py $case
     if ($LASTEXITCODE -ne 0) { throw $case }
 }
-& ./artifacts/p6e/Scripts/python.exe -B scripts/package-nn-beta2.py qualify
-& ./artifacts/p6e/Scripts/python.exe -B scripts/package-nn-beta2.py upgrade
-pwsh -NoProfile -File scripts/install-nn-beta2.ps1
-& ./artifacts/p6e/Scripts/python.exe -B scripts/package-nn-beta2.py installed-beta2
-& ./artifacts/p6e/Scripts/python.exe -B scripts/package-nn-beta2.py installed-ui-read
-& ./artifacts/p6e/Scripts/python.exe -B scripts/package-nn-beta2.py audit
+& ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/package-nn-beta2.py qualify
+& ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/package-nn-beta2.py upgrade
+pwsh -NoProfile -File scripts/local-game/nn-beta2/install-nn-beta2.ps1
+& ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/package-nn-beta2.py installed-beta2
+& ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/package-nn-beta2.py installed-ui-read
+& ./artifacts/p6e/Scripts/python.exe -B scripts/local-game/nn-beta2/package-nn-beta2.py audit
 ```
 
 Completed evidence directories are immutable to these commands. Use a new study

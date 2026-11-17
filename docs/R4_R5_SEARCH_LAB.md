@@ -13,7 +13,7 @@ python /data/not_backed_up/yxu209/ai-training/scripts/experiments/masked-ismcts/
 
 Use `lab-cpu.json` or `laptop-cpu.json` for the required CPU path. `--seconds` and `--simulations` bound this decision probe; they do not calibrate or change v3's 1,000ms training allowance. The report records source/model/config identity, complete legal incumbents, completed root statistics, coverage and actual latency. It makes no playing-strength claim and performs no promotion.
 
-Run compact engineering checks with `scripts/verify-masked-ismcts.py --integration`. These include CPU batch parity, legal-mask/top-K separation, hidden-world invariance, completed four-seat visit labels, fresh training/resume, separate distillation, ONNX parity and retention. No old comparison tournament is required.
+Run compact engineering checks with `scripts/local-game/masked-ismcts/verify-masked-ismcts.py --integration`. These include CPU batch parity, legal-mask/top-K separation, hidden-world invariance, completed four-seat visit labels, fresh training/resume, separate distillation, ONNX parity and retention. No old comparison tournament is required.
 
 ## Strength-repair contract
 

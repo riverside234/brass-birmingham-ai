@@ -20,7 +20,7 @@ All 142 user save/history files match their pre-install hashes. The installer do
 With the game closed, rollback is:
 
 ```powershell
-& .\scripts\install-host-delivery.ps1 -Action Rollback
+& .\scripts\local-game\host-delivery\install-host-delivery.ps1 -Action Rollback
 ```
 
 For an interrupted publication, use `-Action Recover`. The backup is `C:\Program Files (x86)\Steam\steamapps\common\Brass Birmingham\artifacts\patch-recovery\host-delivery-8f939d91d60f4a0b8c66a34aff247a21`. Saves are preserved.

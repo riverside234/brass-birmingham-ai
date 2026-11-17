@@ -29,7 +29,7 @@ The [machine-readable record](UI_PATCH_RESEARCH_COMPATIBILITY.json) identifies t
 
 Previously, a fresh research Unity player copied the installed game's Managed directory, then replaced only its engine/test assemblies. With 1.3.0 installed, this could leave the newer `BrassPatch.dll` or deployment `BrassLegacyAI.dll` beside a 1.1.0 research engine.
 
-`scripts/sync-research-managed.ps1` now copies the selected research runtime's complete DLL set, verifies the copied bytes and removes foreign DLLs **only inside an isolated player below project `artifacts/`**. It rejects the installed directory and directory/file links. The R1 runtime, R3 bridge and historical overlay UI check scripts call it before their test assembly/startup weaving steps. No installed DLL or user save is modified.
+`scripts/local-game/legacy-bridge/sync-research-managed.ps1` now copies the selected research runtime's complete DLL set, verifies the copied bytes and removes foreign DLLs **only inside an isolated player below project `artifacts/`**. It rejects the installed directory and directory/file links. The R1 runtime, R3 bridge and historical overlay UI check scripts call it before their test assembly/startup weaving steps. No installed DLL or user save is modified.
 
 ## Rebuild and data compatibility
 

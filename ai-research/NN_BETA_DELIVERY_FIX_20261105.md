@@ -37,6 +37,6 @@ baseline comparison and installed verification.
 
 Only `BrassLegacyAI.dll` is replaced. The installer checks the exact 1.4.51
 baseline, source and native file hashes, saves a recovery copy, and publishes
-atomically. Rollback: `pwsh -File scripts/install-nn-delivery.ps1 -Action Rollback`
+atomically. Rollback: `pwsh -File scripts/local-game/nn-delivery/install-nn-delivery.ps1 -Action Rollback`
 while the game is closed. Reopen the game and reload the last completed-turn
 checkpoint to recover from the already stopped AI turn.

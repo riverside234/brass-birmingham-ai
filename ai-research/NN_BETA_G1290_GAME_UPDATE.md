@@ -59,7 +59,7 @@ These are functional smokes, not a strength comparison. Evidence:
 [installed smoke](../artifacts/nn-beta/20261101/installed-beta/verification.json).
 
 The installer adds `BrassNative/beta-g1290/` and replaces `BrassLegacyAI.dll` plus
-the installation receipt. With the game closed, `scripts/install-nn-beta.ps1
+the installation receipt. With the game closed, `scripts/local-game/nn-beta/install-nn-beta.ps1
 -Action Recover` handles an interrupted install. `-Action Rollback` restores the
 previous managed runtime and receipt and removes only the manifest-listed Beta
 files, preserving saves. Source archives, hashes and dependency notices accompany

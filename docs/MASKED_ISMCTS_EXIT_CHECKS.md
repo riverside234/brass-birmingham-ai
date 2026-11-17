@@ -63,8 +63,8 @@ The worker/bank files, new contracts and source are eligible for Git; proprietar
 Run Python commands inside the project's configured conda environment on the lab, or with the corresponding local dependencies:
 
 ```sh
-python /data/not_backed_up/yxu209/ai-training/scripts/verify-masked-ismcts.py
-python /data/not_backed_up/yxu209/ai-training/scripts/verify-masked-ismcts.py --integration
+python /data/not_backed_up/yxu209/ai-training/scripts/local-game/masked-ismcts/verify-masked-ismcts.py
+python /data/not_backed_up/yxu209/ai-training/scripts/local-game/masked-ismcts/verify-masked-ismcts.py --integration
 ```
 
 The integration check optionally exercises the archived tiny heuristic manifest when it is privately available. Without that fixture it checks fresh random self-play; the production recipe uses the audited manifest supplied by `--demonstrations`.
@@ -75,7 +75,7 @@ Windows live-game checks:
 & ./tests/MaskedISMCTS/run-runtime.ps1
 & ./tests/BrassLocalAI/run-execution.ps1
 & ./tests/BrassLocalAI/run-unity.ps1 -MaskedQuick
-& ./scripts/test-installed-local-ai.ps1 -Smoke
+& ./scripts/local-game/managed-patch/test-installed-local-ai.ps1 -Smoke
 ```
 
 Follow [release/rollback instructions](MASKED_ISMCTS_1.4.9.md) and the [fresh conda training guide](TRAINING_RECOVERY_LAB.md). Future personality/goal fine-tuning remains after substantial Step 5 training.

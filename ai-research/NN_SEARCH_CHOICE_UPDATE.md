@@ -21,7 +21,7 @@ The actual installed game subsequently passed **750 checks per K choice**, compl
 With the game closed, restore the exact previous managed runtime, policy manifest and receipt using:
 
 ```powershell
-& ./scripts/install-nn-search-choice.ps1 -Action Rollback
+& ./scripts/local-game/nn-search-choice/install-nn-search-choice.ps1 -Action Rollback
 ```
 
 Use `-Action Recover` if installation was interrupted. Rollback does not change saves; K8 games should be resumed with the selector release installed. The separately pinned B01 lab bundle and its 1.4.39 shared native source baseline are unchanged.
