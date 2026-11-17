@@ -244,6 +244,16 @@ class Staged(unittest.TestCase):
 
 
 class Purge(unittest.TestCase):
+    def test_trainer_has_no_unresolved_global_references(self):
+        import builtins
+        import inspect
+        import symtable
+        from brass_ai.recovery import league
+
+        scope = symtable.symtable(inspect.getsource(league._train), league.__file__, 'exec').get_children()[0]
+        globals_used = {s.get_name() for s in scope.get_symbols() if s.is_global() and s.is_referenced()}
+        self.assertEqual(globals_used - vars(league).keys() - vars(builtins).keys(), set())
+
     def test_background_purge_joins_and_raises(self):
         from unittest import mock
         from brass_ai.recovery import retention

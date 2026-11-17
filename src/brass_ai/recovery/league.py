@@ -59,7 +59,7 @@ def finish_training_diagnostics(model,phases,local_scoring,*,generation=None):
 
 
 def train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,expected_generation=None,fresh=False,il_kl_probe_from_run=None):
-    from .retention import owned,run_lock,BackgroundPurge
+    from .retention import owned,run_lock
     from .collector_runtime import from_config,recipe,scope,validate_teacher_budget
     runtime=from_config(config)
     validate_teacher_budget(config,runtime.get('native_inference'))
@@ -454,6 +454,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         exploration_state,floor_transition=exploration.anchor_floor_transition(config,exploration_state,state.get('policy_anchor'))
         if floor_transition:print(f'Entropy floor promotion: {floor_transition["floor_ratio_after"]}; original baseline preserved',flush=True)
     from .ppo_preparation import PreparationPool
+    from .retention import BackgroundPurge
     collection_host=config['host']
     if local_scoring is not None and local_scoring.active:
         from .host_runtime import local_scoring_host

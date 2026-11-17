@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "759cedbc268c17fbd44b82693b437a207db4a151c791886d5a594d7440cb1ebe",
+  "execution_implementation": "95a8a6d17061d4c62810eeee906ac5a47e3f1b55008f97fac507f6b1bf55c1c3",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "9878c0b91ebbfc6e699a520621cb5cac43f503ab49c73ccf346c5443d0bd8f33"
+      "after": "cd957e1276499551ed1cb4b201d960f6ac1604a437b853f309b57c3e486f2632"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -854,6 +854,11 @@
       "implementation": "734c709512a95d5860dcc2294635737a4bf1931f0d1d96c322d3c496cea7a6a0",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "ebd5b626956f55702b83422a6277ea35c15be52b2b596ce822b2a559d46cbdc2"
+    },
+    {
+      "implementation": "759cedbc268c17fbd44b82693b437a207db4a151c791886d5a594d7440cb1ebe",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "839b944b61780867b5f7af56fdc61d1375e5701a763c80deb64f26874431d6f1"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1147,6 +1152,10 @@
   },
   "g3140_ordinary_autoplay": {
     "scope": "Build step 9: the CPU collector plays each eligible ordinary game in one call (lab_autoplay, ordinary-autoplay/1.0.0, lab-native-cpu/src/cpu_autoplay.rs). It replays NeuralPolicy.sample_training (exploration v3, opening temperature, ordinary cotton recipes 1.0.0-4.0.0) with each seat's own Python Mersenne Twister state, handed over and returned once per game, and appends every row through the unchanged append_compact path. Branching, non-neural or non-v3 seats, GPU inference, strict validation and diagnostic hooks keep the Python loop; BRASS_ORDINARY_AUTOPLAY=0 keeps every game on it. Autoplayed views skip the actor-side BOUNDARY admission, so audited games are checked in full by the publisher, which also replays the draws of cotton seats on every game and of all seats on audited games. Same jobs, RNG streams, rows, features and seals; no recipe, reward, search or PPO change.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3140_background_purge_import_fix": {
+    "scope": "Import BackgroundPurge in the inner trainer that owns the cleanup context, instead of the outer entry point. Fixes startup NameError without changing collection, training, cleanup checks, checkpoint/Adam/RNG, counters, or buffers.",
     "qualified_implementation_unchanged": true
   }
 }
