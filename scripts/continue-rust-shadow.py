@@ -40,6 +40,20 @@ def run_training(argv,log):
         finally:process.stdout.close()
 
 
+NAME_LIMIT=255  # bytes per path component (Linux); names that fit keep their old form
+
+
+def recipe_path(root,run_name,prefix,tag):
+    """configs/step5 file for a recipe stage. Each adopted revision lengthens the descriptive
+    name; past NAME_LIMIT bytes it becomes the run name plus a hash of the full name, so the
+    same recipe always maps to the same file and lookups of earlier stages never fail."""
+    import hashlib
+    name=run_name+prefix+tag+'.json'
+    if len(name.encode())>NAME_LIMIT:
+        name=run_name+'-rust-recipe-'+hashlib.sha256(name.encode()).hexdigest()[:24]+'-share'+tag+'.json'
+    return root/'configs/step5'/name
+
+
 def share_target_arg(text):
     from brass_ai.recovery.teacher_gradient_qualification import valid_target
     try:value=float(text)
@@ -261,7 +275,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-pl'+str(config[rating_cadence.KEY]['every_iterations'])+'-share');stages.append(prefix)
         if g3270.applied(config):
             prefix=prefix.replace('-share', '-'+g3270.tag(config)+'-share');stages.append(prefix)
-        output=root/'configs/step5'/(run.name+prefix+tag+'.json')
+        output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
@@ -270,7 +284,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                          g3140.changed(before,config) or adopting_teacher)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
-        earlier=next((p for p in (root/'configs/step5'/(run.name+name+tag+'.json') for name in reversed(stages[:-1])) if p.exists()),None)
+        earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
         settings=from_config(existing if output.exists() or earlier is None else read(earlier))
         if inference is None:settings.pop('native_inference',None)
         elif inference!='keep':settings['native_inference']=inference
