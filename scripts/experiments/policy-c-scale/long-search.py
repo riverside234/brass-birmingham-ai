@@ -7,7 +7,7 @@ from _study import LONG_N, REF_N, SHORT_N, completed_q, main
 
 SCALES = (0.10, 0.15, 0.20, 0.25, 0.30)
 TARGETS = {'normal': 700, 'cotton': 200}
-HEADER = 'short_scale  target_KL  match_long_move  match_long_label  move_NLL'
+HEADER = 'short_scale  target_KL  match_long_move  match_long_label  move_NLL  differs_from_policy'
 
 
 def target_kl(reference, log_probabilities):
@@ -30,7 +30,8 @@ def compare(probes, case, scales, *, candidate_n=LONG_N):
     logits = np.asarray(reference['logits'], dtype=np.float64)
     policy = int(np.argmax(logits))
     log_policy = logits - np.logaddexp.reduce(logits)
-    comparisons = [(target_kl(reference_target, log_policy), policy == move, policy == label, float(-log_policy[move]))]
+    comparisons = [(target_kl(reference_target, log_policy), policy == move, policy == label,
+                    float(-log_policy[move]), False)]
     for scale in scales:
         candidate = probes.run(trial, origin, row, candidate_n, scale)
         if candidate is None:
@@ -42,9 +43,11 @@ def compare(probes, case, scales, *, candidate_n=LONG_N):
         target = np.asarray(candidate['target'], dtype=np.float64)
         # Softmax gives every action mass. Use the log score when a tiny probability rounds to zero on export.
         log_target = np.log(target / target.sum(), out=log_scores.copy(), where=target > 0)
+        played = candidate['played_action']
         comparisons.append((target_kl(reference_target, log_target),
-                            candidate['played_action'] == reference['played_action'],
-                            int(np.argmax(target)) == label, float(-log_scores[move])))
+                            played == reference['played_action'],
+                            int(np.argmax(target)) == label, float(-log_scores[move]),
+                            played != ids[policy]))
     return comparisons
 
 
@@ -52,9 +55,10 @@ def summarize(valid, scales):
     rows, lines = [], []
     if valid:
         names = ('policy', *(f'{scale:.2f}' for scale in scales))
-        for name, (kl, move, label, nll) in zip(names, np.mean(valid, axis=0).tolist(), strict=True):
-            rows.append(dict(short_scale=name, target_KL=kl, match_long_move=move, match_long_label=label, move_NLL=nll))
-            lines.append(f'{name:>11}  {kl:>9.6f}  {move:>15.1%}  {label:>16.1%}  {nll:>8.4f}')
+        for name, (kl, move, label, nll, differs) in zip(names, np.mean(valid, axis=0).tolist(), strict=True):
+            rows.append(dict(short_scale=name, target_KL=kl, match_long_move=move, match_long_label=label,
+                             move_NLL=nll, differs_from_policy=differs))
+            lines.append(f'{name:>11}  {kl:>9.6f}  {move:>15.1%}  {label:>16.1%}  {nll:>8.4f}  {differs:>19.1%}')
     return dict(header=HEADER, lines=lines, rows=rows)
 
 
