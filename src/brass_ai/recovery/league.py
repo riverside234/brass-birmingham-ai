@@ -1017,13 +1017,17 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             f' heads_only={stop["head_only_steps"]} aux_stop={stop["stop_reason"]}')
                     search_aux=(report.get('value_phase') or {}).get('search_auxiliary')
                     if search_aux:
-                        # g3423: one batch of search-table roots in the first PPG step; held-out = search validation tables.
+                        # g3423: search-table roots mixed into the PPG batches; their validation tables pooled in the stop.
                         ce=lambda x:'-' if x is None else f'{x:.4f}'
                         held=search_aux.get('heldout_owner_ce') or {};pick=lambda d:d and d['owner_ce']
+                        crit=search_aux.get('criterion') or {}
+                        shown=search_aux.get('presented') or {};kept=search_aux.get('kept') or {}
                         controller_line+=(f' search_aux={(search_aux.get("train") or {}).get("rows",0)}rows/'
                             f'{(search_aux.get("train") or {}).get("games",0)}games'
-                            f' search_ce={ce(pick(held.get("before")))}->{ce(held.get("after_search_interval"))}'
-                            f' search_kept={search_aux.get("heads_kept")}'
+                            f' search_held={(search_aux.get("heldout") or {}).get("games",0)}games'
+                            f' search_ce={ce(pick(held.get("before")))}->{ce(pick(held.get("after")))}'
+                            f' aux_crit={ce(crit.get("before"))}->{ce(crit.get("after"))}'
+                            f' search_kept={kept.get("heads_rows",0)}/{shown.get("rows",0)}'
                             + (f' search_skip={search_aux["reason"]}' if search_aux.get('reason') else ''))
                     if 'warmup' in aux:
                         warmup=aux['warmup'];next_stage=warmup['after_commit']

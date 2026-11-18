@@ -107,7 +107,7 @@ The g3270 (18), g3318 (6), g3140 (11), teacher-on Stage A, B07 shadow-resume and
 | `recovery/league.py` | Log line |
 | `scripts/continue-rust-shadow.py`, `continue-rust-g1491.py`, `continue-rust-g1190-restart-2.py` | `--soft-policy`, recipe filename tag, the adoption is journaled as `soft-policy` (pending work archived, as for value revisions), help text |
 
-The execution identity is re-recorded together with the search auxiliary (`e62799b4…`). `0dcb6b30…` (g3318–g3423) is kept as a predecessor, so the g3423 checkpoint resumes. S1 itself changes no Rust; the search auxiliary adds one CPU-teacher overlay patch, so the continuation rebuilds the CPU teacher once.
+The execution identity is now `259d39df…` (search auxiliary 2.0.0). Its predecessors `e62799b4…` (S1 with search auxiliary 1.0.0, committed) and `0dcb6b30…` (g3318–g3423) are kept, so the g3423 checkpoint resumes. S1 itself changes no Rust; the search auxiliary adds one CPU-teacher overlay patch, so the continuation rebuilds the CPU teacher once.
 
 ## The run at g3423
 

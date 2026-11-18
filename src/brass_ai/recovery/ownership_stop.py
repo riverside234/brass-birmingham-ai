@@ -19,6 +19,9 @@ the remaining planned batches with the trunk frozen, still checked every 16 step
 the utility stop no longer limits them. Head steps never exceed the phase's planned
 steps. The criterion is the owner-CE part of the training loss with its era weights
 (divided by the Canal weight, so it reads as CE per row: slots mean plus links mean).
+
+With search-aux (g3423) the search-value validation tables with maps join the criterion: their
+roots and the ordinary validation rows are pooled row by row into one owner CE (no separate rule).
 """
 import time
 
@@ -41,9 +44,9 @@ def era_companion(companion):
 
 class OwnershipStop:
     def __init__(self, companion, settings, model, dataset, heldout_ids, update, *, search=None):
-        """``search`` (g3423 search-aux): a search_auxiliary.SearchRows of this iteration's search validation
-        tables. It is scored at every boundary, and the interval that holds the search batch is kept only if
-        its owner CE did not increase either (``search_pending``)."""
+        """``search`` (g3423 search-aux): a search_auxiliary.SearchRows of the search-value validation tables
+        with maps. Their roots are pooled with the ordinary validation rows into one criterion, each root
+        weighted as one ordinary row (critic weight 1); ``before``/``after`` stay the ordinary rows' CE."""
         from .value_phase import value_parts
         require(settings is not None and settings.get('contract') == CONTRACT, 'Unknown ownership stop settings')
         self.local = era_companion(companion); self.settings = dict(settings)
@@ -60,9 +63,13 @@ class OwnershipStop:
         self.parts = [list(p) for p in value_parts(dataset, chosen, update, model)]
         games = {m[2][0] for m in found.values()}
         self.cache = [self._entry(dataset, part, [found[i] for i in part]) for part in self.parts]
-        self.search = search if search is not None and search.rows else None; self.search_pending = False
+        self.search = search if search is not None and search.rows else None
         self.search_cache = ([self._entry(search, part, search.scoring_metadata(part)) for part in search.parts()]
                              if self.search is not None else [])
+        # The pooled criterion's weights: the ordinary rows' critic weights and one per search root.
+        self.weight = (float(sum(dataset.critic_weights[e['index']].double().sum() for e in self.cache))
+                       if self.search is not None and self.cache else None)
+        self.search_weight = float(self.search.rows) if self.search is not None else None
         local.stats['target_cache_hits'], local.stats['target_cache_misses'] = hits, misses  # keep training counters
         self.rows = len(chosen); self.games = len(games)
         self.running = bool(chosen); self.reason = None if chosen else 'no_heldout_targets'
@@ -146,6 +153,12 @@ class OwnershipStop:
         return dict(owner_ce=ratio(s[0], s[1]), canal_owner_ce=ratio(s[2], s[3]), rail_owner_ce=ratio(s[4], s[5]),
                     rail_end_owner_ce=ratio(s[6], s[7]) if we > 0 else None)
 
+    def criterion(self, ordinary, search):
+        """The decisive owner CE: the ordinary rows' alone, or (g3423) pooled with the search roots row by row."""
+        if search is None or self.weight is None: return ordinary['owner_ce']
+        return ((ordinary['owner_ce'] * self.weight + search['owner_ce'] * self.search_weight)
+                / (self.weight + self.search_weight))
+
     # ---- one 16-step boundary ---------------------------------------------------------------
 
     def boundary(self, step, trunk):
@@ -154,22 +167,20 @@ class OwnershipStop:
         local = self.local
         head_steps = local.retained_steps['ppg'] - self.saved['retained_steps']['ppg']
         attempt = self.measure(); search = self.measure_search()
-        ordinary_up = attempt['owner_ce'] > self.current['owner_ce']
-        # g3423: the interval that holds the search batch must not raise the search validation tables' CE either.
-        search_up = self.search_pending and search['owner_ce'] > self.search_current['owner_ce']
-        increased = ordinary_up or search_up
+        # g3423: with search validation tables, one criterion over both sets' rows (no separate rule).
+        before = self.criterion(self.current, self.search_current); after = self.criterion(attempt, search)
+        increased = after > before
         self.intervals.append(dict(start_step=self.last_step + 1, end_step=step, head_steps=head_steps, trunk=trunk,
             owner_ce_before=self.current['owner_ce'], owner_ce_attempted=attempt['owner_ce'],
             canal_owner_ce_attempted=attempt['canal_owner_ce'], rail_owner_ce_attempted=attempt['rail_owner_ce'],
             accepted=not increased, kept_head_steps=0 if increased else head_steps))
         if self.search is not None:
-            self.intervals[-1].update(search_batch=self.search_pending, search_before=self.search_current['owner_ce'],
-                search_attempted=search['owner_ce'],
-                stopped_by=('both' if ordinary_up and search_up else 'search' if search_up else 'ordinary' if ordinary_up else None))
-        self.attempted += head_steps; self.last_step = step; self.search_pending = False
+            self.intervals[-1].update(search_before=self.search_current['owner_ce'], search_attempted=search['owner_ce'],
+                                      criterion_before=before, criterion_attempted=after)
+        self.attempted += head_steps; self.last_step = step
         if increased:
             local.stop_restore(self.saved); local.stopped = True
-            self.running = False; self.reason = 'search_heldout_ce_increased' if search_up and not ordinary_up else 'heldout_ce_increased'
+            self.running = False; self.reason = 'heldout_ce_increased'
             # With a kept trunk the restored heads now sit on a moved trunk: score that state once for the report.
             self.final = self.measure() if trunk == 'kept' else self.current
             self.search_final = self.measure_search() if trunk == 'kept' else self.search_current
@@ -211,10 +222,15 @@ class OwnershipStop:
                   'the last kept boundary and ends head fitting. After the value phase stops, heads fit alone on the '
                   'remaining planned batches with the trunk frozen.')
         if self.search is not None:
+            after = getattr(self, 'final', self.before); search_after = getattr(self, 'search_final', self.search_before)
             record['search'] = dict(rows=self.search.rows, games=self.search.games, before=self.search_before,
-                after=getattr(self, 'search_final', self.search_before),
-                scope='g3423: owner CE of the era heads on this iteration\'s search validation tables (every root, weight 1). '
-                      'The interval holding the search batch is kept only if it did not increase either.')
+                after=search_after,
+                scope='g3423: owner CE of the era heads on the search-value validation tables with maps (every root, weight 1).')
+            record['criterion'] = dict(before=self.criterion(self.before, self.search_before),
+                after=self.criterion(after, search_after) if after is not None else None,
+                search_share=self.search_weight / (self.weight + self.search_weight) if self.weight else None,
+                scope='g3423: the decisive owner CE at every boundary: ordinary validation rows (critic weights) and search '
+                      'validation roots (weight 1) pooled row by row. before/after above are the ordinary rows alone.')
         local.stop_record = record
         return record
 

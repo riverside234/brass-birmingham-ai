@@ -25,11 +25,12 @@ ownership-stop  (g3318, after heads) the era heads get their own early stop: eve
             fitting on the remaining batches with the trunk frozen (recovery/ownership_stop.py).
 search-aux  (g3423, after ownership-stop; needs the g3270 teacher revision) completed search-
             teacher tables train the era heads: each table sends its era-end scoring maps once
-            with its finish message, and once per iteration one batch of played roots from the
-            40 search training tables (36 train + the 4 leaving the search-value held-out set)
-            joins the first PPG step with the era heads' ownership and local-VP losses only.
-            This iteration's 4 search validation tables join the ownership stop
-            (recovery/search_auxiliary.py).
+            with its finish message. The played roots of the search-value training tables of
+            the last four iterations (36 train + 4 leaving the held-out set, per iteration) are
+            mixed into every PPG batch the heads train on, each root once per epoch, with the
+            era heads' ownership and local-VP losses only. The search-value validation set
+            (latest 32 held-out tables, those with maps) is pooled row by row with the ordinary
+            validation rows in the ownership stop's criterion (recovery/search_auxiliary.py).
 
 GPU-staged teacher rows and the background cleanup purge (also step 1) are
 code changes with no setting: they change neither numbers nor recipe.
@@ -47,9 +48,10 @@ BOOTSTRAP = dict(contract='blended-critic-targets/1.0.0', lam=.95, share=.5)
 VP_WEIGHT = .5
 OWNERSHIP_STOP = dict(contract='ownership-ce-early-stop/1.0.0', interval_steps=16,
                       criterion='validation-owner-ce', after_value_stop='heads-only')
-SEARCH_AUX = dict(contract='search-table-auxiliary/1.0.0', rows='played-roots',
-                  train_tables='current-train-plus-leaving-heldout', heldout='current-validation-tables',
-                  batches_per_iteration=1, step=1, losses='era-heads-ownership-and-local-vp', row_weight='ordinary-row')
+SEARCH_AUX = dict(contract='search-table-auxiliary/2.0.0', rows='played-roots',
+                  train_tables='search-value-training-tables-admitted-in-the-last-iterations', train_iterations=4,
+                  heldout='search-value-validation-tables-with-maps', sampling='mixed-into-every-ppg-batch-once-per-epoch',
+                  losses='era-heads-ownership-and-local-vp', row_weight='ordinary-row', criterion='pooled-owner-ce')
 ITEMS = ('time', 'validation', 'heads', 'targets', 'weight=0.15', 'weight=0.5', 'vp', 'rail-end', 'ownership-stop',
          'search-aux')
 

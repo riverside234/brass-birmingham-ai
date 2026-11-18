@@ -111,11 +111,12 @@ comma-separated; adopted items persist and only move forward
   search-aux  (g3423, after ownership-stop and --teacher-revision) completed search-
               teacher tables train the era heads: each table sends its era-end
               scoring maps once with its finish message (CPU teacher rebuilt by the
-              continuation), and once per iteration one batch of played roots from
-              the 36 train tables plus the 4 leaving the search-value held-out set
-              joins the first PPG step with ownership and local-VP losses only; the
-              4 current search validation tables join the ownership stop
-              (ai-research/G3423_SEARCH_AUXILIARY.md).
+              continuation). The played roots of the search-value training tables
+              of the last four iterations are mixed into every PPG batch the heads
+              train on (each root once per epoch, ownership and local-VP losses
+              only); the search-value validation tables with maps (4 at first, up
+              to 32) are pooled with the ordinary validation rows in the ownership
+              stop's criterion (ai-research/G3423_SEARCH_AUXILIARY.md).
 The held-out check, PPG cap .003, beta floor .25 and the strict early stop stay.
 
 --rating-every 20 (at a rated generation, a multiple of ten) runs the PL strength

@@ -1,4 +1,5 @@
 """g3423 search auxiliary: search-teacher tables train the era heads (recovery/search_auxiliary.py)."""
+import contextlib
 import copy
 import unittest
 from collections import defaultdict
@@ -119,24 +120,65 @@ class Fixture(unittest.TestCase):
 
 
 class Selection(Fixture):
-    def test_the_40_tables_are_this_iteration_s_train_tables_and_the_4_leaving_the_held_out_set(self):
-        G0 = 3430; games = []
-        for g in range(G0 - 12, G0 + 1):
-            for t in range(4): games.append(self.game(f'teacher/h{g}-{t}', g, 'heldout', maps=g >= G0 - 8, count=2))
-        for g in (G0 - 1, G0):
+    def test_train_is_two_iterations_of_search_value_training_tables_and_held_out_its_validation_set(self):
+        A0 = 3424; G0 = A0 + 8; games = []  # maps from adoption at A0 on
+        for g in range(G0 - 19, G0 + 1):
+            for t in range(4): games.append(self.game(f'teacher/h{g}-{t}', g, 'heldout', maps=g >= A0, count=2))
+        for g in range(G0 - 4, G0 + 1):
             for t in range(6): games.append(self.game(f'teacher/t{g}-{t}', g, 'train', maps=t != 5, count=2))
-        chosen = A.tables(Buffer(games), G0, heldout_games=32)
-        report = chosen['report']
-        names = lambda items: sorted(game for game, _, _ in items)
-        self.assertEqual(report['rotated_generations'], [G0 - 8])  # the latest 32 move from G-8..G-1 to G-7..G
-        self.assertEqual(names(chosen['train']), sorted([f'teacher/t{G0}-{t}' for t in range(5)] + [f'teacher/h{G0 - 8}-{t}' for t in range(4)]))
-        self.assertEqual(names(chosen['heldout']), [f'teacher/h{G0}-{t}' for t in range(4)])
-        self.assertEqual((report['current_train_games'], report['rotated_games'], report['heldout_games']), (5, 4, 4))
-        self.assertEqual(report['without_maps'], dict(current_train=1))
-        early = A.tables(Buffer(games), G0 - 1, heldout_games=32)  # G-9 leaves, collected before its maps existed
-        self.assertEqual((early['report']['rotated_games'], early['report']['without_maps'].get('rotated')), (0, 4))
-        filling = A.tables(Buffer([g for g in games if g[0]['generation'] >= G0 - 3 or g[0]['split'] == 'train']), G0)
-        self.assertEqual(filling['report']['candidates']['rotated'], 0)  # nothing leaves before the set holds 32
+        buffer = Buffer(games); names = lambda items: sorted(game for game, _, _ in items)
+        chosen = A.tables(buffer, G0, heldout_games=32, iterations=2); report = chosen['report']
+        # Train: the train tables of G-1 and G, and the held-out tables that left the latest 32 in those two
+        # iterations (G-9 and G-8; G-9 was collected before maps existed).
+        self.assertEqual(names(chosen['train']), sorted([f'teacher/t{g}-{t}' for g in (G0 - 1, G0) for t in range(5)]
+                                                        + [f'teacher/h{G0 - 8}-{t}' for t in range(4)]))
+        self.assertEqual((report['train_generations'], report['rotated_generations']), ([G0 - 1, G0], [G0 - 8]))
+        self.assertEqual(report['candidates'], dict(train=12, rotated=8, heldout=32))
+        self.assertEqual(report['without_maps'], dict(train=2, rotated=4))
+        # Held-out: the search-value validation set, the latest 32 (G-7..G), never in training.
+        self.assertEqual(names(chosen['heldout']), sorted(f'teacher/h{g}-{t}' for g in range(G0 - 7, G0 + 1) for t in range(4)))
+        self.assertFalse(set(names(chosen['train'])) & set(names(chosen['heldout'])))
+        # After adoption the held-out set grows by the 4 new tables with maps each iteration: 4, 8, ..., 32.
+        grown = [A.tables(buffer, g, heldout_games=32)['report']['heldout_games'] for g in range(A0, G0 + 1)]
+        self.assertEqual(grown, [4, 8, 12, 16, 20, 24, 28, 32, 32])
+        # The recipe's four iterations: train tables of G-3..G, and the tables that left in those iterations
+        # (G-11..G-8, of which only G-8 has maps).
+        self.assertEqual(G.SEARCH_AUX['train_iterations'], 4)
+        four = A.tables(buffer, G0, heldout_games=32)['report']
+        self.assertEqual((four['iterations'], four['train_generations'], four['rotated_generations']),
+                         (4, list(range(G0 - 3, G0 + 1)), [G0 - 8]))
+        self.assertEqual((four['candidates'], four['without_maps'], four['train_games'], four['rotated_games']),
+                         (dict(train=24, rotated=16, heldout=32), dict(train=4, rotated=12), 20, 4))
+        one = A.tables(buffer, G0, heldout_games=32, iterations=1)['report']
+        self.assertEqual((one['train_generations'], one['rotated_generations'], one['train_games']), ([G0], [G0 - 8], 5))
+
+    def test_the_held_out_order_is_the_search_value_phase_s_own(self):
+        from brass_ai.recovery.search_value_retention import rotating_holdout
+        held = defaultdict(list)
+        for g, name in [(5, 'b'), (5, 'a'), (3, 'z'), (4, 'c'), (6, 'd'), (6, 'a2')]:
+            held[name] = [dict(game_id=name, generation=g, split='heldout', index=i, u=[0.] * 4) for i in range(1, 65)]
+        rows = [r for game in held.values() for r in game]
+        for count in (2, 3, 6):
+            self.assertEqual(A.latest(held, 6, count), rotating_holdout(rows, 6, games=count, minimum=1)[2]['games'])
+
+
+class Mixing(Fixture):
+    def selection(self, rows):
+        g = self.game('teacher/a', 1, 'train', count=rows); h = self.game('teacher/h', 1, 'heldout', count=4)
+        pack = lambda x: (x[0]['game_id'], x, A.read_envelope(x[0][A.FIELD], x[0]['game_id']))
+        return dict(train=[pack(g)], heldout=[pack(h)], report=dict(generation=7))
+
+    def test_each_epoch_spreads_every_search_root_once_over_its_batches(self):
+        search = A.SearchAuxiliary(self.selection(11), 'cpu', G.SEARCH_AUX, batches=4)
+        before = torch.get_rng_state()
+        epochs = [[search.share(epoch, p) for p in range(4)] for epoch in range(3)]
+        self.assertTrue(torch.equal(before, torch.get_rng_state()))  # the ordinary batches' generator is untouched
+        for shares in epochs:
+            self.assertEqual(sorted(i for s in shares for i in s), list(range(11)))  # each root once per epoch
+            self.assertEqual(sorted(len(s) for s in shares), [2, 3, 3, 3])  # an even share per batch
+        self.assertNotEqual(epochs[0], epochs[1])  # a fresh permutation each epoch
+        self.assertEqual(epochs[0], [A.SearchAuxiliary(self.selection(11), 'cpu', G.SEARCH_AUX, batches=4).share(0, p) for p in range(4)])
+        with self.assertRaisesRegex(ValueError, 'outside the epoch'): search.share(0, 4)
 
     def test_each_root_reads_its_era_s_end_map_through_its_own_seat_mapping(self):
         rows = A.SearchRows([(g[0]['game_id'], g, A.read_envelope(g[0][A.FIELD], g[0]['game_id']))
@@ -180,37 +222,53 @@ class Companion(Fixture):
         # The heads' own trunk-gradient scale applies: none reaches the trunk while it is 0 (head-only warm-up).
         trunk = [p.grad for n, p in self.model.named_parameters() if n.startswith('state_encoder.')]
         self.assertEqual(any(g is not None and bool(g.abs().sum() > 0) for g in trunk), a.scale > 0)
+        # A heads-only step: the trunk gets nothing, the heads still do.
+        self.model.zero_grad(set_to_none=True); a.heads.zero_grad(set_to_none=True)
+        a.search_loss(self.model, rows, list(range(rows.rows)), frozen=True).sum().backward()
+        self.assertTrue(all(p.grad is None for p in self.model.parameters()))
+        self.assertTrue(any(p.grad is not None for p in a.heads.parameters()))
         a.stopped = True
         self.assertIsNone(a.search_loss(self.model, rows, [0]))
 
-    def test_the_stop_scores_the_search_tables_and_judges_the_search_interval_with_them(self):
+    def test_the_stop_pools_the_search_roots_with_the_ordinary_rows_in_one_criterion(self):
         a = self.companion(); rows = self.rows(); ids = list(range(len(self.data)))
         plain = S.OwnershipStop(a, G.OWNERSHIP_STOP, self.model, self.ds, ids, self.cfg['update'])
         stop = S.OwnershipStop(a, G.OWNERSHIP_STOP, self.model, self.ds, ids, self.cfg['update'], search=rows)
-        self.assertEqual(plain.before, stop.before)  # the ordinary criterion is unchanged
+        self.assertEqual(plain.before, stop.before)  # before/after stay the ordinary rows' CE
         self.assertIsNone(plain.search_before); self.assertGreater(stop.search_before['owner_ce'], 0)
+        self.assertEqual(plain.criterion(plain.before, None), plain.before['owner_ce'])  # without search: unchanged
+        W, Ws = stop.weight, stop.search_weight
+        self.assertEqual((W, Ws), (float(self.ds.critic_weights[[i for p in stop.parts for i in p]].sum()), float(rows.rows)))
+        pooled = (stop.before['owner_ce'] * W + stop.search_before['owner_ce'] * Ws) / (W + Ws)
+        self.assertAlmostEqual(stop.criterion(stop.before, stop.search_before), pooled)
         initial = copy.deepcopy(a.heads.state_dict())
-        worse = lambda value: dict(stop.search_current, owner_ce=stop.search_current['owner_ce'] + value)
-        with mock.patch.object(S.OwnershipStop, 'measure', lambda self: dict(self.current, owner_ce=self.current['owner_ce'] - 1e-3)):
-            with mock.patch.object(S.OwnershipStop, 'measure_search', lambda self: worse(1.)):
-                stop.boundary(16, 'kept')  # no search batch in this interval: the search CE is reported only
-                self.assertTrue(stop.running); self.assertFalse(stop.intervals[-1]['search_batch'])
-                self.assertIsNone(stop.intervals[-1]['stopped_by'])
-                stop.search_pending = True; kept = copy.deepcopy(a.heads.state_dict())
-                stop.boundary(32, 'kept')
-        self.assertFalse(stop.running); self.assertEqual(stop.reason, 'search_heldout_ce_increased')
-        self.assertEqual(stop.intervals[-1]['stopped_by'], 'search'); self.assertTrue(a.stopped)
+        # Ordinary CE up a little, search CE down more, weighted by rows: the pooled CE falls, so the interval stays.
+        up, down = 1e-3, 2e-3 * W / Ws
+        shift = lambda current, d: dict(current, owner_ce=current['owner_ce'] + d)
+        with mock.patch.object(S.OwnershipStop, 'measure', lambda self: shift(self.current, up)), \
+                mock.patch.object(S.OwnershipStop, 'measure_search', lambda self: shift(self.search_current, -down)):
+            stop.boundary(16, 'kept')
+        self.assertTrue(stop.running); self.assertTrue(stop.intervals[-1]['accepted'])
+        self.assertLess(stop.intervals[-1]['criterion_attempted'], stop.intervals[-1]['criterion_before'])
+        self.assertGreater(stop.intervals[-1]['owner_ce_attempted'], stop.intervals[-1]['owner_ce_before'])
+        # Ordinary CE down a little, search CE up more: the pooled CE rises, so the heads go back.
+        kept = copy.deepcopy(a.heads.state_dict())
+        with mock.patch.object(S.OwnershipStop, 'measure', lambda self: shift(self.current, -up)), \
+                mock.patch.object(S.OwnershipStop, 'measure_search', lambda self: shift(self.search_current, down)):
+            stop.boundary(32, 'kept')
+        self.assertFalse(stop.running); self.assertEqual(stop.reason, 'heldout_ce_increased'); self.assertTrue(a.stopped)
         for k, v in kept.items(): self.assertTrue(torch.equal(v, a.heads.state_dict()[k]), k)
         record = stop.finish()
         self.assertEqual(record['search']['rows'], rows.rows); self.assertIn('owner_ce', record['search']['before'])
-        self.assertNotIn('search', plain.finish())
+        self.assertAlmostEqual(record['criterion']['before'], pooled); self.assertAlmostEqual(record['criterion']['search_share'], Ws / (W + Ws))
+        self.assertNotIn('search', plain.finish()); self.assertNotIn('criterion', plain.finish())
         self.assertTrue(all(torch.equal(v, initial[k]) for k, v in a.heads.state_dict().items()))
 
 
 class Phase(unittest.TestCase):
-    """Through ppg_g210.fit: one batch of search roots in the first step, its tables in the stop."""
+    """Through ppg_g210.fit: search roots mixed into every head step, their validation tables pooled in the stop."""
 
-    def run_phase(self, with_search=True, maps=True):
+    def run_phase(self, with_search=True, maps=True, value_stop=False):
         import tempfile
         from pathlib import Path
         from brass_ai.learning.contracts import SOURCE_ROOT
@@ -233,37 +291,59 @@ class Phase(unittest.TestCase):
                 return roots(name, 1, split, sources[:12], A.table_envelope(receipt, result, job) if maps else None)
             buffer = Buffer([game(f'teacher/t{i}', 'train') for i in range(3)] + [game('teacher/h', 'heldout')])
             p.search_auxiliary = dict(settings=copy.deepcopy(G.SEARCH_AUX), tables=A.tables(buffer, 1)) if with_search else None
-            r = p.fit(m)
+            from brass_ai.recovery import value_phase as V
+            metrics = V.metrics
+            def stopping(*args, **kwargs):  # the value check rejects its first interval: the heads go on alone
+                result = metrics(*args, **kwargs)
+                if kwargs.get('evidence'): result['loss'] = 1. + .1 * stopping.calls; stopping.calls += 1
+                return result
+            stopping.calls = 0
+            with mock.patch.object(V, 'metrics', stopping) if value_stop else contextlib.nullcontext():
+                r = p.fit(m)
             local = p.local_scoring.report(); local['_games'] = {t[0] for t in p.local_scoring.attempted}
         return r, local
 
-    def test_the_first_step_adds_the_search_batch_and_keeps_the_ordinary_rows(self):
-        r, local = self.run_phase()
-        s = r['search_auxiliary']
-        self.assertTrue(s['ready']); self.assertEqual(s['step'], 1); self.assertIsNone(s['reason'])
+    def check_mixed(self, r):
+        s = r['search_auxiliary']; stop = r['ownership_stop']; shown = s['presented']
+        self.assertTrue(s['ready']); self.assertIsNone(s['reason'])
         self.assertEqual((s['train']['rows'], s['train']['games'], s['heldout']['rows'], s['heldout']['games']), (36, 3, 12, 1))
+        # Every step the heads attempted carried its even share of the 36 search roots.
+        self.assertEqual(shown['steps'], stop['attempted_head_steps'])
+        n, b = 36, shown['batches_per_epoch']
+        self.assertEqual((shown['rows_per_step']['min'], shown['rows_per_step']['max']), (n // b, -(-n // b)) if n % b else (n // b,) * 2)
         self.assertGreater(s['weighted_loss'], 0.)
-        self.assertGreater(local['training']['ppg_search_weighted_auxiliary_loss_sum'], 0.)
-        stop = r['ownership_stop']
-        self.assertTrue(stop['intervals'][0]['search_batch'])
-        self.assertTrue(all(not i['search_batch'] for i in stop['intervals'][1:]))
-        self.assertEqual(s['heads_kept'], stop['intervals'][0]['accepted'])
-        self.assertEqual(s['trunk_kept'], r['interval_reports'][0]['accepted'])
         self.assertEqual(stop['search']['rows'], 12)
+        self.assertTrue(all('criterion_attempted' in i for i in stop['intervals']))
+        self.assertLessEqual(s['kept']['heads_rows'], shown['rows'])
+        return s, stop
+
+    def test_search_roots_join_every_head_step_and_the_ordinary_rows_are_unchanged(self):
+        r, local = self.run_phase()
+        s, stop = self.check_mixed(r)
+        self.assertEqual(s['presented']['heads_only_rows'] > 0, stop['head_only_steps'] > 0)
+        self.assertGreater(local['training']['ppg_search_weighted_auxiliary_loss_sum'], 0.)
         base, base_local = self.run_phase(with_search=False)
         self.assertNotIn('search_auxiliary', base)
         # The ordinary rows of every step are the same: same presentations and the same ordinary head accounting.
         self.assertEqual(r['attempted_value_presentations'], base['attempted_value_presentations'])
+        self.assertEqual(r['attempted_steps'], base['attempted_steps'])
         self.assertFalse(any(g.startswith('teacher/') for g in local['_games']))  # search rows are counted apart
         self.assertEqual(local['_games'], base_local['_games'])
-        self.assertNotIn('search', base['ownership_stop'])
+        self.assertNotIn('search', base['ownership_stop']); self.assertNotIn('criterion', base['ownership_stop'])
 
-    def test_without_maps_the_batch_is_skipped(self):
+    def test_heads_only_steps_carry_search_roots_with_the_trunk_frozen(self):
+        r, _ = self.run_phase(value_stop=True)
+        s, stop = self.check_mixed(r)
+        self.assertGreater(stop['head_only_steps'], 0)
+        self.assertGreater(s['presented']['heads_only_rows'], 0)
+        self.assertEqual(s['kept']['trunk_rows'], 0)  # the only joint interval was rejected by the value check
+
+    def test_without_maps_the_rows_are_skipped(self):
         r, _ = self.run_phase(maps=False)
         s = r['search_auxiliary']
-        self.assertEqual((s['ready'], s['reason'], s['step']), (False, 'no_search_maps', None))
+        self.assertEqual((s['ready'], s['reason'], s['presented']['steps']), (False, 'no_search_maps', 0))
         self.assertNotIn('search', r['ownership_stop'])
-        self.assertEqual(s['selection']['without_maps'], dict(current_train=3, heldout=1))
+        self.assertEqual(s['selection']['without_maps'], dict(train=3, heldout=1))
 
 
 class Recipe(unittest.TestCase):

@@ -3,6 +3,10 @@
 - **Date:** 2026-11-18. **Run:** `joint7-v11-2-g1190-restart-3`, newest committed generation g3423.
 - **Adopted with** `--value-revision search-aux` at a committed boundary (planned: g3423, together with `--soft-policy`).
 - **Needs** three things the run already has: the era heads (`heads`, g3275), the ownership stop (`ownership-stop`, g3318) and the g3270 teacher revision.
+- **Revision 2.0.0** (same day, before any lab run). It replaces 1.0.0 because of 1.0.0's risk: one batch at the first PPG step, and a separate check on the 4 current search tables that could end head training on 256 noisy roots. In 2.0.0:
+  - search rows from four iterations of tables are mixed into every PPG batch;
+  - the held-out pool is the whole search-value validation set;
+  - one pooled criterion replaces the separate rule.
 
 ## What it does
 
@@ -26,34 +30,51 @@ Each root of an all-seat table becomes one row (64 per table), built from the ro
 - **Unchanged from ordinary rows:** labels, masks, the VP scale (/5) and the loss weights (0.15 per era now). The rows go through the companion's own `_auxiliary`.
 - **Seat descriptors:** search rows have none, so they read as unknown seats, as for the search-value head.
 
-### 3. One batch per iteration joins the first PPG step
+### 3. Four iterations of search-value training tables, mixed into every PPG batch
 
-- **The training tables (40):**
-  - the 36 train tables of the iteration;
-  - the 4 held-out tables that leave the 32-game rotating search-value held-out set this iteration, collected 8 iterations earlier.
-  - That is 2,560 roots, which fit one 4,096-row PPG batch.
-- **The step:** the batch is added to the first joint step of the value phase. That step's ordinary batch is unchanged.
-- **Losses:** search rows add only the era heads' ownership and local-VP losses (and Rail-end when on), with no value, utility or policy term. Each search row is weighted as one ordinary row of that step: the step's loss is divided by its ordinary batch size.
-- **Existing machinery:** the heads' trunk-gradient scale, the PPG KL checks, the value check with its interval rollback, and the ownership stop apply to that step as to any other.
-- **Accounting:** search rows are counted apart. The ordinary attempted, retained and fitting counters, the warm-up counters and `by_era` stay those of the ordinary rows. The search rows' own era sums are in `search_auxiliary.by_era`.
+- **The pool is the search-value phase's own training data,** read from its buffer without changing it. It holds the search-value training tables admitted in the last four iterations (`train_iterations` 4; the buffer keeps 16):
+  - the train tables collected at G−3 … G (36 each);
+  - the held-out tables that left the latest 32 in those four iterations (4 each, collected at G−11 … G−8). `rotating_holdout` moves them into the search-value training set as they leave.
+  - In full that is 160 tables, 10,240 roots.
+- **Mixing:**
+  - Every PPG epoch draws a fresh permutation of the pool and spreads it evenly over that epoch's ordinary batches. Each batch gets `pool / batches` roots: about 190 at full size, with g3422's 220,062 ordinary rows in 54 batches.
+  - Each search root is thus presented once per epoch, the same rate as an ordinary row.
+  - The share goes to every step the heads train in: the joint steps, and the heads-only steps after the value check stops the trunk. In heads-only steps the search rows, like the ordinary rows, give the trunk no gradient.
+- **Losses:** search rows add only the era heads' ownership and local-VP losses (and Rail-end when on), with no value, utility or policy term. Each search row weighs as one ordinary row of its step: the step's loss is divided by its ordinary batch size, so the ordinary rows' weights do not change.
+- **The ordinary rows are untouched.**
+  - The same rows, in the same order and in the same batches: the search permutation has its own generator, seeded by generation and epoch, so the ordinary shuffles and clone draws are unchanged.
+  - The ordinary attempted, retained and fitting counters, the warm-up counters and `by_era` count ordinary rows only. The search rows' own era sums are in `search_auxiliary.by_era`.
+- **Existing machinery:** every step keeps the heads' trunk-gradient scale, the PPG KL checks, the value check with its interval rollback, and the ownership stop.
+- **Implementation note.** The search rows of a step run as a second small forward and backward pass before that step's optimizer update. This equals one mixed batch, because the model has no layers that depend on the batch.
 
-### 4. The 4 current search validation tables early-stop and evaluate
+### 4. The search-value validation set, pooled into the ownership stop's criterion
 
-- **Scoring.** This iteration's 4 validation tables (256 roots) are scored by the ownership stop at every boundary, beside its ordinary validation games, with the same owner-CE criterion (each root weighted 1).
-- **The interval that holds the search batch** (steps 1–16) is kept only if neither owner CE increased. An increase of either one restores the heads and their Adam to the start, and ends head fitting for the phase. That is the existing rollback.
-  - The reason is `heldout_ce_increased`, or `search_heldout_ce_increased` when only the search tables rose.
-- **Later intervals** are judged on the ordinary games as before. Their search CE is only reported.
-- **No overlap:** the validation tables are never in that iteration's search batch. They train only after they leave the held-out set.
+- **The held-out pool** is the search-value phase's validation set (the latest 32 held-out tables), keeping the tables that have maps.
+  - The criterion reads 4 tables (256 roots) in the first iteration after adoption, 8 in the second, and 32 (2,048 roots) from the eighth on.
+  - These tables are never in the training pool: they train only after they leave the latest 32.
+- **One criterion.**
+  - At every 16-step boundary the stop scores the owner CE of the ordinary validation rows (critic weights) and of the search roots (weight 1, as an ordinary row).
+  - It pools the two set by set, row for row. The pooled CE is `(ce_ord · W_ord + ce_search · W_search) / (W_ord + W_search)`.
+  - An increase restores the heads and their Adam to the last kept boundary, and ends head fitting (reason `heldout_ce_increased`). This is the existing rollback, with no separate search rule.
+- **Weight of the search tables.** The pooled criterion follows row counts. With g3423's 31,489 ordinary validation rows, the search roots are about 0.8% of the criterion at 4 tables and about 6% at 32.
+- **What the report keeps:** `before` and `after` stay the ordinary rows' CE, so they compare with earlier iterations. The decisive values are in `criterion` and in `intervals[*].criterion_*`.
 
-### When the 40 tables are complete
+### How the pools fill after adoption at g3423
 
-- Tables collected from g3423 on carry maps.
-- **The first 8 iterations** (state g3423–g3430) train on the 36 current train tables, 2,304 roots, because the tables leaving the held-out set were collected before the rebuild. They are reported as `without_maps.rotated = 4`.
-- **From the iteration that starts at g3431**, the leaving tables are the g3423 ones, so the batch is 40 tables and 2,560 roots.
+| State (iteration) | Train tables (roots) | Search held-out tables |
+| --- | --- | --- |
+| g3423 | 36 (2,304): only g3423's tables have maps | 4 |
+| g3424 | 72 (4,608) | 8 |
+| g3425 | 108 (6,912) | 12 |
+| g3426 – g3430 | 144 (9,216) | 16 → 32 (+4 per iteration) |
+| g3431 – g3433 | 148 → 156 (+4 per iteration): the leaving held-out tables with maps (g3423's first) | 32 |
+| g3434 on | 160 (10,240) | 32 |
+
+Tables collected before the rebuild have no map. They are counted in `selection.without_maps` and left out.
 
 ### Without the item
 
-- Admission keeps no map, and PPG gets no search batch.
+- Admission keeps no map, PPG gets no search rows, and the ownership stop is exactly as before.
 - The rebuilt binary still sends the maps, and the Python side ignores them.
 
 ## Cost
@@ -62,53 +83,63 @@ Each root of an all-seat table becomes one row (64 per table), built from the ro
 | --- | --- |
 | CPU worker | One rebuild, done by the continuation with its focused regressions. The laptop compile of the patched teacher took 50 s (incremental). |
 | Native work | None new: the recorder already ran. The finish message grows by about 15 KB per table. |
-| Admission | Under 0.1 s for 40 tables (one audit and seal each); about 4 KB per table in the shards |
-| PPG | About +0.3–0.5 s per iteration: staging 2,816 roots (35 MB on the GPU, transient), one forward-backward of 2,560 roots through the trunk and heads, and 256 held-out roots at each of up to five boundaries. For scale, at g3422 the whole value phase took 20 s, 9.2 s of it in training. |
-| Search, collection, held-out data | None: the 40 tables and the 4 validation tables already exist |
+| Admission | Under 0.1 s for 40 tables (one audit and seal each). About 4 KB per table in the shards. |
+| Reading the pools | About 225 shard reads per iteration. Each is a hash plus cached rows, the work the search-value phase already does on the same buffer. |
+| PPG | About +0.4–1.0 s per iteration:<br>• one extra small forward and backward pass (about 45–190 roots) per head step, up to 54 steps;<br>• 2,048 held-out roots scored at each of up to five boundaries;<br>• about 150 MB of states staged on the GPU, transient.<br>For scale, at g3422 the whole value phase took 20 s, 9.2 s of it in training. |
+| Search, collection, held-out data | None: the tables already exist in the search-value buffer |
 
-**Risk.** The extra held-out criterion on the first interval can end ordinary head fitting more often.
-- From g3318 to g3417 the stop already kept 0 head steps in 43 of 100 iterations.
-- The 4 tables are 256 roots, so their CE is noisier than the 31,000-row ordinary criterion.
-- If `aux_stop=search_heldout_ce_increased` turns up in many iterations while the search CE is not falling, that rule is too strict for 4 tables.
+**Risk and what it means.** The search rows are about 1% of the auxiliary presentations at first and 4.7% at full size (10,240 against 220,062 ordinary rows). Each table trains in four consecutive iterations. The pooled criterion weighs them by the same row count (0.8% → 6%).
+- Neither can end head training on its own: ordinary rows still decide most of the criterion. That is the intended low-risk default.
+- The flip side is a small effect. If the search tables' owner CE (`heldout_owner_ce`) does not fall over 20–30 iterations, their share is too small to matter. The next lever is their row weight (say ×4), and it raises their influence on both training and the criterion.
 
 ## What to read
 
 | Field | Meaning |
 | --- | --- |
-| `value_phase.search_auxiliary.selection` | Current train, rotated and held-out tables; `without_maps`; `rotated_generations` (should be G−8) |
-| `value_phase.search_auxiliary.train` / `.heldout` | Rows, games and rows by era of the batch and of the validation tables |
-| `value_phase.search_auxiliary.weighted_loss`, `.by_era` | The batch's auxiliary loss, and its owner CE and VP error by era, kind and open/settled |
-| `value_phase.search_auxiliary.heads_kept`, `.trunk_kept`, `.stopped_by` | Whether the ownership stop kept the interval with the search batch, whether the value check kept the trunk, and which criterion stopped it |
-| `value_phase.search_auxiliary.heldout_owner_ce` | Search validation CE before, after the search interval, and at the end |
-| `value_phase.ownership_stop.search`, `.intervals[*].search_*` | The same, from the stop's side, at every boundary |
+| `value_phase.search_auxiliary.selection` | Train tables (`train_generations`, should be G−3 … G), rotated (`rotated_generations`, should be G−11 … G−8 once they have maps), held-out (`heldout_generations`); `without_maps` |
+| `value_phase.search_auxiliary.train` / `.heldout` | Rows, games and rows by era of the pool and of the validation tables |
+| `value_phase.search_auxiliary.presented` | Rows and steps that carried search rows, joint and heads-only, rows per step, batches per epoch |
+| `value_phase.search_auxiliary.kept` | Rows in intervals the ownership stop kept (`heads_rows`), and in joint steps the value check kept (`trunk_rows`) |
+| `value_phase.search_auxiliary.weighted_loss`, `.by_era` | The search rows' auxiliary loss, and their owner CE and VP error by era, kind and open/settled |
+| `value_phase.search_auxiliary.heldout_owner_ce` | The search validation tables' CE, before and after the phase |
+| `value_phase.search_auxiliary.criterion`, `ownership_stop.criterion` | The pooled CE before and after, and the search share of its weight |
+| `value_phase.ownership_stop.intervals[*]` | `owner_ce_*` (ordinary), `search_*`, `criterion_*` (decisive) at every boundary |
 | `search_value.scoring_maps` | Tables admitted with a map |
-| log line | `search_aux=Nrows/Ngames search_ce=before->after search_kept=…`, after `aux_stop=` |
+| log line | `search_aux=Nrows/Ngames search_held=Mgames search_ce=before->after aux_crit=before->after search_kept=kept/presented`, after `aux_stop=` |
 
 ## Checks run (laptop, fixture models)
 
-`tests/Recovery/test_search_auxiliary_g3423.py`, 11 tests:
+`tests/Recovery/test_search_auxiliary_g3423.py`, 14 tests:
 - **Maps.**
   - The receipt is audited, sealed and bound to its table. A changed total, a missing era, the wrong producer and a final VP that disagrees with the result are all refused.
   - The ordinary receipt check behaves as before.
   - Admission stores the map once, on the first root, and only with the item on.
-- **Selection.** The batch is this iteration's train tables plus exactly the G−8 held-out tables. While the held-out set fills, none leave. Tables without maps are counted and skipped.
+- **Selection.**
+  - The pool is the train tables of the last `iterations` generations plus exactly the held-out tables that left the latest 32 in those iterations, checked for 1, 2 and the recipe's 4 (G−4's train tables are left out).
+  - The held-out set is the latest 32 and never overlaps the pool. After adoption it grows 4, 8, … 32.
+  - Tables without maps are counted and skipped.
+  - The held-out order is `rotating_holdout`'s own.
+- **Mixing.**
+  - Each epoch presents every search root exactly once, in even shares (sizes differ by at most one), with a fresh permutation each epoch.
+  - The torch generator that orders the ordinary batches is untouched.
 - **Rows.** Each root reads its era's end map through its own seat mapping (the classes are checked one by one), and a wrong mapping is refused.
 - **Companion.**
   - Search rows add only era-head losses: the outcome, utility and policy parameters get no gradient.
-  - The trunk follows the heads' scale.
+  - The trunk follows the heads' scale, and gets nothing in a heads-only step.
   - The ordinary counters and era sums are unchanged.
   - A stopped head returns nothing.
 - **Stop.**
-  - The ordinary criterion is identical with or without the search tables.
-  - A search-CE increase stops the heads only in the interval that holds the search batch, with reason `search_heldout_ce_increased`.
+  - `before`/`after` equal the plain stop's, and without search the criterion is the ordinary CE.
+  - The pooled CE is the row-weighted mean of the two sets. An ordinary rise that the search fall outweighs keeps the interval; the reverse stops the heads.
 - **Through `ppg_g210.fit`.**
-  - The batch joins step 1 only.
-  - The ordinary presentations equal those of the same phase without the search batch, and no teacher game enters the ordinary accounting.
-  - Without maps, the batch is skipped.
+  - Every step the heads attempt carries its share.
+  - The ordinary presentations, attempted steps and ordinary head accounting equal those of the same phase without search rows.
+  - With the value check forced to reject its first interval, the heads-only steps carry search rows and no trunk rows are kept.
+  - Without maps the rows are skipped.
 - **Recipe.** The item needs the teacher revision and the ownership stop, is idempotent and forward-only, and `is_on` still recognizes the recipe.
 - **Native.** The overlay adds the field once, and `lab-native/src/teacher.rs` is untouched. The patched CPU teacher compiles (`cargo build --features teacher --bin brass-lab-teacher`).
 
-Also run with this change: soft policy S1 (12), g3318 ownership stop (6), g3140 (11), g3270 (18), local scoring, `test_cpu_inference.Overlay` and `test_ppg_g210`, all passing except two `test_ppg_g210.Restored` tests. Those need an old g0660 export that is not in the local results repository.
+Also run with this change: g3318 ownership stop, g3140, soft policy S1, g3270, `test_local_scoring_ppg` and `test_ppg_g210` (74 tests in all). All pass except two `test_ppg_g210.Restored` tests, which need an old g0660 export that is not in the local results repository.
 
 No teacher table was played locally. The first lab iteration is the check that the rebuilt teacher's maps pass admission, in `search_value.scoring_maps`.
 
@@ -119,19 +150,19 @@ No teacher table was played locally. The first lab iteration is the check that t
 | `rust_backend/lab_cpu_overlay.py` | The finish message carries `scoring` (CPU teacher only) |
 | `rust_backend/lab_teacher.py` | `collect` returns it with the table |
 | `recovery/local_scoring_targets.py` | `audit_eras` (shared by ordinary games and tables), `validate_table_receipt` |
-| `recovery/search_auxiliary.py` (new) | Table envelopes, table selection (train + leaving held-out; current validation), `SearchRows`, the one-batch trainer and report |
-| `recovery/search_value_phase.py`, `search_value_iteration.py` | Keep the map on the table's shard; hand the tables to PPG in `prepare_ppg` |
-| `recovery/local_scoring_v3.py` | `search_loss` (era-head losses only, counted apart), `search_report` |
-| `recovery/ownership_stop.py` | The search validation tables: scored at every boundary; they decide the interval that holds the search batch |
-| `recovery/value_phase.py`, `ppg_g210.py` | The batch at step 1; the report |
-| `recovery/training_revision_g3140.py` | Item `search-aux` (block `search_auxiliary`, forward-only, tag `searchaux`) |
+| `recovery/search_auxiliary.py` | Table envelopes; the pools (`tables`, `latest`); `SearchRows`; the per-batch share (`share`, `add`) and the report |
+| `recovery/search_value_phase.py`, `search_value_iteration.py` | Keep the map on the table's shard; hand the pools to PPG in `prepare_ppg` |
+| `recovery/local_scoring_v3.py` | `search_loss` (era-head losses only, counted apart; `frozen` for heads-only steps), `search_report` |
+| `recovery/ownership_stop.py` | The search validation tables pooled into the criterion (`criterion`), reported at every boundary |
+| `recovery/value_phase.py`, `ppg_g210.py` | The search share in every joint and heads-only step; the report |
+| `recovery/training_revision_g3140.py` | Item `search-aux` (block `search_auxiliary`, contract 2.0.0, `train_iterations` 4, forward-only, tag `searchaux`) |
 | `recovery/league.py`, `scripts/continue-rust-g1491.py`, `continue-rust-g1190-restart-2.py` | Log line, help text |
 
-The execution identity is re-recorded together with soft policy S1 (`e62799b4…`; `0dcb6b30…` is kept as a predecessor).
+The execution identity is re-recorded as `259d39df…`, with `e62799b4…` (the committed 1.0.0 and soft policy S1) kept as a predecessor.
 
 ## Continue command
 
-You have not run the soft-policy command yet, so this one replaces it. It adopts soft policy S1 and the search auxiliary together at g3423 and runs to the g3430 rating:
+You have not run the soft-policy command yet. This one adopts soft policy S1 and the search auxiliary (2.0.0) together at g3423 and runs to the g3430 rating:
 
 ```bash
 python scripts/continue-rust-g1190-restart-2.py --run artifacts/step5/joint7-v11-2-g1190-restart-3 --expected-generation 3423 --iterations 7 --share-target 0.1 --soft-policy --value-revision search-aux
@@ -140,8 +171,8 @@ python scripts/continue-rust-g1190-restart-2.py --run artifacts/step5/joint7-v11
 - **Before the first iteration** the continuation rebuilds the CPU teacher, which takes a few minutes once.
 - **After the first iteration (g3424), check:**
   - `search_value.scoring_maps` is 40 of 40;
-  - `search_aux=2304rows/36games`;
-  - a `search_ce` before → after;
+  - the log shows `search_aux=2304rows/36games search_held=4games`, a `search_ce` before → after and an `aux_crit`;
+  - `presented.steps` equals `ownership_stop.attempted_head_steps`;
   - the soft-policy checks in [G3423_SOFT_POLICY_S1.md](G3423_SOFT_POLICY_S1.md).
 - **Then 20 iterations to the g3450 rating.** Both settings are stored with the run:
 
@@ -149,7 +180,7 @@ python scripts/continue-rust-g1190-restart-2.py --run artifacts/step5/joint7-v11
 python scripts/continue-rust-g1190-restart-2.py --run artifacts/step5/joint7-v11-2-g1190-restart-3 --expected-generation 3430 --iterations 20 --share-target 0.1
 ```
 
-- **From the iteration that starts at g3431** the batch reaches 40 tables (`search_aux=2560rows/40games`).
+- **The pools fill as in the table above:** 144 tables from g3426, 32 held-out tables by g3430, 160 tables from g3434.
 - **Adopting both at once** means the first iterations change two things. They act in different places, and each is reported separately:
   - the soft head trains on the teacher term inside PPO (`teacher_phase.term.soft`);
-  - the search batch trains the era heads in PPG (`value_phase.search_auxiliary`).
+  - the search rows train the era heads in PPG (`value_phase.search_auxiliary`).

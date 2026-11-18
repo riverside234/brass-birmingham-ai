@@ -14,17 +14,19 @@ encoded state, its seat mapping the root's `mapping` (stable seat -> relative, a
 stable_to_relative) and its era `turn_key[0]`; the target is that era's end map (the Rail-end map for
 Canal rows too, when rail-end is on). Labels, masks, VP scaling and loss weights are the era heads' own.
 
-Training.  Once per iteration one batch of the 40 search training tables -- the 36 train tables of this
-iteration and the 4 held-out tables leaving the 32-game search-value held-out set -- joins the first step
-of the PPG value phase. Its rows contribute only the era heads' ownership and local-VP losses (and
-Rail-end when on), each row weighted as one ordinary row of that step; the step's ordinary rows are kept
-unchanged. The heads' trunk-gradient scale, the PPG KL checks, the value check, its rollback and the
-ownership stop all apply to that step as to any other.
+Training (2.0.0).  The search pool is the search-value phase's own training tables admitted in the last four
+iterations: the train tables collected at G-3..G, and the held-out tables that left its latest 32 in
+those four iterations (they join its training set as they leave). Every PPG epoch spreads a fresh
+permutation of the pool evenly over that epoch's batches, so each batch the heads train on (joint steps
+and heads-only steps) carries its share, at the ordinary rows' own rate: each search root once per
+epoch. Search rows contribute only the era heads' ownership and local-VP losses (and Rail-end when on),
+each weighted as one ordinary row of its step; the ordinary rows, their order and their accounting are
+unchanged (the permutation has its own generator). The heads' trunk-gradient scale, the PPG KL checks,
+the value check, its rollback and the ownership stop apply to every step as before.
 
-Held-out.  This iteration's 4 search validation tables are scored by the ownership stop beside its
-ordinary validation games: at the boundary closing the interval that holds the search batch, an increase
-of either owner CE restores the heads (existing rollback) and ends their fitting. Their CE is reported at
-every boundary.
+Held-out.  The search-value validation set (the latest 32 held-out tables) with maps: 4 tables in the
+first iteration after adoption, 32 after eight. Their roots are pooled with the ordinary validation rows
+into the ownership stop's one owner-CE criterion, each root weighted as one ordinary row.
 """
 import copy
 import time
@@ -36,11 +38,12 @@ import torch
 from brass_ai.learning.contracts import keys, require
 from . import local_scoring_targets as targets
 
-CONTRACT = 'search-table-auxiliary/1.0.0'
+CONTRACT = 'search-table-auxiliary/2.0.0'
 FIELD = 'local_scoring'
 SOURCE = 'search-teacher-table'
 ERAS = ('CanalEra', 'RailEra')
 CHUNK = 512
+SEED = 3423  # the search permutation's own generator: (SEED, generation, epoch)
 
 
 # ---- the table's maps -----------------------------------------------------------------------
@@ -63,29 +66,37 @@ def read_envelope(packed, game_id):
 
 # ---- which tables -----------------------------------------------------------------------------
 
-def tables(buffer, generation, *, heldout_games=32):
-    """Train and held-out tables for this iteration's search batch, read without changing the buffer.
+def latest(held, generation, games):
+    """The latest `games` held-out games collected by `generation`, in search_value_retention.rotating_holdout's
+    order (collection generation, then game id)."""
+    order = sorted((g for g, rows in held.items() if rows[0]['generation'] <= generation),
+                   key=lambda g: (held[g][0]['generation'], g))
+    return order[-games:]
 
-    train     the `generation` train tables plus the held-out tables leaving the latest `heldout_games`
-              (the 32-game rotating search-value held-out set) at this generation;
-    heldout   the `generation` held-out (validation) tables.
+
+def tables(buffer, generation, *, heldout_games=32, iterations=4):
+    """Search training and held-out tables for the era heads, read without changing the buffer.
+
+    train     the search-value training tables admitted in the last `iterations` iterations: the train
+              tables collected at generation-iterations+1 .. generation, and the held-out tables that left
+              the latest `heldout_games` in those iterations (rotating_holdout moves them to training);
+    heldout   the latest `heldout_games` held-out tables: the search-value validation set.
     Tables without a stored map (collected before adoption or by a binary that does not send them) are
-    counted and left out.
+    counted and left out, so the held-out set grows from 4 to `heldout_games` after adoption.
     """
     groups = dict(train=defaultdict(list), heldout=defaultdict(list))
     for receipt in buffer.receipts:
         if receipt['reward_id'] != buffer.reward_id: continue
-        if not 0 <= generation - receipt['generation'] < buffer.windows[receipt['split']]: continue
+        age = generation - receipt['generation']
+        if not 0 <= age < buffer.windows[receipt['split']]: continue
+        if receipt['split'] == 'train' and age >= iterations: continue
         for row in buffer._read(receipt): groups[receipt['split']][row['game_id']].append(row)
-    first = lambda rows: rows[0]['generation']
-    held = groups['heldout']
-    order = sorted(held, key=lambda game: (first(held[game]), game))
-    now = set(order[-heldout_games:])
-    before = [game for game in order if first(held[game]) < generation][-heldout_games:]
-    selected = dict(current_train=sorted(g for g, rows in groups['train'].items() if first(rows) == generation),
-                    rotated=[g for g in before if g not in now],
-                    heldout=[g for g in order if first(held[g]) == generation])
-    source = dict(current_train=groups['train'], rotated=held, heldout=held)
+    held = groups['heldout']; first = lambda rows: rows[0]['generation']
+    now = latest(held, generation, heldout_games); current = set(now)
+    selected = dict(train=sorted(groups['train'], key=lambda g: (first(groups['train'][g]), g)),
+                    rotated=[g for g in latest(held, generation - iterations, heldout_games) if g not in current],
+                    heldout=now)
+    source = dict(train=groups['train'], rotated=held, heldout=held)
     chosen = {name: [] for name in selected}; missing = Counter()
     for name, games in selected.items():
         for game in games:
@@ -94,11 +105,13 @@ def tables(buffer, generation, *, heldout_games=32):
             if packed is None:
                 missing[name] += 1; continue
             chosen[name].append((game, rows, read_envelope(packed, game)))
-    report = dict(generation=generation, current_train_games=len(chosen['current_train']), rotated_games=len(chosen['rotated']),
-                  rotated_generations=sorted({first(held[g]) for g in selected['rotated']}),
-                  heldout_games=len(chosen['heldout']), without_maps=dict(missing),
+    generations = lambda name: sorted({first(source[name][g]) for g, _, _ in chosen[name]})
+    report = dict(generation=generation, iterations=iterations, train_games=len(chosen['train']),
+                  rotated_games=len(chosen['rotated']), heldout_games=len(chosen['heldout']),
+                  train_generations=generations('train'), rotated_generations=generations('rotated'),
+                  heldout_generations=generations('heldout'), without_maps=dict(missing),
                   candidates={k: len(v) for k, v in selected.items()})
-    return dict(train=chosen['current_train'] + chosen['rotated'], heldout=chosen['heldout'], report=report)
+    return dict(train=chosen['train'] + chosen['rotated'], heldout=chosen['heldout'], report=report)
 
 
 # ---- rows on the training device ---------------------------------------------------------------
@@ -133,61 +146,74 @@ class SearchRows:
     def scoring_envelopes(self, ids): return [self.envelopes[i] for i in ids]
 
 
-# ---- the once-per-iteration batch ---------------------------------------------------------------
+# ---- search rows mixed into every PPG batch -------------------------------------------------------
 
 class SearchAuxiliary:
-    def __init__(self, selection, device, settings):
+    def __init__(self, selection, device, settings, *, batches):
+        """`batches`: ordinary batches per PPG epoch; each gets an even share of the search pool."""
         began = time.perf_counter()
         self.settings = copy.deepcopy(settings); self.selection = copy.deepcopy(selection['report'])
         self.train = SearchRows(selection['train'], device); self.heldout = SearchRows(selection['heldout'], device)
-        self.step = None; self.loss = None; self.reason = None
-        self.ready = bool(self.train.rows and self.heldout.rows)
+        self.batches = int(batches); self.generation = int(self.selection['generation'])
+        self.orders = {}; self.steps = []; self.loss = None; self.reason = None
+        self.ready = bool(self.train.rows and self.heldout.rows and self.batches > 0)
         if not self.ready: self.reason = 'no_search_maps' if not self.train.rows else 'no_heldout_search_maps'
         self.seconds = dict(rows=time.perf_counter() - began, train=0.)
 
-    def due(self, step):
-        return self.ready and self.step is None and step == self.settings['step']
+    def share(self, epoch, position):
+        """Search rows for ordinary batch `position` of `epoch`: a slice of that epoch's own permutation."""
+        require(0 <= position < self.batches, 'Search rows: batch position outside the epoch')
+        order = self.orders.get(epoch)
+        if order is None:  # its own generator: the ordinary batches and clone draws are untouched
+            order = self.orders[epoch] = np.random.default_rng((SEED, self.generation, epoch)).permutation(self.train.rows).tolist()
+        n = self.train.rows
+        return order[position * n // self.batches:(position + 1) * n // self.batches]
 
-    def add(self, model, local, denominator, update, step):
-        """The search rows' auxiliary loss into this step's gradients; each row weighs as one ordinary row."""
+    def add(self, model, local, denominator, update, step, epoch, position, *, frozen=False):
+        """This batch's search rows into the step's gradients, each weighted as one ordinary row of the step.
+        `frozen`: a heads-only step (the trunk gets no gradient, as for its ordinary rows)."""
+        if not self.ready: return
         from .updates import autocast
-        began = time.perf_counter(); total = None
-        for part in self.train.parts():
+        began = time.perf_counter(); ids = self.share(epoch, position); total = None
+        for start in range(0, len(ids), CHUNK):
             with autocast(update, self.train.device):
-                loss = local.search_loss(model, self.train, part)
-            if loss is None: continue
+                loss = local.search_loss(model, self.train, ids[start:start + CHUNK], frozen=frozen)
+            if loss is None: break  # the heads are stopped
             value = loss.sum() / denominator
             value.backward()
             total = value.detach() if total is None else total + value.detach()
-        self.step = step
         if total is not None:
             local.accumulate('ppg_search_weighted_auxiliary_loss_sum', total)
-            self.loss = total
-        else:
-            self.reason = 'heads_stopped'
+            self.loss = total if self.loss is None else self.loss + total
+            self.steps.append(dict(step=step, epoch=epoch + 1, position=position, rows=len(ids), frozen=frozen))
         self.seconds['train'] += time.perf_counter() - began
 
     def finish(self, local, stop_record, report):
-        """The batch, where it went, and what the held-out search tables say."""
-        step = self.step
-        # The ownership stop's interval and the value check's interval that hold the search step
-        # (the value check numbers steps within its epoch; the search step is in the first epoch).
-        heads = next((i for i in (stop_record or {}).get('intervals', ()) if i['start_step'] <= step <= i['end_step']), None) \
-            if step is not None else None
-        trunk = next((i for i in report.get('interval_reports', ()) if i['epoch'] == 1 and
-                      i['start_step'] <= step < i['start_step'] + max(i['steps'], 1)), None) if step is not None else None
-        search = (stop_record or {}).get('search') or {}
-        return dict(contract=CONTRACT, settings=self.settings, ready=self.ready, reason=self.reason, step=self.step,
+        """Where the search rows went, and what the pooled stop and the search validation tables say."""
+        stop_record = stop_record or {}
+        kept = lambda s: any(i['accepted'] and i['start_step'] <= s['step'] <= i['end_step'] for i in stop_record.get('intervals', ()))
+        # The value check numbers steps within their epoch; heads-only steps leave the trunk frozen.
+        trunk = lambda s: not s['frozen'] and any(i['accepted'] and i['epoch'] == s['epoch'] and
+            i['start_step'] <= s['position'] + 1 < i['start_step'] + max(i['steps'], 1) for i in report.get('interval_reports', ()))
+        steps = self.steps; rows = lambda chosen: sum(s['rows'] for s in chosen)
+        if self.ready and not steps: self.reason = 'heads_stopped'
+        per_step = [s['rows'] for s in steps]
+        search = stop_record.get('search') or {}; criterion = stop_record.get('criterion') or {}
+        return dict(contract=CONTRACT, settings=self.settings, ready=self.ready, reason=self.reason,
             selection=self.selection,
             train=dict(rows=self.train.rows, games=self.train.games, eras=self.train.eras),
             heldout=dict(rows=self.heldout.rows, games=self.heldout.games, eras=self.heldout.eras),
+            presented=dict(rows=rows(steps), steps=len(steps), joint_rows=rows([s for s in steps if not s['frozen']]),
+                           heads_only_rows=rows([s for s in steps if s['frozen']]),
+                           rows_per_step=dict(min=min(per_step), max=max(per_step)) if per_step else None,
+                           batches_per_epoch=self.batches),
+            kept=dict(heads_rows=rows([s for s in steps if kept(s)]), trunk_rows=rows([s for s in steps if trunk(s)])),
             weighted_loss=float(self.loss) if self.loss is not None else None,
-            heads_kept=heads['accepted'] if heads else None, trunk_kept=trunk['accepted'] if trunk else None,
-            stopped_by=heads.get('stopped_by') if heads else None,
-            heldout_owner_ce=dict(before=search.get('before'), after_search_interval=heads.get('search_attempted') if heads else None,
-                                  after=search.get('after')),
+            heldout_owner_ce=dict(before=search.get('before'), after=search.get('after')),
+            criterion=dict(before=criterion.get('before'), after=criterion.get('after'), search_share=criterion.get('search_share')),
             by_era=local.search_report() if local is not None else None, seconds=self.seconds,
-            scope='One batch of played roots from the search training tables in the first PPG step: era-head ownership '
-                  'and local-VP losses only, each row weighted as one ordinary row of that step. heads_kept: the ownership '
-                  'stop kept that interval (ordinary and search held-out owner CE did not increase); trunk_kept: the value '
-                  'check kept it. Held-out: this iteration\'s search validation tables, unweighted roots.')
+            scope='Search-value training tables of the last four iterations, mixed into every PPG batch the heads train '
+                  'on (each root once per epoch, at the ordinary rows\' rate): era-head ownership and local-VP losses only, '
+                  'each row weighted as one ordinary row of its step. kept.heads_rows: rows in intervals the ownership stop '
+                  'kept; kept.trunk_rows: rows in joint steps the value check kept. Held-out: the search-value validation '
+                  'tables with maps, pooled with the ordinary validation rows into the stop\'s owner-CE criterion.')

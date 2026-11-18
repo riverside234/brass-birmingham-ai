@@ -336,8 +336,9 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     decides the utility receipt. ownership_stop (g3318) gives the era heads their own held-out
     owner-CE stop at the 16-step boundaries (recovery/ownership_stop.py); it changes nothing
     the value check sees. search_auxiliary (g3423) = dict(tables=search_auxiliary.tables(...),
-    settings=...): one batch of search-table roots adds only era-head losses to the first step,
-    and the search validation tables join the ownership stop (recovery/search_auxiliary.py)."""
+    settings=...): search-table roots are mixed into every batch the heads train on (each root once
+    per epoch, era-head losses only), and the search validation tables are pooled with the ordinary
+    ones in the ownership stop's criterion (recovery/search_auxiliary.py)."""
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     timings={}
@@ -433,9 +434,11 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         require(config.get('acceptance_steps')==ownership_stop['interval_steps'],'Ownership stop boundaries differ from the value phase')
         started=time.perf_counter()
         if search_auxiliary is not None:
-            # g3423: one batch of search-table roots joins the first step; their validation tables join the stop.
+            # g3423: search-table roots are mixed into every batch the heads train on; their validation
+            # tables are pooled with the ordinary ones in the stop's criterion.
             from .search_auxiliary import SearchAuxiliary
-            search=SearchAuxiliary(search_auxiliary['tables'],value_dataset.device,search_auxiliary['settings'])
+            search=SearchAuxiliary(search_auxiliary['tables'],value_dataset.device,search_auxiliary['settings'],
+                                   batches=math.ceil(len(value_train_ids)/config['batch_size']))
         stop=OwnershipStop(companion,ownership_stop,model,validation_dataset,heldout_ids,update,
                            search=search.heldout if search is not None and search.ready else None)
         timings['ownership_stop_setup_seconds']=time.perf_counter()-started
@@ -484,10 +487,9 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                         loss=loss+local_loss
                         companion.account_loss(local_loss,value_dataset.critic_weights[ix],len(batch),'ppg')
                     ((loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
-                if search is not None and stop.running and search.due(report['attempted_steps']+attempted+1):
-                    # g3423: the search batch adds only era-head losses to this step; its ordinary rows are unchanged.
-                    search.add(model,stop.local,len(batch),update,report['attempted_steps']+attempted+1)
-                    stop.search_pending=search.loss is not None
+                if search is not None and stop.running:
+                    # g3423: this batch's share of the search rows adds only era-head losses; its ordinary rows are unchanged.
+                    search.add(model,stop.local,len(batch),update,report['attempted_steps']+attempted+1,epoch,segment+offset)
                 sample=[clones[j] for j in torch.randint(len(clones),(config['clone_batch_size'],)).tolist()]
                 for part in reference.microbatches(sample):
                     inputs=reference.inputs(part)
@@ -601,8 +603,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     if stop is not None:
         # The value check stopped the trunk; the era heads keep fitting on the remaining
         # planned batches with the trunk frozen until their own CE check stops them.
-        def head_step(batch,step,epoch):
-            local=stop.local
+        def head_step(item,step,epoch):
+            position,batch=item;local=stop.local
             if scheduled and getattr(local,'work_warmup',False):
                 local.begin('ppg',rate_factor=rate_factor(step,total_steps,config))
             else:local.begin('ppg')
@@ -613,14 +615,18 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 if local_loss is not None:
                     local.account_loss(local_loss,value_dataset.critic_weights[ix],len(batch),'ppg')
                     ((local_loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
+            # g3423: the batch's share of the search rows, with the trunk frozen as for its ordinary rows.
+            if search is not None:search.add(model,local,len(batch),update,step,epoch,position,frozen=True)
             local.step('ppg')
         def remaining():
-            # The rest of the stopped epoch, then any planned epochs the value phase never reached.
-            for batch in batches[consumed:]:yield epoch,batch
+            # The rest of the stopped epoch, then any planned epochs the value phase never reached;
+            # each batch with its position in its epoch (the search rows' share).
+            for position in range(consumed,len(batches)):yield epoch,(position,batches[position])
             for later in range(epoch+1,config['max_epochs']):
                 if not stop.running:return
                 order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
-                for start in range(0,len(order),config['batch_size']):yield later,order[start:start+config['batch_size']]
+                for position,start in enumerate(range(0,len(order),config['batch_size'])):
+                    yield later,(position,order[start:start+config['batch_size']])
         if batches and stop.running:stop.continue_heads(remaining(),report['attempted_steps'],head_step)
         report['ownership_stop']=stop.finish()
         if search is not None:report['search_auxiliary']=search.finish(stop.local,report['ownership_stop'],report)

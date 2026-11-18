@@ -92,13 +92,14 @@ class SearchValueIteration:
             # A schedule may raise the PPG beta floor once the head has left Stage A.
             from .search_value_schedule import beta_floor
             phases.beta_floor = beta_floor(self.config['teacher_phase']['search_value'], self.phase.machine.state.get('stage'))
-            # g3423: this iteration's search training and validation tables, for one era-head batch in PPG.
+            # g3423: search training tables (last four iterations) and the validation set, for the era heads in PPG.
             phases.search_auxiliary = None
             if self.auxiliary is not None:
                 from .search_auxiliary import tables
                 require(self.phase.revision is not None, 'Search auxiliary rows need the g3270 rotating held-out set')
                 phases.search_auxiliary = dict(settings=copy.deepcopy(self.auxiliary),
-                    tables=tables(self.phase.buffer, self.generation, heldout_games=self.phase.revision['heldout_games']))
+                    tables=tables(self.phase.buffer, self.generation, heldout_games=self.phase.revision['heldout_games'],
+                                  iterations=self.auxiliary['train_iterations']))
 
     def post_fit(self, *, model, optimizer, reference, clones, probe_ids, dataset,
                  heldout_ids, config, update, beta, report):

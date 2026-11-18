@@ -336,9 +336,10 @@ def build(base):
             self.stats['head_only_seconds'] += time.perf_counter() - start
             return loss
 
-        def search_loss(self, model, ds, ids):
+        def search_loss(self, model, ds, ids, *, frozen=False):
             """Per-row auxiliary loss of search-table roots (g3423 search-aux): the era heads' ownership and
             local-VP terms (and Rail-end when on) only, no value terms; trunk scale as for ordinary rows.
+            ``frozen``: a heads-only step, so the trunk gets no gradient (as head_loss).
 
             ``ds`` is a search_auxiliary.SearchRows. Its rows are counted apart: the ordinary attempted,
             retained and fitting counters, map support and era sums stay those of the ordinary rows.
@@ -348,8 +349,9 @@ def build(base):
             from brass_ai.learning.seat_descriptors import critic_inputs
             start = time.perf_counter()
             index = torch.as_tensor(ids, device=ds.device); states = ds.states[index]
-            encoded = model.encode_state(states)
-            embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids))  # no descriptors: unknown seats
+            with torch.set_grad_enabled(torch.is_grad_enabled() and not frozen):
+                encoded = model.encode_state(states)
+                embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids))  # no descriptors: unknown seats
             kept = (self.era_stats, self.batch_fitting, self.batch_used, self.attempted, self.map_support, self.map_masked,
                     self.pending)
             self.era_stats, self.batch_fitting, self.batch_used = self.search_stats, set(), set()
