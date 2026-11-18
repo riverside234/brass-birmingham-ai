@@ -64,6 +64,33 @@ def validate_receipt(r,game,*,producer):
     expected={row['view']['context']['era'] for row in game['records']}
     require(type(r['eras']) is list and [e['era'] for e in r['eras']]==[e for e in ('CanalEra','RailEra') if e in expected],
             'Missing, duplicate or inherited era scoring receipts')
+    previous=audit_eras(r)
+    final=[next(s['vp'] for s in game['result']['seats'] if s['seat']==i) for i in range(4)]
+    require(previous==r['final_vp']==final,'Whole-game local scoring discrepancy')
+    return r
+
+
+def validate_table_receipt(r,result):
+    """A search-teacher table's receipt (g3423): the same era audit, bound to the table's own result.
+
+    A table is one whole game from its origin, so both eras are present; there are no
+    ordinary game records to bind the start revision to.
+    """
+    keys(r,('contract','rules','producer','start_revision','initial_vp','eras','final_vp'))
+    require(r['contract']==CONTRACT and r['rules']==identity()['rules'] and r['producer']=='rust-local-scoring/1.0.0',
+            'Teacher scoring recorder differs')
+    require(type(r['start_revision']) is int and r['start_revision']>=0,'Invalid scoring start')
+    _ints(r['initial_vp'],4);_ints(r['final_vp'],4)
+    require(type(r['eras']) is list and [e['era'] for e in r['eras']]==['CanalEra','RailEra'],
+            'A teacher table needs both era scoring receipts')
+    previous=audit_eras(r)
+    final=[next(s['vp'] for s in result['seats'] if s['seat']==i) for i in range(4)]
+    require(previous==r['final_vp']==final,'Whole-game teacher scoring discrepancy')
+    return r
+
+
+def audit_eras(r):
+    """Every era's entity rows, masks and official scoring sums; returns the VP after the last era."""
     previous=r['initial_vp'];board=topology()
     for e in r['eras']:
         keys(e,('era','slots','links','before','audit'));_ints(e['before'],4)
@@ -91,9 +118,7 @@ def validate_receipt(r,game,*,producer):
                 'Explicit bonus/adjustment accounting differs')
         require([e['before'][s]+totals['slots'][s]+totals['links'][s] for s in range(4)]==audit['after'],'Era scoring VP discrepancy')
         previous=audit['after']
-    final=[next(s['vp'] for s in game['result']['seats'] if s['seat']==i) for i in range(4)]
-    require(previous==r['final_vp']==final,'Whole-game local scoring discrepancy')
-    return r
+    return previous
 
 
 def row_target(game,row):

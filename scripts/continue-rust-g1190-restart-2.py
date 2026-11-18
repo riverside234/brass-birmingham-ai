@@ -108,6 +108,14 @@ comma-separated; adopted items persist and only move forward
               whether they keep the steps (an increase keeps 0 and ends their
               fitting); after the utility stop they fit alone with the trunk
               frozen (ai-research/G3318_OWNERSHIP_CE_STOP.md).
+  search-aux  (g3423, after ownership-stop and --teacher-revision) completed search-
+              teacher tables train the era heads: each table sends its era-end
+              scoring maps once with its finish message (CPU teacher rebuilt by the
+              continuation), and once per iteration one batch of played roots from
+              the 36 train tables plus the 4 leaving the search-value held-out set
+              joins the first PPG step with ownership and local-VP losses only; the
+              4 current search validation tables join the ownership stop
+              (ai-research/G3423_SEARCH_AUXILIARY.md).
 The held-out check, PPG cap .003, beta floor .25 and the strict early stop stay.
 
 --rating-every 20 (at a rated generation, a multiple of ten) runs the PL strength
@@ -127,6 +135,13 @@ from g3170, ratings run at g3190, g3210, ... Committed slots stay; set once.
 Teacher beta is re-measured once with teaching on. Code-only in the same change:
 teacher workers stream to a memory file (never wait), collection freezes the GC heap,
 and tables are admitted while ordinary games finish.
+
+--soft-policy (at a committed boundary, after --teacher-revision) adopts soft policy
+step S1 (ai-research/G3423_SOFT_POLICY_S1.md); set once, then kept: a trainer-owned
+Linear(192->1) without bias on the policy scorer's hidden layer predicts the rebuilt
+label target softened at T=4 on the teacher term's 128 long-label rows per PPO step,
+weight 8 x beta, with its own gradient call and Adam. Two head-only iterations, then
+the trunk multiplier .2, .4, .6, .8, 1. Not exported; PPO rows join only at step S4.
 """
 import importlib.util
 from pathlib import Path

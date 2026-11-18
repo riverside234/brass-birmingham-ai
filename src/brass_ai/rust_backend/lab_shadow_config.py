@@ -35,8 +35,10 @@ def is_shadow(config):
     from brass_ai.recovery.training_revision_g3140 import previous as before_value_revision
     from brass_ai.recovery.rating_cadence import previous as before_rating_cadence
     from brass_ai.recovery.training_revision_g3270 import previous as before_teacher_revision
+    from brass_ai.recovery.training_revision_g3423 import previous as before_soft_policy
     try:
-        config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(before_teacher_revision(recipe(config))))))
+        config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(
+            before_teacher_revision(before_soft_policy(recipe(config)))))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -120,6 +122,10 @@ def signature_transition(before,after):
     # collection (40 tables), so pending work is archived, not preserved.
     from brass_ai.recovery import training_revision_g3270 as g3270
     old=g3270.project(old,new)
+    if old is None:return False
+    # g3423 soft policy head (S1): adopted once, then kept; trainer-only, no collection setting.
+    from brass_ai.recovery import training_revision_g3423 as g3423
+    old=g3423.project(old,new)
     if old is None:return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False

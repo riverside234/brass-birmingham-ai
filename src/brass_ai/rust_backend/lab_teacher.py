@@ -278,8 +278,10 @@ class Worker:
                     # Batched model-logit parity of every labelled row, once, as the table ends.
                     if not defer_logits and revision is not None and getattr(verifier,'settle',None) is not None:
                         verifier.settle(expected['job_id'])
+                    # g3423: the CPU teacher sends the table's era-end scoring maps once, here.
+                    scoring = {'scoring': meta['scoring']} if meta.get('scoring') is not None else {}
                     return dict(job_id=expected['job_id'],rows=rows,metrics=meta['metrics'],result=meta['result'],
-                                value_rows=values, final_spent=meta.get('final_spent'))
+                                value_rows=values, final_spent=meta.get('final_spent'), **scoring)
                 else:raise ValueError('Unknown teacher event')
         except BaseException as error:
             self.failure = dict(error=str(error),type=type(error).__name__,last_frame=meta,

@@ -329,13 +329,15 @@ def defer_train_metrics(model,config):
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
         companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None,
-        bootstrap_share=0.,loss_weights=None,train_metrics=True,ownership_stop=None):
+        bootstrap_share=0.,loss_weights=None,train_metrics=True,ownership_stop=None,search_auxiliary=None):
     """bootstrap_share/loss_weights change the training loss only (g3140 steps 7-8); the held-out
     check always scores the four main terms on real outcomes with the original weights.
     train_metrics=False skips the two full-buffer scans (g3140 step 1); held-out evidence then
     decides the utility receipt. ownership_stop (g3318) gives the era heads their own held-out
     owner-CE stop at the 16-step boundaries (recovery/ownership_stop.py); it changes nothing
-    the value check sees."""
+    the value check sees. search_auxiliary (g3423) = dict(tables=search_auxiliary.tables(...),
+    settings=...): one batch of search-table roots adds only era-head losses to the first step,
+    and the search validation tables join the ownership stop (recovery/search_auxiliary.py)."""
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     timings={}
@@ -425,13 +427,20 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     scheduled=scheduled_rate(config)
     total_steps=math.ceil(len(value_train_ids)/config['batch_size'])*config['max_epochs']
     if scheduled:report.update(planned_steps=total_steps,attempted_learning_rates=[])
-    stop=None
+    stop=None;search=None
     if ownership_stop is not None and companion is not None and getattr(companion,'active',False):
         from .ownership_stop import OwnershipStop
         require(config.get('acceptance_steps')==ownership_stop['interval_steps'],'Ownership stop boundaries differ from the value phase')
         started=time.perf_counter()
-        stop=OwnershipStop(companion,ownership_stop,model,validation_dataset,heldout_ids,update)
+        if search_auxiliary is not None:
+            # g3423: one batch of search-table roots joins the first step; their validation tables join the stop.
+            from .search_auxiliary import SearchAuxiliary
+            search=SearchAuxiliary(search_auxiliary['tables'],value_dataset.device,search_auxiliary['settings'])
+        stop=OwnershipStop(companion,ownership_stop,model,validation_dataset,heldout_ids,update,
+                           search=search.heldout if search is not None and search.ready else None)
         timings['ownership_stop_setup_seconds']=time.perf_counter()-started
+    elif search_auxiliary is not None:
+        report['search_auxiliary']=dict(ready=False,reason='needs_active_era_heads_and_ownership_stop')
     training_began=time.perf_counter();batches=[];consumed=0;epoch=0
     for epoch in range(config['max_epochs']):
         order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
@@ -475,6 +484,10 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                         loss=loss+local_loss
                         companion.account_loss(local_loss,value_dataset.critic_weights[ix],len(batch),'ppg')
                     ((loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
+                if search is not None and stop.running and search.due(report['attempted_steps']+attempted+1):
+                    # g3423: the search batch adds only era-head losses to this step; its ordinary rows are unchanged.
+                    search.add(model,stop.local,len(batch),update,report['attempted_steps']+attempted+1)
+                    stop.search_pending=search.loss is not None
                 sample=[clones[j] for j in torch.randint(len(clones),(config['clone_batch_size'],)).tolist()]
                 for part in reference.microbatches(sample):
                     inputs=reference.inputs(part)
@@ -610,6 +623,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 for start in range(0,len(order),config['batch_size']):yield later,order[start:start+config['batch_size']]
         if batches and stop.running:stop.continue_heads(remaining(),report['attempted_steps'],head_step)
         report['ownership_stop']=stop.finish()
+        if search is not None:report['search_auxiliary']=search.finish(stop.local,report['ownership_stop'],report)
     timings['training_and_retention_seconds']=time.perf_counter()-training_began
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the

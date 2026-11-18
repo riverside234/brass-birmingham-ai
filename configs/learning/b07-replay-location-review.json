@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "0dcb6b30c64e2f07525651e99442d4518f377d0631767066ee7ea95136a95fba",
+  "execution_implementation": "e62799b42ce1d167f502e9d0ff1f7b3d2c7dd57bb39905a6194aac9e691bc137",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -74,7 +74,7 @@
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
-      "after": "2eeb929e06f77d2ab15811d4276ba4082c2101cf71b7046bb2a8ba8dd82e9fea"
+      "after": "8d4606cf0bb4caddfea1e772eac95a3bda4521b81cc7424cb96ce7c5a2d100bb"
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "4eda891a2b64f7d626cccff5049932c98e3fccb362def79c5239a30faae7a774"
+      "after": "f399fbeed5b1b968299d0b6ec0591093d8c7985f423cc56bfa3b86ecc273e1c6"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -126,7 +126,7 @@
     },
     "src/brass_ai/recovery/ppg_g210.py": {
       "before": "7b7a8d391a56f56ea36d2b97c79af8b5c45fc3c1bfb7494b93886280674e5940",
-      "after": "02760562baf2c5909e2f656ec28062912fc15f7c371705d74a849a5b4b9fc2cc"
+      "after": "9b628bf2a3bd6e5b84839dfcf67901bcc780ce70ed67c05b030ffa6a63f6dbbb"
     },
     "src/brass_ai/recovery/ppg_policy_cache.py": {
       "before": "1724b71a097795cd34961dd81fd99cf25f4c94cf1860b1269b7327203f0684b4",
@@ -158,11 +158,11 @@
     },
     "src/brass_ai/recovery/search_value_iteration.py": {
       "before": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae",
-      "after": "421ccb997020f14c000b076002b8ea157bfc4b712ac4cbc16ae2abd7eab13770"
+      "after": "cb526a617afdff2bb1eb68d1cea7a4c254d6d308347901f5339f847ba27e47af"
     },
     "src/brass_ai/recovery/search_value_phase.py": {
       "before": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2",
-      "after": "5a652bbbac384bf591216e5e4ecd1bc58042da9437082061fd1f3b0812f00833"
+      "after": "68b0cdc97d12e58dc97040c09736172ecc571fab76f00b21f56a6109e842749f"
     },
     "src/brass_ai/recovery/search_value_retention.py": {
       "before": null,
@@ -190,7 +190,7 @@
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
-      "after": "5b0bbe634cc9df423238eabadde924a51a0cebd4ac9b50a86abcf74d2846cd12"
+      "after": "9599b4188342be94213d49927a61ce39aa46a42f3b52617128b4e1d8bd373bc7"
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
@@ -198,7 +198,7 @@
     },
     "src/brass_ai/recovery/teacher_term.py": {
       "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
-      "after": "d9b838986614cbdf7d3cecc58df0edee6a7afe8cdfb6c158875e9e3628dfc96f"
+      "after": "0f79758a6ceb309caea51d6762f0b665fc1e485d0027eb74bb9ffb8375bfa1ec"
     },
     "src/brass_ai/recovery/teacher_value.py": {
       "before": "b77180209a7f14bc3df6e49e119f524a7b339f8212558c572fb04dd3bf6aadff",
@@ -226,7 +226,7 @@
     },
     "src/brass_ai/recovery/value_phase.py": {
       "before": "66844598c56ff0175af8b0997b5ae869de4ae69331b11f5082c07162f4647fae",
-      "after": "6477f6cae579bf59c38e490c862c531e95cd2bc129080fbe800dc7eb6d13f7cb"
+      "after": "0af88b2d5f7dbba9182b0d2351a57a66dd6f8194249d32a40c486c84f39ff22e"
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "6f8c7bb7844a1e7c7cc91300671b5810352a8fe82a2d880da9a5bc518ee2ebe7"
+      "after": "a6b658bbec1df461ca5782ac802e9453f95522ac1fc5a78c58efe1dcf7d5cc91"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -298,7 +298,7 @@
     },
     "src/brass_ai/rust_backend/lab_teacher.py": {
       "before": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb",
-      "after": "89e4b9de390e1fc8a88ed7218368f374edde0bc971d2fafad43ee0c5d06c7c80"
+      "after": "e6be7dc64fedd84355495423843eed1e12e46d89907bec30e4602d5e60c15811"
     },
     "src/brass_ai/rust_backend/lab_teacher_activation.py": {
       "before": null,
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "27648a68f492950206e79af9b8e72658306e19160430d45dbc6b7da0d3893e3d"
+      "after": "eefe7ff4c948efc43050bb7bb9c5778c663828e9c25d3609e8c70e07f6b793b9"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -350,7 +350,7 @@
     },
     "src/brass_ai/rust_backend/lab_cpu_overlay.py": {
       "before": "e7fa0229a185321c91a6dfbb9c513ae50800ac201544e9e0c12812fff204ef21",
-      "after": "09af6c240f567911e6c81c1e0133d01331be49248cd8fa554731dfe5f820968b"
+      "after": "f445fe3ce98c8b37a8f9a405ce90288e91543b2b2ccb3c41802ac26345322a33"
     },
     "src/brass_ai/rust_backend/lab_cpu_runtime.py": {
       "before": "71895897093679de776ad5a98a245f6dfca69a8ea7a0035ec7a310f0adb343c4",
@@ -382,7 +382,7 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "0bfe7d7ab6f09f664105d84c1daf49abd5c2e91a079cc605c22cda85a7854712"
+      "after": "59da6c636c71203c87e225e3a429f436c268823764860363b358846a1308b176"
     },
     "tests/RustBackendLab/test_collection_overlap.py": {
       "before": null,
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "567b27aeab7f0d6c521562673655144ce6c993bf9ce6a1e5f13b8ab241e37b0d"
+      "after": "45a99501e59adea272abcbefc99239f215e0f81286f2032c6cf2947262bc153c"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -606,19 +606,43 @@
     },
     "src/brass_ai/recovery/ownership_stop.py": {
       "before": null,
-      "after": "d133d73bb57528571032861e2a2051dd62f37726782b7a73fd5ae2c370c0e9f4"
+      "after": "65632c4fa2594b0b346c2ed8a00224687e862a169e75179d8878c1b2591ceabe"
     },
     "src/brass_ai/recovery/training_revision_g3140.py": {
       "before": "ee5e47d2b5d9c85c0b7a1e3a7265a27a98367d5ec46b5e999be99784c54085ba",
-      "after": "0536e28be05758e015d23ae8e6903412c6fb7c8743d2f17f9dc35e96d4e6b8be"
+      "after": "abe7a83d8c1c69ebbc649f2aaa032d4845436bbc27cdc608989d757eb31b7edc"
     },
     "src/brass_ai/recovery/local_scoring_v3.py": {
       "before": "4d47c9100516c3269b1bd04ca9c7596b3d012f7d9762db30031a313a11bcc27c",
-      "after": "500e8ca271d4fabfcef3b500c38512c9f4992a943bd2fbfc999c8fbaad3b10ee"
+      "after": "d459e2b852786dccc47ddf15fede646724fb2cd0dd60d580badf61e9e1599cb8"
     },
     "tests/Recovery/test_ownership_stop_g3318.py": {
       "before": null,
       "after": "aed1f9f32e72551c5b28db84e73e86b84bff7442c9bef8aa29762cf2d57f5830"
+    },
+    "src/brass_ai/recovery/local_scoring_targets.py": {
+      "before": "560b9327c74b19873aa64d751c38ff5fddeb70b39305e12eda634101600493d3",
+      "after": "e3e0464be75aa624a023b2cfda1a5313fe32d6059304524e86d74e2f40c6ba37"
+    },
+    "src/brass_ai/recovery/search_auxiliary.py": {
+      "before": null,
+      "after": "40b320dafa22ec44f28867b0949d58ff032f4dd89bafb08c45502e896ab43ed1"
+    },
+    "src/brass_ai/recovery/soft_policy.py": {
+      "before": null,
+      "after": "b8d7fdede777534cf3386690f29d933689f8eae0e3a4e91d13d1bd3103a4a586"
+    },
+    "src/brass_ai/recovery/training_revision_g3423.py": {
+      "before": null,
+      "after": "f29a6a4ab5fecc868cbdf4ff75f10049d9f2e981184f2bff552731dd2f7b89ca"
+    },
+    "tests/Recovery/test_search_auxiliary_g3423.py": {
+      "before": null,
+      "after": "2f4ee5f718b76d355c6aa22146e5c8296189620f23b1fe6530b1221387d43171"
+    },
+    "tests/Recovery/test_soft_policy_g3423.py": {
+      "before": null,
+      "after": "3e108fd78e0b5fb2e9b6433e31aaee23c06a152bb5cbe2009929a63cabd12613"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -919,6 +943,11 @@
       "implementation": "7215217a18b0d3b701bb4b396d25d446bcd9d0021473e07ab82e5f8913ddcb00",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "f4a6b9c79b1fdd8e04cc0a1e6308e7dcd89db8d4b38b5d58d720e06717e0c3d0"
+    },
+    {
+      "implementation": "0dcb6b30c64e2f07525651e99442d4518f377d0631767066ee7ea95136a95fba",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "bdee6ad9896c325437c764eb53a0158360e18cd9e7023316a790fd509b0ffeb8"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1240,6 +1269,14 @@
   },
   "g3318_ownership_stop": {
     "scope": "--value-revision ownership-stop adds value_revision.ownership_stop (ownership-ce-early-stop/1.0.0). The 3.0.0 era heads get their own early stop: at each 16-step value-phase boundary, after the value check decides the trunk, the critic-weighted owner cross-entropy of the heads on the value phase's validation rows is compared with the last kept boundary; an increase restores the heads, their PPG Adam and the kept-work counters (the interval keeps 0 head steps) and ends head fitting for the phase (no further auxiliary loss reaches the trunk). After the value check ends the trunk's phase, the heads fit alone on the epoch's remaining batches with the trunk frozen, checked every 16 steps; head steps never exceed the planned steps. Without the item the heads keep every attempted step, as before. The value check, the trunk, the policy and all exported outputs are unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3423_soft_policy": {
+    "scope": "--soft-policy adds the top-level soft_policy block (soft-policy-g3423/1.0.0), step S1 of ai-research/SOFT_POLICY_TARGET_PLAN.md. A trainer-owned Linear(192->1) without bias on the policy scorer's GELU layer (captured by a forward hook on the same forward, so the main logits are unchanged) predicts softmax((current logits + search bonus) / 4) on the teacher term's 128 long-label rows per PPO step. Its loss gets its own autograd.grad call (the head is not among the teacher's actor parameters); the head steps its own Adam (1e-4, clip 1.0) when teaching is on; the actor parameters receive 8 x beta x the soft gradient beside the teacher's, before PPO's clip. Warm-up: the hidden layer is detached for 2 trained iterations, then the trunk multiplier is .2..1 over 5. The head's JSON state is carried in the teacher phase payload as soft_policy. Not exported; no collection, CPU-worker, lab-native or model change. Without the block, behaviour is exactly as before; the teacher term's own loss, gradient, share and beta are unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3423_search_auxiliary": {
+    "scope": "--value-revision search-aux adds value_revision.search_auxiliary (search-table-auxiliary/1.0.0). The CPU teacher overlay (lab_cpu_overlay, not lab-native) adds the table's era-end scoring maps to its finish message: recorder.finish(&state.export()), from the recorder the teacher already fed at every transition. With the item on, admission audits them like an ordinary game's (local_scoring_targets.audit_eras), binds them to the table result and keeps them sealed on the table's first root in its search-value shard. Once per iteration one batch of played roots from the iteration's train tables and the held-out tables leaving the 32-game rotating set joins the first PPG step with only the era heads' ownership and local-VP losses (each row weighted as an ordinary row; ordinary rows and their accounting unchanged); the iteration's search validation tables join the ownership stop, and the interval holding the search batch is kept only if their owner CE did not increase. Without the item, behaviour is unchanged; the teacher job fingerprint (lab-native sources) is unchanged.",
     "qualified_implementation_unchanged": true
   }
 }

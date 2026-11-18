@@ -42,6 +42,7 @@ class SearchValuePhase:
         # label views here both starved the head and inflated checkpoints.
         self.label_ages = [] if 'schedule' in options else copy.deepcopy(saved.get('label_ages', []))
         self.report = {}
+        self.scoring_maps = False  # g3423 search-aux: keep each table's era-end scoring maps on its shard
 
     def ensure_companion(self):
         if self.companion is None and self.trainable and self.options['stage']!='off':
@@ -58,7 +59,7 @@ class SearchValuePhase:
                 for v in spent.values()), 'Invalid per-table post-search accounting')
         counts = defaultdict(int)
         timings, labels = {}, []
-        reused_roots = 0
+        reused_roots = 0; maps = 0
         self.report.update(rows=counts,value_admission_per_table_seconds=timings)
         for job in jobs:
             table_began = time.monotonic()
@@ -75,6 +76,12 @@ class SearchValuePhase:
             from brass_ai.learning.reward import terminal_utility
             terminal = terminal_utility(result['result'],job['search']['reward']).tolist()
             for row in rows: row['terminal_utility'] = terminal
+            if self.scoring_maps and result.get('scoring') is not None:
+                # g3423: the finish message's era-end maps, audited against this table's result, sealed and
+                # kept once on its first root, so the table can still train after it leaves the held-out set.
+                from .search_auxiliary import FIELD, table_envelope
+                rows[0][FIELD] = table_envelope(result['scoring'], result['result'], job)
+                maps += 1
             # Seal each complete table independently. Charging the entire batch
             # to every final turn makes identical work fail as lane count grows.
             self.buffer.publish(generation,job['split'],rows,game_id=job['expected']['game_id'])
@@ -90,6 +97,7 @@ class SearchValuePhase:
         self.report['rows'] = dict(counts)
         self.report['value_admission_seconds'] = time.monotonic()-began
         self.report['live_root_checks_reused'] = reused_roots
+        if self.scoring_maps: self.report['scoring_maps'] = dict(tables=len(jobs), with_maps=maps)
         self.report['value_admission_per_table_seconds'] = timings
         self.report['verification_limit_seconds'] = None
 

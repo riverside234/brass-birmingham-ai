@@ -67,6 +67,10 @@ class SearchValueIteration:
             pending_directory=run/f"iteration-{state['iteration']:04d}"/'teacher-shadow/value-partials' if pending_files else None,
             defer_install=is_on(config) and not hasattr(model,'search_value_head'),revision=g3270.value_settings(config))
         self.generation = state['iteration']
+        # g3423 search-aux: admission keeps each table's era-end scoring maps on its value shard.
+        from .training_revision_g3140 import search_auxiliary
+        self.auxiliary = search_auxiliary(config)
+        self.phase.scoring_maps = self.auxiliary is not None
         self.report = None
         self.pending_generation = None
         self._publication = None
@@ -88,6 +92,13 @@ class SearchValueIteration:
             # A schedule may raise the PPG beta floor once the head has left Stage A.
             from .search_value_schedule import beta_floor
             phases.beta_floor = beta_floor(self.config['teacher_phase']['search_value'], self.phase.machine.state.get('stage'))
+            # g3423: this iteration's search training and validation tables, for one era-head batch in PPG.
+            phases.search_auxiliary = None
+            if self.auxiliary is not None:
+                from .search_auxiliary import tables
+                require(self.phase.revision is not None, 'Search auxiliary rows need the g3270 rotating held-out set')
+                phases.search_auxiliary = dict(settings=copy.deepcopy(self.auxiliary),
+                    tables=tables(self.phase.buffer, self.generation, heldout_games=self.phase.revision['heldout_games']))
 
     def post_fit(self, *, model, optimizer, reference, clones, probe_ids, dataset,
                  heldout_ids, config, update, beta, report):

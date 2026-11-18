@@ -23,6 +23,13 @@ ownership-stop  (g3318, after heads) the era heads get their own early stop: eve
             heads and Adam and ends their fitting). It replaces the utility-loss stop
             for the heads: once that stop ends the trunk's phase, the heads keep
             fitting on the remaining batches with the trunk frozen (recovery/ownership_stop.py).
+search-aux  (g3423, after ownership-stop; needs the g3270 teacher revision) completed search-
+            teacher tables train the era heads: each table sends its era-end scoring maps once
+            with its finish message, and once per iteration one batch of played roots from the
+            40 search training tables (36 train + the 4 leaving the search-value held-out set)
+            joins the first PPG step with the era heads' ownership and local-VP losses only.
+            This iteration's 4 search validation tables join the ownership stop
+            (recovery/search_auxiliary.py).
 
 GPU-staged teacher rows and the background cleanup purge (also step 1) are
 code changes with no setting: they change neither numbers nor recipe.
@@ -40,16 +47,22 @@ BOOTSTRAP = dict(contract='blended-critic-targets/1.0.0', lam=.95, share=.5)
 VP_WEIGHT = .5
 OWNERSHIP_STOP = dict(contract='ownership-ce-early-stop/1.0.0', interval_steps=16,
                       criterion='validation-owner-ce', after_value_stop='heads-only')
-ITEMS = ('time', 'validation', 'heads', 'targets', 'weight=0.15', 'weight=0.5', 'vp', 'rail-end', 'ownership-stop')
+SEARCH_AUX = dict(contract='search-table-auxiliary/1.0.0', rows='played-roots',
+                  train_tables='current-train-plus-leaving-heldout', heldout='current-validation-tables',
+                  batches_per_iteration=1, step=1, losses='era-heads-ownership-and-local-vp', row_weight='ordinary-row')
+ITEMS = ('time', 'validation', 'heads', 'targets', 'weight=0.15', 'weight=0.5', 'vp', 'rail-end', 'ownership-stop',
+         'search-aux')
 
 
 def validate(block):
-    keys(block, tuple(OFF), ('ownership_stop',))
+    keys(block, tuple(OFF), ('ownership_stop', 'search_auxiliary'))
     require(block['contract'] == CONTRACT and block['train_metrics_every'] in (1, TIME['train_metrics_every'])
             and block['validation'] in (None, VALIDATION)
             and block['bootstrap'] in (None, BOOTSTRAP)
             and block['value_weights'] in (OFF['value_weights'], dict(OFF['value_weights'], vp=VP_WEIGHT))
-            and block.get('ownership_stop', OWNERSHIP_STOP) == OWNERSHIP_STOP,
+            and block.get('ownership_stop', OWNERSHIP_STOP) == OWNERSHIP_STOP
+            and block.get('search_auxiliary', SEARCH_AUX) == SEARCH_AUX
+            and ('search_auxiliary' not in block or 'ownership_stop' in block),
             'Invalid g3140 value revision')
     return block
 
@@ -90,6 +103,11 @@ def configure(config, items, generation):
             require(result['value_phase'].get('acceptance_steps') == OWNERSHIP_STOP['interval_steps'],
                     'The ownership stop checks at the value phase\'s 16-step boundaries')
             revision['ownership_stop'] = copy.deepcopy(OWNERSHIP_STOP)
+        elif item == 'search-aux':
+            from .training_revision_g3270 import applied as teacher_revised
+            require(v3.is_v3(result.get(LOCAL)), 'search-aux needs the era heads (--value-revision heads)')
+            require(teacher_revised(result), 'search-aux reads the g3270 rotating search-value held-out set (--teacher-revision)')
+            revision['search_auxiliary'] = copy.deepcopy(SEARCH_AUX)
         elif item == 'heads':
             old = result.get(LOCAL)
             if v3.is_v3(old): continue  # adopted earlier
@@ -107,6 +125,8 @@ def configure(config, items, generation):
                 require(v3.LADDER.index(value) >= v3.LADDER.index(weights['canal']), 'The local-scoring weight only moves up')
                 weights.update(canal=value, rail=value, rail_end=value / 2 if weights['rail_end'] else 0.)
             v3.validate_config(local)
+    require('search_auxiliary' not in revision or 'ownership_stop' in revision,
+            'search-aux early-stops through the ownership stop (--value-revision ownership-stop)')
     result[KEY] = validate(revision)
     return result
 
@@ -123,7 +143,8 @@ def project(old, new):
     forward = ((a['train_metrics_every'], b['train_metrics_every']) in ((1, 1), (1, 10), (10, 10))
                and not (a['validation'] and not b['validation']) and not (a['bootstrap'] and not b['bootstrap'])
                and not (a['value_weights']['vp'] > b['value_weights']['vp'])
-               and not ('ownership_stop' in a and 'ownership_stop' not in b))
+               and not ('ownership_stop' in a and 'ownership_stop' not in b)
+               and not ('search_auxiliary' in a and 'search_auxiliary' not in b))
     if not forward: return None
     la, lb = old.get(LOCAL), new.get(LOCAL)
     if la != lb:
@@ -166,6 +187,11 @@ def ownership_stop(config):
     return copy.deepcopy(block(config).get('ownership_stop'))
 
 
+def search_auxiliary(config):
+    """The g3423 search-table batch for the era heads, or None."""
+    return copy.deepcopy(block(config).get('search_auxiliary'))
+
+
 def previous(config):
     """The recipe before any g3140 item: the revision key dropped and the replaced 2.0.0 companion restored."""
     from . import local_scoring_v3 as v3
@@ -196,6 +222,7 @@ def tag(config):
     if b['bootstrap']: parts.append('blend50')
     if b['value_weights']['vp'] != OFF['value_weights']['vp']: parts.append('vp05')
     if 'ownership_stop' in b: parts.append('cestop16')
+    if 'search_auxiliary' in b: parts.append('searchaux')
     return '-'.join(parts) or 'none'
 
 

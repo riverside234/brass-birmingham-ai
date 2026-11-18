@@ -139,8 +139,11 @@ PATCHES = {
          '        count_root(&turn_work.value_row);\n'
          '        turn_reports.push(finish_turn'),
         ('searched_turns == 64 && values.len() == 64', 'searched_turns == 64 && value_count == 64'),
+        # g3423 search auxiliary: the table's era-end scoring maps, once, with its finish message.
+        # The teacher already feeds this recorder at every transition (ordinary_after); only the emit is new.
         ('"value_rows":values,"final_spent":ledger.spent,',
-         '"value_rows":values,"value_count":value_count,"final_spent":ledger.spent,'),
+         '"value_rows":values,"value_count":value_count,"scoring":recorder.finish(&state.export())?,'
+         '"final_spent":ledger.spent,'),
         # The g1190 restart schedule's Stage B moves w in .02 steps (fifty collections):
         # a 1/100 grid keeps every earlier 1/20 weight valid.
         ('            && (w * 20. - (w * 20.).round()).abs() < 1e-8\n',

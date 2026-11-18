@@ -568,7 +568,8 @@ def fit(phases,model,preparation_pool):
             companion=companion,preparation=preparation,post_fit=getattr(phases,'post_value_fit',None),
             bootstrap_share=blend['share'] if blend is not None else 0.,loss_weights=revised_weights(phases.config),
             train_metrics=train_metrics_due(phases.config,phases.state['generation']+1),
-            ownership_stop=ownership_stop(phases.config))
+            ownership_stop=ownership_stop(phases.config),
+            search_auxiliary=getattr(phases,'search_auxiliary',None))  # g3423: set by the search-value iteration
         if blend is not None:report['bootstrap_ages']=ds.bootstrap.available()
         if getattr(phases,'diversity',None) is not None:
             phases.diversity.report['intrinsic_fit']=companion.report()

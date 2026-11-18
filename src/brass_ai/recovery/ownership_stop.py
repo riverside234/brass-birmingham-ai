@@ -40,7 +40,10 @@ def era_companion(companion):
 
 
 class OwnershipStop:
-    def __init__(self, companion, settings, model, dataset, heldout_ids, update):
+    def __init__(self, companion, settings, model, dataset, heldout_ids, update, *, search=None):
+        """``search`` (g3423 search-aux): a search_auxiliary.SearchRows of this iteration's search validation
+        tables. It is scored at every boundary, and the interval that holds the search batch is kept only if
+        its owner CE did not increase either (``search_pending``)."""
         from .value_phase import value_parts
         require(settings is not None and settings.get('contract') == CONTRACT, 'Unknown ownership stop settings')
         self.local = era_companion(companion); self.settings = dict(settings)
@@ -55,22 +58,11 @@ class OwnershipStop:
             found.update((i, m) for i, m in zip(part, local.metadata(dataset, part)) if m[0] is not None)
         chosen = [i for i in ids if i in found]
         self.parts = [list(p) for p in value_parts(dataset, chosen, update, model)]
-        device = dataset.device; we = local.horizon_weight('rail_end'); self.cache = []
         games = {m[2][0] for m in found.values()}
-        for part in self.parts:
-            metadata = [found[i] for i in part]
-            entry = dict(part=part, index=torch.as_tensor(part, device=device),
-                         canal=torch.tensor([m[0]['era'] == 'CanalEra' for m in metadata], device=device))
-            for kind, count in (('slots', 49), ('links', 69)):
-                classes, _, mask = local.target_arrays(metadata, kind, count)
-                entry[kind] = (torch.as_tensor(classes, device=device), torch.as_tensor(mask, device=device))
-            if we > 0:
-                end = local.end_metadata(dataset, part, metadata)
-                entry['end_rows'] = torch.tensor([m[0] is not None for m in end], device=device)
-                for kind, count in (('slots', 49), ('links', 69)):
-                    classes, _, mask = local.target_arrays(end, kind, count)
-                    entry['end_' + kind] = (torch.as_tensor(classes, device=device), torch.as_tensor(mask, device=device))
-            self.cache.append(entry)
+        self.cache = [self._entry(dataset, part, [found[i] for i in part]) for part in self.parts]
+        self.search = search if search is not None and search.rows else None; self.search_pending = False
+        self.search_cache = ([self._entry(search, part, search.scoring_metadata(part)) for part in search.parts()]
+                             if self.search is not None else [])
         local.stats['target_cache_hits'], local.stats['target_cache_misses'] = hits, misses  # keep training counters
         self.rows = len(chosen); self.games = len(games)
         self.running = bool(chosen); self.reason = None if chosen else 'no_heldout_targets'
@@ -78,33 +70,67 @@ class OwnershipStop:
         self.attempted = 0; self.kept = 0; self.last_step = 0
         self.precompute_seconds = time.perf_counter() - began
         self.before = self.current = self.measure() if chosen else None
+        self.search_before = self.search_current = self.measure_search()
         self.saved = local.stop_snapshot()
         if not chosen: local.stopped = True
+
+    def _entry(self, dataset, part, metadata):
+        """Target classes and masks of one held-out part, on the device, built once."""
+        local = self.local; device = dataset.device; we = local.horizon_weight('rail_end')
+        entry = dict(part=part, index=torch.as_tensor(part, device=device),
+                     canal=torch.tensor([m[0]['era'] == 'CanalEra' for m in metadata], device=device))
+        for kind, count in (('slots', 49), ('links', 69)):
+            classes, _, mask = local.target_arrays(metadata, kind, count)
+            entry[kind] = (torch.as_tensor(classes, device=device), torch.as_tensor(mask, device=device))
+        if we > 0:
+            end = local.end_metadata(dataset, part, metadata)
+            entry['end_rows'] = torch.tensor([m[0] is not None for m in end], device=device)
+            for kind, count in (('slots', 49), ('links', 69)):
+                classes, _, mask = local.target_arrays(end, kind, count)
+                entry['end_' + kind] = (torch.as_tensor(classes, device=device), torch.as_tensor(mask, device=device))
+        return entry
 
     # ---- the criterion --------------------------------------------------------------------
 
     def measure(self):
         """Critic-weighted mean over held-out rows of the training loss's owner-CE part, per Canal weight."""
         from brass_ai.learning.seat_descriptors import critic_inputs
-        began = time.perf_counter(); local, model, ds = self.local, self.model, self.dataset
+        ds, model = self.dataset, self.model
+        def scored():
+            for entry, (part, ix, inputs) in zip(self.cache, ds.value_batches(iter(self.parts), model)):
+                require(list(part) == entry['part'], 'Ownership stop rows changed order')
+                encoded = model.encode_state(inputs[0])
+                yield entry, encoded, critic_inputs(ds, part), ds.critic_weights[entry['index']].double()
+        return self._score(scored)
+
+    def measure_search(self):
+        """The same criterion on the search validation tables' roots, each root weighted 1; None without them."""
+        if self.search is None: return None
+        from brass_ai.learning.seat_descriptors import critic_inputs
+        search, model = self.search, self.model
+        def scored():
+            for entry in self.search_cache:
+                encoded = model.encode_state(search.states[entry['index']])
+                yield entry, encoded, critic_inputs(search, entry['part']), search.critic_weights[entry['index']].double()
+        return self._score(scored)
+
+    def _score(self, scored):
+        began = time.perf_counter(); local, model = self.local, self.model
         wc, wr, we = (local.horizon_weight(h) for h in ('canal', 'rail', 'rail_end'))
         sums = None
         was, heads_was = model.training, local.heads.training
         model.eval(); local.heads.eval()
         try:
             with torch.no_grad():
-                for entry, (part, ix, inputs) in zip(self.cache, ds.value_batches(iter(self.parts), model)):
-                    require(list(part) == entry['part'], 'Ownership stop rows changed order')
-                    encoded = model.encode_state(inputs[0])
-                    predictions = local.heads(encoded, model.descriptor_embeddings(encoded, critic_inputs(ds, part)), 0.)
-                    canal = entry['canal']; era = torch.zeros(len(part), dtype=torch.float64, device=canal.device)
+                for entry, encoded, descriptors, weight in scored():
+                    predictions = local.heads(encoded, model.descriptor_embeddings(encoded, descriptors), 0.)
+                    canal = entry['canal']; era = torch.zeros(len(entry['part']), dtype=torch.float64, device=canal.device)
                     end = torch.zeros_like(era)
                     for kind in ('slots', 'links'):
                         owner = torch.where(canal[:, None, None], predictions['canal_' + kind][0], predictions['rail_' + kind][0])
                         era += _mean_ce(owner, *entry[kind])
                         if we > 0:
                             end += _mean_ce(predictions['rail_end_' + kind][0], *entry['end_' + kind]) * entry['end_rows']
-                    weight = ds.critic_weights[entry['index']].double()
                     scale = torch.where(canal, torch.full_like(era, wc / wc), torch.full_like(era, wr / wc))
                     row = scale * era + (we / wc) * end
                     values = torch.stack(((weight * row).sum(), weight.sum(),
@@ -127,25 +153,33 @@ class OwnershipStop:
         if not self.running: return
         local = self.local
         head_steps = local.retained_steps['ppg'] - self.saved['retained_steps']['ppg']
-        attempt = self.measure()
-        increased = attempt['owner_ce'] > self.current['owner_ce']
+        attempt = self.measure(); search = self.measure_search()
+        ordinary_up = attempt['owner_ce'] > self.current['owner_ce']
+        # g3423: the interval that holds the search batch must not raise the search validation tables' CE either.
+        search_up = self.search_pending and search['owner_ce'] > self.search_current['owner_ce']
+        increased = ordinary_up or search_up
         self.intervals.append(dict(start_step=self.last_step + 1, end_step=step, head_steps=head_steps, trunk=trunk,
             owner_ce_before=self.current['owner_ce'], owner_ce_attempted=attempt['owner_ce'],
             canal_owner_ce_attempted=attempt['canal_owner_ce'], rail_owner_ce_attempted=attempt['rail_owner_ce'],
             accepted=not increased, kept_head_steps=0 if increased else head_steps))
-        self.attempted += head_steps; self.last_step = step
+        if self.search is not None:
+            self.intervals[-1].update(search_batch=self.search_pending, search_before=self.search_current['owner_ce'],
+                search_attempted=search['owner_ce'],
+                stopped_by=('both' if ordinary_up and search_up else 'search' if search_up else 'ordinary' if ordinary_up else None))
+        self.attempted += head_steps; self.last_step = step; self.search_pending = False
         if increased:
             local.stop_restore(self.saved); local.stopped = True
-            self.running = False; self.reason = 'heldout_ce_increased'
+            self.running = False; self.reason = 'search_heldout_ce_increased' if search_up and not ordinary_up else 'heldout_ce_increased'
             # With a kept trunk the restored heads now sit on a moved trunk: score that state once for the report.
             self.final = self.measure() if trunk == 'kept' else self.current
+            self.search_final = self.measure_search() if trunk == 'kept' else self.search_current
         else:
-            self.current = attempt; self.kept += head_steps; self.saved = local.stop_snapshot()
+            self.current = attempt; self.search_current = search; self.kept += head_steps; self.saved = local.stop_snapshot()
 
     def rebase(self):
         """The trunk moved without a check (a deferred KL rollback): restart the baseline from here."""
         if not self.running: return
-        self.current = self.measure(); self.saved = self.local.stop_snapshot()
+        self.current = self.measure(); self.search_current = self.measure_search(); self.saved = self.local.stop_snapshot()
 
     def continue_heads(self, batches, step, head_step):
         """Heads-only fitting on `batches` ((epoch, rows) pairs) after the value phase stopped, from
@@ -162,7 +196,9 @@ class OwnershipStop:
 
     def finish(self):
         local = self.local
-        if self.running: self.reason = self.reason or 'phase_steps_exhausted'; self.final = self.current
+        if self.running:
+            self.reason = self.reason or 'phase_steps_exhausted'; self.final = self.current
+            self.search_final = self.search_current
         local.stopped = False
         record = dict(contract=CONTRACT, interval_steps=self.interval, rows=self.rows, games=self.games,
             stop_reason=self.reason, attempted_head_steps=self.attempted, kept_head_steps=self.kept,
@@ -174,6 +210,11 @@ class OwnershipStop:
                   'value phase decides the trunk at each 16-step boundary; an increase restores the heads and their Adam to '
                   'the last kept boundary and ends head fitting. After the value phase stops, heads fit alone on the '
                   'remaining planned batches with the trunk frozen.')
+        if self.search is not None:
+            record['search'] = dict(rows=self.search.rows, games=self.search.games, before=self.search_before,
+                after=getattr(self, 'search_final', self.search_before),
+                scope='g3423: owner CE of the era heads on this iteration\'s search validation tables (every root, weight 1). '
+                      'The interval holding the search batch is kept only if it did not increase either.')
         local.stop_record = record
         return record
 

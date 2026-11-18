@@ -81,7 +81,7 @@ def inference_choice(args):
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_search_lambda=False,value_revision=None,rating_every=None,
-            teacher_revision=False):
+            teacher_revision=False,soft_policy=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -168,6 +168,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             # Build steps 2-3 (40 tables, rebuilt targets, 8-iteration labels, search-value rotation); then kept.
             require(mode=='on','The g3270 teacher revision is adopted with teaching on')
             config=g3270.configure(config,state['iteration'])
+        from brass_ai.recovery import training_revision_g3423 as g3423
+        if soft_policy:
+            # Soft policy S1: a trainer-owned soft head on the teacher term's long-label rows; then kept.
+            require(mode=='on','The g3423 soft policy head is adopted with teaching on')
+            config=g3423.configure(config,state['iteration'])
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -275,13 +280,16 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-pl'+str(config[rating_cadence.KEY]['every_iterations'])+'-share');stages.append(prefix)
         if g3270.applied(config):
             prefix=prefix.replace('-share', '-'+g3270.tag(config)+'-share');stages.append(prefix)
+        if g3423.applied(config):
+            prefix=prefix.replace('-share', '-'+g3423.tag(config)+'-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
+        adopting_soft=g3423.applied(config) and not g3423.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
-                         g3140.changed(before,config) or adopting_teacher)
+                         g3140.changed(before,config) or adopting_teacher or adopting_soft)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -305,7 +313,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 # Journal the prepared boundary so a retry cannot archive work
                 # that already belongs to the revised recipe.
                 from brass_ai.recovery.retention import safe
-                journal=('teacher-revision' if adopting_teacher else 'value-revision' if g3140.changed(before,config) else
+                journal=('teacher-revision' if adopting_teacher else 'soft-policy' if adopting_soft else
+                         'value-revision' if g3140.changed(before,config) else
                          'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
                 directory=safe(run, run/'configuration-history'/f"{journal}-{state['iteration']:04d}")
                 marker=safe(run, directory/'recipe.json')
@@ -400,6 +409,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'value_revision',None):kwargs['value_revision']=args.value_revision
         if getattr(args,'rating_every',None) is not None:kwargs['rating_every']=args.rating_every
         if getattr(args,'teacher_revision',False):kwargs['teacher_revision']=True
+        if getattr(args,'soft_policy',False):kwargs['soft_policy']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -482,6 +492,14 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
                   f"{r['rows_per_step']} rows per PPO step without repeats, targets rebuilt from the current policy at scale "
                   f"{r['targets']['label_scale']:g}, long-search labels only; search value buffer {v['buffer_iterations']} iterations, "
                   f"at most {v['steps_per_iteration']} steps, {v['heldout_games']} rotating held-out games.",flush=True)
+        from brass_ai.recovery import training_revision_g3423 as g3423
+        if g3423.applied(options):
+            report['g3423_soft_policy']=g3423.summary(options)
+            r=report['g3423_soft_policy'];w=r['warmup']
+            print(f"g3423 soft policy {r['step']} (from g{r['from_generation']}): a trainer-owned soft head predicts the rebuilt "
+                  f"label target at T={r['temperature']:g} on the teacher term's long-label rows, weight {r['weight']:g} x beta, "
+                  f"PPO-row factor {r['ppo_row_factor']:g}; {w['head_only_iterations']} head-only iterations, then a "
+                  f"{w['ramp_iterations']}-iteration trunk ramp.",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

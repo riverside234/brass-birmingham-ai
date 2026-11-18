@@ -9,6 +9,7 @@ import torch
 
 from brass_ai.learning.batching import collate
 from brass_ai.learning.contracts import digest, require
+from .soft_policy import capture_hidden, single
 from .teacher_buffer import sample_indices
 from .teacher_labels import PHASES, softmax
 
@@ -228,10 +229,13 @@ def staleness_sample(rows, count, *, seed, generation, age):
 
 
 class TeacherTerm:
-    def __init__(self, model, config, aged_rows, *, seed, generation, state=None, revision=None):
-        """``revision`` (g3270): rebuilt targets at a label scale, planned no-repeat batches, sampled staleness."""
+    def __init__(self, model, config, aged_rows, *, seed, generation, state=None, revision=None, soft=None):
+        """``revision`` (g3270): rebuilt targets at a label scale, planned no-repeat batches, sampled staleness.
+
+        ``soft`` (S1 of the soft policy plan): a ``soft_policy.SoftPolicy`` trained on the same drawn rows.
+        """
         self.config = config; self.mode = config['mode']; self.seed = seed; self.generation = generation
-        self.revision = copy.deepcopy(revision)
+        self.revision = copy.deepcopy(revision); self.soft = soft
         self.batches = None; self.plan_report = None; self.bonus = None; self.position = None
         self.state = copy.deepcopy(state or {})
         self.beta = self.state.get('beta', 1.); self.calibrated = self.state.get('calibrated', False)
@@ -286,6 +290,8 @@ class TeacherTerm:
         # (every earlier recipe, and the long-only g1490 restart variant).
         self.long_weight = config[REVISION]['labels'].get('long_weight') if REVISION in config else None
         require(self.revision is None or self.long_weight is None, 'g3270 rebuilt targets use long-search labels only')
+        require(soft is None or (self.revision is not None and self.long_weight is None),
+                'The soft policy head trains on the g3270 long-label path only (no stratified long-and-short path)')
         if self.mode != 'off' and self.revision is None:
             logits = policy_logits(model, [r for _, r in aged_rows])
             for age in sorted({a for a, _ in aged_rows}):
@@ -395,6 +401,7 @@ class TeacherTerm:
             indices, row_weights, long_count = self.stratified(step)
         rows = [self.rows[i] for i in indices]
         parameters = tuple(p for n, p in model.named_parameters() if n.startswith(ACTOR_PREFIXES) and p.requires_grad)
+        soft = self.soft if self.long_weight is None else None; soft_seconds = 0.
         with policy_context(model):
             if self.long_weight is None:
                 # One padded forward per step, however wide the rows. Splitting wide
@@ -413,20 +420,35 @@ class TeacherTerm:
                                                        values=self.bonus)
                     self.staging = dict(staged=self.staged is not None, fallback=self.staged is None,
                         bytes=self.staged.bytes if self.staged else 0, seconds=time.perf_counter() - staged_at)
-                if self.staged is not None:
-                    positions = [self.position[i] for i in indices] if self.position is not None else indices
-                    states, actions, mask, target = self.staged.batch(positions)
-                    logits = _score_policy(model, states, actions, mask).float()
-                else:
-                    logits = forward_policy(model, rows, audit=self.input_audit).float()
-                    target = target_tensor(rows, logits, None if self.bonus is None else [self.bonus[i] for i in indices])
+                # The soft head reads the scorer's hidden layer from this same forward (a hook, no extra pass).
+                with capture_hidden(model, soft is not None) as hidden:
+                    if self.staged is not None:
+                        positions = [self.position[i] for i in indices] if self.position is not None else indices
+                        states, actions, mask, target = self.staged.batch(positions)
+                        logits = _score_policy(model, states, actions, mask).float()
+                    else:
+                        logits = forward_policy(model, rows, audit=self.input_audit).float()
+                        target = target_tensor(rows, logits, None if self.bonus is None else [self.bonus[i] for i in indices])
+                bonus = None
                 if self.bonus is not None:
                     # g3270: the staged vector is the search bonus; the target is rebuilt from the current policy.
+                    bonus = target
                     target = rebuilt_target(logits, target)
                 logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
                 loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
-                gradients = torch.autograd.grad(loss, parameters, allow_unused=True)
+                if soft is not None:
+                    soft_began = time.perf_counter()
+                    soft_loss = soft.loss(logits, bonus, single(hidden))
+                    soft_seconds += time.perf_counter() - soft_began
+                # The teacher's own call, unchanged; it keeps the graph only for a soft loss that reaches the trunk.
+                gradients = torch.autograd.grad(loss, parameters, allow_unused=True,
+                                                retain_graph=soft is not None and soft.trunk)
+                if soft is not None:
+                    soft_began = time.perf_counter()
+                    # A call of its own: the head is not among `parameters`.
+                    head_gradient, soft_gradients = soft.gradients(soft_loss, parameters)
+                    soft_seconds += time.perf_counter() - soft_began
             else:
                 # 2048 rows do not fit one forward: exact gradient sums over PPO-sized chunks.
                 total, gradients, per_row = weighted_gradients(model, rows, row_weights, parameters, audit=self.input_audit)
@@ -452,12 +474,37 @@ class TeacherTerm:
         a, t, d = torch.stack((an.sqrt(), tn.sqrt(), dot)).double().detach().cpu().tolist()
         require(all(np.isfinite(v) for v in (a, t, d)), 'Non-finite teacher gradients')
         raw_share = t / a if measured and a > 0 else None
+        if soft is not None:
+            soft_began = time.perf_counter()
+            # Its weight is 8 x the policy loss already on these rows: 8 beta.
+            scale = soft.weight * self.beta_used; soft.beta_weight = scale
+            by_soft = {id(p): g for p, g in zip(parameters, soft_gradients)} if soft_gradients is not None else {}
+            sn = zero
+            for p in actor.parameters:
+                g = by_soft.get(id(p))
+                if g is not None: sn = sn + g.square().sum()
+            sl, sh, st = torch.stack((soft_loss.detach().float(), head_gradient.detach().norm(), sn.sqrt())).double().cpu().tolist()
+            require(all(np.isfinite(v) for v in (sl, sh, st)), 'Non-finite soft policy loss or gradients')
+            soft_seconds += time.perf_counter() - soft_began
         if self.mode == 'on':
             for p, g in zip(parameters, gradients):
                 if g is None: continue
                 g = g.detach().mul(self.beta_used)
                 if p.grad is None: p.grad = g
                 else: p.grad.add_(g)
+            if soft is not None:
+                soft_began = time.perf_counter()
+                for p, g in zip(parameters, soft_gradients or ()):
+                    if g is None: continue
+                    g = g.detach().mul(scale)
+                    if p.grad is None: p.grad = g
+                    else: p.grad.add_(g)
+                soft.step(head_gradient, sh)
+                soft_seconds += time.perf_counter() - soft_began
+        if soft is not None:
+            soft.record(step=step, loss=sl, head_norm=sh, raw_trunk_norm=st, trunk_norm=st * scale,
+                        share=st * scale / a if measured and a > 0 else None)
+            soft.seconds += soft_seconds
         self.steps.append(dict(step=step, rows=len(rows), loss=float(loss.detach()), raw_share=raw_share,
             share=raw_share * self.beta_used if raw_share is not None else None,
             cosine=d / (a * t) if measured and a * t > 0 else None, actor_norm=a if measured else None, teacher_norm=t * self.beta_used,
@@ -528,6 +575,8 @@ class TeacherTerm:
         qualified = self.qualification and self.qualification['passed']
         fixed = self.qualification['beta'] if qualified else None
         fixed = accepted(fixed, self.remeasurement, self.config['term']['share_target'])
+        if self.soft is not None:
+            mix = dict(mix, soft=self.soft.report())
         if self.revision is not None:
             mix = dict(mix, revision=dict(targets='rebuilt-from-current-policy', label_scale=self.revision['label_scale'],
                 batches=self.revision['batches'], plan=copy.deepcopy(self.plan_report),

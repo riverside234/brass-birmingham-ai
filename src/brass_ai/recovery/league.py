@@ -1015,6 +1015,16 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             f'{ce(stop["after"] and stop["after"]["owner_ce"])}'
                             f' aux_kept={stop["kept_head_steps"]}/{stop["attempted_head_steps"]}'
                             f' heads_only={stop["head_only_steps"]} aux_stop={stop["stop_reason"]}')
+                    search_aux=(report.get('value_phase') or {}).get('search_auxiliary')
+                    if search_aux:
+                        # g3423: one batch of search-table roots in the first PPG step; held-out = search validation tables.
+                        ce=lambda x:'-' if x is None else f'{x:.4f}'
+                        held=search_aux.get('heldout_owner_ce') or {};pick=lambda d:d and d['owner_ce']
+                        controller_line+=(f' search_aux={(search_aux.get("train") or {}).get("rows",0)}rows/'
+                            f'{(search_aux.get("train") or {}).get("games",0)}games'
+                            f' search_ce={ce(pick(held.get("before")))}->{ce(held.get("after_search_interval"))}'
+                            f' search_kept={search_aux.get("heads_kept")}'
+                            + (f' search_skip={search_aux["reason"]}' if search_aux.get('reason') else ''))
                     if 'warmup' in aux:
                         warmup=aux['warmup'];next_stage=warmup['after_commit']
                         controller_line+=(f' aux_stage={warmup["before"]["stage"]}'
@@ -1030,6 +1040,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         # g3270 validation tables: the policy's own movement on them, and the pull toward the teacher.
                         teacher_line+=(f' heldout_move={teacher_report["heldout"]["movement"]["all"]}'
                                        f' heldout_pull={teacher_report["heldout"]["pull"]["all"]}')
+                    if 'soft' in tt:
+                        # g3423 soft policy S1: stage, fit on the label rows, trunk share, movement, validation tables.
+                        sp=tt['soft'];sh=teacher_report['heldout'].get('soft') or {}
+                        g4=lambda v:'None' if v is None else f'{v:.4g}'
+                        teacher_line+=(f' soft={sp["stage"]}:{sp["multiplier"]:.1f} soft_kl={g4(sp["kl"]["first"])}->{g4(sp["kl"]["last"])}'
+                            f' soft_share={g4(sp["share"]["median"])} soft_moved={g4(sp["head_change"])}'
+                            f' soft_heldout={g4((sh.get("before") or {}).get("kl"))}->{g4((sh.get("after") or {}).get("kl"))}')
                     qualification=tt.get('gradient_qualification') or {}
                     if qualification:
                         teacher_line+=(f' grad_qualification={"passed" if qualification["passed"] else "pending"}'

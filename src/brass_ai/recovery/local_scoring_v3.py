@@ -248,7 +248,7 @@ def build(base):
 
         def reset_report(self):
             super().reset_report()
-            self.era_stats = {}
+            self.era_stats = {}; self.search_stats = {}  # search_stats: g3423 search-table rows, kept apart
             self.stopped = False; self.stop_record = None  # ownership-stop: set per value phase
 
         def era_accumulate(self, key, values):
@@ -335,6 +335,49 @@ def build(base):
             loss = self._auxiliary(encoded, embeddings, inputs, ds, ix, ids, metadata)
             self.stats['head_only_seconds'] += time.perf_counter() - start
             return loss
+
+        def search_loss(self, model, ds, ids):
+            """Per-row auxiliary loss of search-table roots (g3423 search-aux): the era heads' ownership and
+            local-VP terms (and Rail-end when on) only, no value terms; trunk scale as for ordinary rows.
+
+            ``ds`` is a search_auxiliary.SearchRows. Its rows are counted apart: the ordinary attempted,
+            retained and fitting counters, map support and era sums stay those of the ordinary rows.
+            """
+            if not self.active or self.stopped: return None
+            require(self.phase == 'ppg', 'Fresh auxiliary target fitting is restricted to PPG')
+            from brass_ai.learning.seat_descriptors import critic_inputs
+            start = time.perf_counter()
+            index = torch.as_tensor(ids, device=ds.device); states = ds.states[index]
+            encoded = model.encode_state(states)
+            embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids))  # no descriptors: unknown seats
+            kept = (self.era_stats, self.batch_fitting, self.batch_used, self.attempted, self.map_support, self.map_masked,
+                    self.pending)
+            self.era_stats, self.batch_fitting, self.batch_used = self.search_stats, set(), set()
+            self.attempted, self.map_support, self.map_masked = set(), {}, {}
+            try:
+                loss = self._auxiliary(encoded, embeddings, (states,), ds, index, ids, ds.scoring_metadata(ids))
+                used = bool(self.batch_used)
+            finally:
+                self.search_stats = self.era_stats
+                (self.era_stats, self.batch_fitting, self.batch_used, self.attempted, self.map_support, self.map_masked,
+                 pending) = kept
+            self.pending = pending or used
+            self.stats['search_seconds'] += time.perf_counter() - start
+            return loss
+
+        def search_report(self):
+            """Era sums of the search rows' attempted presentations, as the ordinary `by_era`."""
+            return self._by_era(self.search_stats)
+
+        def _by_era(self, stats):
+            names = list(stats)
+            totals = dict(zip(names, torch.stack([stats[k] for k in names]).cpu().tolist())) if names else {}
+            by_era = {}
+            for (era, kind, state), (count, ce, none, vp) in totals.items():
+                by_era.setdefault(era, {}).setdefault(kind, {})[state] = dict(entities=int(count),
+                    owner_ce=ce / count if count else None, none_share=none / count if count else None,
+                    vp_abs_error_per_entity=vp / count if count else None)
+            return by_era
 
         def _auxiliary(self, encoded, embeddings, inputs, ds, ix, ids, metadata):
             predictions = self.heads(encoded, embeddings, self.scale)

@@ -696,6 +696,10 @@ def validate_config(config):
     if TEACHER_REVISION in config:
         require('teacher_phase' in config,'The g3270 teacher revision needs the teacher phase')
         fields.add(TEACHER_REVISION);validate_teacher_revision(config[TEACHER_REVISION])
+    from .training_revision_g3423 import KEY as SOFT_POLICY,validate as validate_soft_policy
+    if SOFT_POLICY in config:
+        require(TEACHER_REVISION in config,'The g3423 soft policy head needs the g3270 teacher revision')
+        fields.add(SOFT_POLICY);validate_soft_policy(config[SOFT_POLICY])
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

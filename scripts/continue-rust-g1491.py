@@ -123,7 +123,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'and re-measures beta with teaching on.')
     parser.add_argument('--value-revision', metavar='ITEMS',
         help='Adopt g3140 value-phase revision items at this committed generation, comma-separated: '
-             'time, validation, heads, targets, weight=0.15, weight=0.5, vp, rail-end, ownership-stop. '
+             'time, validation, heads, targets, weight=0.15, weight=0.5, vp, rail-end, ownership-stop, search-aux. '
              'Items persist and only move forward (training_revision_g3140).')
     parser.add_argument('--rating-every', type=int, choices=(20,),
         help='From this committed generation on, run the PL strength rating every 20 iterations '
@@ -133,6 +133,11 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'iteration, 8-iteration labels, 128 rows per PPO step without repeats, targets rebuilt from the current '
              'policy; search value: 16-iteration buffer, 32 steps, 32 rotating held-out games. Set once '
              '(training_revision_g3270); beta is re-measured once with teaching on.')
+    parser.add_argument('--soft-policy', action='store_true',
+        help='Adopt the g3423 soft policy head at this committed generation (soft policy step S1): a trainer-owned '
+             'Linear(192->1) on the hidden layer of the policy scorer predicts the rebuilt label target at T=4 on the '
+             '128 long-label rows per PPO step of the teacher term, weight 8 x beta; 2 head-only iterations, then a '
+             '5-iteration trunk ramp. Needs the g3270 teacher revision. Set once (training_revision_g3423).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -192,6 +197,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.value_revision = None  # an interrupted iteration finishes under its own recipe
         recovery.rating_every = None
         recovery.teacher_revision = False
+        recovery.soft_policy = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

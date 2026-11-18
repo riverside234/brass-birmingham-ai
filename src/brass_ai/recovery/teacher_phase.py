@@ -199,6 +199,9 @@ class TeacherPhase:
         self.weight = ({} if cache and cache.get('identity') != self.buffer.identity
                        else g3270.teacher_weight(config, state, opening_revision_weight(config, state, saved.get('weight', {}))))
         self.term = None; self.jobs = []; self.heldout = []; self.pre_logits = None
+        # g3423 (soft policy S1): the trainer-owned soft head's committed state, beside `weight`.
+        from .soft_policy import carry
+        self.soft_state = carry(saved.get('soft_policy'), self.generation); self.soft = None; self.pre_soft = None
         self.cursor = state.get('teacher_seed_cursor', initial_cursor(config))
         self.receipt, self.ready = readiness(saved.get('readiness'), getattr(model, 'utility_calibration', None), self.reward_id,
                                             skip=self.options.get('skip_utility_qualification', False))
@@ -213,7 +216,7 @@ class TeacherPhase:
         self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id,
                                             skip=self.options.get('skip_utility_qualification', False))
         self.jobs = []; self.heldout = []; self.term = None; self.metrics = {}; self.pre = self.post = None
-        self.pre_logits = None; self.admission_seconds = 0.
+        self.pre_logits = None; self.admission_seconds = 0.; self.soft = None; self.pre_soft = None
         self.buffer.window(self.generation)
         if self.options['mode'] != 'off' and self.ready:
             require(isinstance(export_hash, str) and len(export_hash) == 64 and epoch is not None,
@@ -307,12 +310,23 @@ class TeacherPhase:
     def prepare(self, model):
         from . import training_revision_g3270 as g3270
         settings = g3270.term_settings(self.config)
+        from . import training_revision_g3423 as g3423
+        soft_settings = g3423.settings(self.config)
+        self.soft = None; self.pre_soft = None
+        if soft_settings is not None and self.options['mode'] != 'off':
+            from .soft_policy import SoftPolicy
+            require(settings is not None, 'The soft policy head needs the g3270 teacher revision')
+            self.soft = SoftPolicy(model, soft_settings, self.soft_state, generation=self.generation)
         # g3270: keep the validation rows' pre-update logits for the policy's movement on them.
-        self.pre_logits = policy_logits(model, self.heldout) if settings is not None else None
+        if self.soft is not None:
+            # The same logits as policy_logits, plus the soft head's KL from the same forwards.
+            self.pre_logits, self.pre_soft = self.soft.heldout(model, self.heldout)
+        else:
+            self.pre_logits = policy_logits(model, self.heldout) if settings is not None else None
         self.pre = heldout_measure(model, self.heldout, logits=self.pre_logits)
         rows = self.buffer.rows(self.generation) if self.options['mode'] != 'off' else []
         self.term = TeacherTerm(model, self.options, rows, seed=self.config['seed'], generation=self.generation, state=self.weight,
-                                revision=settings)
+                                revision=settings, soft=self.soft)
         self.term.qualification_context=dict(tables=self.metrics.get('tables',{}),
             labels_by_phase=self.metrics.get('labels_by_phase',{}),
             labels_by_kind=self.metrics.get('labels_by_kind',{}),
@@ -326,7 +340,12 @@ class TeacherPhase:
 
     def finish(self, model, update):
         if self.term is not None: self.weight = self.term.finish()
-        post_logits = policy_logits(model, self.heldout) if self.pre_logits is not None else None
+        post_soft = None
+        if self.soft is not None:
+            self.soft_state = self.soft.finish()
+            post_logits, post_soft = self.soft.heldout(model, self.heldout)
+        else:
+            post_logits = policy_logits(model, self.heldout) if self.pre_logits is not None else None
         self.post = heldout_measure(model, self.heldout, logits=post_logits)
         self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id,
                                             skip=self.options.get('skip_utility_qualification', False))
@@ -341,6 +360,11 @@ class TeacherPhase:
                                                  else None for p in moved},
                            scope='Validation tables of this iteration, before they train: teacher KL to the stored search target, '
                                  'policy movement KL(before||after) on the same rows, pull = movement - KL change (estimate)')
+        if post_soft is not None:
+            # g3423: the soft head on the same rows, against the stored search target softened at T.
+            heldout['soft'] = dict(before=self.pre_soft, after=post_soft,
+                delta=post_soft['kl'] - self.pre_soft['kl'] if post_soft['kl'] is not None and self.pre_soft['kl'] is not None else None,
+                scope='KL(stored target ** (1/T), renormalized || soft head) on the validation tables\' long labels')
         return dict(contract=CONTRACT, mode=self.options['mode'], ready=self.ready, collection=self.metrics,
             term=self.term.report() if self.term else {}, heldout=heldout,
             admission_encoding_seconds=self.admission_seconds, buffer=self.buffer.payload(),
@@ -349,7 +373,10 @@ class TeacherPhase:
 
     def payload(self, generation):
         require(generation == self.generation + 1, 'Teacher commit generation differs')
+        from .soft_policy import carry
+        soft = carry(self.soft_state, generation)
         return dict(contract=CONTRACT, generation=generation, teacher_seed_cursor=self.cursor,
-                    readiness=copy.deepcopy(self.receipt), weight=copy.deepcopy(self.weight), buffer=self.buffer.payload())
+                    readiness=copy.deepcopy(self.receipt), weight=copy.deepcopy(self.weight), buffer=self.buffer.payload(),
+                    **({'soft_policy': soft} if soft is not None else {}))
 
     def committed(self, generation): self.buffer.committed(generation)
