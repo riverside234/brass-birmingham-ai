@@ -103,6 +103,11 @@ comma-separated; adopted items persist and only move forward
   weight=0.15, weight=0.5   local-scoring weight ladder (after heads).
   vp          total-VP training weight .1 -> .5.
   rail-end    Canal rows also predict the Rail-end map (after heads).
+  ownership-stop  (g3318, after heads) the era heads' own early stop: every 16
+              steps their held-out owner CE on the validation games decides
+              whether they keep the steps (an increase keeps 0 and ends their
+              fitting); after the utility stop they fit alone with the trunk
+              frozen (ai-research/G3318_OWNERSHIP_CE_STOP.md).
 The held-out check, PPG cap .003, beta floor .25 and the strict early stop stay.
 
 --rating-every 20 (at a rated generation, a multiple of ten) runs the PL strength

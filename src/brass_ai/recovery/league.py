@@ -1008,6 +1008,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     controller_line+=(f' local={aux["mode"]}@{aux["shared_gradient_scale"]:.2f}'
                         f' rows={aux["retained"]["rows"]}/{aux["available"]["rows"]}'
                         f' head_steps={aux["companion_steps"]["ppo"]}+{aux["companion_steps"]["ppg"]}')
+                    if aux.get('ownership_stop'):
+                        # g3318: the heads' own held-out owner-CE stop (kept/attempted head steps, CE before -> after).
+                        stop=aux['ownership_stop'];ce=lambda x:'-' if x is None else f'{x:.4f}'
+                        controller_line+=(f' aux_ce={ce(stop["before"] and stop["before"]["owner_ce"])}->'
+                            f'{ce(stop["after"] and stop["after"]["owner_ce"])}'
+                            f' aux_kept={stop["kept_head_steps"]}/{stop["attempted_head_steps"]}'
+                            f' heads_only={stop["head_only_steps"]} aux_stop={stop["stop_reason"]}')
                     if 'warmup' in aux:
                         warmup=aux['warmup'];next_stage=warmup['after_commit']
                         controller_line+=(f' aux_stage={warmup["before"]["stage"]}'

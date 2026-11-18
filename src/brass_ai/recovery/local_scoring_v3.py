@@ -10,6 +10,9 @@ Replaces the 2.0.0 companion once, at a committed generation, with fresh heads
 - Head steps are kept when the value phase rejects an interval: the heads are
   not exported, so a head step is harmless when the model's step is undone.
   Only the trunk is restored. The warm-up counts every attempted PPG head step.
+  With the g3318 ownership stop (recovery/ownership_stop.py) the heads instead keep
+  only the 16-step intervals whose held-out owner CE did not increase, and keep
+  fitting with the trunk frozen after the value phase's own stop.
 - Training sums and the held-out check are reported by era and by open versus
   settled entities (settled: a flipped tile or a built link at the decision).
 - The held-out check takes one learner row per game, era and quarter of the era
@@ -246,6 +249,7 @@ def build(base):
         def reset_report(self):
             super().reset_report()
             self.era_stats = {}
+            self.stopped = False; self.stop_record = None  # ownership-stop: set per value phase
 
         def era_accumulate(self, key, values):
             if key not in self.era_stats: self.era_stats[key] = torch.zeros(len(values), dtype=torch.float64, device=values[0].device)
@@ -293,7 +297,9 @@ def build(base):
         def forward(self, model, inputs, ds, ix, *, dropout=None, detach=False, capture_encoded=None):
             from .updates import value_output
             ids = ix.detach().cpu().tolist() if isinstance(ix, torch.Tensor) else list(ix)
-            if not self.active: return value_output(model, inputs, ds, ix, dropout=dropout, detach=detach, capture_encoded=capture_encoded), None
+            # A stopped ownership head (training_revision_g3140 ownership-stop) adds no loss for the rest of the phase.
+            if not self.active or self.stopped:
+                return value_output(model, inputs, ds, ix, dropout=dropout, detach=detach, capture_encoded=capture_encoded), None
             metadata = self.metadata(ds, ids)
             if not any(x[0] is not None for x in metadata):
                 return value_output(model, inputs, ds, ix, dropout=dropout, detach=detach, capture_encoded=capture_encoded), None
@@ -310,6 +316,27 @@ def build(base):
             out = (inputs[1].new_zeros(inputs[1].shape[:2]), *heads)
             if hasattr(model, 'predict_utility'):
                 out += (model.predict_utility(encoded.context, inputs[3], heads, None if ds.remaining is None else ds.remaining[ix], embeddings),)
+            loss = self._auxiliary(encoded, embeddings, inputs, ds, ix, ids, metadata)
+            self.stats['forward_seconds'] += time.perf_counter() - start
+            return out, loss
+
+        def head_loss(self, model, inputs, ds, ix, *, dropout=None):
+            """The same auxiliary loss with the trunk frozen: only the heads get gradients (ownership-stop)."""
+            ids = ix.detach().cpu().tolist() if isinstance(ix, torch.Tensor) else list(ix)
+            if not self.active or self.stopped: return None
+            metadata = self.metadata(ds, ids)
+            if not any(x[0] is not None for x in metadata): return None
+            require(self.phase == 'ppg', 'Fresh auxiliary target fitting is restricted to PPG')
+            from brass_ai.learning.seat_descriptors import critic_inputs
+            start = time.perf_counter()
+            with torch.no_grad():
+                encoded = model.encode_state(inputs[0])
+                embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids, dropout=dropout))
+            loss = self._auxiliary(encoded, embeddings, inputs, ds, ix, ids, metadata)
+            self.stats['head_only_seconds'] += time.perf_counter() - start
+            return loss
+
+        def _auxiliary(self, encoded, embeddings, inputs, ds, ix, ids, metadata):
             predictions = self.heads(encoded, embeddings, self.scale)
             device = inputs[0].device
             canal = torch.tensor([t is not None and t['era'] == 'CanalEra' for t, _, _, _ in metadata], device=device)
@@ -350,10 +377,12 @@ def build(base):
                 if (game, target['era']) not in self.map_support:
                     self.map_support[(game, target['era'])] = sum(int(r['valid']) for k in ('slots', 'links') for r in target[k])
                     self.map_masked[(game, target['era'])] = sum(int(not r['valid']) for k in ('slots', 'links') for r in target[k])
-            self.pending = bool(self.batch_used); self.stats['forward_seconds'] += time.perf_counter() - start
-            return out, loss
+            self.pending = bool(self.batch_used)
+            return loss
 
         # ---- head steps survive a rejected interval --------------------------------------------
+        # The value phase never restores the heads; without ownership-stop they keep every
+        # attempted step, with it the stop's own held-out CE decides (stop_snapshot/stop_restore).
 
         def snapshot(self):
             return dict(kept=True)
@@ -361,6 +390,22 @@ def build(base):
         def restore(self, saved):
             require(saved == dict(kept=True), 'Local scoring 3.0.0 snapshot differs')
             self.optimizers['ppg'].zero_grad(set_to_none=True); self.pending = False; self.restorations += 1
+
+        def stop_snapshot(self):
+            """Heads, PPG Adam and the kept-work counters at an ownership-stop boundary."""
+            return dict(heads={k: v.detach().clone() for k, v in self.heads.state_dict().items()},
+                        adam=copy.deepcopy(self.optimizers['ppg'].state_dict()),
+                        retained=set(self.retained), retained_steps=dict(self.retained_steps), steps=dict(self.steps),
+                        fitting_steps=self.fitting_steps, fitting_used=set(self.fitting_used))
+
+        def stop_restore(self, saved):
+            """Undo every head step since `saved`: they no longer count as kept or fitting work."""
+            self.heads.load_state_dict(saved['heads']); self.optimizers['ppg'].load_state_dict(saved['adam'])
+            self.retained = set(saved['retained']); self.retained_steps = dict(saved['retained_steps'])
+            self.steps = dict(saved['steps']); self.fitting_steps = saved['fitting_steps']
+            self.fitting_used = set(saved['fitting_used'])
+            self.optimizers['ppg'].zero_grad(set_to_none=True); self.pending = False
+            self.restorations += 1; self.rollbacks += 1
 
         # ---- checkpoint ---------------------------------------------------------------------
 
@@ -393,11 +438,14 @@ def build(base):
                 by_era.setdefault(era, {}).setdefault(kind, {})[state] = dict(entities=int(count),
                     owner_ce=ce / count if count else None, none_share=none / count if count else None,
                     vp_abs_error_per_entity=vp / count if count else None)
+            stop = self.stop_record
             result.update(contract=CONTRACT, report_contract=REPORT_CONTRACT, weights=copy.deepcopy(self.config['weights']),
                 vp_scale=VP_SCALE, by_era=by_era, replacement=copy.deepcopy(self.replacement),
-                head_steps_kept_on_rejection=True,
-                by_era_scope='Attempted PPG presentations (heads keep rejected steps). VP error is summed over the four seats, in VP. '
-                             'Settled: a flipped tile or built link at the decision; open: everything else.')
+                head_steps_kept_on_rejection=stop is None,
+                by_era_scope=('Attempted PPG presentations (' + ('the ownership stop decides which head steps stay'
+                              if stop is not None else 'heads keep rejected steps') + '). VP error is summed over the four seats, in VP. '
+                             'Settled: a flipped tile or built link at the decision; open: everything else.'))
+            if stop is not None: result['ownership_stop'] = copy.deepcopy(stop)
             return result
 
         def diagnostics(self, model, dataset, heldout, *, maximum=None):

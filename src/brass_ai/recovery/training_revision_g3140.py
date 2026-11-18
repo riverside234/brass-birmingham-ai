@@ -17,6 +17,12 @@ targets     step 7: win and utility heads train on half the outcome and half the
 weight=X    step 8: local-scoring weight .15, then .5 (both eras, owner and VP).
 vp          step 8: total-VP loss weight .1 -> .5 in training (the check keeps .1).
 rail-end    step 8: Canal rows also predict the Rail-end map, at half the Canal weight.
+ownership-stop  (g3318, after heads) the era heads get their own early stop: every 16
+            steps the held-out owner cross-entropy on the value phase's validation
+            games decides whether the heads keep their steps (an increase restores
+            heads and Adam and ends their fitting). It replaces the utility-loss stop
+            for the heads: once that stop ends the trunk's phase, the heads keep
+            fitting on the remaining batches with the trunk frozen (recovery/ownership_stop.py).
 
 GPU-staged teacher rows and the background cleanup purge (also step 1) are
 code changes with no setting: they change neither numbers nor recipe.
@@ -32,15 +38,18 @@ TIME = dict(train_metrics_every=10)
 VALIDATION = dict(contract='new-game-validation/1.0.0', fraction=.25)
 BOOTSTRAP = dict(contract='blended-critic-targets/1.0.0', lam=.95, share=.5)
 VP_WEIGHT = .5
-ITEMS = ('time', 'validation', 'heads', 'targets', 'weight=0.15', 'weight=0.5', 'vp', 'rail-end')
+OWNERSHIP_STOP = dict(contract='ownership-ce-early-stop/1.0.0', interval_steps=16,
+                      criterion='validation-owner-ce', after_value_stop='heads-only')
+ITEMS = ('time', 'validation', 'heads', 'targets', 'weight=0.15', 'weight=0.5', 'vp', 'rail-end', 'ownership-stop')
 
 
 def validate(block):
-    keys(block, tuple(OFF))
+    keys(block, tuple(OFF), ('ownership_stop',))
     require(block['contract'] == CONTRACT and block['train_metrics_every'] in (1, TIME['train_metrics_every'])
             and block['validation'] in (None, VALIDATION)
             and block['bootstrap'] in (None, BOOTSTRAP)
-            and block['value_weights'] in (OFF['value_weights'], dict(OFF['value_weights'], vp=VP_WEIGHT)),
+            and block['value_weights'] in (OFF['value_weights'], dict(OFF['value_weights'], vp=VP_WEIGHT))
+            and block.get('ownership_stop', OWNERSHIP_STOP) == OWNERSHIP_STOP,
             'Invalid g3140 value revision')
     return block
 
@@ -76,6 +85,11 @@ def configure(config, items, generation):
             revision['bootstrap'] = copy.deepcopy(BOOTSTRAP)
         elif item == 'vp':
             revision['value_weights'] = dict(revision['value_weights'], vp=VP_WEIGHT)
+        elif item == 'ownership-stop':
+            require(v3.is_v3(result.get(LOCAL)), 'ownership-stop needs the era heads (--value-revision heads)')
+            require(result['value_phase'].get('acceptance_steps') == OWNERSHIP_STOP['interval_steps'],
+                    'The ownership stop checks at the value phase\'s 16-step boundaries')
+            revision['ownership_stop'] = copy.deepcopy(OWNERSHIP_STOP)
         elif item == 'heads':
             old = result.get(LOCAL)
             if v3.is_v3(old): continue  # adopted earlier
@@ -108,7 +122,8 @@ def project(old, new):
     except (ValueError, KeyError, TypeError): return None
     forward = ((a['train_metrics_every'], b['train_metrics_every']) in ((1, 1), (1, 10), (10, 10))
                and not (a['validation'] and not b['validation']) and not (a['bootstrap'] and not b['bootstrap'])
-               and not (a['value_weights']['vp'] > b['value_weights']['vp']))
+               and not (a['value_weights']['vp'] > b['value_weights']['vp'])
+               and not ('ownership_stop' in a and 'ownership_stop' not in b))
     if not forward: return None
     la, lb = old.get(LOCAL), new.get(LOCAL)
     if la != lb:
@@ -146,6 +161,11 @@ def value_weights(config):
     return (w['rank'], w['vp'])
 
 
+def ownership_stop(config):
+    """The era heads' own held-out CE early stop, or None (heads keep every attempted step)."""
+    return copy.deepcopy(block(config).get('ownership_stop'))
+
+
 def previous(config):
     """The recipe before any g3140 item: the revision key dropped and the replaced 2.0.0 companion restored."""
     from . import local_scoring_v3 as v3
@@ -175,6 +195,7 @@ def tag(config):
         if local['weights']['rail_end']: parts.append('railend')
     if b['bootstrap']: parts.append('blend50')
     if b['value_weights']['vp'] != OFF['value_weights']['vp']: parts.append('vp05')
+    if 'ownership_stop' in b: parts.append('cestop16')
     return '-'.join(parts) or 'none'
 
 

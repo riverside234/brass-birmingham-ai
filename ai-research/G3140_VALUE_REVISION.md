@@ -22,11 +22,12 @@ Add `--value-revision ITEMS` to your usual `scripts/continue-rust-g1190-restart-
 | --- | --- | --- |
 | `time` | 1 | The two full-buffer train scans of the value phase run every tenth generation. In between, the utility receipt is decided by the acceptance held-out games. |
 | `validation` | 5 | The early stop validates on a quarter of the new games (56 self-play, 24 against the pool). In the next iteration they train like any other game. The permanent 5% hold-out goes. The check itself is unchanged: four main terms, real outcomes, weights .25 and .1, any increase rejects the interval. |
-| `heads` | 6 | Fresh era heads replace the 2.0.0 local-scoring heads at this generation: each slot and link reads its own 16-wide trunk slice; Canal, Rail and Canal→Rail-end outputs; VP target divided by 5 and summed over seats, with the owner term's weight; weight .05. Head steps are kept when an interval is rejected. The trunk gradient ramps in through the existing rule (two fitted iterations head-only, then five ramp iterations). |
+| `heads` | 6 | Fresh era heads replace the 2.0.0 local-scoring heads at this generation: each slot and link reads its own 16-wide trunk slice; Canal, Rail and Canal→Rail-end outputs; VP target divided by 5 and summed over seats, with the owner term's weight; weight .05. Head steps are kept when an interval is rejected (until `ownership-stop`). The trunk gradient ramps in through the existing rule (two fitted iterations head-only, then five ramp iterations). |
 | `targets` | 7 | Win and utility heads train on half the outcome and half the λ=.95 return built from the critic outputs PPO freezes before its update. Each replay age stores its returns (`generation-N.bootstrap.npy`); an age staged before adoption uses its outcomes. The check stays on real outcomes. |
 | `weight=0.15`, `weight=0.5` | 8 | Local-scoring weight for both eras, owner and VP. Needs `heads`. |
 | `vp` | 8 | Total-VP weight .1 → .5 in training only. |
 | `rail-end` | 8 | Canal rows also predict the Rail-end map, at half the Canal weight. Needs `heads`. |
+| `ownership-stop` | (g3318) | The era heads get their own early stop: every 16 steps their held-out owner CE on the validation games decides whether they keep the steps (an increase keeps 0 and ends their fitting); after the value check stops, they fit alone with the trunk frozen. Needs `heads`. See [G3318_OWNERSHIP_CE_STOP.md](G3318_OWNERSHIP_CE_STOP.md). |
 
 The value phase's cap (.003), beta floor (.25), schedule and strict early stop are unchanged.
 

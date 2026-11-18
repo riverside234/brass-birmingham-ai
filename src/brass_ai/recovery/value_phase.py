@@ -329,11 +329,13 @@ def defer_train_metrics(model,config):
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
         companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None,
-        bootstrap_share=0.,loss_weights=None,train_metrics=True):
+        bootstrap_share=0.,loss_weights=None,train_metrics=True,ownership_stop=None):
     """bootstrap_share/loss_weights change the training loss only (g3140 steps 7-8); the held-out
     check always scores the four main terms on real outcomes with the original weights.
     train_metrics=False skips the two full-buffer scans (g3140 step 1); held-out evidence then
-    decides the utility receipt."""
+    decides the utility receipt. ownership_stop (g3318) gives the era heads their own held-out
+    owner-CE stop at the 16-step boundaries (recovery/ownership_stop.py); it changes nothing
+    the value check sees."""
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     timings={}
@@ -423,11 +425,18 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     scheduled=scheduled_rate(config)
     total_steps=math.ceil(len(value_train_ids)/config['batch_size'])*config['max_epochs']
     if scheduled:report.update(planned_steps=total_steps,attempted_learning_rates=[])
-    training_began=time.perf_counter()
+    stop=None
+    if ownership_stop is not None and companion is not None and getattr(companion,'active',False):
+        from .ownership_stop import OwnershipStop
+        require(config.get('acceptance_steps')==ownership_stop['interval_steps'],'Ownership stop boundaries differ from the value phase')
+        started=time.perf_counter()
+        stop=OwnershipStop(companion,ownership_stop,model,validation_dataset,heldout_ids,update)
+        timings['ownership_stop_setup_seconds']=time.perf_counter()-started
+    training_began=time.perf_counter();batches=[];consumed=0;epoch=0
     for epoch in range(config['max_epochs']):
         order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
         batches=[order[start:start+config['batch_size']] for start in range(0,len(order),config['batch_size'])]
-        interval=config.get('acceptance_steps',len(batches))
+        interval=config.get('acceptance_steps',len(batches));consumed=0
         epoch_before=current['loss'];epoch_steps=0;epoch_safe=0;epoch_accepted=0;rejection_reason=None
         report['attempted_epochs']+=1
         for segment in range(0,len(batches),interval):
@@ -534,6 +543,9 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             if deferred:
                 report['interval_reports'][-1].update(kl_checked_at_interval_end=checked_step==report['attempted_steps'],
                     provisional_loss_acceptance=not rejected and safe_kl is None)
+            consumed=segment+attempted
+            # The trunk is decided; the era heads' own check runs on the resulting state.
+            if stop is not None:stop.boundary(report['attempted_steps'],'restored' if rejected else 'kept')
             del saved_model,saved_adam
             if rejected or report['kl_guard_tripped']:break
         partial=epoch_accepted<len(batches)
@@ -546,6 +558,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         if report['early_stop_reason'] is not None:break
     if deferred:
         keep,accepted_kl=guard.finish();max_kl=max(max_kl,guard.maximum)
+        if stop is not None and keep<len(retained):stop.rebase()  # the trunk went back to an earlier boundary
         attempted_kl_checks=len(guard.checks)
         # A loss boundary accepted before the next probe can still be unsafe.
         # Rebuild retained-work accounting from exactly the restored prefix.
@@ -572,6 +585,31 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             entry.update(accepted_steps=kept,safe_steps=kept,accepted=bool(kept),partial=kept<len(batches),
                 probe_kl=accepted[-1].get('retained_probe_kl',accepted[-1]['probe_kl']) if accepted else None)
             if kept:report['epochs']+=1;report['partial_epochs' if entry['partial'] else 'completed_epochs']+=1
+    if stop is not None:
+        # The value check stopped the trunk; the era heads keep fitting on the remaining
+        # planned batches with the trunk frozen until their own CE check stops them.
+        def head_step(batch,step,epoch):
+            local=stop.local
+            if scheduled and getattr(local,'work_warmup',False):
+                local.begin('ppg',rate_factor=rate_factor(step,total_steps,config))
+            else:local.begin('ppg')
+            model.train()
+            for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
+                drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
+                with autocast(update,value_dataset.device):local_loss=local.head_loss(model,inputs,value_dataset,ix,dropout=drop)
+                if local_loss is not None:
+                    local.account_loss(local_loss,value_dataset.critic_weights[ix],len(batch),'ppg')
+                    ((local_loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
+            local.step('ppg')
+        def remaining():
+            # The rest of the stopped epoch, then any planned epochs the value phase never reached.
+            for batch in batches[consumed:]:yield epoch,batch
+            for later in range(epoch+1,config['max_epochs']):
+                if not stop.running:return
+                order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
+                for start in range(0,len(order),config['batch_size']):yield later,order[start:start+config['batch_size']]
+        if batches and stop.running:stop.continue_heads(remaining(),report['attempted_steps'],head_step)
+        report['ownership_stop']=stop.finish()
     timings['training_and_retention_seconds']=time.perf_counter()-training_began
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the

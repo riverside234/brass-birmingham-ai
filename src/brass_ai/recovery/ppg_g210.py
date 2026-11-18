@@ -529,7 +529,7 @@ def fit(phases,model,preparation_pool):
         directory=phases.root/'artifacts',enabled=True)
     with phases.buffer.datasets(phases.dataset.device,policy=False) as (ds,_,receipts), prepare as preparation:
         indices=[];validation=[];validation_support=[];offset=0
-        from .training_revision_g3140 import validation_fraction,value_weights as revised_weights,train_metrics_due
+        from .training_revision_g3140 import validation_fraction,value_weights as revised_weights,train_metrics_due,ownership_stop
         rolling=validation_fraction(phases.config) is not None
         require(not rolling or receipts[0]['generation']==phases.state['generation']+1,'New-game validation needs the current age first')
         for age,(r,part) in enumerate(zip(receipts,ds.data.parts)):
@@ -567,7 +567,8 @@ def fit(phases,model,preparation_pool):
             current_count=receipts[0]['rows'],dropout=(phases.state['generation'],phases.config['seat_descriptors']['dropout_games']) if phases.critic_state else None,
             companion=companion,preparation=preparation,post_fit=getattr(phases,'post_value_fit',None),
             bootstrap_share=blend['share'] if blend is not None else 0.,loss_weights=revised_weights(phases.config),
-            train_metrics=train_metrics_due(phases.config,phases.state['generation']+1))
+            train_metrics=train_metrics_due(phases.config,phases.state['generation']+1),
+            ownership_stop=ownership_stop(phases.config))
         if blend is not None:report['bootstrap_ages']=ds.bootstrap.available()
         if getattr(phases,'diversity',None) is not None:
             phases.diversity.report['intrinsic_fit']=companion.report()

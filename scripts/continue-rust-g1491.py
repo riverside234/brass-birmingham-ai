@@ -123,7 +123,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'and re-measures beta with teaching on.')
     parser.add_argument('--value-revision', metavar='ITEMS',
         help='Adopt g3140 value-phase revision items at this committed generation, comma-separated: '
-             'time, validation, heads, targets, weight=0.15, weight=0.5, vp, rail-end. '
+             'time, validation, heads, targets, weight=0.15, weight=0.5, vp, rail-end, ownership-stop. '
              'Items persist and only move forward (training_revision_g3140).')
     parser.add_argument('--rating-every', type=int, choices=(20,),
         help='From this committed generation on, run the PL strength rating every 20 iterations '

@@ -458,6 +458,8 @@ Each step is one change that can be adopted at a committed boundary.
 
 "Search workers never wait" is done on the Python side: teacher output goes to a memory file, and a GC freeze covers collection. The teacher tables had been stalling for 10–22 s each, all at the same moments. Step 4, the distillation phase, is next.
 
+**Status (2026-11-18, g3318):** the era heads from step 6 get their own early stop with `--value-revision ownership-stop`: held-out owner CE every 16 steps, an increase keeps 0 head steps, and after the value check stops the heads fit alone with the trunk frozen. Before it they kept every attempted step, so at least 16 per iteration. See [G3318_OWNERSHIP_CE_STOP.md](G3318_OWNERSHIP_CE_STOP.md).
+
 Steps 1, 5, 6, 7 and 9 do not depend on the others, so the value-loss steps 5 to 8 can go before the teacher steps 2 to 4. Step 3 needs step 2, step 4 needs step 3, and step 8 needs step 6. Step 5 is best taken before steps 6 to 8: with a sharper early stop, the share of kept intervals shows sooner whether a change to the loss helps or hurts.
 
 ## 9. Risks and what to watch

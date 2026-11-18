@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "7215217a18b0d3b701bb4b396d25d446bcd9d0021473e07ab82e5f8913ddcb00",
+  "execution_implementation": "0dcb6b30c64e2f07525651e99442d4518f377d0631767066ee7ea95136a95fba",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "6e5fb436032c14822ccbe96f827de1b3fd15025f4511155f62bace9a62ecfab3"
+      "after": "4eda891a2b64f7d626cccff5049932c98e3fccb362def79c5239a30faae7a774"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -126,7 +126,7 @@
     },
     "src/brass_ai/recovery/ppg_g210.py": {
       "before": "7b7a8d391a56f56ea36d2b97c79af8b5c45fc3c1bfb7494b93886280674e5940",
-      "after": "5dd79bee4188c9dcce6b22b43fb6856ec3638e29cb9d4472f5cacb70b99a3458"
+      "after": "02760562baf2c5909e2f656ec28062912fc15f7c371705d74a849a5b4b9fc2cc"
     },
     "src/brass_ai/recovery/ppg_policy_cache.py": {
       "before": "1724b71a097795cd34961dd81fd99cf25f4c94cf1860b1269b7327203f0684b4",
@@ -226,7 +226,7 @@
     },
     "src/brass_ai/recovery/value_phase.py": {
       "before": "66844598c56ff0175af8b0997b5ae869de4ae69331b11f5082c07162f4647fae",
-      "after": "34882035372a1f58a65211322d4e1b9f9c12b407d9b026baca47ddf95609b641"
+      "after": "6477f6cae579bf59c38e490c862c531e95cd2bc129080fbe800dc7eb6d13f7cb"
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "b366f222a05cbd9a7e42ec01d0cfc66aaf3d95322b14f54c09065a25714b8404"
+      "after": "27648a68f492950206e79af9b8e72658306e19160430d45dbc6b7da0d3893e3d"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "31da441a0b76f66d92b8c3fd11be12e7fe2ad52da9e820030bedf13e86bcaade"
+      "after": "567b27aeab7f0d6c521562673655144ce6c993bf9ce6a1e5f13b8ab241e37b0d"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -603,6 +603,22 @@
     "tests/RustBackendLab/test_b07_sealing.py": {
       "before": "61483ae52b3e9075b193633e6ab2ee54b5bd4b7e22fafcee6c05cedf3c8f2216",
       "after": "2ed6326cde2bb188d2f10a45ddfc265ce2ea5a520cb7fb81ff77b56eca3706d0"
+    },
+    "src/brass_ai/recovery/ownership_stop.py": {
+      "before": null,
+      "after": "d133d73bb57528571032861e2a2051dd62f37726782b7a73fd5ae2c370c0e9f4"
+    },
+    "src/brass_ai/recovery/training_revision_g3140.py": {
+      "before": "ee5e47d2b5d9c85c0b7a1e3a7265a27a98367d5ec46b5e999be99784c54085ba",
+      "after": "0536e28be05758e015d23ae8e6903412c6fb7c8743d2f17f9dc35e96d4e6b8be"
+    },
+    "src/brass_ai/recovery/local_scoring_v3.py": {
+      "before": "4d47c9100516c3269b1bd04ca9c7596b3d012f7d9762db30031a313a11bcc27c",
+      "after": "500e8ca271d4fabfcef3b500c38512c9f4992a943bd2fbfc999c8fbaad3b10ee"
+    },
+    "tests/Recovery/test_ownership_stop_g3318.py": {
+      "before": null,
+      "after": "aed1f9f32e72551c5b28db84e73e86b84bff7442c9bef8aa29762cf2d57f5830"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -898,6 +914,11 @@
       "implementation": "f93f6a05470ca26db97152b70c69974fb55b7516d545cb63605fdddb3172306e",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "f73e2ea54e7abef3c1ca05a0f9e826c32d575a026d7c2a18db80a99ac50b0082"
+    },
+    {
+      "implementation": "7215217a18b0d3b701bb4b396d25d446bcd9d0021473e07ab82e5f8913ddcb00",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "f4a6b9c79b1fdd8e04cc0a1e6308e7dcd89db8d4b38b5d58d720e06717e0c3d0"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1215,6 +1236,10 @@
   },
   "g3270_collection_never_waits": {
     "scope": "Code-only. Streamed CPU teacher tables write to an unlinked /dev/shm file tailed by the pump (BRASS_TEACHER_SPOOL=0 restores the pipe) and their event queue is unbounded, so a paused trainer never blocks a search worker; the collection window freezes the long-lived GC heap and times every collector pause (BRASS_COLLECTION_GC_FREEZE=0 keeps timing only); teacher tables are admitted on the teacher thread while ordinary games finish (BRASS_TEACHER_TAIL_ADMISSION=0 restores admission after). Label buffer caches keep label+encoding only (views stay in sealed shards); value rows cache states as float32 arrays (same float32 values reach training). Same jobs, RNG, labels, rows and seals.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3318_ownership_stop": {
+    "scope": "--value-revision ownership-stop adds value_revision.ownership_stop (ownership-ce-early-stop/1.0.0). The 3.0.0 era heads get their own early stop: at each 16-step value-phase boundary, after the value check decides the trunk, the critic-weighted owner cross-entropy of the heads on the value phase's validation rows is compared with the last kept boundary; an increase restores the heads, their PPG Adam and the kept-work counters (the interval keeps 0 head steps) and ends head fitting for the phase (no further auxiliary loss reaches the trunk). After the value check ends the trunk's phase, the heads fit alone on the epoch's remaining batches with the trunk frozen, checked every 16 steps; head steps never exceed the planned steps. Without the item the heads keep every attempted step, as before. The value check, the trunk, the policy and all exported outputs are unchanged.",
     "qualified_implementation_unchanged": true
   }
 }
