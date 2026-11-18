@@ -252,7 +252,9 @@ class Barrier(unittest.TestCase):
         return outcome
 
     def test_overlapped_tables_run_in_the_background_and_are_admitted_at_finish(self):
-        with R.scope(dict(R.DEFAULTS, native_inference=R.cpu_block())):
+        import os
+        with mock.patch.dict(os.environ, {self.collector_module.TAIL_ADMISSION: '0'}), \
+                R.scope(dict(R.DEFAULTS, native_inference=R.cpu_block())):
             run = self.begin(True)
             self.assertIsNotNone(run)
             self.assertIsNotNone(run.core_plan)
@@ -264,6 +266,19 @@ class Barrier(unittest.TestCase):
             run.finish()
         self.assertEqual(self.admitted, [len(self.jobs)])
         self.assertTrue(self.phase.metrics['overlapped_with_ordinary'])
+        self.assertEqual(self.phase.metrics['new_tables'], len(self.jobs))
+
+    def test_overlapped_tables_are_admitted_while_ordinary_games_finish(self):
+        # g3270 (build step 2): the teacher thread admits its tables as soon as they are collected.
+        with R.scope(dict(R.DEFAULTS, native_inference=R.cpu_block())):
+            run = self.begin(True)
+            self.assertEqual(self.admitted, [])
+            self.gate.set()
+            run.thread.join(10)
+            self.assertEqual(self.admitted, [len(self.jobs)])  # before ordinary collection ends
+            run.finish()
+        self.assertEqual(self.admitted, [len(self.jobs)])  # admitted once
+        self.assertTrue(self.phase.metrics['admitted_during_ordinary_tail'])
         self.assertEqual(self.phase.metrics['new_tables'], len(self.jobs))
 
     def test_the_sequential_barrier_finishes_before_returning(self):

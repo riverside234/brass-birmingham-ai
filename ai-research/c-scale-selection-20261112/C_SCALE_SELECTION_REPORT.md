@@ -1,11 +1,12 @@
 # c_scale selection for the teacher searches (long and short)
 
-## Latest records: g2400 (updated 2026-11-14)
+## Latest records (updated 2026-11-18)
 
 All C_scale reports are kept together in this folder:
 
 | Report | Evidence and current interpretation |
 |---|---|
+| [g3270 follow-up: K8/640 and K8/96](G2400_LONG_SEARCH_REPORT.md#g3270-follow-up-k8640-and-k896-2026-11-18) | Both budgets tested against K8/3000 on 700 normal and 200 cotton positions each. Combined target KL is lowest at **0.20** for K8/640 (0.258244) and **0.10** for K8/96 (0.514793). |
 | [g2400 short-search ablation](G2400_SHORT_SEARCH_REPORT.md) | All three new console records: 250 and 500 positions from g2399, then 600 positions pooled from g2396–g2398. At normal:cotton = **85:15**, **0.90** is the provisional Q-gap choice, **0.70** the other leading candidate, and **0.50** the latest sample's action-agreement alternative. |
 | [g2400 long-search ablation](G2400_LONG_SEARCH_REPORT.md) | Updated K8/640 versus K8/3000 protocol, w=0, opening T=2 and 60 workers. The latest training export records C_scale **0.10**; a new g2400 long-search numerical result table is still awaiting its source. |
 | [Historical g1760 record](#historical-g1760-record-2026-11-12) | Original tests A–E and their decisions, preserved below. |

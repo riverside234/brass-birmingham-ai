@@ -16,12 +16,26 @@ CONTRACT = 'teacher-label-buffer/1.0.0'
 OWNER = dict(contract=CONTRACT, purpose='policy-only search-v1 labels')
 
 
+def slim(row, *, detach=False):
+    """What training reads after admission: the label and its encoded inputs.
+
+    The full view stays in the sealed shard; a cold load re-validates from it. A frozen
+    view costs about 260 KB of memory per row, which an 8-iteration window cannot keep.
+    ``detach`` copies the label and arrays, as publication always did.
+    """
+    if detach: return LabelRow(dict(teacher=copy.deepcopy(row.label)), copy.deepcopy(row.encoded))
+    return LabelRow(dict(teacher=row.label), row.encoded)
+
+
 class TeacherBuffer:
-    def __init__(self, root, run, identity, *, receipts=(), retired=(), c_scale=.1, cotton_c_scale=None, iterations=4):
+    def __init__(self, root, run, identity, *, receipts=(), retired=(), c_scale=.1, cotton_c_scale=None, iterations=4,
+                 heldout_lag=None):
         self.root, self.run = owned(root, run)
         self.directory = safe(self.run, self.run / 'teacher-labels')
-        require(iterations in (2, 4), 'Invalid teacher buffer window')
-        self.identity = identity; self.c_scale = c_scale; self.iterations = iterations
+        require(iterations in (2, 4, 8), 'Invalid teacher buffer window')
+        # g3270: validation labels train from `heldout_lag` iterations after their own, age counted from then.
+        require(heldout_lag in (None, 1), 'Invalid teacher validation lag')
+        self.identity = identity; self.c_scale = c_scale; self.iterations = iterations; self.heldout_lag = heldout_lag
         self.mixed_scales = None if cotton_c_scale is None else sorted({c_scale, cotton_c_scale})
         self.receipts = copy.deepcopy(list(receipts)); self.retired = copy.deepcopy(list(retired))
         self.pending = list(self.receipts); self._rows = {}
@@ -78,7 +92,8 @@ class TeacherBuffer:
             with partial.open('xb') as f: f.write(data)
             partial.replace(path)
         if not sidecar.exists(): write_json(sidecar, receipt)
-        self.verify(receipt); self._rows[receipt['sha256']] = tuple(copy.deepcopy(rows))
+        # Detached copies of the label and arrays only; the caller's rows (with views) are released.
+        self.verify(receipt); self._rows[receipt['sha256']] = tuple(slim(r, detach=True) for r in rows)
         self.pending = [r for r in self.pending if r['path'] != receipt['path']] + [receipt]
         return receipt
 
@@ -88,11 +103,22 @@ class TeacherBuffer:
         return ('c_scales' not in receipt and
                 (receipt['generation'] == generation or receipt.get('c_scale', .1) == self.c_scale))
 
+    def lag(self, receipt):
+        lag = getattr(self, 'heldout_lag', None)
+        return lag if lag and receipt['split'] == 'heldout' else 0
+
+    def age(self, receipt, generation):
+        """A label's training age; validation labels count from the iteration they start training."""
+        return generation - receipt['generation'] - self.lag(receipt)
+
+    def trains(self, receipt, generation):
+        return receipt['split'] == 'train' or (self.lag(receipt) > 0 and self.age(receipt, generation) >= 0)
+
     def window(self, generation):
         # A changed c_scale is a different search target, so older labels retire
         # with it. The current generation stays: a crash may have sealed its tables.
         keep = [r for r in self.pending if r['profile_digest'] == self.identity
-                and 0 <= generation - r['generation'] < self.iterations
+                and 0 <= generation - r['generation'] < self.iterations + self.lag(r)
                 and self._matches_scale(r, generation)]
         removed = [r for r in self.pending if r not in keep]
         for r in removed:
@@ -101,10 +127,11 @@ class TeacherBuffer:
         return keep
 
     def rows(self, generation, split='train'):
+        """(age, row) pairs. 'train' includes validation labels from their training age 0 (g3270)."""
         from .encoding import PreparedEncoder
         result = []; encoder = PreparedEncoder()
         for receipt in sorted(self.window(generation), key=lambda r: r['generation'], reverse=True):
-            if receipt['split'] != split: continue
+            if not (self.trains(receipt, generation) if split == 'train' else receipt['split'] == split): continue
             self.verify(receipt)
             if receipt['sha256'] not in self._rows:
                 path, _ = self.paths(receipt)
@@ -116,10 +143,11 @@ class TeacherBuffer:
                     require(label['generation'] == receipt['generation'] and label['model_id'] == receipt['model_id']
                             and label['reward_id'] == receipt['reward_id'], 'Teacher shard row identity differs')
                     require(validate_improved_policy(label, row['choices'], view=row['view']) is not None, 'Unadmitted sealed teacher row')
-                    values.append(LabelRow(row, encoder.encode(row['view'], row['choices'], [0.] * 4, [0.] * 8)))
+                    values.append(slim(LabelRow(row, encoder.encode(row['view'], row['choices'], [0.] * 4, [0.] * 8))))
                 require(len({r.identity for r in values}) == len(values), 'Duplicate sealed teacher row')
                 self._rows[receipt['sha256']] = tuple(values)
-            result.extend((generation - receipt['generation'], row) for row in self._rows[receipt['sha256']])
+            age = self.age(receipt, generation) if split == 'train' else generation - receipt['generation']
+            result.extend((age, row) for row in self._rows[receipt['sha256']])
         return result
 
     def payload(self):

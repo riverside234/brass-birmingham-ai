@@ -113,17 +113,37 @@ class TableCache:
         return elapsed
 
 
+TAIL_ADMISSION='BRASS_TEACHER_TAIL_ADMISSION'
+
+
+def tail_admission():
+    import os
+    value=os.environ.get(TAIL_ADMISSION,'1')
+    require(value in ('0','1'),TAIL_ADMISSION+' must be 0 or 1')
+    return value=='1'
+
+
 class TeacherRun:
-    """Teacher tables running beside ordinary collection; finish() admits them."""
-    def __init__(self,collector,core_plan,collect,finish):
+    """Teacher tables running beside ordinary collection; finish() admits them.
+
+    g3270 (build step 2): with ``admit_early`` the tables are admitted on this thread as soon
+    as they are all collected, while the last ordinary games finish; finish() then only
+    waits. Admission draws no random numbers; the per-check policy context still forks the
+    RNG, as the per-table logit checks during collection already do.
+    BRASS_TEACHER_TAIL_ADMISSION=0 admits after ordinary collection, as before.
+    """
+    def __init__(self,collector,core_plan,collect,finish,*,admit_early=None):
         self.collector,self.core_plan,self.finish_tables=collector,core_plan,finish
-        self.live=None;self.error=None;self.finished=False
+        self.admit_early=admit_early
+        self.live=None;self.error=None;self.finished=False;self.admitted=False
         self.thread=threading.Thread(target=self.run,args=(collect,),name='rust-teacher-tables',daemon=True)
         self.thread.start()
 
     def run(self,collect):
         try:
             self.live=collect()
+            if self.admit_early is not None:
+                self.admit_early(self.live);self.admitted=True
         except BaseException as error:
             self.error=error
             # Stop ordinary work now instead of after its last game.
@@ -139,7 +159,7 @@ class TeacherRun:
         require(not self.finished,'Teacher run finished twice')
         self.finished=True
         if self.error is not None:raise self.error
-        self.finish_tables(self.live)
+        if not self.admitted:self.finish_tables(self.live)
 
 
 class ShadowCollector:
@@ -220,9 +240,10 @@ class ShadowCollector:
                     # Timed searches read a clock, so only fixed-count tables may share CPUs.
                     overlap=overlap and counted
                     if overlap:core_plan=CorePlan(cores)
+                    from brass_ai.recovery.training_revision_g3270 import parity_rows
                     collector=TeacherCollector(plan['binary'],plan['core_source'],bootstrap,service,calibration,
                         lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores,core_plan=core_plan,
-                        row_workers=row_workers)
+                        row_workers=row_workers,parity_rows=parity_rows(state['signature']['config']))
                     cpu_metrics=dict(receipt=plan['receipt'],budget=plan['inference']['budget'],
                         exported_bundles=plan['exported_bundles'],lanes=lanes,cores=len(cores),pinning=block['pinning'])
                 else:
@@ -234,20 +255,26 @@ class ShadowCollector:
                     collector=TeacherCollector(build['binary']['path'],build['core_source'],bootstrap,service,calibration,
                         lanes=lanes,model=model,history=state['history'])
         def collect():return collector.collect(missing,on_result=cache.publish)
+        def admit(live,*,tail=False):
+            self.admit(phase,state,model,service,directory,jobs,cached,missing,live,collector,cpu_metrics,seed,began,before,
+                       overlapped=core_plan is not None,tail=tail)
         def finish(live):
-            with torch.random.fork_rng(devices=devices):
-                self.admit(phase,state,model,service,directory,jobs,cached,missing,live,collector,cpu_metrics,seed,began,before,
-                           overlapped=core_plan is not None)
+            with torch.random.fork_rng(devices=devices):admit(live)
         if collector is None:
             finish([]);return None
         if core_plan is None:
             with torch.random.fork_rng(devices=devices):live=collect()
             finish(live);return None
         # A background thread must not touch the global RNG; nothing here draws from it.
-        return TeacherRun(collector,core_plan,collect,finish)
+        # Without the outer fork: restoring the global RNG from a background thread would undo the main thread's draws.
+        return TeacherRun(collector,core_plan,collect,finish,
+                          admit_early=(lambda live:admit(live,tail=True)) if tail_admission() else None)
 
-    def admit(self,phase,state,model,service,directory,jobs,cached,missing,live,collector,cpu_metrics,seed,began,before,*,overlapped=False):
-        """Everything after the tables exist: labels, buffers and evidence, in one order."""
+    def admit(self,phase,state,model,service,directory,jobs,cached,missing,live,collector,cpu_metrics,seed,began,before,*,overlapped=False,tail=False):
+        """Everything after the tables exist: labels, buffers and evidence, in one order.
+
+        ``tail``: running on the teacher thread while ordinary games finish (g3270).
+        """
         cached.update({r['job_id']:r for r in live})
         results=[cached[j['expected']['job_id']] for j in jobs]
         from brass_ai.recovery.training_revision_g1491 import UPDATED_SEARCH, count_search
@@ -309,7 +336,7 @@ class ShadowCollector:
                                  f"({sum(x>5 for x in exits)} of {len(exits)} tables over 5s)",flush=True)
         phase.metrics.update(shadow=phase.options['mode']=='shadow',mode=phase.options['mode'],
             cached_tables=len(jobs)-len(missing),new_tables=len(live),wall_seconds=time.monotonic()-began,
-            overlapped_with_ordinary=overlapped,
+            overlapped_with_ordinary=overlapped,admitted_during_ordinary_tail=tail,
             gradient_qualification='Measured during ordinary PPO; never applied' if phase.options['mode']=='shadow' else
                 'Qualified fixed beta; teacher policy gradients use the existing guarded PPO step')
         phase.metrics['inference']={key:service.metrics.get(key,0)-before.get(key,0) for key in

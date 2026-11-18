@@ -148,6 +148,11 @@ def validation_plan(config,state):
     qualifying=phase['mode']=='shadow' and not (q and q['passed'])
     remeasuring=phase['mode']=='on' and pending(weight)
     forced=qualifying and schedule['validation_during_beta_qualification']
+    from .training_revision_g3270 import every_iteration
+    if every_iteration(config):
+        # g3270: four validation tables every iteration replace the held-out tables every fifth.
+        return dict(due=True,games=4,qualifying=qualifying,forced_by_beta_qualification=forced,interval=1,
+            **({'forced_by_beta_remeasurement': True} if remeasuring else {}),reason='every-iteration')
     periodic=(state['iteration']+1)%schedule['validation_interval']==0
     due=remeasuring or forced or periodic
     return dict(due=due,games=4 if due else 0,qualifying=qualifying,

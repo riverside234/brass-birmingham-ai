@@ -128,6 +128,11 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     parser.add_argument('--rating-every', type=int, choices=(20,),
         help='From this committed generation on, run the PL strength rating every 20 iterations '
              '(was every 10). Committed slots are kept; set once (rating_cadence).')
+    parser.add_argument('--teacher-revision', action='store_true',
+        help='Adopt the g3270 teacher revision at this committed generation (build steps 2-3): 36+4 tables every '
+             'iteration, 8-iteration labels, 128 rows per PPO step without repeats, targets rebuilt from the current '
+             'policy; search value: 16-iteration buffer, 32 steps, 32 rotating held-out games. Set once '
+             '(training_revision_g3270); beta is re-measured once with teaching on.')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -186,6 +191,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.teacher_fast = PREVIOUS_TEACHER_FAST
         recovery.value_revision = None  # an interrupted iteration finishes under its own recipe
         recovery.rating_every = None
+        recovery.teacher_revision = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

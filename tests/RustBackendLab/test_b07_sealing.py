@@ -91,12 +91,17 @@ class Sealing(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             b=TeacherBuffer(SOURCE_ROOT,Path(tmp),'fixture')
             b.publish(10,'train',rows,model_id=model_id(model),reward_id=job['expected']['reward_id'])
+            # The sealed shard holds the full row; buffered rows keep the label and its encoding (g3270).
+            import gzip
+            with gzip.open(Path(tmp)/b.pending[0]['path'],'rt',encoding='utf-8') as f:
+                self.assertEqual(json.loads(f.readline()),json.loads(json.dumps(expected)))
             rows[0].encoded.state.setflags(write=True);rows[0].encoded.state[0]+=1
-            self.assertEqual(b.rows(10)[0][1].row,expected)
-            np.testing.assert_array_equal(b.rows(10)[0][1].encoded.state,before.state)
+            live=b.rows(10)[0][1]
+            self.assertEqual(live.row,dict(teacher=expected['teacher']))
             cold=TeacherBuffer(SOURCE_ROOT,Path(tmp),'fixture',receipts=b.pending)
-            self.assertEqual(cold.rows(10)[0][1].row,expected)
+            self.assertEqual(cold.rows(10)[0][1].row,dict(teacher=expected['teacher']))
             np.testing.assert_array_equal(cold.rows(10)[0][1].encoded.state,before.state)
+            np.testing.assert_array_equal(live.encoded.state,before.state)
 
     def test_cancellation_during_final_publication_cannot_be_taken(self):
         model,job,v,result,_,_=self.stream();key=job['expected']['job_id']

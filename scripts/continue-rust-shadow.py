@@ -66,7 +66,8 @@ def inference_choice(args):
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
-            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_search_lambda=False,value_revision=None,rating_every=None):
+            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_search_lambda=False,value_revision=None,rating_every=None,
+            teacher_revision=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -148,6 +149,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             # Ratings run every `rating_every` committed iterations from this generation on.
             from brass_ai.recovery.config import validate_config
             config=validate_config(rating_cadence.configure(config,rating_every,state['iteration']))
+        from brass_ai.recovery import training_revision_g3270 as g3270
+        if teacher_revision:
+            # Build steps 2-3 (40 tables, rebuilt targets, 8-iteration labels, search-value rotation); then kept.
+            require(mode=='on','The g3270 teacher revision is adopted with teaching on')
+            config=g3270.configure(config,state['iteration'])
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -253,12 +259,15 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-value-'+g3140.tag(config)+'-share');stages.append(prefix)
         if rating_cadence.applied(config):
             prefix=prefix.replace('-share', '-pl'+str(config[rating_cadence.KEY]['every_iterations'])+'-share');stages.append(prefix)
+        if g3270.applied(config):
+            prefix=prefix.replace('-share', '-'+g3270.tag(config)+'-share');stages.append(prefix)
         output=root/'configs/step5'/(run.name+prefix+tag+'.json')
+        adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
-                         g3140.changed(before,config))
+                         g3140.changed(before,config) or adopting_teacher)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (root/'configs/step5'/(run.name+name+tag+'.json') for name in reversed(stages[:-1])) if p.exists()),None)
@@ -282,7 +291,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 # Journal the prepared boundary so a retry cannot archive work
                 # that already belongs to the revised recipe.
                 from brass_ai.recovery.retention import safe
-                journal=('value-revision' if g3140.changed(before,config) else
+                journal=('teacher-revision' if adopting_teacher else 'value-revision' if g3140.changed(before,config) else
                          'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
                 directory=safe(run, run/'configuration-history'/f"{journal}-{state['iteration']:04d}")
                 marker=safe(run, directory/'recipe.json')
@@ -376,17 +385,20 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'update_search_lambda',False):kwargs['update_search_lambda']=True
         if getattr(args,'value_revision',None):kwargs['value_revision']=args.value_revision
         if getattr(args,'rating_every',None) is not None:kwargs['rating_every']=args.rating_every
+        if getattr(args,'teacher_revision',False):kwargs['teacher_revision']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
         if options['teacher_phase'].get('skip_utility_qualification',False):
             report['utility_qualification']='skipped'
             print('Utility qualification skipped; teacher collection does not wait for utility readiness.',flush=True)
-        tables=g1491.tables(options);calibration=options['teacher_phase']['term']['shadow_iterations']
+        from brass_ai.recovery import training_revision_g3270 as g3270
+        tables=g3270.tables(options);calibration=options['teacher_phase']['term']['shadow_iterations']
         report.update(tables=tables,qualification_iterations=g1491.shadow_iterations(options))
         revised='schedule' in options['teacher_phase']['search_value']
         report['stage_schedule']=options['teacher_phase']['search_value'].get('schedule')
-        cadence=(f"tables={tables['train']} + {tables['held_out']} held-out every {report['stage_schedule']['validation_interval']} iterations; qualification override="+
+        cadence=(f"tables={tables['train']} + {tables['held_out']} validation every iteration; " if g3270.every_iteration(options) else
+            f"tables={tables['train']} + {tables['held_out']} held-out every {report['stage_schedule']['validation_interval']} iterations; qualification override="+
             str(report['stage_schedule']['validation_during_beta_qualification'])+'; ') if revised else f"tables={tables['train']}+{tables['held_out']}; "
         from brass_ai.recovery import adaptive_teacher_beta as adaptive
         beta_mode = 'adaptive beta' if adaptive.KEY in options['teacher_phase'] else 'qualified fixed beta'
@@ -448,6 +460,14 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if rating_cadence.applied(options):
             report['rating_cadence']=rating_cadence.summary(options)
             print('Strength rating cadence: '+str(report['rating_cadence']),flush=True)
+        if g3270.applied(options):
+            report['g3270_teacher_revision']=g3270.summary(options)
+            r=report['g3270_teacher_revision'];v=r['search_value']
+            print(f"g3270 teacher revision (from g{r['from_generation']}): {r['tables']['train']}+{r['tables']['held_out']} tables every "
+                  f"iteration, labels {r['buffer']['iterations']} iterations (ages {r['buffer']['age_weights']}), "
+                  f"{r['rows_per_step']} rows per PPO step without repeats, targets rebuilt from the current policy at scale "
+                  f"{r['targets']['label_scale']:g}, long-search labels only; search value buffer {v['buffer_iterations']} iterations, "
+                  f"at most {v['steps_per_iteration']} steps, {v['heldout_games']} rotating held-out games.",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

@@ -132,7 +132,10 @@ class B045(unittest.TestCase):
             self.assertEqual(len(b.rows(17)),1);self.assertEqual(b.rows(17,stale_ages=[7]),[])
             self.assertEqual(len(b.rows(11,'heldout',stale_ages=[1])),1)
             self.assertEqual(ValueBuffer(tmp,'other',receipts=b.receipts).rows(10),[])
-            restored=ValueBuffer(tmp,row['reward_id'],receipts=b.receipts);self.assertEqual(restored.rows(10),[row])
+            restored=ValueBuffer(tmp,row['reward_id'],receipts=b.receipts)
+            # g3270: the cache keeps each state as the float32 array training reads.
+            plain=lambda r:dict(r,state=np.asarray(r['state'],dtype=np.float32).tolist())
+            self.assertEqual([plain(r) for r in restored.rows(10)],[plain(row)])
             (Path(tmp)/b.receipts[0]['file']).write_bytes(b'bad')
             with self.assertRaises(ValueError):ValueBuffer(tmp,row['reward_id'],receipts=b.receipts)
 

@@ -8,11 +8,37 @@ import numpy as np
 import torch
 
 from brass_ai.learning.batching import collate
-from brass_ai.learning.contracts import require
+from brass_ai.learning.contracts import digest, require
 from .teacher_buffer import sample_indices
 from .teacher_labels import PHASES, softmax
 
 ACTOR_PREFIXES = ('state_encoder.', 'entity_encoder.', 'entity_projections.', 'action_encoder.', 'policy_scorer.')
+# g3270: one PPO update's label batches (no repeated row, grouped by legal width).
+BATCH_CONTRACT = 'teacher-label-batches/1.0.0'
+STALENESS_CONTRACT = 'teacher-staleness-sample/1.0.0'
+
+
+def search_bonus(label, scale):
+    """scale * (c1 + most visits) * completed value: the search's preference over the prior.
+
+    The completed values are those of improved_policy (search value where visited, the mixed
+    value elsewhere). softmax(stored logits + search_bonus(label, label['c2'])) is the
+    exported target; g3270 adds the bonus to the current logits instead.
+    """
+    logits, counts, means = (np.asarray(label[k], dtype=np.float64) for k in ('logits', 'counts', 'mean_returns'))
+    value = float(label['node_value'])
+    visited = counts > 0; total = counts.sum()
+    mixed = (value + total * np.dot(softmax(logits[visited]), means[visited])) / (1 + total) if total else value
+    completed = np.where(visited, means, mixed)
+    bonus = scale * (label['c1'] + counts.max()) * completed
+    require(np.isfinite(bonus).all(), 'Non-finite teacher search bonus')
+    return bonus
+
+
+def rebuilt_target(logits, bonus):
+    """softmax(current logits + bonus), held fixed for the gradient. Padding (-inf logits) stays zero."""
+    with torch.no_grad():
+        return (logits.detach() + bonus).softmax(-1)
 
 
 @contextmanager
@@ -39,12 +65,15 @@ def forward_policy(model, rows, *, audit=None):
     return _score_policy(model, states, actions, mask)
 
 
-def target_tensor(rows, logits):
-    """One host-to-device transfer, replacing one transfer per teacher row."""
+def target_tensor(rows, logits, values=None):
+    """One host-to-device transfer, replacing one transfer per teacher row.
+
+    ``values`` replaces the exported targets with other per-action vectors (the g3270 bonus).
+    """
     target = np.zeros(tuple(logits.shape), dtype=np.float32)
     for i, row in enumerate(rows):
-        values = row.label['target']
-        target[i, :len(values)] = values
+        vector = row.label['target'] if values is None else values[i]
+        target[i, :len(vector)] = vector
     return torch.as_tensor(target, device=logits.device)
 
 
@@ -79,16 +108,18 @@ class StagedRows:
     A step gathers its padded batch on the device instead of packing it on the host
     and copying it over. The tensors equal collate()/target_tensor() exactly: zero
     actions, False mask and zero target past each row's legal width. Each row is
-    admitted once (InputAudit), as collate would on its first use.
+    admitted once (InputAudit), as collate would on its first use. ``values`` stages
+    other per-action vectors in place of the exported targets (the g3270 search bonus).
     """
     LIMIT_BYTES = 2 * 1024 ** 3
 
-    def __init__(self, rows, device, audit):
+    def __init__(self, rows, device, audit, values=None):
         for r in rows: audit.check(r.encoded)
         self.widths = [len(r.encoded.choice_ids) for r in rows]
         offsets = np.cumsum([1] + self.widths[:-1])
         actions = np.concatenate([np.zeros((1, rows[0].encoded.actions.shape[-1]), np.float32)] + [r.encoded.actions for r in rows])
-        targets = np.concatenate([np.zeros(1, np.float32)] + [np.asarray(r.label['target'], np.float32) for r in rows])
+        vectors = [r.label['target'] for r in rows] if values is None else values
+        targets = np.concatenate([np.zeros(1, np.float32)] + [np.asarray(v, np.float32) for v in vectors])
         self.states = torch.as_tensor(np.stack([r.encoded.state for r in rows]), device=device)
         self.actions = torch.as_tensor(np.ascontiguousarray(actions, dtype=np.float32), device=device)
         self.targets = torch.as_tensor(targets, device=device)
@@ -97,13 +128,14 @@ class StagedRows:
         self.bytes = sum(t.numel() * t.element_size() for t in (self.states, self.actions, self.targets))
 
     @classmethod
-    def build(cls, rows, device, audit):
+    def build(cls, rows, device, audit, values=None):
         # Duck-typed inputs, and any label narrower or wider than its encoded choices, keep the host collate path.
         if not rows or any(not isinstance(getattr(r.encoded, 'state', None), np.ndarray)
                            or not isinstance(getattr(r.encoded, 'actions', None), np.ndarray)
                            or len(r.encoded.choice_ids) != len(r.label['target']) for r in rows): return None
+        if values is not None and any(len(v) != len(r.label['target']) for r, v in zip(rows, values, strict=True)): return None
         size = sum(len(r.encoded.choice_ids) for r in rows) * rows[0].encoded.actions.shape[-1] * 4
-        return cls(rows, device, audit) if size <= cls.LIMIT_BYTES else None
+        return cls(rows, device, audit, values) if size <= cls.LIMIT_BYTES else None
 
     def batch(self, indices):
         width = max(self.widths[i] for i in indices)
@@ -131,9 +163,19 @@ def profile(row):
     return row.label.get('profile', 'full')
 
 
-def heldout_measure(model, rows):
+def movement(rows, before, after):
+    """Mean KL(policy before || policy after) on the same long-label rows, overall and by phase."""
+    pairs = [(r, b, a) for r, b, a in zip(rows, before, after, strict=True) if profile(r) == 'full']
+    out = {}
+    for phase in ('all', *PHASES):
+        values = [kl(softmax(b), softmax(a)) for r, b, a in pairs if phase == 'all' or r.label['phase'] == phase]
+        out[phase] = float(np.mean(values)) if values else None
+    return out
+
+
+def heldout_measure(model, rows, *, logits=None):
     """Long-label KL by phase, as before g1491; short-search labels under 'short' when present."""
-    logits = policy_logits(model, rows); out = {}
+    logits = policy_logits(model, rows) if logits is None else logits; out = {}
     def measure(pairs):
         return dict(rows=len(pairs), kl=float(np.mean([kl(r.label['target'], softmax(l)) for r, l in pairs])) if pairs else None,
             top1=float(np.mean([np.argmax(r.label['target']) == np.argmax(l) for r, l in pairs])) if pairs else None)
@@ -177,9 +219,20 @@ def weighted_gradients(model, rows, weights, parameters, *, audit=None, max_cell
     return total, sums, per_row
 
 
+def staleness_sample(rows, count, *, seed, generation, age):
+    """A fixed sample of one age's rows for the drift measurement; every row when count is None."""
+    if count is None or len(rows) <= count: return list(rows)
+    key = digest(dict(contract=STALENESS_CONTRACT, seed=seed, generation=generation, age=age))
+    picked = np.random.default_rng(int(key[:16], 16)).choice(len(rows), count, replace=False)
+    return [rows[i] for i in sorted(picked.tolist())]
+
+
 class TeacherTerm:
-    def __init__(self, model, config, aged_rows, *, seed, generation, state=None):
+    def __init__(self, model, config, aged_rows, *, seed, generation, state=None, revision=None):
+        """``revision`` (g3270): rebuilt targets at a label scale, planned no-repeat batches, sampled staleness."""
         self.config = config; self.mode = config['mode']; self.seed = seed; self.generation = generation
+        self.revision = copy.deepcopy(revision)
+        self.batches = None; self.plan_report = None; self.bonus = None; self.position = None
         self.state = copy.deepcopy(state or {})
         self.beta = self.state.get('beta', 1.); self.calibrated = self.state.get('calibrated', False)
         from .teacher_gradient_qualification import restore
@@ -232,7 +285,8 @@ class TeacherTerm:
         # g1491: L = a mean(L_long) + (1-a) mean(L_short); None keeps one long-only pool
         # (every earlier recipe, and the long-only g1490 restart variant).
         self.long_weight = config[REVISION]['labels'].get('long_weight') if REVISION in config else None
-        if self.mode != 'off':
+        require(self.revision is None or self.long_weight is None, 'g3270 rebuilt targets use long-search labels only')
+        if self.mode != 'off' and self.revision is None:
             logits = policy_logits(model, [r for _, r in aged_rows])
             for age in sorted({a for a, _ in aged_rows}):
                 selected = [(r, l) for (a, r), l in zip(aged_rows, logits) if a == age]
@@ -243,6 +297,26 @@ class TeacherTerm:
                     ratio=drift / improve if improve > 0 else None, skipped=bool(skip))
                 if not skip:
                     self.rows.extend(r for r, _ in selected); self.ages.extend([age] * len(selected))
+        elif self.mode != 'off':
+            # The same per-age rule; the drift is measured on a fixed sample of each age (8 ages, ~10,000 rows).
+            groups = {}
+            for a, r in aged_rows: groups.setdefault(a, []).append(r)
+            probes = {age: staleness_sample(rows, self.revision['staleness_sample_rows'], seed=seed,
+                                            generation=generation, age=age) for age, rows in groups.items()}
+            ordered = sorted(groups)
+            logits = policy_logits(model, [r for age in ordered for r in probes[age]]); cursor = 0
+            for age in ordered:
+                rows, probe = groups[age], probes[age]
+                current = logits[cursor:cursor + len(probe)]; cursor += len(probe)
+                improve = float(np.mean([kl(r.label['target'], softmax(r.label['logits'])) for r in rows]))
+                drift = float(np.mean([kl(softmax(r.label['logits']), softmax(l)) for r, l in zip(probe, current, strict=True)]))
+                skip = drift > config['buffer']['max_staleness_ratio'] * improve
+                self.staleness[str(age)] = dict(rows=len(rows), sampled=len(probe), improvement=improve, drift=drift,
+                    ratio=drift / improve if improve > 0 else None, skipped=bool(skip))
+                if not skip:
+                    self.rows.extend(rows); self.ages.extend([age] * len(rows))
+            self.bonus = [search_bonus(r.label, self.revision['label_scale']).astype(np.float32) for r in self.rows]
+        if self.mode != 'off':
             for phase in PHASES:
                 values = [kl(r.label['target'], softmax(r.label['logits'])) for a, r in aged_rows
                           if a == 0 and r.label['phase'] == phase and profile(r) == 'full']
@@ -271,15 +345,50 @@ class TeacherTerm:
     @property
     def active(self): return self.mode != 'off' and bool(self.rows)
 
+    def plan(self, steps):
+        """g3270: fix this PPO update's label batches before its first step.
+
+        Rows are drawn by age weight without replacement (exponential keys divided by the
+        weight), so no row repeats inside the update. The drawn rows are sorted by legal
+        width and cut into batches of ``rows_per_step``, whose order is then shuffled, so a
+        step pads little. A pool smaller than the update's demand gives every row once, in
+        batches of ceil(pool / steps).
+        """
+        self.batches = None; self.plan_report = None
+        if self.revision is None or not self.active or type(steps) is not int or steps <= 0: return
+        n = self.config['term']['rows_per_step']; weights = self.config['buffer']['age_weights']
+        key = digest(dict(contract=BATCH_CONTRACT, seed=self.seed, generation=self.generation, steps=steps, rows=len(self.rows)))
+        rng = np.random.default_rng(int(key[:16], 16))
+        keys = rng.exponential(size=len(self.rows)) / np.asarray([weights[a] for a in self.ages], dtype=np.float64)
+        order = np.argsort(keys, kind='stable')
+        demand = steps * n
+        chosen, size = (order[:demand], n) if demand < len(order) else (order, -(-len(order) // steps))
+        widths = np.asarray([len(self.rows[i].label['legal_ids']) for i in chosen])
+        ranked = chosen[np.lexsort((keys[chosen], widths))]
+        cut = [ranked[i:i + size].tolist() for i in range(0, len(ranked), size)]
+        self.batches = [cut[j] for j in rng.permutation(len(cut)).tolist()]
+        width = lambda i: len(self.rows[i].label['legal_ids'])
+        cells = sum(max(width(i) for i in b) * len(b) for b in self.batches)
+        ages = Counter(self.ages)
+        drawn = Counter(self.ages[i] for i in chosen.tolist())
+        self.plan_report = dict(contract=BATCH_CONTRACT, planned_steps=steps, rows_per_step=n, pool_rows=len(self.rows),
+            demand=demand, drawn_rows=len(chosen), batches=len(self.batches), batch_rows=size,
+            padding_efficiency=float(widths.sum() / cells) if cells else None,
+            inclusion_by_age={str(a): drawn[a] / ages[a] for a in sorted(ages)},
+            scope='Each drawn row is used once in this PPO update; batches stop early if PPO does')
+
     def beta_basis(self):
         return [self.config['term']['share_target'], (self.qualification or {}).get('sha256'),
                 (self.remeasurement or {}).get('measured_generation')]
 
     def apply(self, model, actor, step):
         if not self.active: return
+        if self.batches is not None and step - 1 >= len(self.batches): return  # a small pool is used up
         began = time.perf_counter()
         mix = None
-        if self.long_weight is None:
+        if self.batches is not None:
+            indices = self.batches[step - 1]
+        elif self.long_weight is None:
             indices = sample_indices(self.ages, self.config['buffer']['age_weights'], self.config['term']['rows_per_step'],
                                      seed=self.seed, generation=self.generation, step=step)
         else:
@@ -293,15 +402,27 @@ class TeacherTerm:
                 # encoder forward/backward per chunk: 20-30 s per PPO pass, not 1-3 s.
                 if self.staged is None and not self.staging.get('fallback'):
                     staged_at = time.perf_counter()
-                    self.staged = StagedRows.build(self.rows, next(model.parameters()).device, self.input_audit)
+                    if self.batches is not None:
+                        # g3270: stage only this update's drawn rows, with their search bonus.
+                        used = sorted({i for b in self.batches for i in b})
+                        self.position = {i: k for k, i in enumerate(used)}
+                        self.staged = StagedRows.build([self.rows[i] for i in used], next(model.parameters()).device,
+                                                       self.input_audit, values=[self.bonus[i] for i in used])
+                    else:
+                        self.staged = StagedRows.build(self.rows, next(model.parameters()).device, self.input_audit,
+                                                       values=self.bonus)
                     self.staging = dict(staged=self.staged is not None, fallback=self.staged is None,
                         bytes=self.staged.bytes if self.staged else 0, seconds=time.perf_counter() - staged_at)
                 if self.staged is not None:
-                    states, actions, mask, target = self.staged.batch(indices)
+                    positions = [self.position[i] for i in indices] if self.position is not None else indices
+                    states, actions, mask, target = self.staged.batch(positions)
                     logits = _score_policy(model, states, actions, mask).float()
                 else:
                     logits = forward_policy(model, rows, audit=self.input_audit).float()
-                    target = target_tensor(rows, logits)
+                    target = target_tensor(rows, logits, None if self.bonus is None else [self.bonus[i] for i in indices])
+                if self.bonus is not None:
+                    # g3270: the staged vector is the search bonus; the target is rebuilt from the current policy.
+                    target = rebuilt_target(logits, target)
                 logp = logits.log_softmax(-1).masked_fill(~torch.isfinite(logits), 0.)
                 loss = (torch.special.xlogy(target, target) - target * logp).sum(-1).mean()
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
@@ -407,6 +528,11 @@ class TeacherTerm:
         qualified = self.qualification and self.qualification['passed']
         fixed = self.qualification['beta'] if qualified else None
         fixed = accepted(fixed, self.remeasurement, self.config['term']['share_target'])
+        if self.revision is not None:
+            mix = dict(mix, revision=dict(targets='rebuilt-from-current-policy', label_scale=self.revision['label_scale'],
+                batches=self.revision['batches'], plan=copy.deepcopy(self.plan_report),
+                loss=summary([s['loss'] for s in self.steps]),
+                repeated_rows=sum(n > 1 for n in self.presentations.values())))
         return dict(mode=self.mode, beta=self.beta_used, beta_next=self.beta, steps=len(self.steps), rows=len(self.rows), **mix,
             rows_per_step=self.config['term']['rows_per_step'], **self.beta_report,
             fixed_beta=fixed,

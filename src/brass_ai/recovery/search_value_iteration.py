@@ -43,7 +43,9 @@ class SearchValueIteration:
         if rebuild is not None:
             from .transfer_resume import search_payload
             saved = search_payload(saved,rebuild)
-        options = config['teacher_phase']['search_value']
+        # g3270: at most 32 steps, a 16-iteration buffer and a rotating 32-game held-out set.
+        from . import training_revision_g3270 as g3270
+        options = g3270.search_value_options(config, config['teacher_phase']['search_value'])
         if saved is None:
             require(options['stage'] in ('off','A') and options['blend']['w'] == options['trunk']['scale'] == 0,
                     'Search value adoption cannot skip gates')
@@ -63,7 +65,7 @@ class SearchValueIteration:
         self.phase = SearchValuePhase(run/'search-values', model, options, digest(model.config.utility),
             saved=saved, startup=config['teacher_phase']['startup'], trainable=self.mode == 'on',pending_files=pending_files,
             pending_directory=run/f"iteration-{state['iteration']:04d}"/'teacher-shadow/value-partials' if pending_files else None,
-            defer_install=is_on(config) and not hasattr(model,'search_value_head'))
+            defer_install=is_on(config) and not hasattr(model,'search_value_head'),revision=g3270.value_settings(config))
         self.generation = state['iteration']
         self.report = None
         self.pending_generation = None

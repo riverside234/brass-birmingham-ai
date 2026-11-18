@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, nullcontext
 import copy
 import json
+import os
 from pathlib import Path
 import queue
 import struct
@@ -65,8 +66,62 @@ def _validate_job(job,producer):
     return e
 
 
+SPOOL = 'BRASS_TEACHER_SPOOL'
+SPOOL_POLL_SECONDS = .01
+SPOOL_MIN_FREE_BYTES = 256*1024**2
+
+
+def spool_enabled():
+    value = os.environ.get(SPOOL, '1')
+    require(value in ('0', '1'), SPOOL+' must be 0 or 1')
+    return value == '1'
+
+
+class Spool:
+    """A streamed table's output in an unlinked file, so the worker never waits for Python.
+
+    Through a pipe, a busy trainer process (every thread paused at once, for 3-16 s at
+    g3268/g3269) stopped draining 64 KB pipes and every search worker blocked in its write:
+    about 22 s of each 65 s table. A regular file never blocks the writer; a reader thread
+    tails it. Linux uses /dev/shm (memory) when it has room.
+    """
+    def __init__(self):
+        import tempfile, uuid
+        directory = '/dev/shm' if os.path.isdir('/dev/shm') and os.access('/dev/shm', os.W_OK) else tempfile.gettempdir()
+        try:
+            stat = os.statvfs(directory)
+            if stat.f_bavail*stat.f_frsize < SPOOL_MIN_FREE_BYTES:directory = tempfile.gettempdir()
+        except (AttributeError, OSError):pass
+        self.path = os.path.join(directory, f'brass-teacher-{os.getpid()}-{uuid.uuid4().hex}.out')
+        binary = getattr(os, 'O_BINARY', 0)
+        self.writer = os.open(self.path, os.O_CREAT|os.O_EXCL|os.O_WRONLY|binary, 0o600)
+        try:self.reader = open(os.open(self.path, os.O_RDONLY|binary), 'rb', buffering=0)
+        except BaseException:
+            os.close(self.writer);os.unlink(self.path);raise
+        self.unlinked = False
+
+    def started(self):
+        """The child holds its own handle: close ours, and unlink where an open file allows it."""
+        os.close(self.writer);self.writer = None
+        if os.name != 'nt':
+            os.unlink(self.path);self.unlinked = True
+
+    def close(self):
+        if self.writer is not None:
+            os.close(self.writer);self.writer = None
+        self.reader.close()
+        if not self.unlinked:
+            try:os.unlink(self.path)
+            except FileNotFoundError:pass
+            self.unlinked = True
+
+
 class Worker:
-    """Length-bounded stdout pump permits cancellation even in native traversal."""
+    """Length-bounded stdout pump permits cancellation even in native traversal.
+
+    A streamed (fixed-count CPU) table writes to a Spool file and its events queue is
+    unbounded: verification lag never reaches the search worker (g3270, build step 2).
+    """
     def __init__(self, executable, request, client, cancel, cpu=None):
         from .lab_paths import runtime_path
         self.client, self.cancel = client, cancel
@@ -74,19 +129,36 @@ class Worker:
         # A fixed-count table runs to its quota; only a stall should stop it.
         self.counted = request.get('inference', {}).get('budget', {}).get('mode') == 'count'
         self.stream_turns = request.get('turn_handoff') == STREAM_TURNS
-        self.process = subprocess.Popen([str(runtime_path(executable))], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, bufsize=0, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        self.spool = Spool() if self.stream_turns and spool_enabled() else None
+        try:
+            self.process = subprocess.Popen([str(runtime_path(executable))], stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE if self.spool is None else self.spool.writer,
+                stderr=subprocess.PIPE, bufsize=0, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        except BaseException:
+            if self.spool is not None:self.spool.close()
+            raise
+        if self.spool is not None:self.spool.started()
+        source = self.process.stdout if self.spool is None else self.spool.reader
         if cpu is not None:
             from .lab_cpu_runtime import pin_child
             pin_child(self.process.pid,cpu)
-        self.events = queue.Queue(2); self.stop = threading.Event(); self.stderr = bytearray()
+        self.events = queue.Queue() if self.stream_turns else queue.Queue(2)
+        self.stop = threading.Event(); self.stderr = bytearray()
         def read(n):
             data = bytearray(n)
             remaining = memoryview(data)
             while remaining:
-                got = self.process.stdout.readinto(remaining)
-                require(got, 'Native teacher closed output')
-                remaining = remaining[got:]
+                got = source.readinto(remaining)
+                if got:
+                    remaining = remaining[got:];continue
+                require(self.spool is not None, 'Native teacher closed output')
+                # A file has no more bytes yet. Bytes written before the worker exited are visible.
+                require(not self.stop.is_set(), 'Teacher output reader stopped')
+                if self.process.poll() is not None:
+                    got = source.readinto(remaining)
+                    require(got, 'Native teacher closed output')
+                    remaining = remaining[got:];continue
+                time.sleep(SPOOL_POLL_SECONDS)
             return data
         def pump():
             try:
@@ -229,7 +301,9 @@ class Worker:
         self.process.wait(timeout=EXIT_GRACE_SECONDS)
         self.exit_seconds = time.monotonic()-began
         self.reader.join(timeout=2);self.err_reader.join(timeout=2)
-        self.process.stdin.close();self.process.stdout.close();self.process.stderr.close()
+        self.process.stdin.close();self.process.stderr.close()
+        if self.process.stdout is not None:self.process.stdout.close()
+        if getattr(self, 'spool', None) is not None:self.spool.close()
 
 
 class TeacherCollector:
@@ -239,7 +313,7 @@ class TeacherCollector:
     gated by B05/B07; this class is also the exact two-table qualification path.
     """
     def __init__(self, executable, core_source, bootstrap, service, calibration, *, lanes=2, cancel=None,
-                 model=None, history=(), inference=None, cores=(), core_plan=None, row_workers=0):
+                 model=None, history=(), inference=None, cores=(), core_plan=None, row_workers=0, parity_rows=None):
         self.executable, self.core_source, self.bootstrap = executable,core_source,bootstrap
         self.service, self.calibration = service, calibration
         require(type(lanes) is int and 1 <= lanes <= 256,'Invalid teacher lanes')
@@ -250,6 +324,7 @@ class TeacherCollector:
         self.core_plan = core_plan
         # Helper processes for labelled-row validation and encoding (fixed-count CPU tables only).
         self.row_workers = row_workers
+        self.parity_rows = parity_rows  # g3270: model-logit parity on this many rows per table
         self.verifier = None
         self.failures = []
         self.finalization = {}
@@ -269,7 +344,7 @@ class TeacherCollector:
             from .lab_teacher_rows import shared
             row_pool = shared(self.row_workers)
         self.verifier = TurnVerifier(self.model,self.history,jobs,self.cancel,search_limits=count_search_limits(self.inference),
-                                     row_pool=row_pool)
+                                     row_pool=row_pool,parity_rows=getattr(self,'parity_rows',None))
         c = self.calibration
         require(c['contract'] == CONTRACT and c['source'] == producer and c['core_source'] == self.core_source
                 and c['model_id'] == jobs[0]['expected']['model_id'] and c['export_hash'] == jobs[0]['expected']['export_hash']

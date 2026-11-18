@@ -20,9 +20,13 @@ def label_snapshot(ages):
 
 
 class SearchValuePhase:
-    def __init__(self, directory, model, options, reward_id, *, saved=None, startup='immediate', trainable=True, pending_files=(), pending_directory=None, defer_install=False):
+    def __init__(self, directory, model, options, reward_id, *, saved=None, startup='immediate', trainable=True, pending_files=(), pending_directory=None, defer_install=False,
+                 revision=None):
         self.options = copy.deepcopy(validate(options))
         self.model, self.reward_id = model, reward_id
+        # g3270: a 16-iteration training buffer and a rotating 32-game held-out set (dedicated schedule only).
+        self.revision = copy.deepcopy(revision)
+        require(revision is None or dedicated_holdout(options), 'The rotating search-value held-out set needs the dedicated schedule')
         saved = saved or {}
         self.machine = StageMachine(saved=saved.get('stage'), startup=startup,options=options)
         if options['stage'] == 'off': self.machine.manual('off')
@@ -31,7 +35,8 @@ class SearchValuePhase:
         self.trainable=trainable
         self.buffer = ValueBuffer(directory, reward_id, receipts=saved.get('buffer', {}).get('receipts', ()),
                                   retired=saved.get('buffer', {}).get('retired', ()),pending_files=pending_files,pending_directory=pending_directory,
-                                  heldout_iterations=HELDOUT_ITERATIONS if dedicated_holdout(options) else 8)
+                                  heldout_iterations=HELDOUT_ITERATIONS if dedicated_holdout(options) else 8,
+                                  train_iterations=revision['buffer_iterations'] if revision is not None else 8)
         # Revised return fitting uses validated numeric value rows directly.
         # Policy staleness still belongs to TeacherTerm; duplicating its full
         # label views here both starved the head and inflated checkpoints.
@@ -191,9 +196,21 @@ class SearchValuePhase:
         holdout_a = self.machine.state['stage']=='A' and stage_a_holdout(self.options)
         gated = scale > 0 or holdout_a
         waiting = False
+        rotation = None
+        if dedicated and self.revision is not None:
+            # g3270: the latest 32 held-out games validate; a game leaving them trains until age 16.
+            from .search_value_retention import rotating_holdout
+            rotation = rotating_holdout(heldout, generation, games=self.revision['heldout_games'],
+                                        minimum=self.revision['heldout_minimum'], train_window=self.buffer.windows['train'])
+            buffered = buffered + rotation[1]
+            self.report['heldout_rotation'] = dict(rotation[2], buffer_iterations=self.buffer.windows['train'],
+                                                   train_rows=len(buffered))
         if gated and dedicated:
-            from .search_value_retention import recent_holdout
-            validation, self.report['retention_holdout'] = recent_holdout(heldout, generation)
+            if rotation is not None:
+                validation, self.report['retention_holdout'] = rotation[0], rotation[2]
+            else:
+                from .search_value_retention import recent_holdout
+                validation, self.report['retention_holdout'] = recent_holdout(heldout, generation)
             waiting = not validation
         # A gated pass cannot run until its independent validation panel is complete.
         train = [] if paused or waiting else self._targets(buffered)

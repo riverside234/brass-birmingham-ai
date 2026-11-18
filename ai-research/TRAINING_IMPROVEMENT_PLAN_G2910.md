@@ -450,6 +450,14 @@ Each step is one change that can be adopted at a committed boundary.
 
 **Status (2026-11-17):** steps 1, 5, 6, 7 and 8 are implemented for adoption from g3140 with `--value-revision`; see [G3140_VALUE_REVISION.md](G3140_VALUE_REVISION.md). One change from the table: the search-value head is not paused, so step 1 saves about 5–9 s less than estimated. Step 9's sampling half is implemented: the CPU worker plays each ordinary game, with the same RNG draws and the publisher's audits unchanged. The run stays at 320 games. See [STEP9_ORDINARY_AUTOPLAY.md](STEP9_ORDINARY_AUTOPLAY.md). The two open parts, the publisher decode and the shared-memory hand-off, followed at g3170 (publisher CPU about 1.6 s to 0.3 s per game on the laptop; leases issued with the job), together with PL ratings every 20 iterations; see [G3170_PUBLISHER_LEASES_RATING.md](G3170_PUBLISHER_LEASES_RATING.md). The game count is still 320.
 
+**Status (2026-11-18):** steps 2 and 3 are implemented for adoption from g3270 with `--teacher-revision`; see [G3270_TEACHER_STEPS_2_3.md](G3270_TEACHER_STEPS_2_3.md). The user's changes are:
+- Short-search labels stay off for policy training.
+- 128 rows per PPO step, with no repeats inside the update, grouped by legal width.
+- A 32-game rotating search-value hold-out.
+- A 16-iteration search-value buffer with at most 32 steps.
+
+"Search workers never wait" is done on the Python side: teacher output goes to a memory file, and a GC freeze covers collection. The teacher tables had been stalling for 10–22 s each, all at the same moments. Step 4, the distillation phase, is next.
+
 Steps 1, 5, 6, 7 and 9 do not depend on the others, so the value-loss steps 5 to 8 can go before the teacher steps 2 to 4. Step 3 needs step 2, step 4 needs step 3, and step 8 needs step 6. Step 5 is best taken before steps 6 to 8: with a sharper early stop, the share of kept intervals shows sooner whether a change to the loss helps or hurts.
 
 ## 9. Risks and what to watch

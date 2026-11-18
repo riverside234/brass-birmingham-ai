@@ -108,6 +108,20 @@ The held-out check, PPG cap .003, beta floor .25 and the strict early stop stay.
 --rating-every 20 (at a rated generation, a multiple of ten) runs the PL strength
 rating every 20 committed iterations from that generation on (was every 10):
 from g3170, ratings run at g3190, g3210, ... Committed slots stay; set once.
+
+--teacher-revision (at a committed boundary) adopts build steps 2 and 3
+(ai-research/G3270_TEACHER_STEPS_2_3.md); set once, then kept:
+  tables       36 train + 4 validation tables every iteration (no held-out tables
+               every fifth); validation labels train from the next iteration.
+  labels       8 iterations, age weights 8..1, long-search labels only; each use
+               rebuilds the target from the current policy at label scale .20.
+  batches      128 rows per PPO step, no row repeated inside the PPO update,
+               grouped by legal width; logit parity on 8 rows per table.
+  search value 16-iteration buffer, at most 32 steps, early stop on the latest 32
+               held-out games (4 new per iteration; leaving games train the head).
+Teacher beta is re-measured once with teaching on. Code-only in the same change:
+teacher workers stream to a memory file (never wait), collection freezes the GC heap,
+and tables are admitted while ordinary games finish.
 """
 import importlib.util
 from pathlib import Path

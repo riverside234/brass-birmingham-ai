@@ -90,12 +90,16 @@ class CollectionFailures(unittest.TestCase):
         from brass_ai.recovery.search_value_rows import ValueBuffer
         model=model_fixture();row,_,_=value_fixture(model)
         original=copy.deepcopy(row)
+        import numpy as np
+        # g3270: cached states are float32 arrays, the values every reader converts them to.
+        plain=lambda rows:[dict(r,state=np.asarray(r['state'],dtype=np.float32).tolist()) for r in rows]
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT/'artifacts') as tmp:
             buffer=ValueBuffer(tmp,row['reward_id']);buffer.publish(10,'train',[row])
             row['state'][0]+=1;row['returns'][0][0]+=1;row['job']['model_id']='changed'
-            self.assertEqual(buffer.rows(10),[original])
+            self.assertEqual(plain(buffer.rows(10)),plain([original]))
+            self.assertEqual(buffer.rows(10)[0]['state'].dtype,np.float32)
             restored=ValueBuffer(tmp,original['reward_id'],receipts=buffer.receipts)
-            self.assertEqual(restored.rows(10),buffer.rows(10))
+            self.assertEqual(plain(restored.rows(10)),plain(buffer.rows(10)))
 
 @unittest.skipUnless(os.environ.get('BRASS_B045_BINARY') and os.environ.get('BRASS_B045_BOOTSTRAP'),
                      'Explicit detached native binary/bootstrap required')

@@ -61,11 +61,47 @@ def recent_holdout(rows, generation):
         evaluation_target='final-utility-to-go')
 
 
+ROTATING_GAMES = 32
+
+
+def rotating_holdout(rows, generation, *, games=ROTATING_GAMES, minimum=HELDOUT_GAMES, train_window=16):
+    """g3270: the latest `games` dedicated held-out games validate; older ones join training.
+
+    Four validation tables arrive every iteration. A game leaving the latest `games` trains
+    the head while its collection is inside the `train_window`-iteration buffer, relabelled
+    split 'train' (source_split 'heldout'). No game retires before the set holds `games`, so
+    the set first fills from the 16 games already held out. At least `minimum` games run the
+    early stop.
+    """
+    require(type(games) is int and type(minimum) is int and 0 < minimum <= games and train_window > 0,
+            'Invalid rotating held-out settings')
+    groups = defaultdict(list)
+    for row in rows:
+        require(row['split'] == 'heldout' and 0 <= generation - row['generation'] < HELDOUT_ITERATIONS,
+                'Early stop requires dedicated held-out games in the current window')
+        groups[row['game_id']].append(row)
+    for game in groups.values():
+        require(len(game) == 64 and {r['index'] for r in game} == set(range(1, 65)) and
+                len({r['generation'] for r in game}) == 1, 'Incomplete/duplicate held-out search game')
+    ordered = sorted(groups, key=lambda game: (groups[game][0]['generation'], game))
+    latest, older = ordered[-games:], ordered[:-games]
+    ready = len(latest) >= minimum
+    validation = [dict(r, target=r['u']) for game in latest for r in groups[game]] if ready else []
+    trained = [game for game in older if generation - groups[game][0]['generation'] < train_window]
+    retired = [dict(r, split='train', source_split='heldout') for game in trained for r in groups[game]]
+    return validation, retired, dict(contract='rotating-search-heldout/1', ready=ready, requested_games=games,
+        minimum_games=minimum, available_games=len(groups), window_iterations=HELDOUT_ITERATIONS,
+        games=latest if ready else [], rows=len(validation), generations=sorted({r['generation'] for r in validation}),
+        retired_games=len(older), retired_training_games=len(trained), retired_training_rows=len(retired),
+        retired_generations=sorted({groups[game][0]['generation'] for game in trained}),
+        evaluation_target='final-utility-to-go')
+
+
 class HeldoutLoss:
     """Pack validation positions once and recompute predictions per interval."""
     def __init__(self, model, rows):
         games = Counter(r['game_id'] for r in rows)
-        require(len(games) in (8, HELDOUT_GAMES) and all(n == 64 for n in games.values()) and
+        require((len(games) == 8 or HELDOUT_GAMES <= len(games) <= ROTATING_GAMES) and all(n == 64 for n in games.values()) and
                 all(r['split'] == 'heldout' for r in rows), 'Search early stop needs complete held-out games')
         device = next(model.parameters()).device
         self.model = model

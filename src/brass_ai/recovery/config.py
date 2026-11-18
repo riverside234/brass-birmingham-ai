@@ -692,6 +692,10 @@ def validate_config(config):
     if RATING_CADENCE in config:
         require(config.get('rating',{}).get('enabled') is True,'A rating cadence needs strength ratings')
         fields.add(RATING_CADENCE);validate_rating_cadence(config[RATING_CADENCE],config['rating'])
+    from .training_revision_g3270 import KEY as TEACHER_REVISION,validate as validate_teacher_revision
+    if TEACHER_REVISION in config:
+        require('teacher_phase' in config,'The g3270 teacher revision needs the teacher phase')
+        fields.add(TEACHER_REVISION);validate_teacher_revision(config[TEACHER_REVISION])
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

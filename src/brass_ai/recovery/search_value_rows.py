@@ -112,6 +112,18 @@ def copy_row(row):
     return result
 
 
+def compact(row):
+    """A cached value row with its state as one read-only float32 array.
+
+    Every reader converts states to float32 tensors, so the values it sees are identical;
+    a 3,128-float Python list costs about 99 KB of memory and GC traversal, the array 12 KB.
+    """
+    if 'state' not in row: return row
+    state = np.asarray(row['state'], dtype=np.float32)
+    state.setflags(write=False)
+    return dict(row, state=state)
+
+
 class ValueBuffer:
     """Separate immutable JSON shards; state commit owns the receipt list.
 
@@ -119,10 +131,12 @@ class ValueBuffer:
     No ordinary replay reader sees these paths or records.
     """
     def __init__(self, directory, reward_id, *, receipts=(), retired=(), pending_files=(), pending_directory=None,
-                 heldout_iterations=8):
+                 heldout_iterations=8, train_iterations=8):
         self.directory = Path(directory).resolve()
         self.reward_id = reward_id
-        self.windows = dict(train=8, heldout=heldout_iterations)
+        # g3270: a 16-iteration training window (was 8).
+        require(train_iterations in (8, 16), 'Invalid search-value training window')
+        self.windows = dict(train=train_iterations, heldout=heldout_iterations)
         self.receipts = copy.deepcopy(list(receipts))
         self.retired = copy.deepcopy(list(retired))
         self.cache = {}
@@ -159,7 +173,7 @@ class ValueBuffer:
                     r['split'] == receipt['split'] and r['reward_id'] == receipt['reward_id'] for r in rows), 'Value shard identity differs')
             require('game_id' not in receipt or all(r['game_id'] == receipt['game_id'] for r in rows),
                     'Value shard game differs')
-            self.cache[receipt['sha256']] = rows
+            self.cache[receipt['sha256']] = [compact(r) for r in rows]
         return self.cache[receipt['sha256']]
 
     def publish(self, generation, split, rows, *, game_id=None):
@@ -183,7 +197,7 @@ class ValueBuffer:
         # We just encoded these admitted rows. Keep an independent cache copy
         # instead of immediately decompressing and parsing the same tensors.
         # _read still rehashes the actual file; cold restore still fully decodes.
-        self.cache[receipt['sha256']] = [copy_row(r) for r in rows]
+        self.cache[receipt['sha256']] = [compact(copy_row(r)) for r in rows]
         self._read(receipt)
         return receipt
 

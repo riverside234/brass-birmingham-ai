@@ -34,8 +34,9 @@ def is_shadow(config):
     from brass_ai.recovery.training_revision_g2090 import previous_opening
     from brass_ai.recovery.training_revision_g3140 import previous as before_value_revision
     from brass_ai.recovery.rating_cadence import previous as before_rating_cadence
+    from brass_ai.recovery.training_revision_g3270 import previous as before_teacher_revision
     try:
-        config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(recipe(config)))))
+        config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(before_teacher_revision(recipe(config))))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -114,6 +115,11 @@ def signature_transition(before,after):
     # g3170 rating cadence: adopted once, then kept; it changes only how often ratings run.
     from brass_ai.recovery import rating_cadence
     old=rating_cadence.project(old,new)
+    if old is None:return False
+    # g3270 teacher revision (build steps 2-3): adopted once, then kept. It changes the
+    # collection (40 tables), so pending work is archived, not preserved.
+    from brass_ai.recovery import training_revision_g3270 as g3270
+    old=g3270.project(old,new)
     if old is None:return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False

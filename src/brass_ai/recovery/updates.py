@@ -600,6 +600,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     critic_ds=phases.critic_dataset if phases is not None else ds
     critic_count=len(critic_ids)
     planned_steps=config['epochs']*math.ceil(len(actor_ids)/config['effective_batch_size'] if actor_ids else critic_count/config['critic_batch_size'])
+    # g3270: the teacher term fixes its no-repeat label batches for exactly these steps.
+    if teacher_term is not None and hasattr(teacher_term,'plan'):teacher_term.plan(planned_steps)
     calibration=None;reward_report=None
     if reward is not None:
         from brass_ai.learning.contracts import digest

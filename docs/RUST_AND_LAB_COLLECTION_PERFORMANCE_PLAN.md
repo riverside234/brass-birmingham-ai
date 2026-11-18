@@ -28,6 +28,18 @@ The benchmark entry points are [profile-rust-windows.py](../scripts/benchmarks/p
 
 At g3139 the lane loop cost 1,731 of about 3,150 ordinary core-seconds per iteration: 507 Python↔Rust round trips per game, plus per-decision JSON, hashing and freezing in Python. From g3140 the CPU collector plays each eligible game in one call, using each seat's own Python RNG state. Rows go through the unchanged append path, and the publisher's draw-replay audits are unchanged. On the laptop the lane time per game fell from 2.3–3.2 s to 0.5–0.7 s, with identical rows on all 618 parity decisions. `BRASS_ORDINARY_AUTOPLAY=0` restores the Python loop. Details are in [STEP9_ORDINARY_AUTOPLAY.md](../ai-research/STEP9_ORDINARY_AUTOPLAY.md).
 
+### g3270: teacher tables never wait; 40 tables
+
+In g3264–g3269 a teacher table took 54–65 s, of which 10–22 s was blocked writing turns to the trainer. The long waits were simultaneous: all tables stopped for 3–16 s, three or four times per collection, and resumed within half a second of each other. So the trainer process as a whole had paused. Most likely that was a full garbage collection over large long-lived trees.
+
+Four code-only changes take this off the search workers:
+- **Output.** A streamed CPU table writes to an unlinked `/dev/shm` file that a thread tails, with an unbounded event queue (`BRASS_TEACHER_SPOOL=0`).
+- **GC.** Collection freezes the existing GC heap and times every collector pause in `collection_gc` (`BRASS_COLLECTION_GC_FREEZE=0`).
+- **Admission.** Tables are admitted while the last ordinary games finish (`BRASS_TEACHER_TAIL_ADMISSION=0`).
+- **Memory.** Label caches drop their views, and value states are cached as float32 arrays.
+
+The recipe part, adopted with `--teacher-revision`, runs 36 + 4 validation tables every iteration. Details are in [G3270_TEACHER_STEPS_2_3.md](../ai-research/G3270_TEACHER_STEPS_2_3.md).
+
 ### g3170: publisher decode and pre-issued shared leases
 
 With autoplay, g3168–g3169 collection was bound by the teacher tables. Ordinary lanes were busy about 11% of the time and waited on publishers, which took about 2.6 s of CPU per game; most of a 0.3–0.9 s shared write was waiting for the parent's allocation reply and a second CPU ticket. The publisher now parses each unchanged history event, board field, player and choice list once and reuses its exact canonical bytes for seals and the replay encoding, with results byte-identical to the plain formulas (1.6 s to 0.3 s per game on the laptop). The parent issues each game's shared lease with the job, and the lane writes it inside its game's CPU ticket. `BRASS_SHARED_ROWS=0` and `BRASS_PREISSUED_LEASES=0` restore the old paths. Details are in [G3170_PUBLISHER_LEASES_RATING.md](../ai-research/G3170_PUBLISHER_LEASES_RATING.md).

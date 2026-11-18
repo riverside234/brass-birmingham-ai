@@ -20,6 +20,22 @@ from .lab_admission import teacher_sources
 from brass_ai.recovery.teacher_labels import prepare_rows, check_logits, check_turn
 
 
+def parity_sample(rows, count):
+    """A fixed sample of a table's labelled rows for the model-logit parity check (g3270).
+
+    Rows are taken round-robin over the four phases, each phase in label-identity order, so
+    every phase is checked; None checks every row.
+    """
+    if count is None or len(rows) <= count: return list(rows)
+    from brass_ai.recovery.teacher_labels import PHASES
+    groups = [sorted((r for r in rows if r.label['phase'] == phase), key=lambda r: r.identity) for phase in PHASES]
+    picked = []
+    while len(picked) < count:
+        for group in groups:
+            if group and len(picked) < count: picked.append(group.pop(0))
+    return picked
+
+
 class TableLogitBatcher:
     """One verifier for immutable, completed tables of a frozen collection."""
     MAX_ROWS = 64
@@ -99,7 +115,8 @@ class TableLogitBatcher:
         from brass_ai.recovery.teacher_term import chunks
         require(not self.verifier.cancel.is_set(), 'Teacher logit verification cancelled')
         began = time.monotonic()
-        rows = [row for record, _, _ in group for row in record['deferred']]
+        limit = getattr(self.verifier, 'parity_rows', None)
+        rows = [row for record, _, _ in group for row in parity_sample(record['deferred'], limit)]
         parts = [[rows[i] for i in part] for part in chunks(rows, self.MAX_ROWS, self.MAX_CELLS)]
         if rows:
             with self.verifier._policy_lock():
@@ -112,14 +129,18 @@ class TableLogitBatcher:
                             check_seconds=ended-began)
         for record, future, queued in group:
             count = len(record['deferred'])
-            record['settled'] = dict(rows=count, seconds=ended-queued, queue_seconds=began-queued,
-                                     check_seconds=ended-began) if count else {}
+            checked = len(parity_sample(record['deferred'], limit))
+            record['settled'] = dict(rows=checked, seconds=ended-queued, queue_seconds=began-queued,
+                                     check_seconds=ended-began, **({'labelled_rows': count} if limit is not None else {})) if count else {}
             future.set_result(None)
 
 
 class TurnVerifier:
-    def __init__(self, model, history, jobs, cancel, *, diagnostic=False, search_limits=None, row_pool=None):
+    def __init__(self, model, history, jobs, cancel, *, diagnostic=False, search_limits=None, row_pool=None, parity_rows=None):
         self.model, self.history, self.cancel = model, copy.deepcopy(history), cancel
+        # g3270: the batched model-logit parity check reads this many rows of each table (None: all).
+        require(parity_rows is None or (type(parity_rows) is int and parity_rows > 0), 'Invalid teacher parity sample')
+        self.parity_rows = parity_rows
         self.search_limits = search_limits  # Fixed-count searches may run past the job's own allowance.
         self.model_id = model_id(model)
         self.model_config = copy.deepcopy(model.config.to_dict())
@@ -282,14 +303,16 @@ class TurnVerifier:
         require(record is not None and not self.diagnostic,'Changed/unverified teacher table')
         if 'settled' not in record:
             deferred = record.get('deferred', [])
+            checked = parity_sample(deferred, getattr(self, 'parity_rows', None))
             began = time.monotonic()
             if deferred:
                 with self._policy_lock():
                     ready = time.monotonic()
-                    self._check_model();check_logits(self.model,deferred)
+                    self._check_model();check_logits(self.model,checked)
                 done = time.monotonic()
-                record['settled'] = dict(rows=len(deferred),seconds=done-began,
-                                         queue_seconds=ready-began,check_seconds=done-ready)
+                record['settled'] = dict(rows=len(checked),seconds=done-began,
+                                         queue_seconds=ready-began,check_seconds=done-ready,
+                                         **({'labelled_rows': len(deferred)} if getattr(self, 'parity_rows', None) else {}))
             else:record['settled'] = {}
         return record['settled']
 

@@ -11,7 +11,7 @@ from .teacher_phase_config import CONTRACT, SCHEDULE, SOURCE, validate, buffer_i
 from .teacher_buffer import TeacherBuffer
 from .teacher_cotton import NETWORK_CONTRACTS, SEATS
 from .teacher_labels import PHASES
-from .teacher_term import TeacherTerm, heldout_measure, summary
+from .teacher_term import TeacherTerm, heldout_measure, movement, policy_logits, summary
 from .search_value_schedule import validation_plan
 from .training_revision_g1491 import count_search, cotton_only, cotton_settings, job_block, seated_cotton, teacher_search_head_weight
 from .training_revision_g2090 import teacher_weight as opening_revision_weight
@@ -29,7 +29,8 @@ def committed_weight(config, state):
     saved = state.get(KEY, {})
     cache = saved.get('buffer', {})
     if cache and cache.get('identity') != buffer_identity(config): return {}
-    return opening_revision_weight(config, state, saved.get('weight', {}))
+    from .training_revision_g3270 import teacher_weight as teacher_revision_weight
+    return teacher_revision_weight(config, state, opening_revision_weight(config, state, saved.get('weight', {})))
 
 
 def initial_cursor(config):
@@ -74,7 +75,10 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
     single = cotton_only(config)
     cotton = cotton_settings(config)
     spacing = round(1 / cotton.get('table_fraction', .5))
-    for split, partition, count in (('train', 'train', c['tables']['train']), ('heldout', 'validation', c['tables']['held_out'])):
+    # g3270: 36 train and 4 validation tables every iteration; the qualified recipe keeps 32+4.
+    from .training_revision_g3270 import tables as revised_tables
+    table_counts = revised_tables(config)
+    for split, partition, count in (('train', 'train', table_counts['train']), ('heldout', 'validation', table_counts['held_out'])):
         seeds, cursor = seeds_for(cursor, count, partition=partition)
         # Reserve the same independent seed stream, but create no held-out jobs
         # or search/inference work on intervening iterations.
@@ -88,7 +92,7 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
             if cotton.get('contract') in NETWORK_CONTRACTS:
                 # Exactly 3/20 over consecutive training tables (4/5 of 32).
                 # Heldouts retain one cotton and three standard games each time.
-                ordinal = generation * c['tables']['train'] + index
+                ordinal = generation * table_counts['train'] + index
                 cotton_table = ((ordinal+1)*3//20 > ordinal*3//20 if split == 'train'
                                 else (index+generation)%4 == 0)
             seats = None
@@ -165,7 +169,9 @@ def action_summary(table_metrics, jobs, weight):
 
 class TeacherPhase:
     def __init__(self, root, run, config, state, model, raw=None, *, rebuild=None):
-        self.config = config; self.options = validate(config); self.state = state
+        from . import training_revision_g3270 as g3270
+        # The trainer runs the g3270 overlay (tables, label window, rows per step) when it is adopted.
+        self.config = config; self.options = g3270.phase_options(config, validate(config)); self.state = state
         self.generation = state['iteration']; self.reward_id = digest(self.options['search']['reward'])
         saved = copy.deepcopy(state.get(KEY, {}))
         checkpoint = (raw or {}).get('training', {}).get(KEY)
@@ -187,11 +193,12 @@ class TeacherPhase:
         self.buffer = TeacherBuffer(root, run, buffer_identity(config), receipts=cache.get('receipts', ()),
                                     retired=cache.get('retired', ()), c_scale=teacher_c_scale(profile or None),
                                     cotton_c_scale=profile.get('cotton_c_scale'),
-                                    iterations=self.options['buffer']['iterations'])
+                                    iterations=self.options['buffer']['iterations'],
+                                    heldout_lag=g3270.heldout_lag(config))
         # Static producer/profile changes retire beta with its labels.
         self.weight = ({} if cache and cache.get('identity') != self.buffer.identity
-                       else opening_revision_weight(config, state, saved.get('weight', {})))
-        self.term = None; self.jobs = []; self.heldout = []
+                       else g3270.teacher_weight(config, state, opening_revision_weight(config, state, saved.get('weight', {}))))
+        self.term = None; self.jobs = []; self.heldout = []; self.pre_logits = None
         self.cursor = state.get('teacher_seed_cursor', initial_cursor(config))
         self.receipt, self.ready = readiness(saved.get('readiness'), getattr(model, 'utility_calibration', None), self.reward_id,
                                             skip=self.options.get('skip_utility_qualification', False))
@@ -206,7 +213,7 @@ class TeacherPhase:
         self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id,
                                             skip=self.options.get('skip_utility_qualification', False))
         self.jobs = []; self.heldout = []; self.term = None; self.metrics = {}; self.pre = self.post = None
-        self.admission_seconds = 0.
+        self.pre_logits = None; self.admission_seconds = 0.
         self.buffer.window(self.generation)
         if self.options['mode'] != 'off' and self.ready:
             require(isinstance(export_hash, str) and len(export_hash) == 64 and epoch is not None,
@@ -298,9 +305,14 @@ class TeacherPhase:
             self.search_value.admit(results,self.jobs,post_spent=post_spent if verifier is not None else 0.,value_verifier=values)
 
     def prepare(self, model):
-        self.pre = heldout_measure(model, self.heldout)
+        from . import training_revision_g3270 as g3270
+        settings = g3270.term_settings(self.config)
+        # g3270: keep the validation rows' pre-update logits for the policy's movement on them.
+        self.pre_logits = policy_logits(model, self.heldout) if settings is not None else None
+        self.pre = heldout_measure(model, self.heldout, logits=self.pre_logits)
         rows = self.buffer.rows(self.generation) if self.options['mode'] != 'off' else []
-        self.term = TeacherTerm(model, self.options, rows, seed=self.config['seed'], generation=self.generation, state=self.weight)
+        self.term = TeacherTerm(model, self.options, rows, seed=self.config['seed'], generation=self.generation, state=self.weight,
+                                revision=settings)
         self.term.qualification_context=dict(tables=self.metrics.get('tables',{}),
             labels_by_phase=self.metrics.get('labels_by_phase',{}),
             labels_by_kind=self.metrics.get('labels_by_kind',{}),
@@ -314,13 +326,23 @@ class TeacherPhase:
 
     def finish(self, model, update):
         if self.term is not None: self.weight = self.term.finish()
-        self.post = heldout_measure(model, self.heldout)
+        post_logits = policy_logits(model, self.heldout) if self.pre_logits is not None else None
+        self.post = heldout_measure(model, self.heldout, logits=post_logits)
         self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id,
                                             skip=self.options.get('skip_utility_qualification', False))
         before = self.pre or heldout_measure(model, [])
         changes = {p: self.post[p]['kl'] - before[p]['kl'] if self.post[p]['kl'] is not None and before[p]['kl'] is not None else None for p in before}
+        heldout = dict(before=before, after=self.post, delta=changes)
+        if self.pre_logits is not None:
+            # g3270: the 4 validation tables, measured before they train. An update that ignored the
+            # teacher would raise their teacher KL by about the policy's own movement on them.
+            moved = movement(self.heldout, self.pre_logits, post_logits)
+            heldout.update(movement=moved, pull={p: moved[p] - changes[p] if moved.get(p) is not None and changes.get(p) is not None
+                                                 else None for p in moved},
+                           scope='Validation tables of this iteration, before they train: teacher KL to the stored search target, '
+                                 'policy movement KL(before||after) on the same rows, pull = movement - KL change (estimate)')
         return dict(contract=CONTRACT, mode=self.options['mode'], ready=self.ready, collection=self.metrics,
-            term=self.term.report() if self.term else {}, heldout=dict(before=before, after=self.post, delta=changes),
+            term=self.term.report() if self.term else {}, heldout=heldout,
             admission_encoding_seconds=self.admission_seconds, buffer=self.buffer.payload(),
             side_effects=dict(ppo_steps=update.get('optimizer_steps'), kl_guard=update.get('kl_guard'),
                               categorical_probe=update.get('categorical_probe')))

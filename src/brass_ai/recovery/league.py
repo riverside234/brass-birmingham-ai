@@ -474,6 +474,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
             # advancing the learner or writing a new gate specification.
             if champion_enabled(config):
                 with torch.random.fork_rng(devices=[]):schedule_champion(root,run,state,service,ordinary)
+            from .collection_gc import Window as CollectionWindow
+            collection_window=CollectionWindow()
             for _ in range(iterations):
                 iteration=state['iteration'];began=time.monotonic();directory=run/f'iteration-{iteration:04d}'
                 from . import v4_share
@@ -492,6 +494,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 retired_v4=v4_history.active(state.get('quality_pool'))
                 if phases is not None:phases.retired_tables=('legacy',) if retired_v4 else ()
                 current=service.register(model);behavior=Behavior(current,config['exploration'],exploration_settings)
+                # g3270: freeze the long-lived heap so collector passes cannot pause collection for seconds.
+                collection_window.start()
                 shadow_seconds=0.;teacher_run=None
                 if shadow_collector is not None:
                     shadow_began=time.monotonic()
@@ -558,6 +562,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     if teacher_run is not None:shadow_seconds+=finish_teacher();teacher_run=None
                     load_began=time.monotonic();ingress_metrics={}
                     games,learner_data,diagnostics=prepared_collection.finish(records,ingress_metrics)
+                collection_window.stop()
                 if normal and ordinary.last_collection_report is not None:
                     diagnostics['exploration_metrics']['branching']['scheduling']=ordinary.last_collection_report
                 all_games=games
@@ -768,6 +773,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         sampling=(quality_pool.sampling_description(next_quality)
                                   if quality else '25% initial/IL, 25% recent, 50% older reservoir; unavailable strata fall back')),
                     environment=environment(device),strength='requires fresh post-update evaluation')
+                report['collection_gc']=collection_window.report
                 report['timings'].update(anchor_probe_seconds=anchor_probe_seconds,
                     entropy_probe_seconds=entropy_probe_seconds,
                     auxiliary_diagnostics_seconds=(local_scoring_report or {}).get('heldout',{}).get('seconds',0.),
@@ -1013,6 +1019,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     teacher_line=(f'teacher={teacher_report["mode"]} labels={teacher_report["collection"].get("labels",0)} '
                         f'beta={tt.get("beta")} share={tt.get("share",{}).get("median")} '
                         f'heldout_dKL={teacher_report["heldout"]["delta"]["all"]}')
+                    if 'movement' in teacher_report['heldout']:
+                        # g3270 validation tables: the policy's own movement on them, and the pull toward the teacher.
+                        teacher_line+=(f' heldout_move={teacher_report["heldout"]["movement"]["all"]}'
+                                       f' heldout_pull={teacher_report["heldout"]["pull"]["all"]}')
                     qualification=tt.get('gradient_qualification') or {}
                     if qualification:
                         teacher_line+=(f' grad_qualification={"passed" if qualification["passed"] else "pending"}'
