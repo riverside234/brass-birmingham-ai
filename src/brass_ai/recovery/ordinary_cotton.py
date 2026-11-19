@@ -1,7 +1,8 @@
 """The cotton subset of the existing 70% ordinary self-play quota."""
 from brass_ai.learning.contracts import require
-from brass_ai.step5.policy import (COTTON_CANDIDATES, COTTON_DEVELOP_ONLY, COTTON_EXPLORATION, COTTON_PROBABILITY, LIMITED_COTTON_PROBABILITY,
-                                   cotton_build_available, cotton_candidates, cotton_seats, has_unflipped_cotton, network_cotton_candidates)
+from brass_ai.step5.policy import (BUILD_ONLY_COTTON_ACTIONS, COTTON_CANDIDATES, COTTON_DEVELOP_ONLY, COTTON_EXPLORATION,
+                                   COTTON_PROBABILITY, LIMITED_COTTON_PROBABILITY, QUIET_COTTON_ACTIONS, cotton_build_available,
+                                   cotton_candidates, cotton_seats, cotton_timing, has_unflipped_cotton, network_cotton_candidates)
 
 KEY = COTTON_EXPLORATION
 CONTRACT = 'ordinary-cotton-exploration/1.0.0'
@@ -9,7 +10,10 @@ LIMITED_CONTRACT = 'ordinary-cotton-exploration/2.0.0'
 NETWORK_CONTRACT = 'ordinary-cotton-exploration/3.0.0'
 # g2654: the network recipe with Rail-era cotton builds targeted only from level three.
 RAIL_NETWORK_CONTRACT = 'ordinary-cotton-exploration/4.0.0'
-NETWORK_CONTRACTS = (NETWORK_CONTRACT, RAIL_NETWORK_CONTRACT)
+# g3471: the g2654 recipe, timed within each era (step5.policy.cotton_timing): no cotton exploration at a seat's
+# first and last Canal action and first two and last Rail action; cotton builds only in each era's last two.
+TIMED_CONTRACT = 'ordinary-cotton-exploration/5.0.0'
+NETWORK_CONTRACTS = (NETWORK_CONTRACT, RAIL_NETWORK_CONTRACT, TIMED_CONTRACT)
 LIMITED_CONTRACTS = (LIMITED_CONTRACT, *NETWORK_CONTRACTS)
 RAIL_MINIMUM_BUILD_LEVEL = 3
 CAP = 3
@@ -19,6 +23,8 @@ LIMITED = dict(contract=LIMITED_CONTRACT, probability=LIMITED_COTTON_PROBABILITY
                max_per_seat_era=CAP, pause_unflipped=True, minimum_build_level=2)
 NETWORK = dict(LIMITED, contract=NETWORK_CONTRACT, network_max_per_seat_era=1)
 RAIL_NETWORK = dict(NETWORK, contract=RAIL_NETWORK_CONTRACT, rail_minimum_build_level=RAIL_MINIMUM_BUILD_LEVEL)
+TIMED = dict(RAIL_NETWORK, contract=TIMED_CONTRACT, quiet_actions=QUIET_COTTON_ACTIONS,
+             build_only_actions=BUILD_ONLY_COTTON_ACTIONS)
 
 
 def enabled(config):
@@ -85,7 +91,8 @@ class TableExploration:
         contract = proof.get(KEY, {}).get('contract')
         self.network = contract in NETWORK_CONTRACTS
         self.limited = self.network or contract == LIMITED_CONTRACT
-        self.rail_build_level = RAIL_MINIMUM_BUILD_LEVEL if contract == RAIL_NETWORK_CONTRACT else 2
+        self.rail_build_level = RAIL_MINIMUM_BUILD_LEVEL if contract in (RAIL_NETWORK_CONTRACT, TIMED_CONTRACT) else 2
+        self.timed = contract == TIMED_CONTRACT
         self.used = {'CanalEra': 0, 'RailEra': 0} if self.limited else None
         self.network_used = {'CanalEra': 0, 'RailEra': 0} if self.network else None
 
@@ -95,8 +102,12 @@ class TableExploration:
         era = view['context']['era']
         if view['seat'] not in self.seats or has_unflipped_cotton(view, view['seat']):
             return []
-        return network_cotton_candidates(view, choices, industry=self.used[era] < CAP, network=self.network_used[era] < 1,
-                                         minimum_build_level=self.rail_build_level if era == 'RailEra' else 2)
+        targets, develop = cotton_timing(view['context']) if self.timed else (True, True)
+        if not targets:
+            return []
+        return network_cotton_candidates(view, choices, industry=self.used[era] < CAP,
+                                         network=develop and self.network_used[era] < 1,
+                                         minimum_build_level=self.rail_build_level if era == 'RailEra' else 2, develop=develop)
 
     def options(self, view, choices):
         if self.network:

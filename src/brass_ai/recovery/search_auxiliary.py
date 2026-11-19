@@ -117,9 +117,11 @@ def tables(buffer, generation, *, heldout_games=32, iterations=4):
 # ---- rows on the training device ---------------------------------------------------------------
 
 class SearchRows:
-    """Played roots with their era map and seat mapping; the companion reads them like critic rows."""
+    """Played roots (and, from g3471, a table's extra decision states) with their era map and seat mapping;
+    the companion reads them like critic rows."""
     def __init__(self, games, device):
-        self.device = device; meta, envelopes, states = [], [], []
+        from .search_rows import kind, counts
+        self.device = device; meta, envelopes, states = [], [], []; self.tables = []
         for game, rows, envelope in games:
             maps = {e['era']: e for e in envelope['receipt']['eras']}
             for r in rows:
@@ -127,14 +129,56 @@ class SearchRows:
                 require(era in ERAS and era in maps and r['game_id'] == game, 'Search root era/map differs')
                 mapping = np.asarray(r['mapping'], dtype=np.int64)
                 require(mapping.tolist() == [(s - seat) % 4 for s in range(4)], 'Search root seat mapping differs')
+                position = int(r['index']) if kind(r) == 'turn' else (kind(r), int(r['revision']))
                 meta.append((maps[era], (envelope['sha256'], era, seat, tuple(mapping.tolist())),
-                             (game, era, int(r['index']), seat), mapping))
+                             (game, era, position, seat), mapping))
                 envelopes.append(envelope); states.append(np.asarray(r['state'], dtype=np.float32))
+            self.tables.append((rows, maps))
         self.meta, self.envelopes = meta, envelopes
         self.states = torch.as_tensor(np.stack(states), device=device) if states else None
         self.critic_weights = torch.ones(len(meta), device=device)
         self.games = len(games); self.rows = len(meta)
         self.eras = dict(Counter(m[0]['era'] for m in meta))
+        self.kinds = counts([r for rows, _ in self.tables for r in rows])
+        self.local_bootstrap = None  # g3471: the era heads' lambda-return corrections (prepare)
+
+    def prepare(self, model, local, settings):
+        """g3471: freeze the era heads' predictions at every turn-start root and turn them into each row's
+        lambda-return correction on the table's turn clock (search_rows.search_corrections)."""
+        from brass_ai.learning.seat_descriptors import critic_inputs
+        from .search_rows import Corrections, ENTITIES, WIDTH, kind, search_corrections
+        began = time.perf_counter(); positions = []; offset = 0
+        for rows, _ in self.tables:
+            positions.extend(offset + j for j, r in enumerate(rows) if kind(r) == 'turn'); offset += len(rows)
+        frozen = {}
+        was, heads_were = model.training, local.heads.training
+        model.eval(); local.heads.eval()
+        try:
+            with torch.no_grad():
+                for start in range(0, len(positions), CHUNK):
+                    part = positions[start:start + CHUNK]; index = torch.as_tensor(part, device=self.device)
+                    encoded = model.encode_state(self.states[index])
+                    output = local.heads(encoded, model.descriptor_embeddings(encoded, critic_inputs(self, part)), 0.)
+                    canal = torch.tensor([self.meta[j][0]['era'] == 'CanalEra' for j in part], device=self.device)
+                    pieces = []
+                    for name in ('slots', 'links'):
+                        (co, cv), (ro, rv) = output['canal_' + name], output['rail_' + name]
+                        owner = torch.where(canal[:, None, None], co, ro).float().softmax(-1)
+                        pieces.append(torch.cat((owner, torch.where(canal[:, None, None], cv, rv).float()), -1))
+                    values = torch.cat(pieces, 1).cpu().numpy()
+                    require(values.shape[1:] == (ENTITIES, WIDTH), 'Era-head outputs differ from the search-row targets')
+                    frozen.update(zip(part, values))
+        finally:
+            model.train(was); local.heads.train(heads_were)
+        lam = settings['auxiliary']['lam']; tables = []; offset = 0
+        for rows, maps in self.tables:
+            tables.append((rows, maps, {j: frozen[offset + j] for j, r in enumerate(rows) if kind(r) == 'turn'})); offset += len(rows)
+        corrections = search_corrections(tables, lam)
+        self.corrections = torch.as_tensor(corrections, device=self.device)
+        self.local_bootstrap = Corrections(lambda ix: self.corrections[ix], settings['auxiliary']['search_share'], self.device)
+        return dict(roots=len(positions), rows=self.rows, lam=lam, share=settings['auxiliary']['search_share'],
+                    mean_owner_l1=float(np.abs(corrections[..., :5]).sum(-1).mean()),
+                    mean_vp_l1=float(np.abs(corrections[..., 5:]).sum(-1).mean() * 5), seconds=time.perf_counter() - began)
 
     def __len__(self): return self.rows
 
@@ -159,6 +203,12 @@ class SearchAuxiliary:
         self.ready = bool(self.train.rows and self.heldout.rows and self.batches > 0)
         if not self.ready: self.reason = 'no_search_maps' if not self.train.rows else 'no_heldout_search_maps'
         self.seconds = dict(rows=time.perf_counter() - began, train=0.)
+        self.targets = None  # g3471: the training rows' lambda-return targets (prepare)
+
+    def prepare(self, model, local, settings):
+        """g3471 search-rows: the training rows train on lambda returns of the heads' own frozen predictions at
+        the turn-start roots; the held-out rows keep the actual maps."""
+        if self.ready and settings is not None: self.targets = self.train.prepare(model, local, settings)
 
     def share(self, epoch, position):
         """Search rows for ordinary batch `position` of `epoch`: a slice of that epoch's own permutation."""
@@ -201,8 +251,9 @@ class SearchAuxiliary:
         search = stop_record.get('search') or {}; criterion = stop_record.get('criterion') or {}
         return dict(contract=CONTRACT, settings=self.settings, ready=self.ready, reason=self.reason,
             selection=self.selection,
-            train=dict(rows=self.train.rows, games=self.train.games, eras=self.train.eras),
-            heldout=dict(rows=self.heldout.rows, games=self.heldout.games, eras=self.heldout.eras),
+            train=dict(rows=self.train.rows, games=self.train.games, eras=self.train.eras, kinds=self.train.kinds),
+            heldout=dict(rows=self.heldout.rows, games=self.heldout.games, eras=self.heldout.eras, kinds=self.heldout.kinds),
+            lambda_targets=self.targets,
             presented=dict(rows=rows(steps), steps=len(steps), joint_rows=rows([s for s in steps if not s['frozen']]),
                            heads_only_rows=rows([s for s in steps if s['frozen']]),
                            rows_per_step=dict(min=min(per_step), max=max(per_step)) if per_step else None,

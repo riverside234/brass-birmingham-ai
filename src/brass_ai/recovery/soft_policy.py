@@ -125,7 +125,13 @@ class SoftPolicy:
         else:
             keys(saved, STATE_KEYS)
             require(saved['contract'] == CONTRACT and saved['identity'] == identity(saved), 'Corrupt soft policy state')
-            require(saved['settings_sha256'] == digest(self.settings) and saved['generation'] == generation
+            # g3471: at its weight change the committed head was stamped under the weight-8 settings.
+            change = self.settings.get('weight_change')
+            from .training_revision_g3423 import previous_settings
+            stamped = (saved['settings_sha256'] == digest(self.settings) or
+                       (change is not None and change['generation'] == generation
+                        and saved['settings_sha256'] == digest(previous_settings(self.settings))))
+            require(stamped and saved['generation'] == generation
                     and saved['width'] == width, 'Soft policy checkpoint/settings/progress differs')
             tensor = lambda values: torch.tensor(values, dtype=torch.float32, device=device)
             self.origin = copy.deepcopy(saved['origin'])

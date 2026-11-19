@@ -332,7 +332,7 @@ fn network_targets(view: &Observation) -> Vec<&str> {
         .collect()
 }
 
-fn network_cotton_candidates(view: &Observation, choices: &[Choice], industry: bool, network: bool, minimum: u8) -> Vec<usize> {
+fn network_cotton_candidates(view: &Observation, choices: &[Choice], industry: bool, network: bool, develop: bool, minimum: u8) -> Vec<usize> {
     let phase = view.context.phase;
     if choices.len() <= 1 || !active(phase) {
         return vec![];
@@ -346,7 +346,7 @@ fn network_cotton_candidates(view: &Observation, choices: &[Choice], industry: b
             (c.kind == Kind::Network && c.target.as_deref().is_some_and(|t| links.contains(&t)))
                 || (industry
                     && c.industry == Some(Industry::CottonMill)
-                    && (c.kind == Kind::Develop || builds && c.kind == Kind::Build))
+                    && (develop && c.kind == Kind::Develop || builds && c.kind == Kind::Build))
         })
         .map(|(i, _)| i)
         .collect()
@@ -358,6 +358,8 @@ enum Recipe {
     Limited,
     Network,
     RailNetwork,
+    /// g3471: the g2654 recipe, timed within each era (cpu_cotton::timing).
+    Timed,
 }
 
 /// `recovery.ordinary_cotton.TableExploration` for one table.
@@ -379,6 +381,7 @@ impl Cotton {
             Some("ordinary-cotton-exploration/2.0.0") => Recipe::Limited,
             Some("ordinary-cotton-exploration/3.0.0") => Recipe::Network,
             Some("ordinary-cotton-exploration/4.0.0") => Recipe::RailNetwork,
+            Some("ordinary-cotton-exploration/5.0.0") => Recipe::Timed,
             _ => return Err("unknown ordinary cotton recipe".into()),
         };
         let seats: Vec<usize> = serde_json::from_value(value["seats"].clone())?;
@@ -391,7 +394,7 @@ impl Cotton {
     }
 
     fn network(&self) -> bool {
-        matches!(self.recipe, Recipe::Network | Recipe::RailNetwork)
+        matches!(self.recipe, Recipe::Network | Recipe::RailNetwork | Recipe::Timed)
     }
 
     fn limited(&self) -> bool {
@@ -407,8 +410,13 @@ impl Cotton {
         if !self.seats.contains(&seat) || has_unflipped_cotton(view, seat) {
             return Some(vec![]);
         }
-        let minimum = if era == 1 && self.recipe == Recipe::RailNetwork { 3 } else { 2 };
-        Some(network_cotton_candidates(view, choices, self.used[era] < COTTON_CAP, self.network_used[era] < 1, minimum))
+        let minimum = if era == 1 && matches!(self.recipe, Recipe::RailNetwork | Recipe::Timed) { 3 } else { 2 };
+        // g3471: a quiet action explores no cotton; a build-only action targets cotton builds alone.
+        let (timed, wide) = if self.recipe == Recipe::Timed { crate::cpu_cotton::timing(&view.context) } else { (true, true) };
+        if !timed {
+            return Some(vec![]);
+        }
+        Some(network_cotton_candidates(view, choices, self.used[era] < COTTON_CAP, wide && self.network_used[era] < 1, wide, minimum))
     }
 
     fn options(&self, view: &Observation, choices: &[Choice]) -> (f64, bool) {
@@ -712,6 +720,37 @@ mod tests {
         assert_eq!(other[5], 0.2222222222222222);
         assert!(other.iter().enumerate().all(|(i, x)| i == 5 || *x == 0.1111111111111111));
         assert_eq!(exploration(&[choice("p", Kind::Pass, None)], &intent, Phase::Action).unwrap(), [1.0]);
+    }
+
+    #[test]
+    fn cpu_autoplay_timed_cotton_is_quiet_at_era_edges_and_builds_only_at_their_ends() {
+        use brass_ai_core::state::{dto::StateDto, NativeState};
+        use brass_ai_core::types::Seat;
+        let dto: StateDto = serde_json::from_str(include_str!("../../native/brass-ai-core/tests/data/initial-state.json")).unwrap();
+        let state = NativeState::import(&dto).unwrap();
+        let mut view = state.observation(Seat::try_from(state.context().actor as u8).unwrap()).unwrap();
+        let seat = seat_of(&view);
+        let mat = view.players[seat].mat.iter_mut().find(|m| m.industry == Industry::CottonMill).unwrap();
+        while mat.tiles.first().is_some_and(|t| t.level < 3) { mat.tiles.remove(0); }
+        let link = network_targets(&view)[0].to_string();
+        let mut network = choice("n", Kind::Network, None);
+        network.target = Some(link);
+        let choices = [choice("b", Kind::Build, Some(Industry::CottonMill)), choice("d", Kind::Develop, Some(Industry::CottonMill)),
+                       network, choice("p", Kind::Pass, None)];
+        let parse = |contract: &str| Cotton::parse(&json!({"contract": contract, "seats": [seat], "probability": 0.2})).unwrap().unwrap();
+        let (timed, plain) = (parse("ordinary-cotton-exploration/5.0.0"), parse("ordinary-cotton-exploration/4.0.0"));
+        for (era, round, left, expected) in [
+            (Era::CanalEra, 1, 1, vec![]), (Era::CanalEra, 4, 2, vec![0, 1, 2]), (Era::CanalEra, 8, 2, vec![0]),
+            (Era::CanalEra, 8, 1, vec![]), (Era::RailEra, 1, 2, vec![]), (Era::RailEra, 1, 1, vec![]),
+            (Era::RailEra, 2, 2, vec![0, 1, 2]), (Era::RailEra, 8, 2, vec![0]), (Era::RailEra, 8, 1, vec![]),
+        ] {
+            view.context.era = era;
+            view.context.round = round;
+            view.context.actions_remaining = left;
+            view.context.phase = Phase::Action;
+            assert_eq!(timed.targets(&view, &choices), Some(expected), "{era:?} {round} {left}");
+            assert_eq!(plain.targets(&view, &choices), Some(vec![0, 1, 2]), "{era:?} {round} {left}");
+        }
     }
 
     #[test]

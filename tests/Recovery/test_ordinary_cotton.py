@@ -152,7 +152,8 @@ class OrdinaryCotton(unittest.TestCase):
             build = dict(seat=0, chosen=0, choices=[dict(kind='build', industry='CottonMill')],
                          view=dict(view, slots=[]))
             later = dict(seat=0, chosen=0, choices=[dict(kind='loan')], view=view)
-            g = CheckedGame(dict(game_id=name, setup_group=name, opponents=['learner']*4, records=[build,later,later]))
+            g = CheckedGame(dict(game_id=name, setup_group=name, opponents=['learner']*4, records=[build,later,later],
+                                 result=dict(vp=[100, 90, 80, 70] if cotton_table else [60, 50, 40, 30])))
             if cotton_table:
                 g.cotton_seats = (0, 2)
             return g
@@ -161,6 +162,7 @@ class OrdinaryCotton(unittest.TestCase):
             patch.object(diagnostics, 'match_report', return_value=dict(policies={}, games=1)),
             patch.object(diagnostics, 'learner_seats', return_value={}),
             patch.object(diagnostics, 'health_counts', return_value={}),
+            patch.object(diagnostics, 'terminal_targets', lambda result: dict(vp=result['vp'])),
             patch.object(diagnostics, 'pottery_metrics', return_value=dict(builds={'Pottery':0},
                 legal_build_opportunities={'Pottery':0}, builds_matching_assigned_focus={}, seat_trajectory_contexts={})),
         ):
@@ -168,8 +170,9 @@ class OrdinaryCotton(unittest.TestCase):
                 (game('cotton', cotton_table=True, flipped=True), 'selfplay'),
                 (game('standard'), 'selfplay'), (game('historical', flipped=True), 'historical'))]
             summary = diagnostics.merge_summaries(parts)
-        expected = dict(cotton_exploration=dict(tables=1,builds=1,flips=1),
-                        standard_exploration=dict(tables=1,builds=1,flips=0))
+        # g3471: learner-seat games and final VP by table type too.
+        expected = dict(cotton_exploration=dict(tables=1,builds=1,flips=1,seat_games=4,vp_sum=340.),
+                        standard_exploration=dict(tables=1,builds=1,flips=0,seat_games=4,vp_sum=180.))
         self.assertEqual(summary['economy']['cotton_by_selfplay'], expected)
         self.assertEqual(summary['economy']['observed_flips']['CottonMill'], 2)
         self.assertEqual(compact(summary)['economy']['cotton_by_selfplay'], expected)

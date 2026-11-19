@@ -148,6 +148,13 @@ def rail_cotton_marker(marker):
     return dict(marker, exploration=dict(marker['exploration'], cotton=cotton))
 
 
+def timed_cotton_marker(marker):
+    """g3471: the same network cotton tables, with cotton exploration timed within each era (training_revision_g3471)."""
+    from .teacher_cotton import TIMED_NETWORK_CONTRACT, settings
+    cotton = dict(settings(contract=TIMED_NETWORK_CONTRACT), table_fraction=marker['exploration']['cotton']['table_fraction'])
+    return dict(marker, exploration=dict(marker['exploration'], cotton=cotton))
+
+
 def configure_teacher_games(config, weight, *, seated=False):
     """Set the teacher-only blend and split cotton exploration within each partition."""
     require(type(weight) is int and weight in (0, 1), 'Teacher search-head weight must be 0 or 1')
@@ -195,7 +202,7 @@ def validate(config):
             allowed += tuple(cotton_only_marker(_mixed_tables(seated, weight, seated=True), network=True) for weight in (0, 1))
         g2600 = tuple(g2600_marker(cotton_only_marker(_mixed_tables(dict(opening, count_search=UPDATED_SEARCH), weight,
                                                                     seated=True), network=True)) for weight in (0, 1))
-        allowed += g2600 + tuple(rail_cotton_marker(m) for m in g2600)
+        allowed += g2600 + tuple(rail_cotton_marker(m) for m in g2600) + tuple(timed_cotton_marker(m) for m in g2600)
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',
@@ -337,9 +344,15 @@ def job_block(config, *, split='train', cotton_table=False, stage='A', seats=Non
             weight = None
         seats = seats or []
         cotton_table = bool(seats)
-    return _job_block(config['teacher_phase'][KEY]['exploration'], split=split,
-                      short_labels=settings(config)['short_labels'],
-                      search_head_weight=weight, cotton_table=cotton_table, seats=seats)
+    result = _job_block(config['teacher_phase'][KEY]['exploration'], split=split,
+                        short_labels=settings(config)['short_labels'],
+                        search_head_weight=weight, cotton_table=cotton_table, seats=seats)
+    # g3471: the CPU teacher also records extra decision states (recovery/search_rows.py).
+    from .training_revision_g3140 import search_rows
+    if search_rows(config) is not None:
+        from .search_rows import JOB
+        result['search_rows'] = dict(JOB)
+    return result
 
 
 def validate_job(job):
@@ -347,6 +360,12 @@ def validate_job(job):
     revision = job.get('teacher_revision')
     if revision is None:
         return None
+    if 'search_rows' in revision:
+        # g3471: the extra-row capture is one fixed block beside the reviewed revision.
+        from .search_rows import JOB
+        require(revision['search_rows'] == JOB and job.get('split') in ('train', 'heldout'), 'Unreviewed search-row capture')
+        validate_job(dict(job, teacher_revision={k: v for k, v in revision.items() if k != 'search_rows'}))
+        return revision
     split = job.get('split')
     require(isinstance(revision, dict) and job.get('seating') == 'all-seat-search' and
             not job.get('h2h') and not job.get('shadow_probe'), 'Unreviewed g1491 teacher job revision')

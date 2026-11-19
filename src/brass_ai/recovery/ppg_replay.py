@@ -19,7 +19,7 @@ from . import ppg_sampling
 
 CONTRACT='ppg-eight-disk-buffer/1.0.0'
 OWNER=dict(contract=CONTRACT,purpose='sealed MC critic rows and selected complete policy inputs')
-FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|meta\.npy|games\.npy|state-floats\.npy|state-bits\.npy|critic-actions\.npy|policy-actions\.npy|local-scoring\.json|domino\.json|bootstrap\.npy|json)(\.partial|\.tmp)?$')
+FILE=re.compile(r'generation-([0-9]{6,})\.(critic\.npy|actions\.npy|meta\.npy|games\.npy|state-floats\.npy|state-bits\.npy|critic-actions\.npy|policy-actions\.npy|local-scoring\.json|domino\.json|bootstrap\.npy|local-bootstrap\.npy|json)(\.partial|\.tmp)?$')
 
 
 class Rows(DiskRows):
@@ -29,7 +29,7 @@ class Rows(DiskRows):
             from .ppg_packing import CriticArray
             self.array=CriticArray(lambda ext:path.with_name(path.name.replace('critic.npy',ext)),receipt)
         else:self.array=np.load(path,mmap_mode='r',allow_pickle=False)
-        self.local={};self.domino={};self.bootstrap=None
+        self.local={};self.domino={};self.bootstrap=None;self.local_bootstrap=None
         try:
             if 'domino.json' in receipt['files']:
                 from .domino_config import CONTRACT as DOMINO_CONTRACT
@@ -58,11 +58,19 @@ class Rows(DiskRows):
             if 'bootstrap.npy' in receipt['files']:
                 self.bootstrap=np.load(path.with_name(path.name.replace('critic.npy','bootstrap.npy')),mmap_mode='r',allow_pickle=False)
                 require(self.bootstrap.dtype==np.dtype('<f4') and self.bootstrap.shape==(receipt['rows'],2,4),'Invalid bootstrap target layout')
+            if 'local-bootstrap.npy' in receipt['files']:
+                # g3471: the era heads' lambda-return corrections, by cache row (search_rows.ordinary_corrections).
+                from .search_rows import ENTITIES,WIDTH
+                self.local_bootstrap=np.load(path.with_name(path.name.replace('critic.npy','local-bootstrap.npy')),mmap_mode='r',allow_pickle=False)
+                require(self.local_bootstrap.dtype==np.dtype('<f2') and self.local_bootstrap.shape==(receipt['rows'],ENTITIES,WIDTH),
+                        'Invalid era-head correction layout')
             require(self.array.dtype==row_dtype() and self.array.shape==(receipt['rows'],),'Invalid eight-age critic layout')
         except BaseException:self.close();raise
 
     def close(self):
         if getattr(self,'bootstrap',None) is not None and getattr(self.bootstrap,'_mmap',None) is not None:self.bootstrap._mmap.close()
+        if getattr(self,'local_bootstrap',None) is not None and getattr(self.local_bootstrap,'_mmap',None) is not None:
+            self.local_bootstrap._mmap.close()
         super().close()
 
     def field(self,i,field):
@@ -120,6 +128,27 @@ class BootstrapColumn:
 
     def available(self):
         return [p.bootstrap is not None for p in self.data.parts]
+
+
+class LocalBootstrapColumn:
+    """g3471: [n,118,9] float32 era-head corrections; an age without them (staged before adoption) reads zeros,
+    which leaves its targets the actual maps."""
+    def __init__(self,data):self.data=data
+    def __call__(self,indices):
+        from .search_rows import ENTITIES,WIDTH
+        if isinstance(indices,torch.Tensor):indices=indices.detach().cpu().numpy()
+        indices=np.asarray(indices,dtype=np.int64)
+        parts=np.searchsorted(self.data.ends,indices,side='right')
+        result=np.zeros((len(indices),ENTITIES,WIDTH),dtype=np.float32)
+        for p in np.unique(parts):
+            part=self.data.parts[p]
+            if part.local_bootstrap is None:continue
+            selected=np.flatnonzero(parts==p);local=indices[selected]-(self.data.ends[p-1] if p else 0)
+            result[selected]=part.local_bootstrap[local]
+        return result
+
+    def available(self):
+        return [p.local_bootstrap is not None for p in self.data.parts]
 
 
 class Column:
@@ -284,7 +313,7 @@ class Buffer:
         validate_selection(r['holdout_selection'],self.config['value_phase']['holdout'],fraction)
         require(set(r['game_ids'])<=set(r['holdout_selection']['games']),'Unknown PPG cached game')
         expected=set(EXTENSIONS) if packed else {'critic.npy','actions.npy'}
-        require(set(r['files'])-{'local-scoring.json','domino.json','bootstrap.npy'}==expected,'Missing/unknown PPG cache file type')
+        require(set(r['files'])-{'local-scoring.json','domino.json','bootstrap.npy','local-bootstrap.npy'}==expected,'Missing/unknown PPG cache file type')
         require(('packing' in r)==packed,'PPG packing receipt contract differs')
         if packed:
             validate(r['packing'])
@@ -304,7 +333,7 @@ class Buffer:
         from .value_buffer import DiskBuffer
         return DiskBuffer.source(self,records,policy_id,kinds,model_id)
 
-    def stage(self,dataset,train_ids,heldout_ids,actor_ids,source,model,selection,*,bootstrap=None):
+    def stage(self,dataset,train_ids,heldout_ids,actor_ids,source,model,selection,*,bootstrap=None,local_bootstrap=None):
         require(self.pending is None and state_value_model(model),'Eight-age PPG needs an unstaged state-only critic')
         from .critic_holdout import validate_selection
         validate_selection(selection,self.config['value_phase']['holdout'],self.holdout_fraction())
@@ -395,6 +424,15 @@ class Buffer:
             with open(part,'wb') as stream:np.save(stream,values,allow_pickle=False)
             part.replace(self.path(generation,'bootstrap.npy'))
             p=self.path(generation,'bootstrap.npy');files['bootstrap.npy']=dict(bytes=p.stat().st_size,sha256=sha(p))
+        if local_bootstrap is not None:
+            # g3471: the era heads' lambda-return corrections in cache row order; older ages keep the actual maps.
+            from .search_rows import ENTITIES,WIDTH
+            values=np.ascontiguousarray(np.asarray(local_bootstrap,dtype='<f2')[ids])
+            require(values.shape==(len(ids),ENTITIES,WIDTH) and np.isfinite(values).all(),'Invalid era-head corrections')
+            part=self.path(generation,'local-bootstrap.npy.partial')
+            with open(part,'wb') as stream:np.save(stream,values,allow_pickle=False)
+            part.replace(self.path(generation,'local-bootstrap.npy'))
+            p=self.path(generation,'local-bootstrap.npy');files['local-bootstrap.npy']=dict(bytes=p.stat().st_size,sha256=sha(p))
         from .domino_config import enabled,CONTRACT as DOMINO_CONTRACT
         if enabled(self.config):
             from .domino_sampling import validate_assignment,learner_row

@@ -505,6 +505,8 @@ pub struct Revision {
     cotton: Option<CottonMode>,
     cotton_seats: Option<u8>,
     report_actions: bool,
+    /// g3471: extra decision states per era (cpu_capture), if the job asks for them.
+    capture: Option<usize>,
 }
 
 #[derive(Default, Debug, serde::Serialize)]
@@ -592,9 +594,16 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
     let game_opening = e.get("game_opening");
     let normal_sampling = e.get("normal_sampling");
     let ordinary_table = job["h2h"] != true && job["shadow_probe"] != true;
+    // g3471: the table also records extra decision states (cpu_capture).
+    let rows = block.get(crate::cpu_capture::KEY);
+    let capture = rows.map(crate::cpu_capture::settings).transpose()?;
+    if capture.is_some() {
+        check(ordinary_table && (job["split"] == "train" || job["split"] == "heldout"), "search rows on an unreviewed table")?;
+    }
     check(
         block["contract"] == REVISION_CONTRACT
-            && block.as_object().is_some_and(|o| o.len() == 3 + usize::from(weight.is_some()) + usize::from(seats.is_some()))
+            && block.as_object().is_some_and(|o| o.len() == 3 + usize::from(weight.is_some()) + usize::from(seats.is_some())
+                + usize::from(rows.is_some()))
             && block["short_labels"].is_boolean()
             && e.as_object().is_some_and(|o| o.len() == 4 + usize::from(e.get("cotton").is_some())
                 + usize::from(game_opening.is_some()) + usize::from(normal_sampling.is_some()))
@@ -647,6 +656,7 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         Some(settings) if seats.is_some() => {
             let mode = if settings == &CottonMode::Network.settings() { CottonMode::Network }
                 else if settings == &CottonMode::RailNetwork.settings() { CottonMode::RailNetwork }
+                else if settings == &CottonMode::TimedNetwork.settings() { CottonMode::TimedNetwork }
                 else if single { CottonMode::SingleSeat } else { CottonMode::Seated };
             check(!mode.network() || single, "cotton network requires the single-seat recipe")?;
             check(settings == &mode.settings(), "unreviewed seated cotton exploration")?;
@@ -675,6 +685,7 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
         cotton,
         cotton_seats,
         report_actions: weight.is_some() || seats.is_some(),
+        capture,
     }))
 }
 
@@ -904,8 +915,13 @@ pub fn teacher_install(request: &Value, expected: &Value, max_cost: f64) -> Resu
     if block.is_null() {
         check(revision.is_none(), "the teacher revision needs CPU inference")?;
         REVISION.with(|cell| *cell.borrow_mut() = None);
+        crate::cpu_capture::install(None, 0);
         return Ok(());
     }
+    // g3471: the extra decision states use the job's own sampling seed, on a stream of their own.
+    let capture = revision.as_ref().and_then(|r| r.capture);
+    let seed = if capture.is_some() { request["job"]["sampling_seed"].as_u64().ok_or("sampling seed")? } else { 0 };
+    crate::cpu_capture::install(capture, seed);
     check(block["contract"] == CONTRACT, "CPU inference contract")?;
     let runtime_sha256 = init_runtime(&block["runtime"])?;
     let model = Model::load(&block["bundle"])?;

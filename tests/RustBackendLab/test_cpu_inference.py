@@ -923,6 +923,38 @@ class NativeWorkers(unittest.TestCase):
         self.assertTrue(labelled)
         for row in result['rows']:C.validate_label(row['teacher'],row['choices'],view=row['view'])
 
+    def test_g3471_search_rows_and_timed_cotton_teacher_table_match_python_admission(self):
+        """g3471: the table's extra decision states pass the Python checks (sample recomputed from its stream), and
+        every cotton label follows the timed rule (no exploration at the era edges, builds only at their ends)."""
+        from brass_ai.recovery import search_rows as S, teacher_cotton as C, training_revision_g1491 as G
+        from brass_ai.recovery.search_value_rows import complete_game
+        from brass_ai.step5.policy import cotton_seats, cotton_timing
+        budget=dict(mode='count',full=64,fast=24,fast_k=8,**G.G2600_SEARCH)
+        exploration=dict(G.COTTON_ONLY_EXPLORATION,game_opening=G.T13_GAME_OPENING,cotton=C.settings(contract=C.TIMED_NETWORK_CONTRACT))
+        seed=self.all_seat_job(0.)['sampling_seed']
+        seats=cotton_seats(seed,1,C.TIMED_NETWORK_CONTRACT)
+        revision=dict(G._job_block(exploration,short_labels=False,cotton_table=True,seats=seats,search_head_weight=0),
+                      search_rows=dict(S.JOB))
+        job,result,verifier=self.run_all_seat(0.,budget,revision,split='train',streamed=True)
+        self.assertEqual(G.validate_job(job),revision)
+        self.assertTrue(verifier.take(result,job,self.model)[0])
+        receipt=result['metrics']['cpu_inference']['revision']['cotton']
+        self.assertEqual(receipt['contract'],C.TIMED_NETWORK_CONTRACT)
+        C.validate_receipt(receipt,job,result['rows'])
+        for row in result['rows']:
+            C.validate_label(row['teacher'],row['choices'],view=row['view'])
+            if row['teacher'].get('cotton_exploration'):self.assertTrue(cotton_timing(row['view']['context'])[0])
+        roots=complete_game(result['value_rows'],result['result'],result['final_spent'],job)
+        extras=S.validate(result['search_rows'],roots,job)
+        counts=S.counts(extras)
+        print('g3471 extra rows', counts, {era:len(v) for era,v in result['search_rows']['candidates'].items()})
+        self.assertEqual(counts['second'],60)
+        self.assertTrue(0<counts['sampled']<=48)
+        self.assertEqual({x['revision'] for x in extras if x['kind']=='sampled'},
+                         {r for era,c in result['search_rows']['candidates'].items() for r in S.sample(seed,c,24)})
+        completed=S.complete(roots,extras,result['result'],result['final_spent'],job['search']['reward'],1.)
+        for row in completed:np.testing.assert_allclose(row['target'],row['u'],rtol=0,atol=1e-12)
+
     def test_single_seat_teacher_cotton_without_normal_exploration(self):
         from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
         from brass_ai.step5.policy import cotton_seats

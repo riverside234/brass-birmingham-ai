@@ -44,7 +44,8 @@ def economy(games,learner_ids=None,*,selfplay=False):
     actions=Counter();phases=Counter();builds=Counter();flipped=Counter();merchant=Counter()
     cash=[];income=[];forced=0;debt=0;feasible_sales=0;selected_sales=0;seen_tiles=set();tile_states={}
     by_era=Counter();levels=Counter();passes_with_alternative=sale_starts=sale_continuations=0
-    cotton = {key: dict(tables=0, builds=0, flips=0) for key in ('cotton_exploration','standard_exploration')} if selfplay else {}
+    # g3471: learner-seat final VP by self-play table type (cotton exploration or standard tables) too.
+    cotton = {key: dict(tables=0, builds=0, flips=0, seat_games=0, vp_sum=0.) for key in ('cotton_exploration','standard_exploration')} if selfplay else {}
     for game in games:
         if selfplay:
             group = 'cotton_exploration' if getattr(game, 'cotton_seats', ()) else 'standard_exploration'
@@ -82,6 +83,8 @@ def economy(games,learner_ids=None,*,selfplay=False):
         if selfplay:
             cotton_counts = cotton[group]
             cotton_counts['tables'] += 1
+            vp = terminal_targets(game['result'])['vp']
+            cotton_counts['seat_games'] += len(relevant); cotton_counts['vp_sum'] += float(sum(vp[s] for s in relevant))
             cotton_counts['builds'] += builds['CottonMill'] - builds_before
             cotton_counts['flips'] += flipped['CottonMill'] - flips_before
     unflipped=Counter(v['type'] for v in tile_states.values() if not v['flipped'])

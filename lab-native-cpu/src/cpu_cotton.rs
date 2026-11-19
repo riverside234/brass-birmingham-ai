@@ -20,7 +20,30 @@ const SINGLE_SEAT_CONTRACT: &str = "teacher-cotton-exploration/6.0.0";
 const NETWORK_CONTRACT: &str = "teacher-cotton-exploration/7.0.0";
 /// g2654: the network recipe, with Rail-era cotton builds targeted only from level three.
 const RAIL_NETWORK_CONTRACT: &str = "teacher-cotton-exploration/8.0.0";
+/// g3471: the g2654 recipe, timed within each era (`timing`).
+const TIMED_NETWORK_CONTRACT: &str = "teacher-cotton-exploration/9.0.0";
 pub const CAP: u8 = 3;
+/// g3471: a seat's main actions in the era (Canal 1..=15, Rail 1..=16) with no cotton exploration,
+/// and those where only cotton builds are targeted (no cotton develop or cotton-city network).
+pub const QUIET_ACTIONS: ([u32; 2], [u32; 3]) = ([1, 15], [1, 2, 16]);
+pub const BUILD_ONLY_ACTIONS: ([u32; 2], [u32; 2]) = ([14, 15], [15, 16]);
+
+/// The acting seat's 1-based main action in its era. Its payment and continuation decisions keep that
+/// index: the engine counts actions down only when an action finishes.
+pub fn era_action(c: &ViewContext) -> u32 {
+    (2 * u32::from(c.round)).saturating_sub(u32::from(c.actions_remaining)) + u32::from(c.era == Era::RailEra)
+}
+
+/// g3471 (step5.policy.cotton_timing twin): (any cotton target, cotton develop and network targets).
+pub fn timing(c: &ViewContext) -> (bool, bool) {
+    let index = era_action(c);
+    let (quiet, build_only): (&[u32], &[u32]) = if c.era == Era::RailEra {
+        (&QUIET_ACTIONS.1, &BUILD_ONLY_ACTIONS.1)
+    } else {
+        (&QUIET_ACTIONS.0, &BUILD_ONLY_ACTIONS.0)
+    };
+    if quiet.contains(&index) { (false, false) } else { (true, !build_only.contains(&index)) }
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Mode {
@@ -33,6 +56,7 @@ pub enum Mode {
     SingleSeat,
     Network,
     RailNetwork,
+    TimedNetwork,
 }
 
 impl Mode {
@@ -42,12 +66,22 @@ impl Mode {
 
     /// The one-network-per-era cotton recipes (g2400, and g2654 with the Rail-era build level).
     pub fn network(self) -> bool {
-        matches!(self, Self::Network | Self::RailNetwork)
+        matches!(self, Self::Network | Self::RailNetwork | Self::TimedNetwork)
+    }
+
+    /// The single-seat recipes, which keep the search's planned action as the base.
+    fn single(self) -> bool {
+        matches!(self, Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork)
+    }
+
+    /// (any cotton target, develop and network targets) at a decision; only the timed recipe gates.
+    fn gate(self, c: &ViewContext) -> (bool, bool) {
+        if self == Self::TimedNetwork { timing(c) } else { (true, true) }
     }
 
     /// Lowest targeted cotton build level; level one is never targeted, Rail-era level two only before g2654.
     fn minimum_build_level(self, era: usize) -> u8 {
-        if self == Self::RailNetwork && era == 1 { 3 } else { 2 }
+        if matches!(self, Self::RailNetwork | Self::TimedNetwork) && era == 1 { 3 } else { 2 }
     }
 
     fn contract(self) -> &'static str {
@@ -60,6 +94,7 @@ impl Mode {
             Self::SingleSeat => SINGLE_SEAT_CONTRACT,
             Self::Network => NETWORK_CONTRACT,
             Self::RailNetwork => RAIL_NETWORK_CONTRACT,
+            Self::TimedNetwork => TIMED_NETWORK_CONTRACT,
         }
     }
 
@@ -67,7 +102,7 @@ impl Mode {
         match self {
             Self::Builds => (1, 5),
             Self::Develop | Self::Mixed25 => (1, 4),
-            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork => (3, 10),
+            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork => (3, 10),
         }
     }
 
@@ -75,20 +110,24 @@ impl Mode {
         match self {
             Self::Builds => 0.2,
             Self::Develop | Self::Mixed25 => 0.25,
-            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork => 0.3,
+            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork => 0.3,
         }
     }
 
     pub fn settings(self) -> Value {
-        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork) { "train-and-heldout" } else { "train" };
+        let scope = if matches!(self, Self::Mixed | Self::Mixed25 | Self::Seated) || self.single() { "train-and-heldout" } else { "train" };
         let mut settings = json!({"contract":self.contract(),"probability":self.probability(),"max_per_seat_era":CAP,
             "long_candidates":2,"short_candidates":1,"pause_unflipped":true,"scope":scope});
-        if matches!(self, Self::SingleSeat | Self::Network | Self::RailNetwork) {
+        if self.single() {
             settings["minimum_build_level"] = json!(2);
             settings["short_window"] = json!("all-actions");
         }
         if self.network() { settings["network_max_per_seat_era"] = json!(1); }
-        if self == Self::RailNetwork { settings["rail_minimum_build_level"] = json!(3); }
+        if matches!(self, Self::RailNetwork | Self::TimedNetwork) { settings["rail_minimum_build_level"] = json!(3); }
+        if self == Self::TimedNetwork {
+            settings["quiet_actions"] = json!({"CanalEra": QUIET_ACTIONS.0, "RailEra": QUIET_ACTIONS.1});
+            settings["build_only_actions"] = json!({"CanalEra": BUILD_ONLY_ACTIONS.0, "RailEra": BUILD_ONLY_ACTIONS.1});
+        }
         settings
     }
 }
@@ -261,12 +300,15 @@ impl State {
             })
         };
         let industry = !self.mode.network() || self.used[binding.era][binding.seat] < CAP;
-        self.develops = self.mode.develop() && industry;
+        // g3471: a quiet action of the era explores no cotton; a build-only action targets cotton builds alone.
+        let (timed, wide) = self.mode.gate(&view.context);
+        let window = window && timed;
+        self.develops = self.mode.develop() && industry && wide;
         let minimum = self.mode.minimum_build_level(binding.era);
-        self.builds = industry && (!matches!(self.mode, Mode::SingleSeat | Mode::Network | Mode::RailNetwork) || view.players[binding.seat].mat.iter()
+        self.builds = industry && (!self.mode.single() || view.players[binding.seat].mat.iter()
             .find(|m| m.industry == Industry::CottonMill)
             .and_then(|m| m.tiles.first()).is_some_and(|tile| tile.level >= minimum));
-        if self.mode.network() && self.network_used[binding.era][binding.seat] == 0 {
+        if self.mode.network() && wide && self.network_used[binding.era][binding.seat] == 0 {
             self.networks = network_targets(view, choices);
         }
         if phase == Phase::Continuation {
@@ -377,7 +419,7 @@ impl State {
         let develop = self.develops;
         let builds = self.builds;
         let networks = &self.networks;
-        let planned = matches!(self.mode, Mode::SingleSeat | Mode::Network | Mode::RailNetwork);
+        let planned = self.mode.single();
         let mut cotton_total = 0;
         let mut cotton_mass = 0.;
         let mut locations = Vec::with_capacity(2);
@@ -810,5 +852,60 @@ mod tests {
         // Occupying all cotton slots removes network targets, including mixed slots.
         v.slots.retain(|s| !s.types.contains(&Industry::CottonMill));
         assert!(network_targets(&v,&choices).is_empty());
+    }
+
+    #[test]
+    fn the_timed_recipe_is_quiet_at_era_edges_and_builds_only_at_their_ends() {
+        let mut v = view();
+        let seat = v.seat as usize;
+        let mut choices = choices();
+        choices[1].kind = Kind::Network;
+        choices[1].industry = None;
+        let target = network_targets(&v, &choices).first().unwrap().clone();
+        choices[1].target = Some(target);
+        choices[2].kind = Kind::Develop;
+        let mut build = choices[2].clone();
+        build.id = "3".into();
+        build.kind = Kind::Build;
+        choices.push(build); // a cotton build: the one target of a build-only action
+        let mat = v.players[seat].mat.iter_mut().find(|m| m.industry == Industry::CottonMill).unwrap();
+        while mat.tiles.first().is_some_and(|t| t.level < 3) { mat.tiles.remove(0); }
+        // (era, round, actions remaining) -> (the seat's action in the era, explores, develop and network too)
+        for (era, round, left, index, explores, wide) in [
+            (Era::CanalEra, 1, 1, 1, false, false), (Era::CanalEra, 2, 2, 2, true, true), (Era::CanalEra, 7, 1, 13, true, true),
+            (Era::CanalEra, 8, 2, 14, true, false), (Era::CanalEra, 8, 1, 15, false, false),
+            (Era::RailEra, 1, 2, 1, false, false), (Era::RailEra, 1, 1, 2, false, false), (Era::RailEra, 2, 2, 3, true, true),
+            (Era::RailEra, 7, 1, 14, true, true), (Era::RailEra, 8, 2, 15, true, false), (Era::RailEra, 8, 1, 16, false, false),
+        ] {
+            v.context.era = era;
+            v.context.round = round;
+            v.context.actions_remaining = left;
+            v.context.phase = Phase::Action;
+            v.context.revision += 1;
+            assert_eq!(era_action(&v.context), index);
+            assert_eq!(timing(&v.context), (explores, wide), "{era:?} {round} {left}");
+            let mut state = State { mode: Mode::TimedNetwork, seats: Some(1 << seat), ..State::default() };
+            assert_eq!(state.prepare(&v, &choices, true, true), usize::from(explores), "{era:?} {round} {left}");
+            assert_eq!(state.eligible(), explores);
+            let (develops, builds, networks) = state.coverage();
+            assert_eq!((develops, !networks.is_empty()), (wide, wide), "{era:?} {round} {left}");
+            assert!(builds);
+            // A continuation (a develop's second tile) keeps its action's index and rule.
+            v.context.phase = Phase::Continuation;
+            v.context.revision += 1;
+            state.prepare(&v, &choices, true, true);
+            assert_eq!(state.eligible(), explores && wide, "{era:?} {round} {left}");
+            // The untimed recipe explores at every action.
+            let mut plain = State { mode: Mode::RailNetwork, seats: Some(1 << seat), ..State::default() };
+            v.context.phase = Phase::Action;
+            v.context.revision += 1;
+            assert_eq!(plain.prepare(&v, &choices, true, true), 1);
+        }
+        let settings = Mode::TimedNetwork.settings();
+        let mut rail = Mode::RailNetwork.settings();
+        rail["contract"] = json!(TIMED_NETWORK_CONTRACT);
+        rail["quiet_actions"] = json!({"CanalEra": [1, 15], "RailEra": [1, 2, 16]});
+        rail["build_only_actions"] = json!({"CanalEra": [14, 15], "RailEra": [15, 16]});
+        assert_eq!(settings, rail);
     }
 }

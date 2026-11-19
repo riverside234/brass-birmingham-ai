@@ -1029,6 +1029,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             f' aux_crit={ce(crit.get("before"))}->{ce(crit.get("after"))}'
                             f' search_kept={kept.get("heads_rows",0)}/{shown.get("rows",0)}'
                             + (f' search_skip={search_aux["reason"]}' if search_aux.get('reason') else ''))
+                        kinds=(search_aux.get('train') or {}).get('kinds') or {}
+                        if set(kinds)-{'turn'}:
+                            # g3471: the expanded rows by kind (turn starts, second actions, sampled decisions).
+                            controller_line+=(f' search_rows={kinds.get("turn",0)}+{kinds.get("second",0)}'
+                                              f'+{kinds.get("sampled",0)}')
                     if 'warmup' in aux:
                         warmup=aux['warmup'];next_stage=warmup['after_commit']
                         controller_line+=(f' aux_stage={warmup["before"]["stage"]}'
@@ -1085,6 +1090,14 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                       f'insolvency events={update["insolvency"].get("events",0)} '
                       f'mean cost={update["insolvency"].get("mean_cost_per_trajectory",0):.4f}; '
                       +teacher_line,flush=True)
+                # g3471: self-play learner VP by table type (standard tables and cotton exploration tables).
+                tables=(report.get('economy') or {}).get('cotton_by_selfplay') or {}
+                if tables and all('vp_sum' in tables[k] for k in tables):
+                    shown=[('all',sum(t['vp_sum'] for t in tables.values()),sum(t['seat_games'] for t in tables.values()),
+                            sum(t['tables'] for t in tables.values()))]+[(name,tables[key]['vp_sum'],tables[key]['seat_games'],tables[key]['tables'])
+                            for key,name in (('standard_exploration','standard'),('cotton_exploration','cotton')) if key in tables]
+                    print('Self-play mean final VP per learner seat: '+', '.join(
+                        f'{name} {vp/seats:.2f} ({count} tables)' for name,vp,seats,count in shown if seats),flush=True)
                 from . import entropy_schedule as anneal
                 if anneal.automatic(config) and anneal.waiting(exploration_state[anneal.KEY]):
                     # Checkpoint, caches, ratings and compact history are fully

@@ -80,8 +80,8 @@ def inference_choice(args):
 
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
-            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_search_lambda=False,value_revision=None,rating_every=None,
-            teacher_revision=False,soft_policy=False):
+            update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
+            teacher_revision=False,soft_policy=False,soft_policy_weight=None):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -149,6 +149,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if update_rail_cotton:
             from brass_ai.recovery.config import validate_config
             config=validate_config(g2654.configure(config))
+        from brass_ai.recovery import training_revision_g3471 as g3471
+        if update_cotton_timing:
+            # g3471: no cotton exploration at the era edges, cotton builds only in each era's last two actions.
+            from brass_ai.recovery.config import validate_config
+            config=validate_config(g3471.configure(config))
         from brass_ai.recovery import training_revision_g2880 as g2880
         if update_search_lambda:
             from brass_ai.recovery.config import validate_config
@@ -173,6 +178,10 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             # Soft policy S1: a trainer-owned soft head on the teacher term's long-label rows; then kept.
             require(mode=='on','The g3423 soft policy head is adopted with teaching on')
             config=g3423.configure(config,state['iteration'])
+        if soft_policy_weight is not None:
+            # g3471: the soft head's weight 8 -> 6 x beta; head, Adam and warm-up carry over.
+            require(mode=='on','The soft policy weight changes with teaching on')
+            config=g3423.set_weight(config,soft_policy_weight,state['iteration'])
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -275,19 +284,27 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         if g3140.applied(config):
             if weight is not None and previous_weight is not None and previous_weight != weight:
                 stages.append(prefix.replace(f'-w{weight}-', f'-w{previous_weight}-'))
+            if g3140.applied(before) and g3140.tag(before)!=g3140.tag(config):
+                # The recipe file the run used last stays in the runtime lookup chain.
+                stages.append(prefix.replace('-share', '-value-'+g3140.tag(before)+'-share'))
             prefix=prefix.replace('-share', '-value-'+g3140.tag(config)+'-share');stages.append(prefix)
         if rating_cadence.applied(config):
             prefix=prefix.replace('-share', '-pl'+str(config[rating_cadence.KEY]['every_iterations'])+'-share');stages.append(prefix)
         if g3270.applied(config):
             prefix=prefix.replace('-share', '-'+g3270.tag(config)+'-share');stages.append(prefix)
         if g3423.applied(config):
+            if g3423.applied(before) and g3423.tag(before)!=g3423.tag(config):
+                stages.append(prefix.replace('-share', '-'+g3423.tag(before)+'-share'))
             prefix=prefix.replace('-share', '-'+g3423.tag(config)+'-share');stages.append(prefix)
+        if g3471.applied(config):
+            prefix=prefix.replace('-share', '-cotton-timed-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
-        adopting_soft=g3423.applied(config) and not g3423.applied(before)
+        adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
+                         g3471.applied(config) and not g3471.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
                          g3140.changed(before,config) or adopting_teacher or adopting_soft)
         existing=read(output) if output.exists() else state['signature']['config']
@@ -405,11 +422,13 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'update_cotton_sampling',False):kwargs['update_cotton_sampling']=True
         if getattr(args,'update_cotton_network',False):kwargs['update_cotton_network']=True
         if getattr(args,'update_rail_cotton',False):kwargs['update_rail_cotton']=True
+        if getattr(args,'update_cotton_timing',False):kwargs['update_cotton_timing']=True
         if getattr(args,'update_search_lambda',False):kwargs['update_search_lambda']=True
         if getattr(args,'value_revision',None):kwargs['value_revision']=args.value_revision
         if getattr(args,'rating_every',None) is not None:kwargs['rating_every']=args.rating_every
         if getattr(args,'teacher_revision',False):kwargs['teacher_revision']=True
         if getattr(args,'soft_policy',False):kwargs['soft_policy']=True
+        if getattr(args,'soft_policy_weight',None) is not None:kwargs['soft_policy_weight']=args.soft_policy_weight
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -476,6 +495,10 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g2654.applied(options):
             report['g2654_revision']=g2654.summary(options)
             print('Cotton exploration skips Rail-era builds below level three: '+str(report['g2654_revision']),flush=True)
+        from brass_ai.recovery import training_revision_g3471 as g3471
+        if g3471.applied(options):
+            report['g3471_cotton_timing']=g3471.summary(options)
+            print('Cotton exploration timing (actions of a seat within its era): '+str(report['g3471_cotton_timing']),flush=True)
         from brass_ai.recovery import training_revision_g3140 as g3140
         if g3140.applied(options):
             report['g3140_value_revision']=g3140.summary(options)

@@ -280,6 +280,11 @@ class Worker:
                         verifier.settle(expected['job_id'])
                     # g3423: the CPU teacher sends the table's era-end scoring maps once, here.
                     scoring = {'scoring': meta['scoring']} if meta.get('scoring') is not None else {}
+                    # g3471: and, when its job asks, the extra decision states (checked at admission).
+                    wanted = (revision or {}).get('search_rows') is not None
+                    require(not wanted or meta.get('search_rows') is not None,
+                            'CPU teacher did not send the expanded search rows; rerun scripts/prepare-rust-cpu-inference.py')
+                    if wanted: scoring['search_rows'] = meta['search_rows']
                     return dict(job_id=expected['job_id'],rows=rows,metrics=meta['metrics'],result=meta['result'],
                                 value_rows=values, final_spent=meta.get('final_spent'), **scoring)
                 else:raise ValueError('Unknown teacher event')

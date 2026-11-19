@@ -22,7 +22,7 @@ PATCHES = {
          '[dependencies]\n' + ORT + '\nbrass-ai-core = { path = "../native/brass-ai-core" }\n'),
     ),
     'src/lib.rs': (
-        ('pub mod scoring;\n', 'pub mod cpu_autoplay;\npub mod cpu_cotton;\npub mod cpu_eval;\npub mod scoring;\n'),
+        ('pub mod scoring;\n', 'pub mod cpu_autoplay;\npub mod cpu_capture;\npub mod cpu_cotton;\npub mod cpu_eval;\npub mod scoring;\n'),
         ('impl Lane {\n    pub fn new(',
          'impl Lane {\n'
          '    /// Tensors of the last `feature_arrays` call, for in-process inference.\n'
@@ -143,7 +143,22 @@ PATCHES = {
         # The teacher already feeds this recorder at every transition (ordinary_after); only the emit is new.
         ('"value_rows":values,"final_spent":ledger.spent,',
          '"value_rows":values,"value_count":value_count,"scoring":recorder.finish(&state.export())?,'
-         '"final_spent":ledger.spent,'),
+         '"search_rows":crate::cpu_capture::finish(),"final_spent":ledger.spent,'),
+        # g3471 search rows: a later main action of a searched turn, or a decision the per-era sample keeps,
+        # is encoded once before it is applied (cpu_capture; off unless the job's revision asks for it).
+        ('        if session.is_some() && view.context.phase == Phase::Action { first_action = false; }\n',
+         '        if let Some(capture) = crate::cpu_capture::kind(view.context.era, view.context.revision,\n'
+         '            all_seat && session.is_some() && view.context.phase == Phase::Action, first_action,\n'
+         '            actual.actions.len(), searched_turns)? {\n'
+         '            peer.encoder.encode(&view, &actual.key.choices, &root.context, &mut || Ok(()))?;\n'
+         '            let t = peer.encoder.tensors().ok_or("missing captured tensor")?;\n'
+         '            crate::cpu_capture::record(capture, json!({"index":searched_turns,"seat":seat,\n'
+         '                "revision":view.context.revision,"decision":view.context.phase,"phase":phase(&view),\n'
+         '                "legal":actual.actions.len(),"actions_remaining":view.context.actions_remaining,\n'
+         '                "state":t.state,"mapping":t.stable_to_relative,"remaining":ledger.remaining(),"spent":ledger.spent,\n'
+         '                "turn_key":[view.context.era,view.context.round,view.context.turn,view.context.turn_owner]}))?;\n'
+         '        }\n'
+         '        if session.is_some() && view.context.phase == Phase::Action { first_action = false; }\n'),
         # The g1190 restart schedule's Stage B moves w in .02 steps (fifty collections):
         # a 1/100 grid keeps every earlier 1/20 weight valid.
         ('            && (w * 20. - (w * 20.).round()).abs() < 1e-8\n',
@@ -332,6 +347,7 @@ def apply(directory, root=SOURCE_ROOT):
             text = text.replace(before, after)
         path.write_bytes(text.encode('utf-8'))
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_autoplay.rs', directory/'src/cpu_autoplay.rs')
+    shutil.copyfile(root/OVERLAY_DIR/'src/cpu_capture.rs', directory/'src/cpu_capture.rs')
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_eval.rs', directory/'src/cpu_eval.rs')
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_cotton.rs', directory/'src/cpu_cotton.rs')
     shutil.copyfile(root/OVERLAY_DIR/'Cargo.lock', directory/'Cargo.lock')

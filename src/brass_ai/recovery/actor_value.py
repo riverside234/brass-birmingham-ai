@@ -543,11 +543,15 @@ class TrainingPhases:
     def record_frozen(self,values):
         """g3140 step 7: the critic outputs PPO froze before its update, by critic row."""
         self.frozen_outputs={k:values[k] for k in ('win','utility') if k in values}
+        # g3471 search-rows: the era heads' own frozen ownership probabilities and local VP, for their lambda targets.
+        from .training_revision_g3140 import search_rows
+        self.frozen_local=({k:v for k,v in values.items() if k.startswith(('canal_','rail_slots','rail_links'))}
+                           if search_rows(self.config) is not None else None)
 
     def prepare(self,dataset):
         from .updates import Dataset
         started=time.perf_counter();timings={}
-        self.dataset=dataset;self.frozen_outputs=None
+        self.dataset=dataset;self.frozen_outputs=None;self.frozen_local=None
         self.critic_dataset=Dataset(dataset.data+self.snapshot_data,dataset.device,policy=False) if self.snapshot_data else dataset
         critic=self.critic_dataset
         timings['dataset']=time.perf_counter()-started;started=time.perf_counter()

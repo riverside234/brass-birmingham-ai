@@ -86,6 +86,12 @@ exploration from targeting Rail-era cotton builds below level three; level-one
 builds stay excluded in both eras. Develop and network targets, allowances,
 labels, buffers and the search-head stage are unchanged. The setting persists.
 
+--update-cotton-timing (at a committed boundary, after --update-rail-cotton) times cotton
+exploration within each era on PPO and teacher cotton tables: none at the first and last
+Canal action of a seat or its first two and last Rail actions; only cotton builds (no
+cotton develop or cotton-city network) in the last two actions of each era. Seats, quotas,
+rates, allowances, labels and buffers are kept. The setting persists.
+
 --update-search-lambda (at a committed g2654 boundary) sets the search-value return
 lambda to .95 (was .8). Each fit recomputes the buffered games' returns at the new
 lambda, so no buffer retires; held-out games still score the realized utility-to-go.
@@ -117,6 +123,16 @@ comma-separated; adopted items persist and only move forward
               only); the search-value validation tables with maps (4 at first, up
               to 32) are pooled with the ordinary validation rows in the ownership
               stop's criterion (ai-research/G3423_SEARCH_AUXILIARY.md).
+  search-rows (g3471, after search-aux and targets) each search-teacher table also
+              records the state before every played second main action and, per era,
+              a uniform sample of up to 24 other played decisions with two or more
+              choices (no new search; CPU teacher rebuilt by the continuation). The
+              search-value head trains on all three row types at lambda .95 applied
+              once per turn (extra states bootstrap at the next turn start). The era
+              heads train on lambda .95 returns of their own frozen predictions:
+              ordinary rows half actual map, half return; search rows the full return
+              on the turn clock. Held-out checks keep the actual outcomes and maps
+              (ai-research/G3471_SEARCH_ROWS.md).
 The held-out check, PPG cap .003, beta floor .25 and the strict early stop stay.
 
 --rating-every 20 (at a rated generation, a multiple of ten) runs the PL strength
@@ -143,6 +159,9 @@ Linear(192->1) without bias on the policy scorer's hidden layer predicts the reb
 label target softened at T=4 on the teacher term's 128 long-label rows per PPO step,
 weight 8 x beta, with its own gradient call and Adam. Two head-only iterations, then
 the trunk multiplier .2, .4, .6, .8, 1. Not exported; PPO rows join only at step S4.
+
+--soft-policy-weight 6 (at a committed boundary, after --soft-policy) lowers that weight
+to 6 x beta; the head, its Adam and warm-up carry over. Set once.
 """
 import importlib.util
 from pathlib import Path

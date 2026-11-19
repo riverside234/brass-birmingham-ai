@@ -6,7 +6,17 @@ import torch
 
 from brass_ai.learning.contracts import digest, require
 from brass_ai.learning.search_value import correction
+from .search_rows import kind
 from .search_value_schedule import HELDOUT_GAMES, HELDOUT_ITERATIONS
+
+
+def complete(game, *, numbered=True):
+    """One table's rows: its 64 roots from one collection, plus any g3471 extra rows (search_rows).
+    `numbered`: the roots are turns 1..64 (the dedicated held-out checks); else 64 distinct indices (Stage-C reserve)."""
+    turn = [r for r in game if kind(r) == 'turn']
+    indices = {r['index'] for r in turn}
+    return (len(turn) == 64 and (indices == set(range(1, 65)) if numbered else len(indices) == 64) and
+            len({r['generation'] for r in game}) == 1)
 
 
 def reserve_games(rows, generation, seed):
@@ -22,8 +32,7 @@ def reserve_games(rows, generation, seed):
                 'Stage-C holdout must come from the current eight-age training buffer')
         groups[row['game_id']].append(row)
     for game in groups.values():
-        require(len(game) == 64 and len({r['index'] for r in game}) == 64
-                and len({r['generation'] for r in game}) == 1, 'Incomplete/duplicate Stage-C value game')
+        require(complete(game, numbered=False), 'Incomplete/duplicate Stage-C value game')
     keys = sorted(groups)
     draw_seed = int(digest(['stage-c-heldout/1', seed, generation, keys])[:16], 16)
     report = dict(contract='stage-c-heldout/1', seed=draw_seed, requested_games=8,
@@ -48,8 +57,7 @@ def recent_holdout(rows, generation):
                 'Early stop requires dedicated held-out games in the current window')
         groups[row['game_id']].append(row)
     for game in groups.values():
-        require(len(game) == 64 and {r['index'] for r in game} == set(range(1, 65)) and
-                len({r['generation'] for r in game}) == 1, 'Incomplete/duplicate held-out search game')
+        require(complete(game), 'Incomplete/duplicate held-out search game')
     ready = len(groups) >= HELDOUT_GAMES
     latest = sorted(groups, key=lambda game: (groups[game][0]['generation'], game))[-HELDOUT_GAMES:]
     # Score on the realized utility-to-go. Older held-out games may have been
@@ -81,8 +89,7 @@ def rotating_holdout(rows, generation, *, games=ROTATING_GAMES, minimum=HELDOUT_
                 'Early stop requires dedicated held-out games in the current window')
         groups[row['game_id']].append(row)
     for game in groups.values():
-        require(len(game) == 64 and {r['index'] for r in game} == set(range(1, 65)) and
-                len({r['generation'] for r in game}) == 1, 'Incomplete/duplicate held-out search game')
+        require(complete(game), 'Incomplete/duplicate held-out search game')
     ordered = sorted(groups, key=lambda game: (groups[game][0]['generation'], game))
     latest, older = ordered[-games:], ordered[:-games]
     ready = len(latest) >= minimum
@@ -100,7 +107,7 @@ def rotating_holdout(rows, generation, *, games=ROTATING_GAMES, minimum=HELDOUT_
 class HeldoutLoss:
     """Pack validation positions once and recompute predictions per interval."""
     def __init__(self, model, rows):
-        games = Counter(r['game_id'] for r in rows)
+        games = Counter(r['game_id'] for r in rows if kind(r) == 'turn')  # g3471: plus any extra rows
         require((len(games) == 8 or HELDOUT_GAMES <= len(games) <= ROTATING_GAMES) and all(n == 64 for n in games.values()) and
                 all(r['split'] == 'heldout' for r in rows), 'Search early stop needs complete held-out games')
         device = next(model.parameters()).device

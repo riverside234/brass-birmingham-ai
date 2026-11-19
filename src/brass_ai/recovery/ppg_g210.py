@@ -492,9 +492,20 @@ def fit(phases,model,preparation_pool):
         require(getattr(phases,'frozen_outputs',None) is not None,'Blended critic targets need the outputs PPO froze')
         boot=lambda_returns(phases.critic_dataset,phases.frozen_outputs,blend['lam'])
         boot_report=dict(bootstrap_report(phases.critic_dataset,boot),**blend)
+    # g3471 search-rows: the era heads' lambda returns of their own outputs PPO froze, per seat chain.
+    from .training_revision_g3140 import search_rows
+    rows_settings=search_rows(phases.config);local_boot=local_report=None
+    if rows_settings is not None:
+        from .search_rows import ordinary_corrections
+        require(getattr(phases,'frozen_local',None),'Era-head lambda targets need the era-head outputs PPO froze')
+        began_local=time.perf_counter()
+        local_boot,local_report=ordinary_corrections(phases.critic_dataset,phases.frozen_local,rows_settings['auxiliary']['lam'])
+        local_report.update(share=rows_settings['auxiliary']['ordinary_share'],seconds=time.perf_counter()-began_local)
+        phases.frozen_local=None
     cache=phases.buffer.stage(phases.critic_dataset,phases.train_ids,phases.heldout_ids,phases.actor_ids,
-        phases.collection_source,model,phases.split['selection'],bootstrap=boot)
+        phases.collection_source,model,phases.split['selection'],bootstrap=boot,local_bootstrap=local_boot)
     if boot_report is not None:cache['bootstrap']=boot_report
+    if local_report is not None:cache['local_bootstrap']=local_report
     staged=time.perf_counter()
     clock=None
     if two_iteration(c):
@@ -553,6 +564,13 @@ def fit(phases,model,preparation_pool):
             offset+=r['rows']
         snapshot_weight=phases.critic_state['snapshot_weight'] if phases.critic_state else 1.
         ds.critic_weights=torch.tensor([snapshot_weight if r=='snapshot' else 1. for r in ds.roles],device=ds.device)
+        if rows_settings is not None:
+            # g3471: ordinary rows train the era heads on the actual map plus half the lambda-return correction.
+            from .ppg_replay import LocalBootstrapColumn
+            from .search_rows import Corrections
+            column=LocalBootstrapColumn(ds.data)
+            if any(column.available()):
+                ds.local_bootstrap=Corrections(column,rows_settings['auxiliary']['ordinary_share'],ds.device)
         companion=getattr(phases,'local_scoring',None)
         if getattr(phases,'diversity',None) is not None:
             from .domino_auxiliary import PPGCompanions

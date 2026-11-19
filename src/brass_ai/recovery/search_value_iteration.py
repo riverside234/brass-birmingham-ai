@@ -94,12 +94,14 @@ class SearchValueIteration:
             phases.beta_floor = beta_floor(self.config['teacher_phase']['search_value'], self.phase.machine.state.get('stage'))
             # g3423: search training tables (last four iterations) and the validation set, for the era heads in PPG.
             phases.search_auxiliary = None
-            if self.auxiliary is not None:
+            if getattr(self, 'auxiliary', None) is not None:  # absent on an iteration built without its config
                 from .search_auxiliary import tables
                 require(self.phase.revision is not None, 'Search auxiliary rows need the g3270 rotating held-out set')
+                from .training_revision_g3140 import search_rows
                 phases.search_auxiliary = dict(settings=copy.deepcopy(self.auxiliary),
                     tables=tables(self.phase.buffer, self.generation, heldout_games=self.phase.revision['heldout_games'],
-                                  iterations=self.auxiliary['train_iterations']))
+                                  iterations=self.auxiliary['train_iterations']),
+                    rows=search_rows(self.config))  # g3471: the era heads' lambda targets on the expanded rows
 
     def post_fit(self, *, model, optimizer, reference, clones, probe_ids, dataset,
                  heldout_ids, config, update, beta, report):

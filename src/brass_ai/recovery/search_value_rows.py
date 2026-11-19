@@ -179,7 +179,9 @@ class ValueBuffer:
     def publish(self, generation, split, rows, *, game_id=None):
         require(split in ('train', 'heldout') and rows and all(r['generation'] == generation and r['split'] == split and
                 r['reward_id'] == self.reward_id for r in rows), 'Value buffer attribution differs')
-        require(len({(r['game_id'], r['index']) for r in rows}) == len(rows), 'Duplicate value row')
+        # g3471: a table's extra rows (search_rows) are keyed by their decision's revision, its roots by turn.
+        from .search_rows import row_key
+        require(len({row_key(r) for r in rows}) == len(rows), 'Duplicate value row')
         require(game_id is None or all(r['game_id'] == game_id for r in rows), 'Value shard game differs')
         self.directory.mkdir(parents=True, exist_ok=True)
         data = gzip.compress(json.dumps(rows, separators=(',', ':'), allow_nan=False).encode(), mtime=0, compresslevel=1)

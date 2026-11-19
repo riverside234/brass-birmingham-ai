@@ -13,7 +13,7 @@ def mixed(config):return config.get('table_plan',{}).get('contract')==TABLE_CONT
 
 
 def validate_mix(config):
-    from .ordinary_cotton import KEY, LIMITED, NETWORK, PROBABILITIES, RAIL_NETWORK, SETTINGS, enabled
+    from .ordinary_cotton import KEY, LIMITED, NETWORK, PROBABILITIES, RAIL_NETWORK, SETTINGS, TIMED, enabled
     plan=config['table_plan']
     require(set(plan)==set(TABLE_PLAN)|{'contract','origin_generation','origin_games'}|({KEY} if enabled(config) else set()) and
         plan['contract']==TABLE_CONTRACT and plan['quotas']==QUOTAS and
@@ -27,7 +27,7 @@ def validate_mix(config):
         '70/30 curriculum must preserve the previous schedule through its committed origin')
     require(config.get('v4_history') is not None,'70/30 requires v4 already moved into history')
     if enabled(config):
-        require(plan[KEY] in (LIMITED, NETWORK, RAIL_NETWORK, *(dict(SETTINGS, probability=rate) for rate in PROBABILITIES))
+        require(plan[KEY] in (LIMITED, NETWORK, RAIL_NETWORK, TIMED, *(dict(SETTINGS, probability=rate) for rate in PROBABILITIES))
                 and config.get('branching', {}).get('rate_per_decision') == 0,
                 'Ordinary cotton self-play requires a reviewed mix with branching disabled')
     return plan

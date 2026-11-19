@@ -15,6 +15,8 @@ from .rating_plot import DEFAULT_MAX_POINTS, RECENT_GENERATIONS, display_points,
 FORMAT = 'selfplay-vp-history/1.0.0'
 GROUP_SIZE = 10
 HISTORY_PATH = Path('ratings/vp-history.json')
+# g3471: learner VP by self-play table type, from economy.cotton_by_selfplay (reports from g3471 on).
+TABLE_TYPES = (('standard', 'standard_exploration'), ('cotton', 'cotton_exploration'))
 
 
 def _read(path):
@@ -51,7 +53,29 @@ def _totals(report):
         if type(counts['tables']) is not int or counts['tables'] < 0:
             raise ValueError('Invalid self-play table count')
         row['tables'] = counts['tables']
+    by_table = _by_table(report)
+    if by_table is not None: row['by_table'] = by_table
     return row
+
+
+def _by_table(report):
+    """{standard, cotton: (vp_sum, seat_games, tables)} of a report's self-play learner seats, if it records them."""
+    groups = (report.get('economy') or {}).get('cotton_by_selfplay') or report.get('by_table')
+    if not groups:
+        return None
+    if set(groups) <= {name for name, _ in TABLE_TYPES}:  # a saved history row
+        return {name: dict(groups[name]) for name, _ in TABLE_TYPES if name in groups}
+    if not all('vp_sum' in groups.get(key, {}) for _, key in TABLE_TYPES if key in groups):
+        return None
+    result = {}
+    for name, key in TABLE_TYPES:
+        if key not in groups: continue
+        g = groups[key]
+        if (type(g['seat_games']) is not int or g['seat_games'] < 0 or type(g['vp_sum']) not in (int, float)
+                or not math.isfinite(g['vp_sum']) or type(g['tables']) is not int):
+            raise ValueError('Invalid self-play VP by table type')
+        result[name] = dict(vp_sum=float(g['vp_sum']), seat_games=g['seat_games'], tables=g['tables'])
+    return result or None
 
 
 def _merge(rows, row):
@@ -94,7 +118,7 @@ def collect(run, *, state=None, history_sources=(), on_report=None):
                 if type(generation) is not int or generation < 1:
                     raise ValueError('Invalid VP history generation')
                 if generation <= limit:
-                    totals = _totals({'health_by_composition': {'selfplay': item}})
+                    totals = _totals({'health_by_composition': {'selfplay': item}, 'by_table': item.get('by_table')})
                     if totals is not None:
                         _merge(rows, dict(generation=generation, **totals))
 
@@ -154,8 +178,23 @@ def groups(history, generation):
         total = math.fsum(r['vp_sum'] for r in part)
         result.append(dict(first=first, last=last, iterations=len(part), seat_games=seats,
                            vp_sum=total, mean_vp=total/seats if complete and seats else None,
-                           tables=sum(r['tables'] for r in part) if all('tables' in r for r in part) else None))
+                           tables=sum(r['tables'] for r in part) if all('tables' in r for r in part) else None,
+                           by_table=_pooled(part) if complete else None))
     return result
+
+
+def _pooled(part):
+    """Each table type's pooled mean VP over `part`, when every row records it (else None for that type)."""
+    if not part or not all('by_table' in r for r in part):
+        return None
+    result = {}
+    for name, _ in TABLE_TYPES:
+        if not all(name in r['by_table'] for r in part): continue
+        seats = sum(r['by_table'][name]['seat_games'] for r in part)
+        total = math.fsum(r['by_table'][name]['vp_sum'] for r in part)
+        result[name] = dict(seat_games=seats, vp_sum=total, tables=sum(r['by_table'][name]['tables'] for r in part),
+                            mean_vp=total/seats if seats else None)
+    return result or None
 
 
 def display_groups(data, max_points=DEFAULT_MAX_POINTS):
@@ -176,10 +215,23 @@ def display_groups(data, max_points=DEFAULT_MAX_POINTS):
             continue
         seats = sum(r['seat_games'] for r in part)
         total = math.fsum(r['vp_sum'] for r in part)
+        by_table = None
+        if all(r.get('by_table') for r in part):
+            by_table = {}
+            for name, _ in TABLE_TYPES:
+                if not all(name in r['by_table'] for r in part): continue
+                n = sum(r['by_table'][name]['seat_games'] for r in part)
+                vp = math.fsum(r['by_table'][name]['vp_sum'] for r in part)
+                by_table[name] = dict(seat_games=n, vp_sum=vp, mean_vp=vp/n if n else None)
         result.append(dict(first=part[0]['first'], last=part[-1]['last'],
                            generation=bucket['generation'], seat_games=seats, vp_sum=total,
-                           mean_vp=total/seats))
+                           mean_vp=total/seats, by_table=by_table or None))
     return result
+
+
+def _type_mean(row, name):
+    value = (row.get('by_table') or {}).get(name) or {}
+    return value.get('mean_vp')
 
 
 def render(history, output, *, generation=None, preview=None, max_points=DEFAULT_MAX_POINTS):
@@ -277,13 +329,25 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
                     continue
                 x = positions if name == 'history' else [r['last'] for r in part]
                 y = [r['mean_vp'] if r['mean_vp'] is not None else math.nan for r in part]
+                typed_range = []
                 line, = axes.plot(x, y, color=blue, linewidth=2., zorder=4)
                 line.set_gid('vp-' + name + '-line')
+                # g3471: standard and cotton-exploration tables apart, where the groups record them.
+                for kind, color, style in (('standard', '#6F8790', (0, (4, 3))), ('cotton', '#C47A2C', (0, (1.5, 2)))):
+                    values = [_type_mean(r, kind) for r in part]
+                    if any(v is not None for v in values):
+                        typed, = axes.plot(x, [v if v is not None else math.nan for v in values], color=color,
+                                           linewidth=1.5, linestyle=style, zorder=3)
+                        typed.set_gid('vp-' + name + '-' + kind + '-line')
+                        present_values = [v for v in values if v is not None]
+                        low_typed, high_typed = min(present_values), max(present_values)
+                        typed_range.append((low_typed, high_typed))
                 ordinary = [(xx,r) for xx,r in zip(x,part) if r['mean_vp'] is not None and r != latest]
                 dots = axes.scatter([xx for xx,r in ordinary], [r['mean_vp'] for xx,r in ordinary],
                                     s=23, facecolor='white', edgecolor=blue, linewidth=1.05, zorder=5)
                 dots.set_gid('vp-' + name + '-markers')
-                low = min(r['mean_vp'] for r in present); high = max(r['mean_vp'] for r in present)
+                low = min([r['mean_vp'] for r in present] + [a for a, _ in typed_range])
+                high = max([r['mean_vp'] for r in present] + [b for _, b in typed_range])
                 span = max(2., high-low)
                 axes.set_ylim(low-span*.12, high+span*.16)
                 if latest in present:
@@ -297,9 +361,13 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
                 start = recent_positions[0]-.5
                 ax.axvspan(start, len(shown)-.5, color=blue, alpha=.035, linewidth=0, zorder=0)
                 ax.axvline(start, color=blue, alpha=.25, linewidth=.8, linestyle=(0, (3, 4)), zorder=1)
-            fig.legend(handles=[Line2D([], [], color=blue, marker='o', markerfacecolor='white',
-                       linewidth=1.8, markersize=4, label='Seat-weighted pooled mean VP')],
-                       loc='center left', bbox_to_anchor=(.066, .095), frameon=False, fontsize=8.4, labelcolor=muted)
+            handles = [Line2D([], [], color=blue, marker='o', markerfacecolor='white',
+                              linewidth=1.8, markersize=4, label='Seat-weighted pooled mean VP')]
+            if any(r.get('by_table') for r in data):
+                handles += [Line2D([], [], color='#6F8790', linestyle=(0, (4, 3)), linewidth=1.5, label='Standard tables'),
+                            Line2D([], [], color='#C47A2C', linestyle=(0, (1.5, 2)), linewidth=1.5, label='Cotton exploration tables')]
+            fig.legend(handles=handles, loc='center left', bbox_to_anchor=(.066, .095), frameon=False, fontsize=8.4,
+                       labelcolor=muted, ncol=len(handles))
             text(.055, .055, 'Full history: adjacent 10-iteration groups pooled; first/latest exact. Recent panel: original groups. Zero-VP seats included.'
                  if averaged else 'Each point = total VP / learner-seat games across 10 committed iterations. Zero-VP seats are included.',
                  fontsize=8.1, color=muted)

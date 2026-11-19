@@ -286,13 +286,22 @@ def build(base):
                 result.append((end, (key[0], 'RailEra', key[2], key[3]) if end is not None else None, token, mapping))
             return result
 
-        def _terms(self, owner, vp, classes, values, mask, device):
+        def _terms(self, owner, vp, classes, values, mask, device, correction=None):
+            """`correction` (g3471 search-rows): [B, n, 9] share-scaled lambda-return corrections of the owner
+            probabilities and local VP; the loss then uses the blended target, while the returned CE and VP error
+            (the by-era report) stay those against the actual map."""
             m = torch.as_tensor(mask, device=device); cls = torch.as_tensor(classes, device=device)
             truth = torch.as_tensor(values, device=device)
             ce = F.cross_entropy(owner.float().transpose(1, 2), cls, reduction='none')
             error = F.smooth_l1_loss(vp.float(), truth, reduction='none').sum(-1)
             den = m.sum(-1).clamp_min(1)
-            return m, cls, truth, ce, error, ((ce + error) * m).sum(-1) / den
+            if correction is None:
+                return m, cls, truth, ce, error, ((ce + error) * m).sum(-1) / den
+            target = (F.one_hot(cls, 5).float() + correction[..., :5]).clamp_min(0)
+            target = target / target.sum(-1, keepdim=True).clamp_min(1e-12)
+            soft = -(target * F.log_softmax(owner.float(), -1)).sum(-1)
+            soft_error = F.smooth_l1_loss(vp.float(), truth + correction[..., 5:], reduction='none').sum(-1)
+            return m, cls, truth, ce, error, ((soft + soft_error) * m).sum(-1) / den
 
         def forward(self, model, inputs, ds, ix, *, dropout=None, detach=False, capture_encoded=None):
             from .updates import value_output
@@ -391,11 +400,15 @@ def build(base):
             wc, wr, we = (self.horizon_weight(h) for h in ('canal', 'rail', 'rail_end'))
             weight = torch.where(canal, torch.full_like(loss, wc), torch.full_like(loss, wr)) * present
             end_meta = self.end_metadata(ds, ids, metadata) if we > 0 else None
+            # g3471 search-rows: lambda-return corrections of the own-era targets (ordinary rows .5, search rows 1).
+            source = getattr(ds, 'local_bootstrap', None)
+            corrections = source(ix) if source is not None else None
             for kind in ('slots', 'links'):
                 (co, cv), (ro, rv) = predictions['canal_' + kind], predictions['rail_' + kind]
                 owner = torch.where(canal[:, None, None], co, ro); vp = torch.where(canal[:, None, None], cv, rv)
                 classes, values, mask = self.target_arrays(metadata, kind, owner.shape[1])
-                m, cls, truth, ce, error, term = self._terms(owner, vp, classes, values, mask, device)
+                part = None if corrections is None else (corrections[:, :49] if kind == 'slots' else corrections[:, 49:])
+                m, cls, truth, ce, error, term = self._terms(owner, vp, classes, values, mask, device, part)
                 loss = loss + weight * term
                 current, settled, _ = board[kind]
                 for era_index, era in enumerate(ERAS):

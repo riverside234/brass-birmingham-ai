@@ -67,7 +67,7 @@ def cotton_network_targets(view):
     return {link['id'] for link in view['links'] if any(city in cities for city in link['regions'])}
 
 
-def network_cotton_candidates(view, choices, *, industry=True, network=True, minimum_build_level=2):
+def network_cotton_candidates(view, choices, *, industry=True, network=True, minimum_build_level=2, develop=True):
     phase = view['context']['phase']
     if len(choices) <= 1 or phase not in ('action', 'continuation'):
         return []
@@ -76,7 +76,28 @@ def network_cotton_candidates(view, choices, *, industry=True, network=True, min
     return [i for i, c in enumerate(choices)
             if (c['kind'] == 'network' and c.get('target') in links) or
             (industry and c.get('industry') == 'CottonMill' and
-             (c['kind'] == 'develop' or builds and c['kind'] == 'build'))]
+             (develop and c['kind'] == 'develop' or builds and c['kind'] == 'build'))]
+
+
+# g3471 cotton timing: a seat's main actions in the era where cotton exploration is off, and where it targets
+# cotton builds only (no cotton develop or cotton-city network). The Canal era has 15 actions, the Rail era 16.
+QUIET_COTTON_ACTIONS = dict(CanalEra=[1, 15], RailEra=[1, 2, 16])
+BUILD_ONLY_COTTON_ACTIONS = dict(CanalEra=[14, 15], RailEra=[15, 16])
+
+
+def era_action(context):
+    """The acting seat's 1-based main action in its era. Its payment and continuation decisions keep that action's
+    index: the engine counts actions down only when an action finishes."""
+    index = 2 * int(context['round']) - int(context['actions_remaining'])
+    return index + 1 if context['era'] == 'RailEra' else index
+
+
+def cotton_timing(context):
+    """(any cotton target, cotton develop and network targets) allowed at this decision."""
+    index = era_action(context)
+    if index in QUIET_COTTON_ACTIONS[context['era']]:
+        return False, False
+    return True, index not in BUILD_ONLY_COTTON_ACTIONS[context['era']]
 
 
 def sample_cotton(rng, selected, baseline, candidates, rate):

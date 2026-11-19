@@ -59,7 +59,7 @@ class SearchValuePhase:
                 for v in spent.values()), 'Invalid per-table post-search accounting')
         counts = defaultdict(int)
         timings, labels = {}, []
-        reused_roots = 0; maps = 0
+        reused_roots = 0; maps = 0; extra_counts = defaultdict(int)
         self.report.update(rows=counts,value_admission_per_table_seconds=timings)
         for job in jobs:
             table_began = time.monotonic()
@@ -69,6 +69,15 @@ class SearchValuePhase:
             rows = complete(result['value_rows'], result['result'], result['final_spent'], job,
                             lam=self.machine.state['lam'] or 1.)
             if live:reused_roots += len(rows)
+            if (job.get('teacher_revision') or {}).get('search_rows') is not None:
+                # g3471: the table's extra decision states, checked against its roots, with their own targets.
+                from .search_rows import complete as complete_extras, validate as validate_extras
+                require(result.get('search_rows') is not None, 'A search-rows table lacks its extra rows')
+                extras = validate_extras(result['search_rows'], rows, job)
+                rows = rows + complete_extras(rows, extras, result['result'], result['final_spent'], job['search']['reward'],
+                                              self.machine.state['lam'] or 1.)
+                extra_counts['second'] += sum(r['kind'] == 'second' for r in extras)
+                extra_counts['sampled'] += sum(r['kind'] == 'sampled' for r in extras)
             if rows[0].get('vp_payments'):
                 self.report.setdefault('vp_payments_per_table',{})[job['expected']['game_id']]=rows[0]['vp_payments']
             # Keep the final utility so all eight ages can be retargeted exactly
@@ -98,6 +107,7 @@ class SearchValuePhase:
         self.report['value_admission_seconds'] = time.monotonic()-began
         self.report['live_root_checks_reused'] = reused_roots
         if self.scoring_maps: self.report['scoring_maps'] = dict(tables=len(jobs), with_maps=maps)
+        if extra_counts: self.report['extra_rows'] = dict(extra_counts)  # g3471 search rows admitted this iteration
         self.report['value_admission_per_table_seconds'] = timings
         self.report['verification_limit_seconds'] = None
 
@@ -122,21 +132,13 @@ class SearchValuePhase:
         return stale
 
     def _targets(self, rows):
+        # g3471: a table's extra rows (search_rows) bootstrap at their turn's next root; the roots are unchanged.
+        from .search_rows import turn_targets
         lam = self.machine.state['lam'] or 1.
         groups = defaultdict(list)
         for row in rows: groups[row['game_id']].append(row)
         result = []
-        for game in groups.values():
-            game.sort(key=lambda r:r['index'])
-            following = np.asarray(game[-1]['terminal_utility'])
-            targets = []
-            for i in reversed(range(len(game))):
-                next_u = np.asarray(game[i+1]['u'] if i+1 < len(game) else game[i]['terminal_utility'])
-                cost = next_u - game[i]['u']
-                boot = np.asarray(game[i+1]['r'] if i+1 < len(game) else game[i]['terminal_utility'])
-                following = -cost + (1-lam)*boot + lam*following
-                targets.append(dict(game[i], target=following.tolist(), target_lambda=lam))
-            result.extend(reversed(targets))
+        for game in groups.values(): result.extend(turn_targets(game, lam))
         return result
 
     def after_ppg(self, generation, *, mode, ordinary=None, h2h=None, annealing=False, guarded=None):
@@ -245,9 +247,21 @@ class SearchValuePhase:
         updated=time.perf_counter()
         # Never reuse an older validation as this iteration's observation.
         if heldout is None:heldout=self.buffer.rows(generation,'heldout')
+        from .search_rows import kind
         current=[r for r in heldout if r['generation']==generation]
+        extras=[r for r in current if kind(r)!='turn']; current=[r for r in current if kind(r)=='turn']
         main,delta=predict_rows(self.model,current) if current else ([],[])
         diagnostic=diagnostics(current,np.asarray(main),np.asarray(delta))
+        if extras:
+            # g3471: the same check on this iteration's held-out extra rows, by kind (monitoring only).
+            main_x,delta_x=predict_rows(self.model,extras);u=np.asarray([r['u'] for r in extras])
+            report={}
+            for name in ('second','sampled'):
+                chosen=np.flatnonzero([kind(r)==name for r in extras])
+                if len(chosen):
+                    report[name]=dict(rows=int(len(chosen)),main_mse=float(np.mean((main_x[chosen]-u[chosen])**2)),
+                                      corrected_mse=float(np.mean((main_x[chosen]+delta_x[chosen]-u[chosen])**2)))
+            self.report['extra_validation']=report
         self.report.update(validation=diagnostic,stage=self.machine.advance(generation,diagnostic,pause=paused or waiting),
             updated=bool(self.report['update'].get('steps')),training_scale=scale,
             delta=dict(mean=float(np.abs(delta).mean()) if len(delta) else None,

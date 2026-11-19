@@ -31,6 +31,14 @@ search-aux  (g3423, after ownership-stop; needs the g3270 teacher revision) comp
             era heads' ownership and local-VP losses only. The search-value validation set
             (latest 32 held-out tables, those with maps) is pooled row by row with the ordinary
             validation rows in the ownership stop's criterion (recovery/search_auxiliary.py).
+search-rows (g3471, after search-aux and targets) every search-teacher table also records the state
+            before each played second main action and, per era, a uniform sample of up to 24 other played
+            decisions with two or more choices (no new search; CPU teacher rebuilt by the continuation).
+            The search-value head trains on all three row types, lambda .95 applied once per turn: an
+            extra state bootstraps at the next turn-start root. The era heads train on lambda .95 returns of
+            their own frozen predictions: ordinary rows on half the actual map and half the return along each
+            seat's chain, search rows on the full return on the turn clock; held-out checks keep the actual
+            maps and outcomes (recovery/search_rows.py).
 
 GPU-staged teacher rows and the background cleanup purge (also step 1) are
 code changes with no setting: they change neither numbers nor recipe.
@@ -52,19 +60,29 @@ SEARCH_AUX = dict(contract='search-table-auxiliary/2.0.0', rows='played-roots',
                   train_tables='search-value-training-tables-admitted-in-the-last-iterations', train_iterations=4,
                   heldout='search-value-validation-tables-with-maps', sampling='mixed-into-every-ppg-batch-once-per-epoch',
                   losses='era-heads-ownership-and-local-vp', row_weight='ordinary-row', criterion='pooled-owner-ce')
+SEARCH_ROWS = dict(contract='expanded-search-rows/1.0.0',
+                   rows=dict(turn_starts=64, second='state-before-every-played-second-main-action', sampled_per_era=24,
+                             sampled='other-played-decisions-with-two-or-more-choices',
+                             stream='splitmix64-of-job-seed-and-revision', searches='none-new'),
+                   search_value=dict(lam=.95, clock='once-per-turn', extra_bootstrap='next-turn-start-root'),
+                   auxiliary=dict(lam=.95, ordinary_share=.5, search_share=1., bootstrap='frozen-era-head-predictions',
+                                  ordinary_clock='seat-chain', search_clock='turn', rail_end='actual-map'),
+                   heldout='whole-games-against-actual-outcomes')
 ITEMS = ('time', 'validation', 'heads', 'targets', 'weight=0.15', 'weight=0.5', 'vp', 'rail-end', 'ownership-stop',
-         'search-aux')
+         'search-aux', 'search-rows')
 
 
 def validate(block):
-    keys(block, tuple(OFF), ('ownership_stop', 'search_auxiliary'))
+    keys(block, tuple(OFF), ('ownership_stop', 'search_auxiliary', 'search_rows'))
     require(block['contract'] == CONTRACT and block['train_metrics_every'] in (1, TIME['train_metrics_every'])
             and block['validation'] in (None, VALIDATION)
             and block['bootstrap'] in (None, BOOTSTRAP)
             and block['value_weights'] in (OFF['value_weights'], dict(OFF['value_weights'], vp=VP_WEIGHT))
             and block.get('ownership_stop', OWNERSHIP_STOP) == OWNERSHIP_STOP
             and block.get('search_auxiliary', SEARCH_AUX) == SEARCH_AUX
-            and ('search_auxiliary' not in block or 'ownership_stop' in block),
+            and block.get('search_rows', SEARCH_ROWS) == SEARCH_ROWS
+            and ('search_auxiliary' not in block or 'ownership_stop' in block)
+            and ('search_rows' not in block or ('search_auxiliary' in block and block['bootstrap'] is not None)),
             'Invalid g3140 value revision')
     return block
 
@@ -110,6 +128,15 @@ def configure(config, items, generation):
             require(v3.is_v3(result.get(LOCAL)), 'search-aux needs the era heads (--value-revision heads)')
             require(teacher_revised(result), 'search-aux reads the g3270 rotating search-value held-out set (--teacher-revision)')
             revision['search_auxiliary'] = copy.deepcopy(SEARCH_AUX)
+        elif item == 'search-rows':
+            from .training_revision_g1491 import applied as cpu_teacher
+            require('search_auxiliary' in revision, 'search-rows extends the search-table rows (--value-revision search-aux)')
+            require(revision['bootstrap'] is not None, 'search-rows bootstraps the era heads beside the blended critic '
+                    'targets, from the outputs PPO freezes (--value-revision targets)')
+            require(cpu_teacher(result), 'search-rows is captured by the CPU teacher of the g1491 recipe')
+            require(result['teacher_phase']['search_value'].get('target', {}).get('lambda') == SEARCH_ROWS['search_value']['lam'],
+                    'search-rows applies the search-value lambda .95 once per turn')
+            revision['search_rows'] = copy.deepcopy(SEARCH_ROWS)
         elif item == 'heads':
             old = result.get(LOCAL)
             if v3.is_v3(old): continue  # adopted earlier
@@ -146,7 +173,8 @@ def project(old, new):
                and not (a['validation'] and not b['validation']) and not (a['bootstrap'] and not b['bootstrap'])
                and not (a['value_weights']['vp'] > b['value_weights']['vp'])
                and not ('ownership_stop' in a and 'ownership_stop' not in b)
-               and not ('search_auxiliary' in a and 'search_auxiliary' not in b))
+               and not ('search_auxiliary' in a and 'search_auxiliary' not in b)
+               and not ('search_rows' in a and 'search_rows' not in b))
     if not forward: return None
     la, lb = old.get(LOCAL), new.get(LOCAL)
     if la != lb:
@@ -194,6 +222,11 @@ def search_auxiliary(config):
     return copy.deepcopy(block(config).get('search_auxiliary'))
 
 
+def search_rows(config):
+    """The g3471 expanded search rows and the era heads' lambda targets, or None."""
+    return copy.deepcopy(block(config).get('search_rows')) if KEY in (config or {}) else None
+
+
 def previous(config):
     """The recipe before any g3140 item: the revision key dropped and the replaced 2.0.0 companion restored."""
     from . import local_scoring_v3 as v3
@@ -225,6 +258,7 @@ def tag(config):
     if b['value_weights']['vp'] != OFF['value_weights']['vp']: parts.append('vp05')
     if 'ownership_stop' in b: parts.append('cestop16')
     if 'search_auxiliary' in b: parts.append('searchaux')
+    if 'search_rows' in b: parts.append('searchrows')
     return '-'.join(parts) or 'none'
 
 

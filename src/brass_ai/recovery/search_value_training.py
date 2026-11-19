@@ -371,11 +371,13 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
         held_loss = HeldoutLoss(model,heldout)
     current_loss = initial_loss = held_loss() if held_loss is not None else None
     # Inputs are fixed, but trunk encodings must be recomputed after each
-    # optimizer step. Pack numeric rows once, retaining exact sample order/RNG.
-    states=np.asarray([r['state'] for r in rows],dtype=np.float32)
-    mappings=np.asarray([r['mapping'] for r in rows],dtype=np.int64)
-    remaining_costs=np.asarray([r['remaining'] for r in rows],dtype=np.float32)
-    targets=np.asarray([r['target'] for r in rows],dtype=np.float32)
+    # optimizer step. The sample order/RNG depends only on the row count; each
+    # step packs just its own rows (g3471: the expanded buffer holds ~110k rows,
+    # of which at most 32 x 512 are drawn), with the same values as one pack.
+    def packed(selected):
+        chosen=[rows[i] for i in selected]
+        return (np.asarray([r['state'] for r in chosen],dtype=np.float32),np.asarray([r['mapping'] for r in chosen],dtype=np.int64),
+                np.asarray([r['remaining'] for r in chosen],dtype=np.float32),np.asarray([r['target'] for r in chosen],dtype=np.float32))
     device=next(model.parameters()).device
     rng=np.random.default_rng(companion.seed+companion.steps);reports=[];steps=0
     batches=_search_batches(len(rows),intervals*16,rng,one_epoch=one_epoch)
@@ -384,11 +386,12 @@ def unconditional_pass(companion,rows,value_optimizer,*,scale,cloning_loss,measu
         rollback=Selection(model,value_optimizer,{'search':0.},companion=companion)
         try:
             for step,selected in enumerate(interval,start=start+1):
-                state,mapping,remaining=(torch.as_tensor(a[selected],device=device) for a in (states,mappings,remaining_costs))
+                *inputs,target=packed(selected)
+                state,mapping,remaining=(torch.as_tensor(a,device=device) for a in inputs)
                 encoded=model.encode_state(state)
                 with torch.no_grad():main=model.heads_from_encoded(encoded,mapping,remaining)[-1]
                 delta=correction(model,encoded,mapping,remaining,scale=scale)
-                loss=torch.nn.functional.mse_loss(main+delta,torch.as_tensor(targets[selected],device=device))
+                loss=torch.nn.functional.mse_loss(main+delta,torch.as_tensor(target,device=device))
                 value_optimizer.zero_grad(set_to_none=True);companion.optimizer.zero_grad(set_to_none=True)
                 loss.backward()
                 require(all(p.grad is None for n,p in model.named_parameters() if n.startswith(('outcomes.','utility_head.'))),
