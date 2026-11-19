@@ -44,7 +44,7 @@ def validate(options):
         floor = schedule.get('ppg_beta_floor_after_stage_b')
         require(type(schedule['validation_during_beta_qualification']) is bool and
             type(schedule['stage_a_iterations']) is int and schedule['stage_a_iterations'] in (50,100) and
-            floor in (.25,.5) and dict(schedule,validation_during_beta_qualification=True)==refreshed_schedule(
+            floor in (.125,.25,.5) and dict(schedule,validation_during_beta_qualification=True)==refreshed_schedule(
                 schedule['stage_a_iterations'], beta_floor_after_stage_b=floor),
             'Invalid refreshed search-value schedule')
         return schedule
@@ -114,7 +114,8 @@ def previous_recipe(config):
     from .training_revision_g1294 import previous as before_revision
     from .training_revision_g1307 import previous as before_lr_floor
     from .training_revision_g1491 import previous as before_g1491
-    result=copy.deepcopy(before_revision(before_lr_floor(before_g1491(config))))
+    from .training_revision_g3658 import previous as before_eighth_floor
+    result=copy.deepcopy(before_revision(before_lr_floor(before_g1491(before_eighth_floor(config)))))
     from .adaptive_teacher_beta import KEY as ADAPTIVE_BETA
     result.get('teacher_phase',{}).pop(ADAPTIVE_BETA,None)
     # Width is separately bound by the signed recipe and strict checkpoint loader.

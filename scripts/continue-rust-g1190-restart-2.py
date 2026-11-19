@@ -172,6 +172,10 @@ the trunk multiplier .2, .4, .6, .8, 1. Not exported; PPO rows join only at step
 --soft-policy-weight W (at a committed boundary, after --soft-policy) sets that weight
 to W x beta (2, 4, 6, 8, 10, 12 or 16; 6 from g3471); the head, its Adam and warm-up
 carry over. Each change is kept until the next.
+
+--ppg-beta-floor 0.125 (at a committed boundary) lowers the PPG beta floor from .25 to
+.125, in the value phase and in the search-head Stage C schedule, and sets the PPG beta
+to .125 once (hotfix). Trips, both Adams, RNG and replay carry over; the floor persists.
 """
 import importlib.util
 from pathlib import Path

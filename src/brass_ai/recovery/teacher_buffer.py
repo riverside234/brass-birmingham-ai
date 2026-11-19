@@ -154,8 +154,9 @@ class TeacherBuffer:
         return dict(contract=CONTRACT, identity=self.identity, receipts=copy.deepcopy(self.pending),
                     retired=copy.deepcopy(self.retired))
 
-    def committed(self, generation):
-        state = read(safe(self.run, self.run / 'state.json'))
+    def committed(self, generation, *, state=None):
+        # g3658: the state league.commit_cleanups just wrote, when it hands it over.
+        state = read(safe(self.run, self.run / 'state.json')) if state is None else state
         require(state['iteration'] == generation and state.get('teacher_phase', {}).get('buffer') == self.payload(),
                 'Teacher cleanup requires matching durable state commit')
         for receipt in self.retired:

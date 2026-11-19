@@ -65,6 +65,8 @@ TEACHER_FLOOR_DEFAULT=dict(EVERY_ITER_DEFAULT,contract=TEACHER_FLOOR_CONTRACT,be
 KL_STOP_CONTRACT='ppg-value-phase/26.0.0'
 KL_STOP_MIGRATION='ppg-kl-cap-stop-and-keep/1.0.0'
 KL_STOP_DEFAULT=dict(TEACHER_FLOOR_DEFAULT,contract=KL_STOP_CONTRACT)
+# g3658 (training_revision_g3658): floor .25 -> .125 and beta set to .125 once at the first resume.
+EIGHTH_FLOOR_MIGRATION='ppg-beta-floor-eighth-hotfix/1.0.0'
 
 
 def active(c):return c.get('contract') in (CONTRACT,COSINE_CONTRACT,LINEAR_CONTRACT,SHORT_CONTRACT,LOSS16_CONTRACT,KL32_CONTRACT,BETA1_CONTRACT,QUARTER_CONTRACT,EARLY_CONTRACT,TWO_ITER_CONTRACT,EVERY_ITER_CONTRACT,TEACHER_FLOOR_CONTRACT,KL_STOP_CONTRACT)
@@ -226,8 +228,8 @@ def validate(c):
     default=KL_STOP_DEFAULT if c.get('contract')==KL_STOP_CONTRACT else TEACHER_FLOOR_DEFAULT if c.get('contract')==TEACHER_FLOOR_CONTRACT else EVERY_ITER_DEFAULT if c.get('contract')==EVERY_ITER_CONTRACT else TWO_ITER_DEFAULT if two_iteration(c) else EARLY_DEFAULT if c.get('contract')==EARLY_CONTRACT else QUARTER_DEFAULT if c.get('contract')==QUARTER_CONTRACT else BETA1_DEFAULT if c.get('contract')==BETA1_CONTRACT else KL32_DEFAULT if c.get('contract')==KL32_CONTRACT else LOSS16_DEFAULT if c.get('contract')==LOSS16_CONTRACT else SHORT_DEFAULT if short(c) else LINEAR_DEFAULT if linear(c) else COSINE_DEFAULT if cosine(c) else DEFAULT
     if default is KL_STOP_DEFAULT and c.get('max_epochs') in (1, 2):
         default = dict(default, max_epochs=c['max_epochs'])
-        if c.get('beta_clone_min') == .5:
-            default['beta_clone_min'] = .5
+        if c.get('beta_clone_min') in (.5, .125):  # .125: g3658
+            default['beta_clone_min'] = c['beta_clone_min']
     require(type(c) is dict and set(c)==set(default) and active(c),'Invalid g210 PPG fields/contract')
     # Smaller batches are useful for bounded regression/smoke fixtures only.
     for k,v in default.items():
@@ -372,7 +374,11 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             raising_floor = (saved_value['contract'] == config['value_phase']['contract'] == KL_STOP_CONTRACT
                 and saved_value['beta_clone_min'] == .25 and config['value_phase']['beta_clone_min'] == .5
                 and dict(saved['options'], value_phase=dict(saved_value, beta_clone_min=.5)) == phases.options)
-            options_match = options_match or raising_floor
+            # g3658: the floor goes down to .125 once, from the committed .25 (training_revision_g3658).
+            lowering_floor = (saved_value['contract'] == config['value_phase']['contract'] == KL_STOP_CONTRACT
+                and saved_value['beta_clone_min'] == .25 and config['value_phase']['beta_clone_min'] == .125
+                and dict(saved['options'], value_phase=dict(saved_value, beta_clone_min=.125)) == phases.options)
+            options_match = options_match or raising_floor or lowering_floor
             if two_iteration(saved['options']['value_phase']):fields.add('phase_origin')
             expected_contract=TWO_ITER_CHECKPOINT if two_iteration(saved['options']['value_phase']) else CHECKPOINT
             require(saved.get('contract')==expected_contract and set(saved)==fields and options_match,
@@ -382,6 +388,15 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             if raising_floor:
                 require(type(phases.beta) in (int, float) and .25 <= phases.beta <= 32, 'Invalid saved PPG beta')
                 phases.beta = max(.5, phases.beta)
+            if lowering_floor:
+                # The user's hotfix: beta .125 at once, not after halvings. Trips, Adams/RNG, replay and cadence stay.
+                require(type(phases.beta) in (int, float) and math.isfinite(phases.beta) and .25 <= phases.beta <= 32,
+                        'Invalid saved PPG beta before the .125 floor')
+                phases.ppg_schedule_migration=dict(contract=EIGHTH_FLOOR_MIGRATION,origin=generation,
+                    beta_before=phases.beta,beta_after=.125,previous_adoption=copy.deepcopy(phases.adoption),
+                    scope='PPG beta floor .25 -> .125 (value phase and search-head Stage C) and beta set to .125 once. '
+                          'Preserve the KL trip history, both Adams/RNG, cached replay, cadence and gate evidence.')
+                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration);phases.beta=.125
             if adopting_kl_stop:
                 phases.ppg_schedule_migration=dict(contract=KL_STOP_MIGRATION,origin=generation,
                     beta_before=phases.beta,beta_after=phases.beta,previous_adoption=copy.deepcopy(phases.adoption),
@@ -579,6 +594,15 @@ def fit(phases,model,preparation_pool):
             companion=PPGCompanions(companion,phases.diversity,phases.optimizer,phases.config['update']['value_weight'])
         if companion is not None and companion.active:companion.inventory(ds,indices)
         pooled=scheduled(c)
+        # g3658: with new-game validation only the current age validates, so the acceptance rows are the
+        # gate's rows (g3655-g3657: bit-identical metrics). Then the gate reuses the acceptance scans.
+        from . import critic_data
+        gate_reuse=False
+        if pooled and rolling and len(validation)==len(phases.heldout_ids):
+            from collections import Counter
+            names=receipts[0]['game_ids']
+            validated=Counter(names[g] for g in ds.data.parts[0].array['game'][np.asarray(validation,dtype=np.int64)].tolist())
+            gate_reuse=validated==Counter(phases.critic_dataset.data[i][2][0] for i in phases.heldout_ids)
         indexed=time.perf_counter()
         report=value_phase.fit(model,phases.optimizer,phases.dataset,phases.train_ids,validation if pooled else phases.heldout_ids,
             phases.actor_ids if rate is not None else [],phases.probe_ids,effective,phases.config['update'],beta=phases.beta,
@@ -589,7 +613,9 @@ def fit(phases,model,preparation_pool):
             bootstrap_share=blend['share'] if blend is not None else 0.,loss_weights=revised_weights(phases.config),
             train_metrics=train_metrics_due(phases.config,phases.state['generation']+1),
             ownership_stop=ownership_stop(phases.config),
-            search_auxiliary=getattr(phases,'search_auxiliary',None))  # g3423: set by the search-value iteration
+            search_auxiliary=getattr(phases,'search_auxiliary',None),  # g3423: set by the search-value iteration
+            gate_from_acceptance=gate_reuse,
+            descriptor_diagnostics=critic_data.reads_descriptor_gain(phases.critic_state,phases.config.get('critic_data')))
         if blend is not None:report['bootstrap_ages']=ds.bootstrap.available()
         if getattr(phases,'diversity',None) is not None:
             phases.diversity.report['intrinsic_fit']=companion.report()
@@ -597,6 +623,12 @@ def fit(phases,model,preparation_pool):
         report['value_work']=dict(cache_stage_seconds=staged-began,replay_open_and_index_seconds=indexed-staged,
             fit_with_auxiliary_seconds=time.perf_counter()-indexed,
             scope='Wall attribution; fit includes its existing synchronous metrics and post-PPG auxiliary callback')
+        warmed=getattr(phases.buffer,'prefetch_report',None)
+        if warmed is not None:
+            # g3658: seconds is None while the hint was still running when the replay opened.
+            report['value_work']['prefetch']=dict(files=warmed['files'],bytes=warmed['bytes'],seconds=warmed['seconds'],
+                opened_after_seconds=staged-warmed['began'])
+            phases.buffer.prefetch_report=None
         if pooled:report['acceptance_support']=validation_support
         if getattr(phases,'retired_tables',()):report['retired_table_checks']=list(phases.retired_tables)
     if rate is None:report['early_stop_reason']='no_applied_ppo_rate'

@@ -104,7 +104,8 @@ def compact(report):
         r=report['local_scoring_adoption']
         out['local_scoring_adoption']={k:r[k] for k in ('contract','origin','new_origin','next_phase','cleanup_complete','cleanup')}
     for key in ('il_kl_limit','policy_anchor','anchor_transition','rating_coverage','rehearsal_schedule','health_counts','quality_pool','strength_rating','value_phase','seat_fingerprints','gate_diagnostics',
-                'exploration_rollout','entropy_control','entropy_schedule','entropy_measurement','entropy_floor_transition','exploration_metrics','seat_contexts','temperature_rating','context_evaluation','v4_share_gate','panel_gates','teacher_phase','cleanup'):
+                'exploration_rollout','entropy_control','entropy_schedule','entropy_measurement','entropy_floor_transition','exploration_metrics','seat_contexts','temperature_rating','context_evaluation','v4_share_gate','panel_gates','teacher_phase','cleanup',
+                'collection_gc','iteration_gc','commit_timings','previous_cleanup_purge'):
         if key in report:out[key]=report[key]
     if 'teacher_phase' in out:out['teacher_phase']=_teacher_summary(out['teacher_phase'])
     out['health_by_composition']={k:v['health_counts'] for k,v in report.get('by_composition',{}).items()
@@ -116,7 +117,8 @@ def compact(report):
         'sampling_seconds','rehearsal_prepare_seconds','rehearsal_cleanup_seconds',
         'anchor_probe_seconds','entropy_probe_seconds','auxiliary_diagnostics_seconds','pool_admission_seconds',
         'post_ppo_diagnostics_seconds','final_diagnostics_seconds',
-        'value_phase_seconds','search_and_distill_seconds','checkpoint_seconds','evaluation_seconds','context_evaluation_seconds','cleanup_seconds','iteration_seconds'))
+        'value_phase_seconds','search_and_distill_seconds','checkpoint_seconds','evaluation_seconds','context_evaluation_seconds','cleanup_seconds',
+        'commit_seconds','trim_seconds','gc_full_collection_seconds','iteration_seconds'))
     actor=report.get('actor',{})
     out['actor']=scalars(actor,('optimizer_steps','learner_decisions','meaningful_decisions','forced_decisions',
         'learner_trajectories','kl_early_stop','rehearsal_weight','gradient_clip_steps','baseline_explained_variance',

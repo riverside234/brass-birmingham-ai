@@ -379,4 +379,7 @@ class TeacherPhase:
                     readiness=copy.deepcopy(self.receipt), weight=copy.deepcopy(self.weight), buffer=self.buffer.payload(),
                     **({'soft_policy': soft} if soft is not None else {}))
 
-    def committed(self, generation): self.buffer.committed(generation)
+    # g3658: league.commit_cleanups hands over the state it just wrote (no second read of state.json).
+    committed_state = True
+
+    def committed(self, generation, *, state=None): self.buffer.committed(generation, state=state)

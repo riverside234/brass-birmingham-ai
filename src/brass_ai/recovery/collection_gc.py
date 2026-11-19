@@ -1,4 +1,4 @@
-"""The garbage collector during collection (g3270, build step 2: search workers never wait).
+"""The garbage collector over a training iteration (g3270 collection window; g3658 iteration policy).
 
 A full CPython collection pauses every thread of the trainer process. In g3268/g3269 all
 teacher tables stopped writing at the same moments, 3-4 times per collection for 3-16 s, and
@@ -6,12 +6,30 @@ resumed within half a second of each other: the trainer had stopped draining the
 The process keeps large long-lived trees (label views, value rows, replay metadata); a full
 pass walks all of them even though none can be garbage during collection.
 
-At the start of collection the existing objects move to the permanent generation
+g3270: at the start of collection the existing objects move to the permanent generation
 (gc.freeze), so a collection during the window walks only the objects made since. At the end
 they return to the oldest generation (gc.unfreeze) and the normal thresholds apply again.
-Reference counting frees garbage as usual meanwhile, frozen or not; only cyclic garbage older
-than the window waits until it ends. Every pause inside the window is timed for the report.
-BRASS_COLLECTION_GC_FREEZE=0 keeps the timing and skips the freeze.
+
+g3658: freezing alone made full passes more frequent, not rarer. CPython 3.12 starts a full
+pass when the objects promoted since the last one exceed a quarter of the old generation, and
+after a freeze the old generation is only the window's own survivors. The ingested replay grew
+past that quarter again and again: the g3654-g3657 windows paused 39-57 s, 26-39 s of it in
+7-18 full passes of 2-5 s each. After the window (unfrozen) the next full passes walked the
+whole heap, 11M frozen objects plus the ingested games, and landed wherever they fell:
+sampling (+20 s), PPO critic preparation (+21 s), the value phase's replay open (+16 s).
+
+The iteration policy, on by default:
+- start (collection begins): freeze the heap and turn automatic collection off. Reference
+  counting frees garbage as usual; only cyclic garbage made during the window waits.
+- stop (collection ends): freeze again. That is O(1): the window's survivors join the permanent
+  generation without any pass. Automatic collection resumes with full passes off, so the rest
+  of the iteration runs young passes over objects made after collection only.
+- finish (iteration end, after the commit): unfreeze, restore the thresholds and run one full
+  pass over everything. It is timed and reports the cyclic garbage it found, so no cycle lives
+  longer than one iteration.
+
+BRASS_ITERATION_GC=0 keeps the g3270 window (freeze, unfreeze at the end of collection).
+BRASS_COLLECTION_GC_FREEZE=0 keeps the timing and skips any freeze or policy.
 """
 from collections import Counter
 import gc
@@ -21,18 +39,43 @@ import time
 from brass_ai.learning.contracts import require
 
 SWITCH = 'BRASS_COLLECTION_GC_FREEZE'
+POLICY = 'BRASS_ITERATION_GC'
 CONTRACT = 'collection-gc-window/1.0.0'
+ITERATION_CONTRACT = 'iteration-gc/1.0.0'
+# The oldest generation never reaches this many young collections inside one iteration.
+NO_FULL = 2 ** 31 - 1
+
+# (thresholds, window) to restore if an iteration ended without finish() (an exception or a break).
+_outstanding = None
+
+
+def _flag(name):
+    value = os.environ.get(name, '1')
+    require(value in ('0', '1'), name + ' must be 0 or 1')
+    return value == '1'
 
 
 def enabled():
-    value = os.environ.get(SWITCH, '1')
-    require(value in ('0', '1'), SWITCH + ' must be 0 or 1')
-    return value == '1'
+    return _flag(SWITCH)
+
+
+def iteration_policy():
+    return enabled() and _flag(POLICY)
+
+
+def settle():
+    """Undo a policy an earlier iteration left in force; the next window starts clean."""
+    global _outstanding
+    if _outstanding is None: return False
+    thresholds, window = _outstanding; _outstanding = None
+    window._detach(); window.active = window.tail = False
+    gc.set_threshold(*thresholds); gc.unfreeze(); gc.enable()
+    return True
 
 
 class Window:
     def __init__(self):
-        self.active = False; self.report = None
+        self.active = False; self.report = None; self.tail = False
         self._started = None
 
     def _callback(self, phase, info):
@@ -44,24 +87,56 @@ class Window:
             self._counts[generation] += 1; self._seconds[generation] += elapsed
             self._longest = max(self._longest, elapsed)
 
-    def start(self):
-        if self.active: self.stop()
+    def _reset(self):
         self._counts, self._seconds, self._longest = Counter(), Counter(), 0.
-        self.freeze = enabled(); self.frozen = None; self._began = time.perf_counter()
+
+    def _passes(self):
+        return dict(collections=dict(self._counts), pause_seconds={k: round(v, 6) for k, v in self._seconds.items()},
+                    total_pause_seconds=sum(self._seconds.values()), longest_pause_seconds=self._longest)
+
+    def _detach(self):
+        try: gc.callbacks.remove(self._callback)
+        except ValueError: pass
+
+    def start(self):
+        global _outstanding
+        if self.active: self.stop()
+        if self.tail: self.finish()
+        settle()
+        self._reset()
+        self.freeze = enabled(); self.policy = iteration_policy(); self.frozen = None; self._began = time.perf_counter()
         gc.callbacks.append(self._callback)
         if self.freeze:
             gc.freeze(); self.frozen = gc.get_freeze_count()
+        if self.policy:
+            _outstanding = (gc.get_threshold(), self); gc.disable()
         self.active = True
 
     def stop(self):
         if not self.active: return self.report
-        if self.freeze: gc.unfreeze()
-        try:gc.callbacks.remove(self._callback)
-        except ValueError:pass
+        if self.policy:
+            # The window's survivors join the frozen heap without a pass; young passes resume, full passes wait for finish().
+            young = _outstanding[0]
+            gc.freeze(); gc.set_threshold(young[0], young[1], NO_FULL); gc.enable()
+        else:
+            if self.freeze: gc.unfreeze()
+            self._detach()
         self.active = False
         self.report = dict(contract=CONTRACT, freeze=self.freeze, frozen_objects=self.frozen,
-            window_seconds=time.perf_counter() - self._began, collections=dict(self._counts),
-            pause_seconds={k: round(v, 6) for k, v in self._seconds.items()},
-            total_pause_seconds=sum(self._seconds.values()), longest_pause_seconds=self._longest,
+            window_seconds=time.perf_counter() - self._began, **self._passes(),
+            policy='iteration' if self.policy else 'window',
             scope='Collector passes inside ordinary and teacher collection; every trainer thread waits during each')
+        if self.policy:
+            self.tail = True; self._tail_began = time.perf_counter(); self._reset()
         return self.report
+
+    def finish(self):
+        """Iteration end: the passes since collection, then one timed full pass over the whole heap."""
+        if not self.tail: return None
+        after = dict(seconds=time.perf_counter() - self._tail_began, **self._passes())
+        settle()
+        began = time.perf_counter(); unreachable = gc.collect()
+        return dict(contract=ITERATION_CONTRACT, after_collection=after,
+            full_collection=dict(seconds=time.perf_counter() - began, unreachable=unreachable),
+            scope='After collection: young passes only, over objects made since; the heap stays frozen. '
+                  'One full pass at the end of the iteration; unreachable counts the cyclic garbage it freed.')

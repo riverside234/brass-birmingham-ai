@@ -513,12 +513,17 @@ class Buffer:
         if not hasattr(os,'posix_fadvise') or self.window<2 or not self.receipts:return None
         paths=[self.path(r['generation'],ext) for r in self.receipts[-(self.window-1):] for ext in r['files']
                if not ext.endswith('.json') and ext not in ('actions.npy','policy-actions.npy')]
+        # g3658: when the hint returned, so the value phase can tell a disk wait from a collector pause.
+        self.prefetch_report=dict(files=len(paths),bytes=sum(r['files'][ext]['bytes'] for r in self.receipts[-(self.window-1):]
+            for ext in r['files'] if not ext.endswith('.json') and ext not in ('actions.npy','policy-actions.npy')),
+            began=time.perf_counter(),seconds=None)
         def warm():
             for path in paths:
                 try:
                     with open(path,'rb') as stream:os.posix_fadvise(stream.fileno(),0,0,os.POSIX_FADV_WILLNEED)
                 except OSError:
                     continue
+            self.prefetch_report['seconds']=time.perf_counter()-self.prefetch_report['began']
         self.prefetching=threading.Thread(target=warm,name='ppg-prefetch',daemon=True)
         self.prefetching.start()
         return len(paths)
@@ -542,9 +547,11 @@ class Buffer:
             for a in actions:a._mmap.close()
             for r in rows:r.close()
 
-    def committed(self,generation):
+    def committed(self,generation,*,state=None):
+        # g3658: the committed state is the one league.commit_cleanups just wrote, when it hands it over.
+        state=read(self.run/'state.json') if state is None else state
         require(self.pending is not None and self.pending[-1]['generation']==generation==self.generation+1
-            and read(self.run/'state.json')['iteration']==generation,'PPG cache expiry requires checkpoint/state commit')
+            and state['iteration']==generation,'PPG cache expiry requires checkpoint/state commit')
         keep={r['generation'] for r in self.pending};files=[]
         require(read(self.directory/'owner.json')==OWNER,'PPG cache owner changed')
         for p in self.directory.iterdir():

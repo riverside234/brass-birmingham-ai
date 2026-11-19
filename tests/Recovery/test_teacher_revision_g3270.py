@@ -402,12 +402,16 @@ class Collection(unittest.TestCase):
     def test_the_gc_window_freezes_and_times_collector_passes(self):
         from brass_ai.recovery.collection_gc import Window
         keep = [[i] for i in range(10000)]
-        window = Window(); window.start()
-        try:
-            self.assertGreater(gc.get_freeze_count(), 0)
-            gc.collect()
-        finally:
-            report = window.stop()
+        window = Window()
+        # The g3270 window (the g3658 iteration policy is tested in test_iteration_speed_g3658).
+        with patch.dict(os.environ, {'BRASS_ITERATION_GC': '0'}):
+            window.start()
+            try:
+                self.assertGreater(gc.get_freeze_count(), 0)
+                gc.collect()
+            finally:
+                report = window.stop()
+        self.assertIsNone(window.finish())
         self.assertEqual(gc.get_freeze_count(), 0)
         self.assertTrue(report['freeze']); self.assertGreaterEqual(report['frozen_objects'], len(keep))
         self.assertGreaterEqual(report['collections'].get('2', 0), 1)

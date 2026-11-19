@@ -329,7 +329,8 @@ def defer_train_metrics(model,config):
 def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config,update,*,beta,
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
         companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None,
-        bootstrap_share=0.,loss_weights=None,train_metrics=True,ownership_stop=None,search_auxiliary=None):
+        bootstrap_share=0.,loss_weights=None,train_metrics=True,ownership_stop=None,search_auxiliary=None,
+        gate_from_acceptance=False,descriptor_diagnostics=True):
     """bootstrap_share/loss_weights change the training loss only (g3140 steps 7-8); the held-out
     check always scores the four main terms on real outcomes with the original weights.
     train_metrics=False skips the two full-buffer scans (g3140 step 1); held-out evidence then
@@ -338,7 +339,11 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     the value check sees. search_auxiliary (g3423) = dict(tables=search_auxiliary.tables(...),
     settings=...): search-table roots are mixed into every batch the heads train on (each root once
     per epoch, era-head losses only), and the search validation tables are pooled with the ordinary
-    ones in the ownership stop's criterion (recovery/search_auxiliary.py)."""
+    ones in the ownership stop's criterion (recovery/search_auxiliary.py).
+    gate_from_acceptance (g3658): the caller found the gate rows are the acceptance rows (the same
+    held-out games of the current age), so the gate before/after are the acceptance measurements of
+    the same weights instead of a second scan. descriptor_diagnostics=False skips the masked-descriptor
+    scan when no critic-data controller reads its gain."""
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     timings={}
@@ -412,7 +417,8 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                        evidence=True,group_cache=heldout_groups)
     train_before=None if deferred_train else measure_train('train_before_seconds')
     before=measure_heldout()
-    gate_before=measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else before
+    gate_before=((copy.deepcopy(before) if gate_from_acceptance else
+                  measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True)) if separate_gate else before)
     current=before;epochs=[];used=set();presentations=0;clone_presentations=0
     max_kl=0.;attempted_kl_checks=0;accepted_kl=0.;last_attempt=None;previous_presentations=0;role_presentations=defaultdict(int);branch_presentations=0
     deferred=config.get('kl_check_steps',1)>1
@@ -667,7 +673,9 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             before=dict(heldout_mse=before['utility_mse']),after=dict(heldout_mse=current['utility_mse']),
             scope='Final accepted value-phase weights; acceptance held-out games (train scans not scheduled this iteration)')
     # With zero retained updates, leave the existing qualification unchanged.
-    gate_after=measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True) if separate_gate else current
+    # `current` is always the acceptance measurement of the weights the phase keeps (head-only steps do not move it).
+    gate_after=((copy.deepcopy(current) if gate_from_acceptance else
+                 measure('current_validation_seconds',model,gate_dataset,gate_ids,update,evidence=True)) if separate_gate else current)
     started=time.perf_counter()
     report.update(train_before=train_before,train_after=train_after,heldout_before=gate_before,heldout_after=gate_after,
         last_attempted_heldout=last_attempt,heldout_attempt_scope=('Loss-accepted boundaries remain provisional until a safe exact KL receipt; attempted diagnostics may precede final rollback'
@@ -697,12 +705,17 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             gate_evidence_scope='Current iteration only; previous held-out evidence is not counted again',
             scope='Critic training and loss acceptance: two cached iterations. Cloning/probe and GAE/snapshot evidence: current iteration only.')
     timings['policy_diagnostics_seconds']=time.perf_counter()-started
-    unknown_metrics=measure('descriptor_diagnostics_seconds',model,gate_dataset,gate_ids,update,unknown=True)
-    from .critic_data import learner_ev
-    true_ev=learner_ev(gate_after);unknown_ev=learner_ev(unknown_metrics)
-    report.update(heldout_unknown=unknown_metrics,
-        descriptor_gain=dict(learner_ev_gain=true_ev-unknown_ev if true_ev is not None and unknown_ev is not None else None),
-        role_usage={role:dict(distinct_used=sum(value_dataset.roles[i]==role for i in used),presentations=role_presentations[role]) for role in ('learner','snapshot')})
+    if separate_gate:report['gate_measurement']='acceptance' if gate_from_acceptance else 'separate'
+    if descriptor_diagnostics:
+        unknown_metrics=measure('descriptor_diagnostics_seconds',model,gate_dataset,gate_ids,update,unknown=True)
+        from .critic_data import learner_ev
+        true_ev=learner_ev(gate_after);unknown_ev=learner_ev(unknown_metrics)
+        report.update(heldout_unknown=unknown_metrics,
+            descriptor_gain=dict(learner_ev_gain=true_ev-unknown_ev if true_ev is not None and unknown_ev is not None else None))
+    else:
+        report.update(heldout_unknown=None,descriptor_gain=dict(learner_ev_gain=None,measured=False,
+            reason='No critic-data controller reads the descriptor gain (g3658)'))
+    report.update(role_usage={role:dict(distinct_used=sum(value_dataset.roles[i]==role for i in used),presentations=role_presentations[role]) for role in ('learner','snapshot')})
     report['seconds']=time.perf_counter()-began
     if companion is not None and hasattr(companion,'diversity'):
         groups=defaultdict(list)

@@ -148,6 +148,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         help='Set the weight of the adopted soft policy head to this many x beta at this committed generation (8 at '
              'adoption, 6 from g3471); the head, its Adam and warm-up carry over. Each change is kept until the next '
              '(training_revision_g3423).')
+    parser.add_argument('--ppg-beta-floor', type=float, choices=(.125,),
+        help='Lower the PPG beta floor .25 -> .125 at this committed generation, in the value phase and in the '
+             'search-head Stage C schedule, and set the PPG beta to .125 once (hotfix); trips, Adams, RNG and replay '
+             'carry over. The floor persists (training_revision_g3658).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -210,6 +214,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.soft_policy = False
         recovery.soft_policy_weight = None
         recovery.update_cotton_timing = False
+        recovery.ppg_beta_floor = None
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

@@ -81,7 +81,7 @@ def inference_choice(args):
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
-            teacher_revision=False,soft_policy=False,soft_policy_weight=None):
+            teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -183,6 +183,12 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             # The soft head's weight x beta (8 -> 6 at g3471); head, Adam and warm-up carry over.
             require(mode=='on','The soft policy weight changes with teaching on')
             config=g3423.set_weight(config,soft_policy_weight,state['iteration'])
+        from brass_ai.recovery import training_revision_g3658 as g3658
+        if ppg_beta_floor is not None:
+            # PPG beta floor .25 -> .125 (value phase and search-head Stage C); the first resume sets beta to .125.
+            require(ppg_beta_floor==g3658.FLOOR,'Only the reviewed .125 PPG beta floor')
+            from brass_ai.recovery.config import validate_config
+            config=validate_config(g3658.configure(config))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -301,16 +307,19 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-cotton-timed-share');stages.append(prefix)
         if g3528.applied(config):
             prefix=prefix.replace('-share', '-retimed-share');stages.append(prefix)
+        if g3658.applied(config):
+            prefix=prefix.replace('-share', '-ppg-floor0125-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
+        adopting_floor=g3658.applied(config) and not g3658.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
                          g3471.applied(config) and not g3471.applied(before) or
                          g3528.applied(config) and not g3528.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
-                         g3140.changed(before,config) or adopting_teacher or adopting_soft)
+                         g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -335,7 +344,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 # that already belongs to the revised recipe.
                 from brass_ai.recovery.retention import safe
                 journal=('teacher-revision' if adopting_teacher else 'soft-policy' if adopting_soft else
-                         'value-revision' if g3140.changed(before,config) else
+                         'value-revision' if g3140.changed(before,config) else 'ppg-beta-floor' if adopting_floor else
                          'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
                 directory=safe(run, run/'configuration-history'/f"{journal}-{state['iteration']:04d}")
                 marker=safe(run, directory/'recipe.json')
@@ -433,6 +442,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'teacher_revision',False):kwargs['teacher_revision']=True
         if getattr(args,'soft_policy',False):kwargs['soft_policy']=True
         if getattr(args,'soft_policy_weight',None) is not None:kwargs['soft_policy_weight']=args.soft_policy_weight
+        if getattr(args,'ppg_beta_floor',None) is not None:kwargs['ppg_beta_floor']=args.ppg_beta_floor
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -511,6 +521,10 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g3140.applied(options):
             report['g3140_value_revision']=g3140.summary(options)
             print('g3140 value revision: '+str(report['g3140_value_revision']),flush=True)
+        from brass_ai.recovery import training_revision_g3658 as g3658
+        if g3658.applied(options):
+            report['g3658_ppg_beta_floor']=g3658.summary(options)
+            print('PPG beta floor: '+str(report['g3658_ppg_beta_floor']),flush=True)
         from brass_ai.recovery import rating_cadence
         if rating_cadence.applied(options):
             report['rating_cadence']=rating_cadence.summary(options)

@@ -44,6 +44,13 @@ def fixed_config(config):
 def fixed(c):return c.get('contract')==FIXED_DEFAULT['contract']
 
 
+def reads_descriptor_gain(s,c):
+    """g3658: only the automatic rollout, before snapshot rows switch on, reads the value phase's descriptor gain.
+    The fixed recipe (critic-rows/3.0.0) never does, so its masked-descriptor scan is skipped."""
+    return (s is not None and c is not None and not fixed(c) and c['snapshot_rows']
+            and c['rollout']['mode']=='auto' and not s['snapshots_active'])
+
+
 def validate_config(c):
     require(type(c) is dict and set(c)==set(DEFAULT) and c['contract'] in (DEFAULT['contract'],LEGACY_DEFAULT['contract'],FIXED_DEFAULT['contract'])
         and c['learner_rows'] is True and type(c['snapshot_rows']) is bool

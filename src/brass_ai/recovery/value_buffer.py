@@ -410,10 +410,11 @@ class DiskBuffer:
             total+=p.stat().st_size;removed.append(p.name);p.unlink()
         return dict(deleted_files=removed,deleted_bytes=total,seconds=time.perf_counter()-began)
 
-    def committed(self,generation):
+    def committed(self,generation,*,state=None):
         require(self.pending is not None and self.pending['generation']==generation==self.generation+1,
                 'PPG cache commit generation differs')
-        require(read(self.run/'state.json')['iteration']==generation,'PPG cleanup requires committed training state')
+        state=read(self.run/'state.json') if state is None else state
+        require(state['iteration']==generation,'PPG cleanup requires committed training state')
         self.receipt=self.pending;self.pending=None;self.generation=generation
         result=self.cleanup(generation);self.rebuilt=False;self.startup_cleanup=None
         self.reward_transition=None;self.holdout_transition=None

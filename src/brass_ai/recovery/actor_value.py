@@ -802,10 +802,13 @@ class TrainingPhases:
             beta_clone=self.beta,kl_trips=copy.deepcopy(self.trips),optimizer=self.optimizer.state_dict(),
             **({'buffer':copy.deepcopy(self.buffer.pending)} if self.buffer else {}))
 
-    def committed(self,generation):
+    # g3658: league.commit_cleanups hands over the state it just wrote (no second read of state.json).
+    committed_state=True
+
+    def committed(self,generation,*,state=None):
         self.gae_floor_migration=None
         if self.buffer:
-            self.value_report['buffer']['committed_cleanup']=self.buffer.committed(generation)
+            self.value_report['buffer']['committed_cleanup']=self.buffer.committed(generation,state=state)
         elif self.critic_evidence is not None and self.root is not None and self.run is not None:
             self.value_report['disabled_cache_cleanup']=value_buffer.retire_disabled(self.root,self.run,generation)
         self.collection_source=None

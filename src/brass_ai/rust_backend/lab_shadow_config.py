@@ -36,9 +36,10 @@ def is_shadow(config):
     from brass_ai.recovery.rating_cadence import previous as before_rating_cadence
     from brass_ai.recovery.training_revision_g3270 import previous as before_teacher_revision
     from brass_ai.recovery.training_revision_g3423 import previous as before_soft_policy
+    from brass_ai.recovery.training_revision_g3658 import previous as before_eighth_floor
     try:
         config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(
-            before_teacher_revision(before_soft_policy(recipe(config)))))))
+            before_teacher_revision(before_soft_policy(before_eighth_floor(recipe(config))))))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -120,6 +121,12 @@ def signature_transition(before,after):
     if g2880.applied(old) != g2880.applied(new):
         if g2880.applied(old):return False
         try:old=g2880.configure(old)
+        except (ValueError, KeyError, TypeError):return False
+    # g3658: the PPG beta floor .25 -> .125 (value phase and search-head Stage C), adopted once; then kept.
+    from brass_ai.recovery import training_revision_g3658 as g3658
+    if g3658.applied(old) != g3658.applied(new):
+        if g3658.applied(old):return False
+        try:old=g3658.configure(old)
         except (ValueError, KeyError, TypeError):return False
     # g3140 value revision: its items and the local-scoring weight ladder only move forward.
     from brass_ai.recovery import training_revision_g3140 as g3140

@@ -40,7 +40,9 @@ class PlanDigests:
         with self.lock:self.read_bytes+=after[2]
         return value,after[2]
 
-    def report(self, *, archived_bytes=0):
+    def report(self, *, archived_bytes=0, final_delete_rehash=True):
         return dict(plan_and_move_read_bytes=self.read_bytes+archived_bytes,reused_read_bytes=self.reused_bytes,
-            reuse_hits=self.hits,metadata_reuse_supported=METADATA_REUSE,final_delete_rehash=True,
-            scope='Apply hashes before moving and rehashes before deletion. Report archival hashes the same bytes it parses.')
+            reuse_hits=self.hits,metadata_reuse_supported=METADATA_REUSE,final_delete_rehash=final_delete_rehash,
+            scope=('Apply hashes before moving and rehashes before deletion. Report archival hashes the same bytes it parses.'
+                   if final_delete_rehash else
+                   'Automatic zero-hour cleanup (g3658): sizes checked at move and deletion; only archived reports are hashed, as they are parsed.'))

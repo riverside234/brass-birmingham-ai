@@ -183,7 +183,7 @@ def _references(root,run):
             if entry['path'].endswith('.json') and entry.get('quarantine') and not (entry.get('deleted') or entry.get('restored')):
                 original=safe(run,run/entry['path']);stored=safe(run,run/entry['quarantine'])
                 if not original.exists() and stored.is_file():
-                    require(sha(stored)==entry['sha256'],'Quarantined manifest changed')
+                    require(matches(stored,entry),'Quarantined manifest changed')
                     quarantined[original]=stored
     for directory in (root/'training/datasets',root/'training/models'):
         if directory.exists(): control.extend((p,read(p),'dataset or model manifest') for p in directory.rglob('*.json'))
@@ -273,12 +273,20 @@ def _same_payload(left,right):
 
 
 def slim_checkpoint(root,run,entry,existing=None,*,preserve_auxiliary=False):
-    path=project_path(root,entry['path']);require(sha(path)==entry['sha256'],'Population checkpoint changed')
+    path=project_path(root,entry['path'])
     if existing is not None:
         cached_path=safe(run,project_path(root,existing['path']))
         require(existing['model_id']==entry['model_id'] and cached_path.parent==run/'population'
-            and cached_path.is_file() and sha(cached_path)==existing['sha256'],'Population cache receipt changed')
-        if path==cached_path:return dict(existing)
+            and cached_path.is_file(),'Population cache receipt changed')
+        if path==cached_path:
+            # g3658: a member already in its population file keeps its receipt without two serial hashes of
+            # the file at every commit (24 members, 48 reads). Pool planning hashes every member, in parallel,
+            # before each collection (ordinary.verify_pool_checkpoints), so a changed file still stops the run.
+            require(entry['sha256']==existing['sha256'],'Population cache receipt changed')
+            return dict(existing)
+        require(sha(cached_path)==existing['sha256'],'Population cache receipt changed')
+    require(sha(path)==entry['sha256'],'Population checkpoint changed')
+    if existing is not None:
         if not preserve_auxiliary and 'auxiliary_heads' not in entry and 'auxiliary_heads' not in existing:
             return dict(entry,path=existing['path'],sha256=existing['sha256'],weights_only=True)
     elif path.parent==run/'population' and entry.get('weights_only'):
@@ -378,10 +386,18 @@ def preserve_available_companions(root,run,state):
         scope='All main state_dict heads retained. Exact companion bundles recovered only from available matching full generations; no fabricated historical weights. Old files remain immutable.')
 
 
-def plan(root,run,config=RETENTION,*,_hash_entries=True):
+def matches(path,entry):
+    """A journal entry's bytes: its sha256, or its size where an automatic zero-hour cleanup recorded only that (g3658)."""
+    return sha(path)==entry['sha256'] if entry.get('sha256') is not None else Path(path).stat().st_size==entry['bytes']
+
+
+def plan(root,run,config=RETENTION,*,_hash_entries=True,_observed=None):
     root,run=owned(root,run);require(run.exists(),'Run does not exist')
     require(not active(run,allow_owner=True),'Cannot prune an active run')
+    began=time.perf_counter()
     pins=references(root,run);state_path=run/'state.json';state=read(state_path) if state_path.exists() else {}
+    # g3658: the caller's purge of this plan reuses these pins, and the report times the scan.
+    if _observed is not None:_observed.update(pins=dict(pins),references_seconds=time.perf_counter()-began)
     from .value_buffer import enabled as buffered_value
     require(not buffered_value(state.get('signature',{}).get('config',{})) or config['replay_rounds']>=2,
             'Two-iteration PPG requires at least 2 replay rounds, including manual cleanup')
@@ -492,11 +508,22 @@ def plan(root,run,config=RETENTION,*,_hash_entries=True):
         protected=[dict(path=p.relative_to(run).as_posix(),reason=reasons.get(p,'dependency')) for p in sorted(keep) if p.exists()])
 
 
-def prune(root,run,config=RETENTION,*,apply=False,defer_purge=False):
+def prune(root,run,config=RETENTION,*,apply=False,defer_purge=False,automatic=False):
+    """automatic (g3658): the trainer's scheduled zero-hour cleanup checks sizes, not hashes.
+
+    With quarantine_hours 0 nothing is ever restored from quarantine, so the move and the
+    purge only need to know that a file is the one the plan listed. The plan already reads
+    the reference graph; its pins rescue dependencies in the purge of the same plan, which
+    no longer reads the graph a second time. At g3655 the two hashes read 7.5 GB twice and
+    the purge took 208 s beside the next iteration. Manual and delayed cleanups keep both.
+    """
     from .retention_digests import PlanDigests,hash_batch
     # In apply mode, hash as part of the journaled move rather than reading
     # every candidate twice. Dry runs still return the complete digest plan.
-    began=time.perf_counter();root,run=owned(root,run);decision=plan(root,run,config,_hash_entries=not apply)
+    began=time.perf_counter();root,run=owned(root,run);observed={}
+    sizes=automatic and apply and config['quarantine_hours']==0
+    decision=(plan(root,run,config,_hash_entries=False,_observed=observed) if sizes
+              else plan(root,run,config,_hash_entries=not apply))
     planned=time.perf_counter()
     if not apply: return dict(decision,dry_run=True)
     digests=PlanDigests()
@@ -522,6 +549,7 @@ def prune(root,run,config=RETENTION,*,apply=False,defer_purge=False):
     token=str(int(time.time()))+'-'+uuid.uuid4().hex[:8]
     manifest=run/'.retention'/('cleanup-'+token+'.json');trash=run/'.retention-trash'/token
     decision.update(dry_run=False,quarantine_hours=config['quarantine_hours'],status='moving')
+    if sizes:decision['verification']='size'
     write_json(manifest,decision,compact=True)
     for start in range(0,len(decision['entries']),JOURNAL_BATCH):
         batch=decision['entries'][start:start+JOURNAL_BATCH];paths=[]
@@ -529,9 +557,10 @@ def prune(root,run,config=RETENTION,*,apply=False,defer_purge=False):
             source=safe(run,run/entry['path']);destination=safe(run,trash/entry['path'])
             require(not destination.exists(),'Quarantine would overwrite a file')
             paths.append((source,destination))
-        measured=hash_batch([source for source,_ in paths],digests.measure)
+        measured=([(entry.get('sha256'),source.stat().st_size) for entry,(source,_) in zip(batch,paths,strict=True)] if sizes
+                  else hash_batch([source for source,_ in paths],digests.measure))
         for entry,(_,destination),(checksum,size) in zip(batch,paths,measured,strict=True):
-            require(size==entry['bytes'] and checksum==entry.setdefault('sha256',checksum),'Artifact changed during cleanup')
+            require(size==entry['bytes'] and (sizes or checksum==entry.setdefault('sha256',checksum)),'Artifact changed during cleanup')
             entry['quarantine']=destination.relative_to(run).as_posix();entry['moving']=True
         # All intents reach disk before the first rename. An interrupted batch
         # may contain moved and unmoved entries; purge/restore handle both.
@@ -546,10 +575,13 @@ def prune(root,run,config=RETENTION,*,apply=False,defer_purge=False):
         report=read(report_path);report.update(raw_records_pruned=True,promotion_eligible=False)
         report['retention_manifest']=manifest.relative_to(root).as_posix();write_json(report_path,report)
     moved=time.perf_counter()
+    known=(manifest,observed['pins']) if sizes else None
     # g3140 step 1: the caller may run the final purge (rehash and delete) beside the next iteration.
     result=(dict(permanently_deleted_files=None,permanently_deleted_bytes=None,rescued_dependencies=None,purge='background')
-            if defer_purge else purge(root,run,config,automatic=True))
-    return dict(decision,manifest=str(manifest),**result,hash_reuse=digests.report(archived_bytes=sum(e['bytes'] for e in archived)),timings=dict(plan_seconds=planned-began,
+            if defer_purge else purge(root,run,config,automatic=True,known=known))
+    return dict(decision,manifest=str(manifest),**result,known_pins=known,
+        hash_reuse=digests.report(archived_bytes=sum(e['bytes'] for e in archived),final_delete_rehash=not sizes),
+        timings=dict(plan_seconds=planned-began,references_seconds=observed.get('references_seconds'),
         archive_move_seconds=moved-planned,history_seconds=archived_at-planned,purge_seconds=time.perf_counter()-moved))
 
 
@@ -570,13 +602,14 @@ def scheduled_prune(root,run,config=RETENTION,*,background=None):
         next_cleanup_generation=((generation//interval+1)*interval if last is None else last+interval),
         reason='not_due' if config['enabled'] else 'disabled')
     if not config['enabled'] or not due:return result
-    cleanup=prune(root,run,config,apply=True,defer_purge=background is not None)
+    cleanup=prune(root,run,config,apply=True,defer_purge=background is not None,automatic=True)
     write_json(receipt,dict(format='automatic-retention/1.0.0',generation=generation,every_iterations=interval))
     result['purge']=cleanup.get('purge','inline')
-    if result['purge']=='background':background.start(root,run,config,generation)
+    if result['purge']=='background':background.start(root,run,config,generation,known=cleanup.get('known_pins'))
     result.update(performed=True,last_cleanup_generation=generation,next_cleanup_generation=generation+interval,reason='due')
     result.update({k:cleanup[k] for k in ('reclaimable_bytes','permanently_deleted_files','permanently_deleted_bytes','timings')})
     if 'hash_reuse' in cleanup:result['hash_reuse']=cleanup['hash_reuse']
+    if cleanup.get('verification'):result['verification']=cleanup['verification']
     return result
 
 
@@ -601,14 +634,14 @@ class BackgroundPurge:
             if kind is None:raise
         return False
 
-    def start(self,root,run,config,generation):
+    def start(self,root,run,config,generation,*,known=None):
         require(self.thread is None,'A cleanup purge is already running')
         import threading
         def work():
             began=time.perf_counter()
             for attempt in range(3):
                 try:
-                    self.result=dict(purge(root,run,config,automatic=True),generation=generation,
+                    self.result=dict(purge(root,run,config,automatic=True,known=known),generation=generation,
                         attempts=attempt+1,seconds=time.perf_counter()-began)
                     return
                 except (FileNotFoundError,json.JSONDecodeError) as error:
@@ -641,11 +674,15 @@ def remove_empty_parents(run,path):
         parent=parent.parent
 
 
-def purge(root,run,config=RETENTION,*,automatic=False):
+def purge(root,run,config=RETENTION,*,automatic=False,known=None):
+    """known (g3658) = (manifest, pins) from the plan that wrote that manifest moments before:
+    its entries are rescued by those pins without reading the reference graph again. Any other
+    unsettled manifest, and pruning old receipts, still read it fresh."""
     from .retention_digests import hash_batch
     root,run=owned(root,run);require(not active(run,allow_owner=True),'Cannot purge an active run')
     state=read(run/'state.json') if (run/'state.json').exists() else {};generation=state.get('iteration',state.get('epoch',0))
     count=0;rescued=0;deleted_bytes=0;pins=None;completed=[]
+    known_manifest=Path(known[0]).resolve() if known is not None else None
     for manifest in sorted((run/'.retention').glob('cleanup-*.json')):
         data=read(manifest)
         if settled(data):
@@ -654,7 +691,10 @@ def purge(root,run,config=RETENTION,*,automatic=False):
         # Zero-hour mode is safe immediately AFTER a committed state. Delayed
         # quarantine keeps its previous-generation guard.
         if automatic and data['quarantine_hours'] and generation<=data['generation']: continue
-        if pins is None:pins=references(root,run)
+        if known_manifest is not None and manifest.resolve()==known_manifest:pinned=known[1]
+        else:
+            if pins is None:pins=references(root,run)
+            pinned=pins
         for start in range(0,len(data['entries']),JOURNAL_BATCH):
             actions=[];empty_paths=[];changed=False
             for entry in data['entries'][start:start+JOURNAL_BATCH]:
@@ -665,7 +705,7 @@ def purge(root,run,config=RETENTION,*,automatic=False):
                         destination=safe(run,run/entry['quarantine'])
                         require(origin.exists()!=destination.exists(),'Ambiguous interrupted cleanup')
                         if destination.exists():
-                            require(sha(destination)==entry['sha256'],'Interrupted quarantine changed')
+                            require(matches(destination,entry),'Interrupted quarantine changed')
                             entry.update(moved=True,moving=False);changed=True
                     if not entry.get('moved'):
                         # This file never left its original path. Release the
@@ -674,18 +714,22 @@ def purge(root,run,config=RETENTION,*,automatic=False):
                         continue
                 path=safe(run,run/entry['quarantine'])
                 if entry.get('restoring') and not path.exists() and origin.exists():
-                    require(sha(origin)==entry['sha256'],'Restored dependency changed')
+                    require(matches(origin,entry),'Restored dependency changed')
                     entry.update(restored=True,restoring=False);changed=True;empty_paths.append(path);continue
                 if entry.get('deleting') and not path.exists():
                     entry.update(deleted=True,deleting=False);changed=True;empty_paths.extend((path,origin));continue
                 require(path.exists(),'Quarantine changed')
-                if origin in pins:
+                if origin in pinned:
                     require(not origin.exists(),'Restoring dependency would overwrite a file')
                     entry.update(restoring=True,deleting=False);action='restore'
                 else:entry['deleting']=True;action='delete'
                 actions.append((entry,path,origin,action));changed=True
-            checksums=hash_batch([path for _,path,_,_ in actions],sha)
-            require(all(entry['sha256']==checksum for (entry,_,_,_),checksum in zip(actions,checksums,strict=True)),
+            # Entries a size-only cleanup journaled (g3658) are checked by size; hashed entries are rehashed as before.
+            hashed=[(entry,path) for entry,path,_,_ in actions if entry.get('sha256') is not None]
+            checksums=hash_batch([path for _,path in hashed],sha)
+            require(all(entry['sha256']==checksum for (entry,_),checksum in zip(hashed,checksums,strict=True)),
+                    'Quarantine changed')
+            require(all(path.stat().st_size==entry['bytes'] for entry,path,_,_ in actions if entry.get('sha256') is None),
                     'Quarantine changed')
             if changed:write_json(manifest,data,compact=True)  # durable intent BEFORE any delete/restore
             for entry,path,origin,action in actions:
@@ -707,7 +751,7 @@ def purge(root,run,config=RETENTION,*,automatic=False):
         if settled(data):completed.append((data['created'],manifest))
     # Bound the cleanup journal too; unsettled receipts remain recoverable.
     if len(completed)>2:
-        if pins is None:pins=references(root,run)
+        if pins is None:pins=known[1] if known is not None else references(root,run)
         unpinned=[(created,path) for created,path in completed if path.resolve() not in pins]
         for _,path in sorted(unpinned)[:-2]:safe(run,path).unlink()
     return dict(permanently_deleted_files=count,permanently_deleted_bytes=deleted_bytes,rescued_dependencies=rescued)
@@ -729,13 +773,13 @@ def _restore(run,manifest,data):
         # Complete an interrupted restore only when its recorded intent and
         # exact destination bytes agree; never treat an arbitrary file as ours.
         if entry.get('restoring') and not source.exists() and destination.exists():
-            require(sha(destination)==entry['sha256'],'Restored dependency changed')
+            require(matches(destination,entry),'Restored dependency changed')
             entry.update(restored=True,restoring=False)
             write_json(manifest,data);count+=1
             continue
         if entry.get('moving') and destination.exists() and not source.exists(): continue
         require(not destination.exists(),'Restore would overwrite a current artifact')
-        require(sha(source)==entry['sha256'],'Quarantine changed')
+        require(matches(source,entry),'Quarantine changed')
         entry['restoring']=True;write_json(manifest,data)
         destination.parent.mkdir(parents=True,exist_ok=True);source.replace(destination)
         entry.update(restored=True,restoring=False)

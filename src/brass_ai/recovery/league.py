@@ -735,6 +735,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     quality_pool.finish_report(quality_report,next_quality,pool_admission)
                 diagnostics_finished=time.monotonic()
                 teacher_report=teacher_phase.finish(model,update) if teacher_phase is not None else None
+                teacher_finished=time.monotonic()
                 report=dict(format='step5-recovery-report/'+'2.2.0',iteration=iteration,composition=dict(composition),
                     v4_share_gate=v4_share.report(share,composition),
                     panel_gates=copy.deepcopy(state.get('ratings',{}).get('panel_gates')),
@@ -838,7 +839,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         **({'quality_pool_digest':quality_pool.state_digest(next_quality)} if quality else {})))
                 report['post_update_model_id']=identity
                 report['timings']['checkpoint_seconds']=time.monotonic()-checkpoint_began
-                write_json(directory/'report.json',report)
+                # g3658: the commit, timed (it was the iteration's unmeasured remainder); reports and state are compact JSON.
+                commit_began=time.monotonic()
+                commit=dict(teacher_finish_seconds=teacher_finished-diagnostics_finished,
+                    report_assembly_seconds=checkpoint_began-teacher_finished)
+                write_json(directory/'report.json',report,compact=True)
+                commit['report_write_seconds']=time.monotonic()-commit_began
                 entry=dict(path=output.relative_to(root).as_posix(),sha256=sha(output),model_id=identity,generation=iteration+1)
                 state.update(iteration=iteration+1,games_done=done,next_seed=cursor,context_counter=context_counter,
                     history=state['history']+[entry],next_search_games=next_search,
@@ -878,14 +884,22 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     search={k:v for k,v in search.items() if k not in ('collection','updates')})])[-2:]
                 if teacher_report is not None:state['recent_training'][-1]['teacher_phase']=teacher_report
                 # The previous cleanup's purge ran beside this iteration; finish it before committing.
+                joining=time.monotonic();commit['lineage_seconds']=joining-commit_began-commit['report_write_seconds']
                 previous_purge=background_purge.join()
+                commit['purge_join_seconds']=time.monotonic()-joining
                 if previous_purge is not None:report['previous_cleanup_purge']=previous_purge
                 if revised:
                     from .retention import update_population
+                    populating=time.monotonic()
                     update_population(root,run,state,config['population'])
-                write_json(state_path,state)
+                    commit['population_seconds']=time.monotonic()-populating
+                writing=time.monotonic()
+                write_json(state_path,state,compact=True)
+                commit['state_write_seconds']=time.monotonic()-writing
+                cleaning=time.monotonic()
                 commit_cleanups(state_path,state,iteration+1,search_values=search_values,
                                 owners=(teacher_phase,local_scoring,phases,diversity))
+                commit_ended=time.monotonic();commit['owner_cleanup_seconds']=commit_ended-cleaning
                 if revised:
                     evaluation_began=time.monotonic()
                     from .champion import schedule as schedule_champion
@@ -915,11 +929,20 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     cleanup_began=time.monotonic()
                     report['cleanup']=scheduled_prune(root,run,config['retention'],background=background_purge)
                     report['timings']['cleanup_seconds']=time.monotonic()-cleanup_began
+                    trimming=time.monotonic()
                     service.trim([e['model_id'] for e in state['population']]+[identity]+
                                  ([state['champion']['model_id']] if incumbent else [])+
                                  ([state['champion_mix'][k]['model_id'] for k in ('anchor','previous')] if champion_mix.enabled(config) else []))
+                    commit['trim_seconds']=time.monotonic()-trimming
+                # g3658: the iteration's one full collector pass (collection_gc), after the commit.
+                iteration_gc=collection_window.finish()
+                if iteration_gc is not None:report['iteration_gc']=iteration_gc
+                report['commit_timings']=dict(commit,scope='Commit work between final diagnostics and evaluation, and the inference-cache trim')
+                report['timings'].update(commit_seconds=(checkpoint_began-diagnostics_finished)+(commit_ended-commit_began),
+                    trim_seconds=commit.get('trim_seconds',0.),
+                    gc_full_collection_seconds=iteration_gc['full_collection']['seconds'] if iteration_gc else 0.)
                 report['timings']['iteration_seconds']=time.monotonic()-began
-                write_json(directory/'report.json',report)
+                write_json(directory/'report.json',report,compact=True)
                 from .context_evaluation import record_iteration_time
                 record_iteration_time(root,run,state,report)
                 summaries.append(report);summaries=summaries[-2:]
@@ -1118,11 +1141,16 @@ def commit_cleanups(state_path,state,generation,*,search_values=None,owners=()):
     state. Rating compaction's stale-writer guard compares the two. A rated
     iteration saved its slot before compacting and hid this; an iteration the
     rating cadence skips (g3180) does not.
+
+    g3658: owners that check the durable commit read it from the state just written
+    (``committed_state``), instead of parsing the 20 MB state.json again each.
     """
     if search_values is not None:search_values.committed(state)
     for owner in owners:
-        if owner is not None:owner.committed(generation)
-    write_json(state_path,state)
+        if owner is None:continue
+        if getattr(owner,'committed_state',False):owner.committed(generation,state=state)
+        else:owner.committed(generation)
+    write_json(state_path,state,compact=True)
 
 
 def schedule_evaluations(root,run,state,device,mono,*,inference_devices=None):
