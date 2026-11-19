@@ -544,8 +544,10 @@ class TrainingPhases:
         """g3140 step 7: the critic outputs PPO froze before its update, by critic row."""
         self.frozen_outputs={k:values[k] for k in ('win','utility') if k in values}
         # g3471 search-rows: the era heads' own frozen ownership probabilities and local VP, for their lambda targets.
-        from .training_revision_g3140 import search_rows
-        self.frozen_local=({k:v for k,v in values.items() if k.startswith(('canal_','rail_slots','rail_links'))}
+        # g3528: the Rail-end head's too, once its own lambda targets are on.
+        from .training_revision_g3140 import rail_end_returns_on,search_rows
+        heads=('canal_','rail_slots','rail_links')+(('rail_end_',) if rail_end_returns_on(self.config,self.state['generation']) else ())
+        self.frozen_local=({k:v for k,v in values.items() if k.startswith(heads)}
                            if search_rows(self.config) is not None else None)
 
     def prepare(self,dataset):

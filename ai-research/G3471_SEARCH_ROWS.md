@@ -61,7 +61,8 @@ cap seldom binds and a table grows from 64 to roughly 140 rows (about 2.2×).
   - An extra row in turn t takes root t+1's step, the same correction as its turn's root. Frames are aligned through the stable seats.
   - They train on the full return, Z + C.
 - **Checks.** The ownership stop and its pooled criterion keep scoring the actual maps, and the by-era report keeps the actual-map CE. At λ = 1 the losses equal the run without the item (tested).
-- **Rail-end.** The Rail-end head (weight 0 in this run) keeps its actual map.
+- **Rail-end.** The Rail-end head (weight 0 in this run) keeps its actual map. This run removes the Rail-end heads at
+  g3528; a run that switches them on gets λ-returns too (ai-research/G3528_CONTINUATION.md).
 
 ## 4. Soft policy weight 8 → 6 (`--soft-policy-weight 6`)
 

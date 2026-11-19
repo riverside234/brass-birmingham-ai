@@ -443,7 +443,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                            search=search.heldout if search is not None and search.ready else None)
         if search is not None:
             # g3471: the search rows' era-head targets from the heads' predictions frozen here, before any step.
-            search.prepare(model,stop.local,search_auxiliary.get('rows'))
+            search.prepare(model,stop.local,search_auxiliary.get('rows'),rail_end=bool(search_auxiliary.get('rail_end')))
         timings['ownership_stop_setup_seconds']=time.perf_counter()-started
     elif search_auxiliary is not None:
         report['search_auxiliary']=dict(ready=False,reason='needs_active_era_heads_and_ownership_stop')

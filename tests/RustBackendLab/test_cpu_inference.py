@@ -955,6 +955,31 @@ class NativeWorkers(unittest.TestCase):
         completed=S.complete(roots,extras,result['result'],result['final_spent'],job['search']['reward'],1.)
         for row in completed:np.testing.assert_allclose(row['target'],row['u'],rtol=0,atol=1e-12)
 
+    def test_g3528_retimed_cotton_teacher_table_matches_python_labels(self):
+        """g3528: a teacher cotton table under the retimed rule; every cotton label passes the Python rule (Canal 1
+        explores, Canal 14 may develop, never a network there)."""
+        from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
+        from brass_ai.step5.policy import COTTON_TIMINGS, cotton_permissions, cotton_seats, era_action
+        budget=dict(mode='count',full=64,fast=24,fast_k=8,**G.G2600_SEARCH)
+        exploration=dict(G.COTTON_ONLY_EXPLORATION,game_opening=G.T13_GAME_OPENING,cotton=C.settings(contract=C.RETIMED_NETWORK_CONTRACT))
+        seed=self.all_seat_job(0.)['sampling_seed']
+        seats=cotton_seats(seed,1,C.RETIMED_NETWORK_CONTRACT)
+        revision=G._job_block(exploration,short_labels=False,cotton_table=True,seats=seats,search_head_weight=0)
+        job,result,verifier=self.run_all_seat(0.,budget,revision,split='train',streamed=True)
+        self.assertEqual(G.validate_job(job),revision)
+        self.assertTrue(verifier.take(result,job,self.model)[0])
+        receipt=result['metrics']['cpu_inference']['revision']['cotton']
+        self.assertEqual(receipt['contract'],C.RETIMED_NETWORK_CONTRACT)
+        C.validate_receipt(receipt,job,result['rows'])
+        by_action={}
+        for row in result['rows']:
+            C.validate_label(row['teacher'],row['choices'],view=row['view'])
+            if row['teacher'].get('cotton_exploration'):
+                context=row['view']['context']
+                self.assertTrue(cotton_permissions(context,COTTON_TIMINGS['g3528'])[0])
+                key=(context['era'],era_action(context));by_action[key]=by_action.get(key,0)+1
+        print('g3528 cotton labels by (era, action)',sorted(by_action.items()))
+
     def test_single_seat_teacher_cotton_without_normal_exploration(self):
         from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
         from brass_ai.step5.policy import cotton_seats

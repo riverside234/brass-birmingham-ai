@@ -155,6 +155,13 @@ def timed_cotton_marker(marker):
     return dict(marker, exploration=dict(marker['exploration'], cotton=cotton))
 
 
+def retimed_cotton_marker(marker):
+    """g3528: the same network cotton tables under the retimed rule (training_revision_g3528)."""
+    from .teacher_cotton import RETIMED_NETWORK_CONTRACT, settings
+    cotton = dict(settings(contract=RETIMED_NETWORK_CONTRACT), table_fraction=marker['exploration']['cotton']['table_fraction'])
+    return dict(marker, exploration=dict(marker['exploration'], cotton=cotton))
+
+
 def configure_teacher_games(config, weight, *, seated=False):
     """Set the teacher-only blend and split cotton exploration within each partition."""
     require(type(weight) is int and weight in (0, 1), 'Teacher search-head weight must be 0 or 1')
@@ -203,6 +210,7 @@ def validate(config):
         g2600 = tuple(g2600_marker(cotton_only_marker(_mixed_tables(dict(opening, count_search=UPDATED_SEARCH), weight,
                                                                     seated=True), network=True)) for weight in (0, 1))
         allowed += g2600 + tuple(rail_cotton_marker(m) for m in g2600) + tuple(timed_cotton_marker(m) for m in g2600)
+        allowed += tuple(retimed_cotton_marker(m) for m in g2600)
     require(digest(marker) in tuple(digest(b) for b in allowed), 'Unreviewed g1491 training revision')
     v = VARIANTS[name]
     require(c.get('contract') == 'teacher-phase/2.0.0' and c.get('seating') == 'all-seat-search',

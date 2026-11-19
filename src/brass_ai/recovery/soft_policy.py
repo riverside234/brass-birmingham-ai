@@ -125,7 +125,7 @@ class SoftPolicy:
         else:
             keys(saved, STATE_KEYS)
             require(saved['contract'] == CONTRACT and saved['identity'] == identity(saved), 'Corrupt soft policy state')
-            # g3471: at its weight change the committed head was stamped under the weight-8 settings.
+            # At a weight change (g3471, g3528) the committed head was stamped under the settings before it.
             change = self.settings.get('weight_change')
             from .training_revision_g3423 import previous_settings
             stamped = (saved['settings_sha256'] == digest(self.settings) or

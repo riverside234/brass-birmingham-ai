@@ -16,7 +16,11 @@ targets     step 7: win and utility heads train on half the outcome and half the
             lambda .95 bootstrapped return from the critic frozen before PPO.
 weight=X    step 8: local-scoring weight .15, then .5 (both eras, owner and VP).
 vp          step 8: total-VP loss weight .1 -> .5 in training (the check keeps .1).
-rail-end    step 8: Canal rows also predict the Rail-end map, at half the Canal weight.
+rail-end    step 8: Canal rows also predict the Rail-end map, at half the Canal weight. With search-rows
+            (g3528) its targets are lambda .95 returns like the era targets': each Canal row's chain runs on
+            through the Rail era's chain to the game-end map (ordinary rows half actual map and half return,
+            search rows the full return). A head switched on with it trains on the actual map for its
+            first four iterations (RAIL_END_WARMUP), so its returns start from a trained head.
 ownership-stop  (g3318, after heads) the era heads get their own early stop: every 16
             steps the held-out owner cross-entropy on the value phase's validation
             games decides whether the heads keep their steps (an increase restores
@@ -39,6 +43,10 @@ search-rows (g3471, after search-aux and targets) every search-teacher table als
             their own frozen predictions: ordinary rows on half the actual map and half the return along each
             seat's chain, search rows on the full return on the turn clock; held-out checks keep the actual
             maps and outcomes (recovery/search_rows.py).
+drop-rail-end (g3528, after heads, with the Rail-end weight 0) removes the Rail-end owner and VP outputs from
+            the era heads at this generation. They never trained (weight 0: no loss or preservation term), so
+            the checkpoint loses only zero-initialised layers; their Adam slots go with them. Afterwards no
+            Rail-end outputs are computed, frozen or checked, and rail-end is refused (local_scoring_v3).
 
 GPU-staged teacher rows and the background cleanup purge (also step 1) are
 code changes with no setting: they change neither numbers nor recipe.
@@ -68,8 +76,28 @@ SEARCH_ROWS = dict(contract='expanded-search-rows/1.0.0',
                    auxiliary=dict(lam=.95, ordinary_share=.5, search_share=1., bootstrap='frozen-era-head-predictions',
                                   ordinary_clock='seat-chain', search_clock='turn', rail_end='actual-map'),
                    heldout='whole-games-against-actual-outcomes')
+RAIL_END_WARMUP = 4  # iterations on the actual game-end map before a fresh Rail-end head's lambda targets
 ITEMS = ('time', 'validation', 'heads', 'targets', 'weight=0.15', 'weight=0.5', 'vp', 'rail-end', 'ownership-stop',
-         'search-aux', 'search-rows')
+         'search-aux', 'search-rows', 'drop-rail-end')
+
+
+def rail_end_returns(from_generation):
+    """g3528: the search-rows block whose Rail-end targets are lambda returns from `from_generation` on."""
+    result = copy.deepcopy(SEARCH_ROWS)
+    result['auxiliary']['rail_end'] = dict(target='lambda-return', through='rail-era-chain', from_generation=from_generation)
+    return result
+
+
+def _rows_valid(rows):
+    if rows == SEARCH_ROWS: return True
+    end = rows.get('auxiliary', {}).get('rail_end') if type(rows) is dict and type(rows.get('auxiliary')) is dict else None
+    return (type(end) is dict and type(end.get('from_generation')) is int and end['from_generation'] >= 0
+            and rows == rail_end_returns(end['from_generation']))
+
+
+def _rail_end(block):
+    """The search rows' Rail-end target setting: 'actual-map', a lambda-return dict, or None without search-rows."""
+    return block['search_rows']['auxiliary']['rail_end'] if 'search_rows' in block else None
 
 
 def validate(block):
@@ -80,7 +108,7 @@ def validate(block):
             and block['value_weights'] in (OFF['value_weights'], dict(OFF['value_weights'], vp=VP_WEIGHT))
             and block.get('ownership_stop', OWNERSHIP_STOP) == OWNERSHIP_STOP
             and block.get('search_auxiliary', SEARCH_AUX) == SEARCH_AUX
-            and block.get('search_rows', SEARCH_ROWS) == SEARCH_ROWS
+            and _rows_valid(block.get('search_rows', SEARCH_ROWS))
             and ('search_auxiliary' not in block or 'ownership_stop' in block)
             and ('search_rows' not in block or ('search_auxiliary' in block and block['bootstrap'] is not None)),
             'Invalid g3140 value revision')
@@ -143,11 +171,18 @@ def configure(config, items, generation):
             require(old is not None and accepted_warmup(old) and old['mode'] == 'apply',
                     'Era heads replace the applied 2.0.0 local-scoring companion')
             result[LOCAL] = v3.default(generation, old, mode=old['mode'])
+        elif item == 'drop-rail-end':
+            local = result.get(LOCAL)
+            require(v3.is_v3(local), 'drop-rail-end removes outputs of the era heads (--value-revision heads)')
+            require(local['weights']['rail_end'] == 0, 'drop-rail-end removes Rail-end heads that never trained (weight 0)')
+            local.setdefault('rail_end_removed', generation)
+            v3.validate_config(local)
         else:
             local = result.get(LOCAL)
             require(v3.is_v3(local), item + ' needs the era heads (--value-revision heads)')
             weights = local['weights']
             if item == 'rail-end':
+                require(not v3.rail_end_removed(local), 'The Rail-end heads were removed (drop-rail-end)')
                 weights['rail_end'] = weights['canal'] / 2
             else:
                 value = float(item.split('=')[1])
@@ -156,6 +191,12 @@ def configure(config, items, generation):
             v3.validate_config(local)
     require('search_auxiliary' not in revision or 'ownership_stop' in revision,
             'search-aux early-stops through the ownership stop (--value-revision ownership-stop)')
+    # g3528: with search-rows the Rail-end head trains on lambda returns too (actual map while it is fresh).
+    local = result.get(LOCAL)
+    if _rail_end(revision) == 'actual-map' and v3.is_v3(local) and local['weights']['rail_end'] > 0:
+        before = config.get(LOCAL)
+        trained = v3.is_v3(before) and before['weights']['rail_end'] > 0  # the head already fits the actual map
+        revision['search_rows'] = rail_end_returns(generation if trained else generation + RAIL_END_WARMUP)
     result[KEY] = validate(revision)
     return result
 
@@ -174,9 +215,11 @@ def project(old, new):
                and not (a['value_weights']['vp'] > b['value_weights']['vp'])
                and not ('ownership_stop' in a and 'ownership_stop' not in b)
                and not ('search_auxiliary' in a and 'search_auxiliary' not in b)
-               and not ('search_rows' in a and 'search_rows' not in b))
+               and not ('search_rows' in a and 'search_rows' not in b)
+               and not (type(_rail_end(a)) is dict and _rail_end(a) != _rail_end(b)))
     if not forward: return None
     la, lb = old.get(LOCAL), new.get(LOCAL)
+    if type(_rail_end(b)) is dict and not (v3.is_v3(lb) and lb['weights']['rail_end'] > 0): return None
     if la != lb:
         if la is None or lb is None: return None
         try:
@@ -227,6 +270,12 @@ def search_rows(config):
     return copy.deepcopy(block(config).get('search_rows')) if KEY in (config or {}) else None
 
 
+def rail_end_returns_on(config, generation):
+    """g3528: whether the iteration from committed `generation` trains the Rail-end head on lambda returns."""
+    end = _rail_end(block(config)) if KEY in (config or {}) else None
+    return type(end) is dict and generation >= end['from_generation']
+
+
 def previous(config):
     """The recipe before any g3140 item: the revision key dropped and the replaced 2.0.0 companion restored."""
     from . import local_scoring_v3 as v3
@@ -254,11 +303,13 @@ def tag(config):
     if v3.is_v3(local):
         parts.append('eraheads-w' + str(local['weights']['canal']).replace('.', ''))
         if local['weights']['rail_end']: parts.append('railend')
+        if v3.rail_end_removed(local): parts.append('norailend')
     if b['bootstrap']: parts.append('blend50')
     if b['value_weights']['vp'] != OFF['value_weights']['vp']: parts.append('vp05')
     if 'ownership_stop' in b: parts.append('cestop16')
     if 'search_auxiliary' in b: parts.append('searchaux')
     if 'search_rows' in b: parts.append('searchrows')
+    if type(_rail_end(b)) is dict: parts.append('railendlam')
     return '-'.join(parts) or 'none'
 
 

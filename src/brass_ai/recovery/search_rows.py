@@ -33,8 +33,19 @@ Ordinary PPO rows follow each seat's chain of critic rows, as the utility blend 
 PPO; they train on Z + .5 C. Search rows follow the table's turn clock: P at the next turn-start root of the
 same era (an extra row in turn t takes root t+1, so it shares its turn root's correction), aligned to the
 row's seat through the stable seats and frozen at the start of the value phase; they train on Z + C. The
-Rail-end head (Canal rows predicting the game-end map; weight 0 in this run) keeps its actual map. The
 ownership stop's held-out criterion keeps scoring the actual maps.
+
+Rail-end (g3528, with `rail-end`).  Canal rows' Rail-end head predicts the game-end map Z_end, which is also
+what the Rail head predicts on Rail rows. Its return runs on through the Rail era: along the Canal rows
+P is the Rail-end head's own frozen prediction, and the last Canal row bootstraps at the first Rail row of
+the same chain (the seat's next critic row; on the turn clock, the first Rail root) with that row's Rail
+prediction and Rail-era return:
+
+    E_last = (1 - lam) P_rail(first Rail row) + lam G_rail(first Rail row),   E_i = (1 - lam) P_end(i+1) + lam E_(i+1),
+
+so it ends at the game-end map. Ordinary rows train on Z_end + .5 (E - Z_end), search rows on E. The
+corrections sit beside the era ones as channels 9..17 (Canal rows only); a head switched on with rail-end
+fits the actual map for its first iterations (training_revision_g3140.RAIL_END_WARMUP).
 """
 import copy
 from collections import defaultdict
@@ -53,6 +64,7 @@ FIELDS = ('kind', 'index', 'seat', 'revision', 'decision', 'phase', 'legal', 'ac
           'remaining', 'spent', 'turn_key')
 ENTITIES = 49 + 69  # slots then links, in the era heads' order
 WIDTH = 9           # owner probabilities (none, four relative seats) then the four seats' local VP / 5
+PAIRED = 2 * WIDTH  # g3528: the era correction, then the Rail-end correction (Canal rows)
 STREAM = 0x34715EA200000000
 MASK = (1 << 64) - 1
 
@@ -231,17 +243,27 @@ def head_outputs(values, rows, canal):
     return result
 
 
-def ordinary_corrections(dataset, frozen, lam):
+def end_outputs(values, rows):
+    """[n, 118, 9] frozen Rail-end head predictions (owner probabilities, then local VP) of Canal rows."""
+    ix = torch.as_tensor(np.asarray(rows, dtype=np.int64))
+    parts = [torch.cat((torch.as_tensor(values[f'rail_end_{k}_owner'])[ix].float(),
+                        torch.as_tensor(values[f'rail_end_{k}_vp'])[ix].float()), -1) for k in ('slots', 'links')]
+    return torch.cat(parts, 1).cpu().numpy()
+
+
+def ordinary_corrections(dataset, frozen, lam, *, rail_end=False):
     """g3471: ([rows, 118, 9] float16 corrections of the critic rows' era-head targets, report).
 
     Each seat's chain of critic rows (game-record order, as the utility blend) is cut wherever its scoring map
-    or seat frame changes, so each run ends at its era's actual map; rows without a map get zeros."""
+    or seat frame changes, so each run ends at its era's actual map; rows without a map get zeros.
+    g3528 `rail_end`: [rows, 118, 18], channels 9..17 the Canal rows' Rail-end corrections, whose chain runs on
+    into the Rail run that follows in the same chain (same game and frame); Canal rows without one get zeros."""
     from .local_scoring_targets import map_for
     require(0 < lam <= 1, 'Invalid auxiliary lambda')
     rows = len(dataset.data)
     require(all(len(v) == rows for v in frozen.values()), 'Frozen era-head outputs do not match the critic rows')
-    out = np.zeros((rows, ENTITIES, WIDTH), dtype=np.float16)
-    runs, tokens, current = [], [], {}
+    out = np.zeros((rows, ENTITIES, PAIRED if rail_end else WIDTH), dtype=np.float16)
+    runs, tokens, current, after = [], [], {}, {}
     for i in range(rows):
         row = dataset.rows[i]; label = row.get('_local_scoring')
         if label is None: continue
@@ -249,6 +271,7 @@ def ordinary_corrections(dataset, frozen, lam):
         token = (label['envelope']['sha256'], target['era'], tuple(int(x) for x in dataset.data[i][3].stable_to_relative))
         chain = dataset.data[i][2]; last = current.get(chain)
         if last is None or last[0] != token:
+            if last is not None: after[last[1]] = len(runs)  # the chain's next run
             current[chain] = (token, len(runs)); runs.append([]); tokens.append((token, target))
         runs[current[chain][1]].append(i)
     if not runs: return out, dict(rows=0, runs=0)
@@ -270,13 +293,45 @@ def ordinary_corrections(dataset, frozen, lam):
             c[step] = (1 - lam) * (head_outputs(frozen, following[step], canal[step]) - z[step]) + lam * c[step]
             owner += float(np.abs(c[step, :, :5]).sum()); vp += float(np.abs(c[step, :, 5:]).sum())
         c[live & (following < 0)] = 0.
-        out[now[live]] = c[live]
+        out[now[live], :, :WIDTH] = c[live]
         following = np.where(live, now, following)
     require(np.isfinite(out).all(), 'Nonfinite era-head corrections')
     used = sum(map(len, runs)) * ENTITIES
-    return out, dict(rows=sum(map(len, runs)), runs=len(runs), lam=lam, mean_owner_l1=owner / used, mean_vp_l1=vp * 5 / used,
-                     scope='Mean over critic rows with a map and entities: L1 of the owner-probability correction and of the '
-                           'local-VP correction (in VP, summed over seats), before the .5 share')
+    report = dict(rows=sum(map(len, runs)), runs=len(runs), lam=lam, mean_owner_l1=owner / used, mean_vp_l1=vp * 5 / used,
+                  scope='Mean over critic rows with a map and entities: L1 of the owner-probability correction and of the '
+                        'local-VP correction (in VP, summed over seats), before the .5 share')
+    if rail_end: report['rail_end'] = _end_corrections(out, frozen, runs, tokens, after, z, c, lam)
+    return out, report
+
+
+def _end_corrections(out, frozen, runs, tokens, after, z, first, lam):
+    """Channels 9..17 of `out`: the Canal runs' Rail-end corrections (ordinary_corrections). `first[k]` is run k's
+    era correction at its first row, so a linked Rail run supplies the boundary E_last."""
+    canal = [k for k, (token, _) in enumerate(tokens) if token[1] == 'CanalEra']
+    linked = [k for k in canal if k in after and tokens[after[k]][0][1] == 'RailEra'
+              and tokens[after[k]][0][0] == tokens[k][0][0] and tokens[after[k]][0][2] == tokens[k][0][2]]
+    if not linked: return dict(canal_runs=len(canal), linked_runs=0, rows=0)
+    rails = [after[k] for k in linked]
+    zend = z[rails]  # the game-end map, in the same frame
+    boundary = (1 - lam) * (head_outputs(frozen, [runs[j][0] for j in rails], np.zeros(len(rails), np.bool_)) - zend) + lam * first[rails]
+    longest = max(len(runs[k]) for k in linked)
+    index = np.full((len(linked), longest), -1, dtype=np.int64)
+    for n, k in enumerate(linked): index[n, :len(runs[k])] = runs[k]
+    e = np.zeros((len(linked), ENTITIES, WIDTH), dtype=np.float32)
+    following = np.full(len(linked), -1, dtype=np.int64); owner = vp = 0.
+    for t in range(longest - 1, -1, -1):
+        now = index[:, t]; live = now >= 0
+        step = np.flatnonzero(live & (following >= 0))
+        if len(step): e[step] = (1 - lam) * (end_outputs(frozen, following[step]) - zend[step]) + lam * e[step]
+        last = np.flatnonzero(live & (following < 0))
+        e[last] = boundary[last]
+        owner += float(np.abs(e[live][:, :, :5]).sum()); vp += float(np.abs(e[live][:, :, 5:]).sum())
+        out[now[live], :, WIDTH:] = e[live]
+        following = np.where(live, now, following)
+    require(np.isfinite(out).all(), 'Nonfinite Rail-end corrections')
+    used = sum(len(runs[k]) for k in linked) * ENTITIES
+    return dict(canal_runs=len(canal), linked_runs=len(linked), rows=used // ENTITIES,
+                mean_owner_l1=owner / used, mean_vp_l1=vp * 5 / used)
 
 
 def to_stable(a, mapping):
@@ -292,18 +347,22 @@ def to_relative(a, mapping):
     return result
 
 
-def search_corrections(tables, lam):
+def search_corrections(tables, lam, *, rail_end=False):
     """g3471: [rows, 118, 9] float32 corrections of search rows on each table's turn clock.
 
-    `tables`: per table (rows in SearchRows order, era maps, frozen), with `frozen[j]` the [118, 9] prediction of
-    the root at row position j by its own era head, in its own frame. Within an era the roots form the chain (the
-    era's last root has C = 0); an extra row in turn t bootstraps at root t+1 when that root is in its era, else it
-    is at its horizon (C = 0). Frames meet in the stable seats."""
+    `tables`: per table (rows in SearchRows order, era maps, frozen[, ends]), with `frozen[j]` the [118, 9]
+    prediction of the root at row position j by its own era head, in its own frame. Within an era the roots form
+    the chain (the era's last root has C = 0); an extra row in turn t bootstraps at root t+1 when that root is in
+    its era, else it is at its horizon (C = 0). Frames meet in the stable seats.
+    g3528 `rail_end`: [rows, 118, 18]; `ends[j]` is Canal root j's Rail-end prediction, and channels 9..17 of a
+    Canal row are its Rail-end correction: the Canal roots' chain on those predictions, whose last root
+    bootstraps at the first Rail root (its Rail prediction and Rail-era return). An extra row takes its root's."""
     require(0 < lam <= 1, 'Invalid auxiliary lambda')
-    total = sum(len(rows) for rows, _, _ in tables)
-    out = np.zeros((total, ENTITIES, WIDTH), dtype=np.float32)
+    total = sum(len(entry[0]) for entry in tables)
+    out = np.zeros((total, ENTITIES, PAIRED if rail_end else WIDTH), dtype=np.float32)
     offset = 0
-    for rows, maps, frozen in tables:
+    for entry in tables:
+        rows, maps, frozen = entry[:3]; ends = entry[3] if len(entry) > 3 else None
         at = {r['index']: j for j, r in enumerate(rows) if kind(r) == 'turn'}
         stable = {era: map_arrays(target, [0, 1, 2, 3])[0] for era, target in maps.items()}
         era_of = lambda t: rows[at[t]]['turn_key'][0]
@@ -315,6 +374,17 @@ def search_corrections(tables, lam):
                             (1 - lam) * (to_stable(frozen[at[following]], rows[at[following]]['mapping']) - stable[era])
                             + lam * chain[following])
                 following = t
+        end = {}
+        if rail_end and ends is not None and 'RailEra' in maps:
+            following = None
+            for t in sorted((t for t in at if era_of(t) == 'CanalEra'), reverse=True):
+                if following is None:  # the last Canal root: the first Rail root's prediction and return
+                    end[t] = ((1 - lam) * (to_stable(frozen[at[t + 1]], rows[at[t + 1]]['mapping']) - stable['RailEra'])
+                              + lam * chain[t + 1] if t + 1 in at and era_of(t + 1) == 'RailEra' else np.zeros((ENTITIES, WIDTH)))
+                else:
+                    end[t] = ((1 - lam) * (to_stable(ends[at[following]], rows[at[following]]['mapping']) - stable['RailEra'])
+                              + lam * end[following])
+                following = t
         for j, r in enumerate(rows):
             era = r['turn_key'][0]
             if era not in maps: continue
@@ -324,7 +394,8 @@ def search_corrections(tables, lam):
                 t = r['index'] + 1
                 c = ((1 - lam) * (to_stable(frozen[at[t]], rows[at[t]]['mapping']) - stable[era]) + lam * chain[t]
                      if t in at and era_of(t) == era else None)
-            if c is not None: out[offset + j] = to_relative(c, r['mapping'])
+            if c is not None: out[offset + j, :, :WIDTH] = to_relative(c, r['mapping'])
+            if r['index'] in end and era == 'CanalEra': out[offset + j, :, WIDTH:] = to_relative(end[r['index']], r['mapping'])
         offset += len(rows)
     require(np.isfinite(out).all(), 'Nonfinite search-row corrections')
     return out

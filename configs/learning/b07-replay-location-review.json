@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "e4afd4e2563c0944ab2031e70175c9267afcd591482256a865044c05631f11d7",
+  "execution_implementation": "7f8431f5e14d9c3f70ad35cdeffe84aef21f98adc7743cf5a664a4cddfc1110c",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -50,7 +50,7 @@
     },
     "src/brass_ai/recovery/actor_value.py": {
       "before": "48ada7549fc564fc67d75486c469dff751bc442ab714fd2b92ede431a27b4cf7",
-      "after": "533c853c0b43f4ca57d2a1f3539e0652a13e5edc98e1695bcd29ef02b551932e"
+      "after": "cb25ccd2e739826d6d902e621477beb2d041d4e07ced1ec7f39b32109e3b020f"
     },
     "src/brass_ai/recovery/admitted_inputs.py": {
       "before": "47aec3397f698def017fec3653d15c757fc317279227470f30d1e5077afad750",
@@ -126,7 +126,7 @@
     },
     "src/brass_ai/recovery/ppg_g210.py": {
       "before": "7b7a8d391a56f56ea36d2b97c79af8b5c45fc3c1bfb7494b93886280674e5940",
-      "after": "0fe1621cf068200b74f6ba8512f14897ed205de130bff8d2a2b2cca8df1d15ee"
+      "after": "bca8fd5a226ee0767d7c0a2361108bdb7f9d53cf7e560967ee54f9f7c6e8d3e5"
     },
     "src/brass_ai/recovery/ppg_policy_cache.py": {
       "before": "1724b71a097795cd34961dd81fd99cf25f4c94cf1860b1269b7327203f0684b4",
@@ -134,7 +134,7 @@
     },
     "src/brass_ai/recovery/ppg_replay.py": {
       "before": "d0de1159db478c3a86275910717c7b0471597d8852eb5576916e5f99acb55efc",
-      "after": "dd95dbd4ef546c3d9c68f301386d8a4d671d918676bdb7ec3946643e7447225e"
+      "after": "a6d462e7a9ca721c699e4b1c9bf189316a01ff815cfbd4b94551eda33b4378fa"
     },
     "src/brass_ai/recovery/replay.py": {
       "before": "28e7ea9e2bb92f064717c6c7d7cd258a38026c03ae95fe00ba2b6178921f7f7c",
@@ -158,7 +158,7 @@
     },
     "src/brass_ai/recovery/search_value_iteration.py": {
       "before": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae",
-      "after": "843c408de5a999570a00c99c6d4c0361ae1c31a83bc1446136a8531564b9d877"
+      "after": "f23fdba63afdcd26508b786a96758d8996a2b13e805ff7b8954d8cf946de89d1"
     },
     "src/brass_ai/recovery/search_value_phase.py": {
       "before": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2",
@@ -226,7 +226,7 @@
     },
     "src/brass_ai/recovery/value_phase.py": {
       "before": "66844598c56ff0175af8b0997b5ae869de4ae69331b11f5082c07162f4647fae",
-      "after": "b39167a98d7f801e976abf786513eefe7a81b835cb79186a0f97857fcbadbcaf"
+      "after": "66454cdedf3a6218272d63c304805311a5e979d1f9735c5c3c216124353e62ff"
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "dfb94bbf7f84d2c4113c331ceda867e5cdda2593e28e1e3cf60a83fca492636b"
+      "after": "3f9ea793e957ba261e4526e9cffc85d16569ece83472b6eba292350b21c708fb"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "c96b20579d1e1fa9d888d4fe5273bf2e4d77e4aae3b59e0a8a431b32bda441f6"
+      "after": "a2664663b8ba51d115af5659570507298f103bf789c588a8b1518980ddacd800"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -346,7 +346,7 @@
     },
     "src/brass_ai/recovery/training_revision_g1491.py": {
       "before": "5c6caf54055c00bc4ef2c06a33bfc651b1f82d37dcb9351bb71f997920fb832e",
-      "after": "db02900a2b98b0615dd887a853524d3cf37fd700d7e0bd58afacc541c051d141"
+      "after": "2b553e58ef02c64a8f1c5a26cf077a4711503d8eda3110cda810ca2aed574ab0"
     },
     "src/brass_ai/rust_backend/lab_cpu_overlay.py": {
       "before": "e7fa0229a185321c91a6dfbb9c513ae50800ac201544e9e0c12812fff204ef21",
@@ -370,7 +370,7 @@
     },
     "src/brass_ai/recovery/teacher_cotton.py": {
       "before": null,
-      "after": "abf5856d74dbfdfb5a9ce23335912145b06eccb7ace13c0efb6c9f76235792d4"
+      "after": "bde74c2aaf2cf828a13a36b185b128616e2c601fbcd54bb0878c3bd7f485fbef"
     },
     "src/brass_ai/rust_backend/lab_cotton_overlay.py": {
       "before": null,
@@ -382,7 +382,7 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "32bc225862657b69dd8fece28475d59b4ed77083d8b4fd5276bab162ee92a5c4"
+      "after": "d6eabdc0f987e5cc3f143b2269e4da6b0389f63348d613224f7d516661724b5d"
     },
     "tests/RustBackendLab/test_collection_overlap.py": {
       "before": null,
@@ -390,7 +390,7 @@
     },
     "tests/RustBackendLab/test_cpu_inference.py": {
       "before": null,
-      "after": "f572ca9d43375716c631ecbdaceea118582d62a7e9948b3fd8cc373ca9c31a4d"
+      "after": "0bec05bc9258b668471e4ab1819af2a6e78aa48e977ae7fa573752023affe590"
     },
     "tests/RustBackendLab/test_cpu_qualification.py": {
       "before": "746a19f5f85f7026f1ef511603d1aa40a2d75dd3d28535bb75dd4df791f67b60",
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "607a0c3bb7201dd96e1f2f43887b8a84e712c3cab233f406ed746dfa9f220560"
+      "after": "cdb2f8dd1c5333aca3a5a4ab74739aafebf0fdffc7d0b0b3efd57313647c59c2"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -554,15 +554,15 @@
     },
     "src/brass_ai/recovery/training_revision_g1041.py": {
       "before": "6f9cdd7a99d8d61c21ebb0167148035df3f39eceba18ea1c7aab847d46309ce9",
-      "after": "f4b939b0e1b2559e68642ea890f7c42273c3676239cd54401ad66706da6d0c96"
+      "after": "70d952fbab5363ff3158eca416c6094ae7c42ce1eb91a5dc6dc95c61eccd0e48"
     },
     "src/brass_ai/step5/policy.py": {
       "before": "5c29876a1eaf5f710554445123a6bf5e0a60e1aea5ca1c8b8165cccc52b922b5",
-      "after": "1566f623fee9bde6f71b0061bdfccb2c242317291671dff04975f3c27c0a7c67"
+      "after": "8fa2a0451d4b3c8402576dc73458c80b0d3b6dc9231d22a4c4bcb93acd2600ca"
     },
     "src/brass_ai/recovery/ordinary_cotton.py": {
       "before": null,
-      "after": "2484aaefcea3ee6b5147c12b76c43ef0a83d1e72d95a8b121bc0cc3dece607b0"
+      "after": "463a2bdda57d5109910fb6eefcbcda02b51f26a9b8ac29627b97d87f459c74d4"
     },
     "tests/Recovery/test_ordinary_cotton.py": {
       "before": null,
@@ -610,11 +610,11 @@
     },
     "src/brass_ai/recovery/training_revision_g3140.py": {
       "before": "ee5e47d2b5d9c85c0b7a1e3a7265a27a98367d5ec46b5e999be99784c54085ba",
-      "after": "48ab71a6c842df94ae326de8aaf068a6bb01e3c9c8b15de91ae017d1323191e6"
+      "after": "585826d4417883968e93becd7ce3fbc1c7d77442ed8fe69a8960709bc8ac5b1a"
     },
     "src/brass_ai/recovery/local_scoring_v3.py": {
       "before": "4d47c9100516c3269b1bd04ca9c7596b3d012f7d9762db30031a313a11bcc27c",
-      "after": "03249edab6d91036ac7c8e576cc1c2d0eb26feee7f28d1ae3e9960b757c13b31"
+      "after": "f9d2f134db6a57dbb3dc0cd056231ae65b19f528de37441992a3bd990d98dcb3"
     },
     "tests/Recovery/test_ownership_stop_g3318.py": {
       "before": null,
@@ -626,15 +626,15 @@
     },
     "src/brass_ai/recovery/search_auxiliary.py": {
       "before": null,
-      "after": "98df3f7c96cfe8d630b32b978e8341acc490a207b2b80d6ecd92e88c6ca32391"
+      "after": "cef53b33ab9b7ba2d43f5ca5b54d0d9210f36017c89b887361422d313552519b"
     },
     "src/brass_ai/recovery/soft_policy.py": {
       "before": null,
-      "after": "c97313359eac222c369801b02f905a97449c7a3137b16e06ba5ce1dab0de724f"
+      "after": "edf34e38b8b830159e1b0a0924ec71d6ab9914b12b5b5b68cbb953c2445f8176"
     },
     "src/brass_ai/recovery/training_revision_g3423.py": {
       "before": null,
-      "after": "c90502b04b459a5ba2be9ecac13dc66ec07a6cb451bae7b6f7c897d019a9d1e3"
+      "after": "a9fe65f58390585842756c3153ddb188f8241cc07b8bf840de94391791071984"
     },
     "tests/Recovery/test_search_auxiliary_g3423.py": {
       "before": null,
@@ -646,11 +646,11 @@
     },
     "src/brass_ai/recovery/search_rows.py": {
       "before": null,
-      "after": "f287e9d720b480ee3f111ea15cbbd15ac71ef3a83b998368929584e80e16f4fe"
+      "after": "670ebdc300633b6624b09f91c16df1c73356770694ba8c89a394f0c88294dba2"
     },
     "src/brass_ai/recovery/training_revision_g2654.py": {
       "before": "c8693c1a60cf6417afdf86c9f5f4d9cfc510967c450c39979147cb6b668cfb88",
-      "after": "f54a6ebfede540fd5a922cc6dfd86380be72397dfa935dcd5a1afda5879a29af"
+      "after": "f5da73c41a9aae3195afd63e277cac7a272bca65bf261c26e6cef91bf1384fae"
     },
     "src/brass_ai/recovery/training_revision_g3471.py": {
       "before": null,
@@ -662,7 +662,19 @@
     },
     "tests/Recovery/test_search_rows_g3471.py": {
       "before": null,
-      "after": "6be84a393014152ae5e8114957ca44771e13f3894f93f1c89e82972a66579023"
+      "after": "ce29770acb8009f72b3c4646cc15673bd4a705f6ee72aeefda5f1ed9c161b3f2"
+    },
+    "src/brass_ai/recovery/training_revision_g3528.py": {
+      "before": null,
+      "after": "6b0ad8e783a4554c20e3944644e4a12152c965ab17e2de45eb18bea453f7ae1b"
+    },
+    "tests/Recovery/test_cotton_retiming_g3528.py": {
+      "before": null,
+      "after": "93faafc44026e936412650ce5244cde319bf023a3f8dba0eb6dbb898a82cc62f"
+    },
+    "tests/Recovery/test_rail_end_g3528.py": {
+      "before": null,
+      "after": "2fbee32aa9aa33302c00a1147a72c1894557218b95b5b06acd84e05334d8e818"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -978,6 +990,11 @@
       "implementation": "259d39dff08a97f3310c804b0c64d30054314b108e42ff5f4ce51444020b6c6e",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "10a7af00360de5b93e3faecd30f4f28833b1c4eb2da93ad8cbd33d150d199914"
+    },
+    {
+      "implementation": "e4afd4e2563c0944ab2031e70175c9267afcd591482256a865044c05631f11d7",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "fecc49fd3aef2bb24745714b1d5043ae9ffab1d1f34048f11078ee5d5a802062"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1323,6 +1340,22 @@
   },
   "g3471_selfplay_vp": {
     "scope": "Reporting only: economy.cotton_by_selfplay also sums learner-seat games and final VP for standard and cotton-exploration self-play tables; the iteration log prints the mean VP per learner seat for all, standard and cotton tables; the self-play VP history and chart add the two table types where reports record them.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3528_rail_end_returns": {
+    "scope": "With search-rows, adopting --value-revision rail-end (weight canal/2) also sets value_revision.search_rows.auxiliary.rail_end = {target: lambda-return, through: rail-era-chain, from_generation}: from that generation (adoption + 4 for a head switched on then, so it first fits the actual map) the Canal rows' Rail-end targets are lambda .95 returns of the heads' own frozen predictions. A Canal row's chain runs on the Rail-end head's predictions and its last Canal row bootstraps at the first Rail row of the same chain (ordinary rows: the seat's next critic row; search rows: the first Rail root) with its Rail prediction and Rail-era return, so it ends at the game-end map. Ordinary rows train on the actual map plus half the correction (channels 9..17 of the PPG sidecar local-bootstrap.npy, 18 channels from then; 9-channel ages read zeros), search rows on the full return. The ownership stop and its pooled criterion keep scoring the actual maps. Before that generation, and without rail-end, behaviour is unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3528_drop_rail_end": {
+    "scope": "--value-revision drop-rail-end (needs the era heads with the Rail-end weight 0) sets local_scoring_auxiliary.rail_end_removed to the adoption generation. From then the era heads are local_scoring_v3.TwoEraHeads: the full heads built from the same seed with the Rail-end owner and VP outputs dropped. At that generation only, the committed full-heads checkpoint loses those parameters (zero-initialised and never trained: no loss or preservation term at weight 0) and their slots in the PPO and PPG head Adams, remapped by parameter name; the report records the count and their largest absolute value. No Rail-end output is computed, frozen, preserved or checked afterwards, and rail-end is refused.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3528_soft_policy_weight": {
+    "scope": "--soft-policy-weight takes 2, 4, 6, 8, 10, 12 or 16 x beta at any committed boundary after adoption. soft_policy.weight_change records the latest change {generation, before} with the earlier one nested as previous, so the settings before each change rebuild exactly; the head, its Adam and warm-up carry over and its state stamped under the earlier settings is accepted once at the change generation. The g3471 block (one change, 8 -> 6) is unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "g3528_cotton_retiming": {
+    "scope": "--update-cotton-timing now adopts the newest reviewed rule (training_revision_g3528, from the g3471 or the g2654 recipe): ordinary-cotton-exploration/6.0.0 and teacher-cotton-exploration/10.0.0. By a seat's action in its era: no cotton exploration at Canal 15 or Rail 1, 2 and 16; no cotton develop at Canal 15 or Rail 15 and 16; no cotton-city network at Canal 14 and 15 or Rail 15 and 16. Against g3471, Canal 1 explores every cotton target and Canal 14 targets cotton develops too. The same rule in step5.policy.cotton_permissions (ordinary_cotton actors and replay audit, teacher_cotton labels) and the CPU overlay (cpu_cotton::retiming for the teacher, cpu_autoplay for ordinary games; lab-native unchanged). Seats are drawn from the new contracts' streams; quotas, rates, allowances, labels and buffers are unchanged; g3471 labels and rows keep their rule.",
     "qualified_implementation_unchanged": true
   }
 }

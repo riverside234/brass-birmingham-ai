@@ -12,9 +12,11 @@ exported and never chooses a move. Its own gradient call and Adam (1e-4, clip 1.
 The teacher recipe, labels, buffers, beta and its qualification are unchanged. The head and
 its Adam live in the teacher phase's payload beside the term's beta state.
 
-g3471: --soft-policy-weight 6 lowers the weight to 6 x beta at a committed boundary (the user's
-change). The head, its Adam and warm-up carry over; the block records the change (weight_change),
-and the head's committed state, stamped under the weight-8 settings, is re-stamped at that generation.
+g3471: --soft-policy-weight W sets the weight to W x beta at a committed boundary (the user's
+change; 8 -> 6 at g3471, 6 -> 12 at g3528). The head, its Adam and warm-up carry over. The block
+records the latest change as weight_change = {generation, before}, with the change before it nested
+as weight_change.previous, so the settings before any change can be rebuilt exactly. The head's
+committed state, stamped under the earlier settings, is re-stamped at the change generation.
 """
 import copy
 
@@ -36,39 +38,51 @@ SETTINGS = dict(
 )
 
 
-WEIGHTS = (8., 6.)
+WEIGHTS = (2., 4., 6., 8., 10., 12., 16.)  # x beta; 8 at adoption
 
 
 def validate(block):
     keys(block, (*SETTINGS, 'from_generation'), ('weight_change',))
     plain = {k: v for k, v in block.items() if k not in ('from_generation', 'weight_change')}
-    change = block.get('weight_change')
     require(plain == dict(SETTINGS, weight=block['weight']) and block['weight'] in WEIGHTS
-            and type(block['from_generation']) is int and block['from_generation'] >= 0
-            and (change is None) == (block['weight'] == SETTINGS['weight'])
-            and (change is None or (set(change) == {'generation', 'before'} and change['before'] == SETTINGS['weight']
-                                    and type(change['generation']) is int and change['generation'] >= block['from_generation'])),
-            'Invalid g3423 soft policy revision')
+            and type(block['from_generation']) is int and block['from_generation'] >= 0, 'Invalid g3423 soft policy revision')
+    # The change history, latest first: each change moves to a different reviewed weight, later than the one
+    # before it, and the earliest starts from the adopted weight 8.
+    weight, change, later = block['weight'], block.get('weight_change'), None
+    while change is not None:
+        keys(change, ('generation', 'before'), ('previous',))
+        require(change['before'] in WEIGHTS and change['before'] != weight and type(change['generation']) is int
+                and change['generation'] >= block['from_generation'] and (later is None or change['generation'] < later),
+                'Invalid g3423 soft policy weight change')
+        weight, later, change = change['before'], change['generation'], change.get('previous')
+    require(weight == SETTINGS['weight'], 'Invalid g3423 soft policy weight change')
     return block
 
 
 def previous_settings(block):
-    """The block before its g3471 weight change (whose digest stamps the head's earlier committed state)."""
+    """The block before its latest weight change (whose digest stamps the head's earlier committed state)."""
+    change = block['weight_change']
     result = {k: copy.deepcopy(v) for k, v in block.items() if k != 'weight_change'}
-    result['weight'] = SETTINGS['weight']
+    result['weight'] = change['before']
+    if 'previous' in change: result['weight_change'] = copy.deepcopy(change['previous'])
     return result
 
 
 def set_weight(config, weight, generation):
-    """`config` with the soft head's weight at `weight` from committed generation `generation` (8 -> 6 only)."""
+    """`config` with the soft head's weight at `weight` from committed generation `generation`."""
     require(applied(config), 'The soft policy weight changes an adopted soft head (--soft-policy first)')
-    require(float(weight) in WEIGHTS and type(generation) is int, 'The reviewed soft policy weights are 8 and 6')
+    require(float(weight) in WEIGHTS and type(generation) is int,
+            'The reviewed soft policy weights are ' + ', '.join(f'{w:g}' for w in WEIGHTS))
     block = validate(config[KEY])
     if block['weight'] == float(weight): return copy.deepcopy(config)
-    require(block['weight'] == SETTINGS['weight'] and float(weight) == 6. and generation >= block['from_generation'],
-            'The soft policy weight only moves from 8 to 6')
+    earlier = block.get('weight_change')
+    require(generation >= block['from_generation'] and (earlier is None or generation > earlier['generation']),
+            'A soft policy weight change follows the adoption and the previous change')
+    change = dict(generation=generation, before=block['weight'])
+    if earlier is not None: change['previous'] = copy.deepcopy(earlier)
     result = copy.deepcopy(config)
-    result[KEY] = validate(dict(copy.deepcopy(block), weight=6., weight_change=dict(generation=generation, before=SETTINGS['weight'])))
+    result[KEY] = validate(dict({k: copy.deepcopy(v) for k, v in block.items() if k != 'weight_change'},
+                                weight=float(weight), weight_change=change))
     from .config import validate_config
     validate_config(result)
     return result
@@ -105,12 +119,12 @@ def project(old, new):
     a, b = (old or {}).get(KEY), (new or {}).get(KEY)
     if a == b: return old
     if a is not None:
-        # g3471: the one reviewed change of an adopted head, its weight 8 -> 6.
+        # The one reviewed change of an adopted head: its weight, recorded as b's latest change from exactly a.
         try:
             validate(a); validate(b)
         except (ValueError, KeyError, TypeError):
             return None
-        if a['weight'] != SETTINGS['weight'] or 'weight_change' not in b or previous_settings(b) != a: return None
+        if 'weight_change' not in b or previous_settings(b) != a: return None
         result = copy.deepcopy(old); result[KEY] = copy.deepcopy(b)
         return result
     try:

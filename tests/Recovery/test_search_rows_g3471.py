@@ -392,7 +392,7 @@ class SoftWeight(unittest.TestCase):
         with mock.patch('brass_ai.recovery.config.validate_config', lambda c: c):
             changed = S.set_weight(config, 6, 3471)
             self.assertEqual(S.set_weight(changed, 6, 3480), changed)
-            with self.assertRaisesRegex(ValueError, '8 and 6'): S.set_weight(config, 4, 3471)
+            with self.assertRaisesRegex(ValueError, 'reviewed'): S.set_weight(config, 5, 3471)
         block = changed[S.KEY]
         self.assertEqual((block['weight'], block['weight_change']), (6., dict(generation=3471, before=8.)))
         self.assertEqual(S.previous_settings(block), config[S.KEY])

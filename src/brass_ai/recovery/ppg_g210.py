@@ -493,13 +493,15 @@ def fit(phases,model,preparation_pool):
         boot=lambda_returns(phases.critic_dataset,phases.frozen_outputs,blend['lam'])
         boot_report=dict(bootstrap_report(phases.critic_dataset,boot),**blend)
     # g3471 search-rows: the era heads' lambda returns of their own outputs PPO froze, per seat chain.
-    from .training_revision_g3140 import search_rows
+    from .training_revision_g3140 import rail_end_returns_on,search_rows
     rows_settings=search_rows(phases.config);local_boot=local_report=None
     if rows_settings is not None:
         from .search_rows import ordinary_corrections
         require(getattr(phases,'frozen_local',None),'Era-head lambda targets need the era-head outputs PPO froze')
         began_local=time.perf_counter()
-        local_boot,local_report=ordinary_corrections(phases.critic_dataset,phases.frozen_local,rows_settings['auxiliary']['lam'])
+        # g3528: and the Canal rows' Rail-end corrections, once that head's own lambda targets are on.
+        local_boot,local_report=ordinary_corrections(phases.critic_dataset,phases.frozen_local,rows_settings['auxiliary']['lam'],
+            rail_end=rail_end_returns_on(phases.config,phases.state['generation']))
         local_report.update(share=rows_settings['auxiliary']['ordinary_share'],seconds=time.perf_counter()-began_local)
         phases.frozen_local=None
     cache=phases.buffer.stage(phases.critic_dataset,phases.train_ids,phases.heldout_ids,phases.actor_ids,

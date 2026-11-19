@@ -63,7 +63,10 @@ def head_identity():
 
 
 def validate_config(config):
-    keys(config, tuple(default(0)))
+    keys(config, tuple(default(0)), ('rail_end_removed',))
+    if 'rail_end_removed' in config:  # g3528 drop-rail-end: the Rail-end outputs are gone from that generation on
+        require(type(config['rail_end_removed']) is int and config['rail_end_removed'] >= config['replacement']['generation']
+                and config['weights']['rail_end'] == 0, 'Invalid Rail-end head removal')
     require(config['contract'] == CONTRACT and config['head_contract'] == HEAD and config['target'] == targets.identity()
             and config['mode'] in ('off', 'shadow', 'apply') and config['vp_scale'] == VP_SCALE,
             'Local scoring 3.0.0 contract differs')
@@ -90,12 +93,65 @@ def weights_forward(old, new):
 
 
 def config_forward(old, new):
-    """A reviewed 3.0.0 -> 3.0.0 change: mode and the weight ladder only."""
+    """A reviewed 3.0.0 -> 3.0.0 change: mode, the weight ladder and (g3528) the Rail-end heads' removal only."""
     if not (is_v3(old) and is_v3(new)): return False
     validate_config(old); validate_config(new)
     a, b = copy.deepcopy(old), copy.deepcopy(new)
     a.pop('mode'); b.pop('mode'); wa, wb = a.pop('weights'), b.pop('weights')
+    ra, rb = a.pop('rail_end_removed', None), b.pop('rail_end_removed', None)
+    if ra is not None and ra != rb: return False  # a removal is kept
     return a == b and weights_forward(wa, wb)
+
+
+# ---- g3528 drop-rail-end: era heads without the Rail-end outputs ----------------------------------------
+
+RAIL_END = ('rail_end_slots', 'rail_end_links')
+
+
+def rail_end_removed(config): return is_v3(config) and 'rail_end_removed' in config
+
+
+class TwoEraHeads(EraScoringHeads):
+    """The era heads with the Rail-end owner and VP outputs removed. Built as the full heads, then those
+    outputs dropped, so the canal and rail layers draw the same initial values."""
+    def __init__(self, context_width=512):
+        super().__init__(context_width)
+        self.full_names = [n for n, _ in self.named_parameters()]  # the full heads' parameter order
+        for name in RAIL_END:
+            del self.owner[name]; del self.vp[name]
+
+    def forward(self, encoded, descriptors, scale=1.):
+        from brass_ai.learning.local_scoring_heads import scale_gradient
+        from brass_ai.learning.local_scoring_heads_v2 import KINDS, LINKS, SLICE_WIDTH, SLOTS
+        context = scale_gradient(torch.cat((encoded.context, descriptors.flatten(1)), -1), scale)
+        entities = scale_gradient(encoded.targets[:, :SLOTS + LINKS], scale)
+        shared = F.gelu(self.shared(context))
+        slices = self.slices(shared).view(len(context), SLOTS + LINKS, SLICE_WIDTH)
+        result = {}
+        for kind, lo, hi in KINDS:
+            hidden = F.gelu(self.hidden[kind](torch.cat((entities[:, lo:hi], slices[:, lo:hi]), -1)))
+            for horizon in ('canal', 'rail'):
+                name = f'{horizon}_{kind}'
+                result[name] = (self.owner[name](hidden), self.vp[name](hidden))
+        return result
+
+
+def drop_rail_end(heads, optimizers, full_names, kept_names):
+    """A full-heads checkpoint (state dict and the two Adams) without the Rail-end parameters, and a record."""
+    from collections import OrderedDict as Ordered
+    removed = [n for n in full_names if n not in kept_names]
+    require(sorted(heads) == sorted(full_names) and all(n.split('.')[1] in RAIL_END for n in removed),
+            'Era-head checkpoint layout differs')
+    index = [full_names.index(n) for n in kept_names]
+    result = {}
+    for phase, state in optimizers.items():
+        groups = state['param_groups']
+        require(len(groups) == 1 and list(groups[0]['params']) == list(range(len(full_names))), 'Era-head Adam layout differs')
+        result[phase] = dict(state={new: copy.deepcopy(state['state'][old]) for new, old in enumerate(index) if old in state['state']},
+                             param_groups=[dict(copy.deepcopy(groups[0]), params=list(range(len(index))))])
+    record = dict(contract='rail-end-head-removal/1.0.0', parameters=int(sum(heads[n].numel() for n in removed)),
+                  max_abs=float(max(heads[n].detach().abs().max() for n in removed)))
+    return Ordered((n, heads[n]) for n in kept_names), result, record
 
 
 class StateColumns:
@@ -198,8 +254,9 @@ def build(base):
             self.origin = origin; self.age = generation - origin['generation']
             require(self.age >= 0, 'Auxiliary activation origin is in the future')
             self.seed = int(digest(dict(origin=origin, head=HEAD))[:15], 16)
+            removed = rail_end_removed(self.config); self.rail_end_removal = None
             with torch.random.fork_rng(devices=list(range(torch.cuda.device_count()))):
-                torch.manual_seed(self.seed); self.heads = EraScoringHeads(model.config.hidden)
+                torch.manual_seed(self.seed); self.heads = (TwoEraHeads if removed else EraScoringHeads)(model.config.hidden)
             self.heads.to(next(model.parameters()).device)
             lr = self.config['optimizer']['learning_rate']
             self.optimizers = {p: torch.optim.Adam(self.heads.parameters(), lr=lr, weight_decay=0.) for p in ('ppo', 'ppg')}
@@ -214,8 +271,17 @@ def build(base):
                         'Companion architecture/config hash differs')
                 require(config_forward(saved['config'], self.config) and saved['seed'] == self.seed and
                         saved['generation'] == generation and saved['age'] == self.age, 'Companion checkpoint/config/progress differs')
-                self.heads.load_state_dict(saved['heads'], strict=True)
-                for p, o in self.optimizers.items(): o.load_state_dict(saved['optimizers'][p])
+                heads, optimizers = saved['heads'], saved['optimizers']
+                if removed and not rail_end_removed(saved['config']):
+                    # g3528 drop-rail-end, once at its generation: the full heads' checkpoint loses the Rail-end
+                    # outputs, which trained at weight 0 (no loss or preservation term reached them).
+                    require(self.config['rail_end_removed'] == generation and saved['config']['weights']['rail_end'] == 0,
+                            'The Rail-end heads are removed untrained, at their committed generation')
+                    heads, optimizers, self.rail_end_removal = drop_rail_end(
+                        heads, optimizers, self.heads.full_names, [n for n, _ in self.heads.named_parameters()])
+                    self.rail_end_removal['generation'] = generation
+                self.heads.load_state_dict(heads, strict=True)
+                for p, o in self.optimizers.items(): o.load_state_dict(optimizers[p])
                 self.retained_steps = copy.deepcopy(saved['retained_steps'])
                 self.retained_samples = copy.deepcopy(saved['retained_samples'])
                 self.warmup = copy.deepcopy(warmup.validate(saved['warmup'], self.config, generation))
@@ -238,7 +304,7 @@ def build(base):
             return float(self.config['weights'][horizon])
 
         def preservation_weights(self):
-            return {name: (self.horizon_weight(name.rsplit('_', 1)[0]),) * 2 for name in output_names()}
+            return {name: (self.horizon_weight(name.rsplit('_', 1)[0]),) * 2 for name in output_names() if name in self.heads.owner}
 
         @property
         def scale(self):
@@ -400,14 +466,18 @@ def build(base):
             wc, wr, we = (self.horizon_weight(h) for h in ('canal', 'rail', 'rail_end'))
             weight = torch.where(canal, torch.full_like(loss, wc), torch.full_like(loss, wr)) * present
             end_meta = self.end_metadata(ds, ids, metadata) if we > 0 else None
-            # g3471 search-rows: lambda-return corrections of the own-era targets (ordinary rows .5, search rows 1).
+            # g3471 search-rows: lambda-return corrections of the own-era targets (ordinary rows .5, search rows 1);
+            # g3528: channels 9..17, when present, the Canal rows' Rail-end corrections.
             source = getattr(ds, 'local_bootstrap', None)
             corrections = source(ix) if source is not None else None
+            ends = corrections[..., 9:] if corrections is not None and corrections.shape[-1] > 9 else None
+            if corrections is not None: corrections = corrections[..., :9]
             for kind in ('slots', 'links'):
                 (co, cv), (ro, rv) = predictions['canal_' + kind], predictions['rail_' + kind]
                 owner = torch.where(canal[:, None, None], co, ro); vp = torch.where(canal[:, None, None], cv, rv)
                 classes, values, mask = self.target_arrays(metadata, kind, owner.shape[1])
-                part = None if corrections is None else (corrections[:, :49] if kind == 'slots' else corrections[:, 49:])
+                entities = slice(0, 49) if kind == 'slots' else slice(49, None)
+                part = None if corrections is None else corrections[:, entities]
                 m, cls, truth, ce, error, term = self._terms(owner, vp, classes, values, mask, device, part)
                 loss = loss + weight * term
                 current, settled, _ = board[kind]
@@ -421,7 +491,8 @@ def build(base):
                     eo, ev = predictions['rail_end_' + kind]
                     classes, values, mask = self.target_arrays(end_meta, kind, eo.shape[1])
                     rows = torch.tensor([t is not None for t, _, _, _ in end_meta], device=device)
-                    m, cls, truth, ce, error, term = self._terms(eo, ev, classes, values, mask, device)
+                    m, cls, truth, ce, error, term = self._terms(eo, ev, classes, values, mask, device,
+                                                                 None if ends is None else ends[:, entities])
                     loss = loss + we * rows * term
                     s = m & rows[:, None]
                     self.era_accumulate(('CanalEra->RailEnd', kind, 'all'), (s.sum(), (ce.detach() * s).sum(), ((cls == 0) & s).sum(),
@@ -504,6 +575,8 @@ def build(base):
                               if stop is not None else 'heads keep rejected steps') + '). VP error is summed over the four seats, in VP. '
                              'Settled: a flipped tile or built link at the decision; open: everything else.'))
             if stop is not None: result['ownership_stop'] = copy.deepcopy(stop)
+            if rail_end_removed(self.config):
+                result['rail_end_heads'] = dict(removed_at=self.config['rail_end_removed'], migration=copy.deepcopy(self.rail_end_removal))
             return result
 
         def diagnostics(self, model, dataset, heldout, *, maximum=None):

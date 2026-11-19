@@ -11,10 +11,12 @@ from . import ordinary_cotton, teacher_cotton, training_revision_g1491 as teache
 
 
 def applied(config):
-    # The g3471 timed recipe keeps this rule (training_revision_g3471).
-    return (config.get('table_plan', {}).get(ordinary_cotton.KEY) in (ordinary_cotton.RAIL_NETWORK, ordinary_cotton.TIMED) and
+    # The g3471 timed and g3528 retimed recipes keep this rule (training_revision_g3471, training_revision_g3528).
+    return (config.get('table_plan', {}).get(ordinary_cotton.KEY) in (ordinary_cotton.RAIL_NETWORK, ordinary_cotton.TIMED,
+                                                                       ordinary_cotton.RETIMED) and
             teacher.cotton_settings(config).get('contract') in (teacher_cotton.RAIL_NETWORK_CONTRACT,
-                                                                 teacher_cotton.TIMED_NETWORK_CONTRACT))
+                                                                 teacher_cotton.TIMED_NETWORK_CONTRACT,
+                                                                 teacher_cotton.RETIMED_NETWORK_CONTRACT))
 
 
 def configure(config):

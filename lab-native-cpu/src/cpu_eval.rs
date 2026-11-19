@@ -657,6 +657,7 @@ pub fn revision(job: &Value) -> Result<Option<Revision>> {
             let mode = if settings == &CottonMode::Network.settings() { CottonMode::Network }
                 else if settings == &CottonMode::RailNetwork.settings() { CottonMode::RailNetwork }
                 else if settings == &CottonMode::TimedNetwork.settings() { CottonMode::TimedNetwork }
+                else if settings == &CottonMode::RetimedNetwork.settings() { CottonMode::RetimedNetwork }
                 else if single { CottonMode::SingleSeat } else { CottonMode::Seated };
             check(!mode.network() || single, "cotton network requires the single-seat recipe")?;
             check(settings == &mode.settings(), "unreviewed seated cotton exploration")?;

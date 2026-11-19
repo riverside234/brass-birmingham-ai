@@ -83,6 +83,15 @@ def network_cotton_candidates(view, choices, *, industry=True, network=True, min
 # cotton builds only (no cotton develop or cotton-city network). The Canal era has 15 actions, the Rail era 16.
 QUIET_COTTON_ACTIONS = dict(CanalEra=[1, 15], RailEra=[1, 2, 16])
 BUILD_ONLY_COTTON_ACTIONS = dict(CanalEra=[14, 15], RailEra=[15, 16])
+# g3528 retiming (the user's revision): a seat's first Canal action explores every cotton target again, and its
+# Canal action 14 targets cotton develops as well as builds (still no cotton-city network). The Rail era is unchanged.
+RETIMED_QUIET_COTTON_ACTIONS = dict(CanalEra=[15], RailEra=[1, 2, 16])
+RETIMED_NO_DEVELOP_COTTON_ACTIONS = dict(CanalEra=[15], RailEra=[15, 16])
+RETIMED_NO_NETWORK_COTTON_ACTIONS = dict(CanalEra=[14, 15], RailEra=[15, 16])
+COTTON_TIMINGS = dict(
+    g3471=dict(quiet=QUIET_COTTON_ACTIONS, no_develop=BUILD_ONLY_COTTON_ACTIONS, no_network=BUILD_ONLY_COTTON_ACTIONS),
+    g3528=dict(quiet=RETIMED_QUIET_COTTON_ACTIONS, no_develop=RETIMED_NO_DEVELOP_COTTON_ACTIONS,
+               no_network=RETIMED_NO_NETWORK_COTTON_ACTIONS))
 
 
 def era_action(context):
@@ -92,12 +101,19 @@ def era_action(context):
     return index + 1 if context['era'] == 'RailEra' else index
 
 
+def cotton_permissions(context, timing):
+    """(any cotton target, cotton develop targets, cotton-city network targets) allowed at this decision under a
+    COTTON_TIMINGS rule."""
+    index, era = era_action(context), context['era']
+    if index in timing['quiet'][era]:
+        return False, False, False
+    return True, index not in timing['no_develop'][era], index not in timing['no_network'][era]
+
+
 def cotton_timing(context):
-    """(any cotton target, cotton develop and network targets) allowed at this decision."""
-    index = era_action(context)
-    if index in QUIET_COTTON_ACTIONS[context['era']]:
-        return False, False
-    return True, index not in BUILD_ONLY_COTTON_ACTIONS[context['era']]
+    """g3471: (any cotton target, cotton develop and network targets) allowed at this decision."""
+    targets, develop, _ = cotton_permissions(context, COTTON_TIMINGS['g3471'])
+    return targets, develop
 
 
 def sample_cotton(rng, selected, baseline, candidates, rate):

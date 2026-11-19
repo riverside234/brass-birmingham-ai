@@ -22,11 +22,18 @@ const NETWORK_CONTRACT: &str = "teacher-cotton-exploration/7.0.0";
 const RAIL_NETWORK_CONTRACT: &str = "teacher-cotton-exploration/8.0.0";
 /// g3471: the g2654 recipe, timed within each era (`timing`).
 const TIMED_NETWORK_CONTRACT: &str = "teacher-cotton-exploration/9.0.0";
+/// g3528: the g3471 rule retimed (`retiming`).
+const RETIMED_NETWORK_CONTRACT: &str = "teacher-cotton-exploration/10.0.0";
 pub const CAP: u8 = 3;
 /// g3471: a seat's main actions in the era (Canal 1..=15, Rail 1..=16) with no cotton exploration,
 /// and those where only cotton builds are targeted (no cotton develop or cotton-city network).
 pub const QUIET_ACTIONS: ([u32; 2], [u32; 3]) = ([1, 15], [1, 2, 16]);
 pub const BUILD_ONLY_ACTIONS: ([u32; 2], [u32; 2]) = ([14, 15], [15, 16]);
+/// g3528 (step5.policy.COTTON_TIMINGS['g3528']): the first Canal action explores every cotton target again and
+/// Canal action 14 targets cotton develops too; actions with no cotton exploration, no cotton develop, no network.
+pub const RETIMED_QUIET_ACTIONS: ([u32; 1], [u32; 3]) = ([15], [1, 2, 16]);
+pub const RETIMED_NO_DEVELOP_ACTIONS: ([u32; 1], [u32; 2]) = ([15], [15, 16]);
+pub const RETIMED_NO_NETWORK_ACTIONS: ([u32; 2], [u32; 2]) = ([14, 15], [15, 16]);
 
 /// The acting seat's 1-based main action in its era. Its payment and continuation decisions keep that
 /// index: the engine counts actions down only when an action finishes.
@@ -45,6 +52,18 @@ pub fn timing(c: &ViewContext) -> (bool, bool) {
     if quiet.contains(&index) { (false, false) } else { (true, !build_only.contains(&index)) }
 }
 
+/// g3528 (step5.policy.cotton_permissions twin): (any cotton target, cotton develop targets, cotton-city network targets).
+pub fn retiming(c: &ViewContext) -> (bool, bool, bool) {
+    let index = era_action(c);
+    let rail = c.era == Era::RailEra;
+    let pick = |canal: &'static [u32], railway: &'static [u32]| if rail { railway } else { canal };
+    if pick(&RETIMED_QUIET_ACTIONS.0, &RETIMED_QUIET_ACTIONS.1).contains(&index) {
+        return (false, false, false);
+    }
+    (true, !pick(&RETIMED_NO_DEVELOP_ACTIONS.0, &RETIMED_NO_DEVELOP_ACTIONS.1).contains(&index),
+     !pick(&RETIMED_NO_NETWORK_ACTIONS.0, &RETIMED_NO_NETWORK_ACTIONS.1).contains(&index))
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Mode {
     #[default]
@@ -57,6 +76,7 @@ pub enum Mode {
     Network,
     RailNetwork,
     TimedNetwork,
+    RetimedNetwork,
 }
 
 impl Mode {
@@ -66,22 +86,29 @@ impl Mode {
 
     /// The one-network-per-era cotton recipes (g2400, and g2654 with the Rail-era build level).
     pub fn network(self) -> bool {
-        matches!(self, Self::Network | Self::RailNetwork | Self::TimedNetwork)
+        matches!(self, Self::Network | Self::RailNetwork | Self::TimedNetwork | Self::RetimedNetwork)
     }
 
     /// The single-seat recipes, which keep the search's planned action as the base.
     fn single(self) -> bool {
-        matches!(self, Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork)
+        matches!(self, Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork | Self::RetimedNetwork)
     }
 
-    /// (any cotton target, develop and network targets) at a decision; only the timed recipe gates.
-    fn gate(self, c: &ViewContext) -> (bool, bool) {
-        if self == Self::TimedNetwork { timing(c) } else { (true, true) }
+    /// (any cotton target, develop targets, network targets) at a decision; only the timed recipes gate.
+    fn gate(self, c: &ViewContext) -> (bool, bool, bool) {
+        match self {
+            Self::TimedNetwork => {
+                let (timed, wide) = timing(c);
+                (timed, wide, wide)
+            }
+            Self::RetimedNetwork => retiming(c),
+            _ => (true, true, true),
+        }
     }
 
     /// Lowest targeted cotton build level; level one is never targeted, Rail-era level two only before g2654.
     fn minimum_build_level(self, era: usize) -> u8 {
-        if matches!(self, Self::RailNetwork | Self::TimedNetwork) && era == 1 { 3 } else { 2 }
+        if matches!(self, Self::RailNetwork | Self::TimedNetwork | Self::RetimedNetwork) && era == 1 { 3 } else { 2 }
     }
 
     fn contract(self) -> &'static str {
@@ -95,6 +122,7 @@ impl Mode {
             Self::Network => NETWORK_CONTRACT,
             Self::RailNetwork => RAIL_NETWORK_CONTRACT,
             Self::TimedNetwork => TIMED_NETWORK_CONTRACT,
+            Self::RetimedNetwork => RETIMED_NETWORK_CONTRACT,
         }
     }
 
@@ -102,7 +130,8 @@ impl Mode {
         match self {
             Self::Builds => (1, 5),
             Self::Develop | Self::Mixed25 => (1, 4),
-            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork => (3, 10),
+            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork
+            | Self::RetimedNetwork => (3, 10),
         }
     }
 
@@ -110,7 +139,8 @@ impl Mode {
         match self {
             Self::Builds => 0.2,
             Self::Develop | Self::Mixed25 => 0.25,
-            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork => 0.3,
+            Self::Mixed | Self::Seated | Self::SingleSeat | Self::Network | Self::RailNetwork | Self::TimedNetwork
+            | Self::RetimedNetwork => 0.3,
         }
     }
 
@@ -123,10 +153,15 @@ impl Mode {
             settings["short_window"] = json!("all-actions");
         }
         if self.network() { settings["network_max_per_seat_era"] = json!(1); }
-        if matches!(self, Self::RailNetwork | Self::TimedNetwork) { settings["rail_minimum_build_level"] = json!(3); }
+        if matches!(self, Self::RailNetwork | Self::TimedNetwork | Self::RetimedNetwork) { settings["rail_minimum_build_level"] = json!(3); }
         if self == Self::TimedNetwork {
             settings["quiet_actions"] = json!({"CanalEra": QUIET_ACTIONS.0, "RailEra": QUIET_ACTIONS.1});
             settings["build_only_actions"] = json!({"CanalEra": BUILD_ONLY_ACTIONS.0, "RailEra": BUILD_ONLY_ACTIONS.1});
+        }
+        if self == Self::RetimedNetwork {
+            settings["quiet_actions"] = json!({"CanalEra": RETIMED_QUIET_ACTIONS.0, "RailEra": RETIMED_QUIET_ACTIONS.1});
+            settings["no_develop_actions"] = json!({"CanalEra": RETIMED_NO_DEVELOP_ACTIONS.0, "RailEra": RETIMED_NO_DEVELOP_ACTIONS.1});
+            settings["no_network_actions"] = json!({"CanalEra": RETIMED_NO_NETWORK_ACTIONS.0, "RailEra": RETIMED_NO_NETWORK_ACTIONS.1});
         }
         settings
     }
@@ -300,15 +335,15 @@ impl State {
             })
         };
         let industry = !self.mode.network() || self.used[binding.era][binding.seat] < CAP;
-        // g3471: a quiet action of the era explores no cotton; a build-only action targets cotton builds alone.
-        let (timed, wide) = self.mode.gate(&view.context);
+        // g3471 / g3528: a quiet action of the era explores no cotton; some actions exclude develop or network targets.
+        let (timed, develops, linked) = self.mode.gate(&view.context);
         let window = window && timed;
-        self.develops = self.mode.develop() && industry && wide;
+        self.develops = self.mode.develop() && industry && develops;
         let minimum = self.mode.minimum_build_level(binding.era);
         self.builds = industry && (!self.mode.single() || view.players[binding.seat].mat.iter()
             .find(|m| m.industry == Industry::CottonMill)
             .and_then(|m| m.tiles.first()).is_some_and(|tile| tile.level >= minimum));
-        if self.mode.network() && wide && self.network_used[binding.era][binding.seat] == 0 {
+        if self.mode.network() && linked && self.network_used[binding.era][binding.seat] == 0 {
             self.networks = network_targets(view, choices);
         }
         if phase == Phase::Continuation {
@@ -907,5 +942,36 @@ mod tests {
         rail["quiet_actions"] = json!({"CanalEra": [1, 15], "RailEra": [1, 2, 16]});
         rail["build_only_actions"] = json!({"CanalEra": [14, 15], "RailEra": [15, 16]});
         assert_eq!(settings, rail);
+        // g3528 retiming: Canal 1 explores everything, Canal 14 develops but no network; the Rail era as before.
+        for (era, round, left, rule) in [
+            (Era::CanalEra, 1, 1, (true, true, true)), (Era::CanalEra, 2, 2, (true, true, true)),
+            (Era::CanalEra, 7, 1, (true, true, true)), (Era::CanalEra, 8, 2, (true, true, false)),
+            (Era::CanalEra, 8, 1, (false, false, false)), (Era::RailEra, 1, 2, (false, false, false)),
+            (Era::RailEra, 1, 1, (false, false, false)), (Era::RailEra, 2, 2, (true, true, true)),
+            (Era::RailEra, 7, 1, (true, true, true)), (Era::RailEra, 8, 2, (true, false, false)),
+            (Era::RailEra, 8, 1, (false, false, false)),
+        ] {
+            v.context.era = era;
+            v.context.round = round;
+            v.context.actions_remaining = left;
+            v.context.phase = Phase::Action;
+            v.context.revision += 1;
+            assert_eq!(retiming(&v.context), rule, "{era:?} {round} {left}");
+            let mut state = State { mode: Mode::RetimedNetwork, seats: Some(1 << seat), ..State::default() };
+            assert_eq!(state.prepare(&v, &choices, true, true), usize::from(rule.0), "{era:?} {round} {left}");
+            let (develops, builds, networks) = state.coverage();
+            assert_eq!((develops, !networks.is_empty()), (rule.1, rule.2), "{era:?} {round} {left}");
+            assert!(builds);
+            v.context.phase = Phase::Continuation;
+            v.context.revision += 1;
+            state.prepare(&v, &choices, true, true);
+            assert_eq!(state.eligible(), rule.0 && (rule.1 || rule.2), "{era:?} {round} {left}");
+        }
+        let mut retimed = Mode::RailNetwork.settings();
+        retimed["contract"] = json!(RETIMED_NETWORK_CONTRACT);
+        retimed["quiet_actions"] = json!({"CanalEra": [15], "RailEra": [1, 2, 16]});
+        retimed["no_develop_actions"] = json!({"CanalEra": [15], "RailEra": [15, 16]});
+        retimed["no_network_actions"] = json!({"CanalEra": [14, 15], "RailEra": [15, 16]});
+        assert_eq!(Mode::RetimedNetwork.settings(), retimed);
     }
 }

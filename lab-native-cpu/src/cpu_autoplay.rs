@@ -360,6 +360,8 @@ enum Recipe {
     RailNetwork,
     /// g3471: the g2654 recipe, timed within each era (cpu_cotton::timing).
     Timed,
+    /// g3528: the g3471 rule retimed (cpu_cotton::retiming).
+    Retimed,
 }
 
 /// `recovery.ordinary_cotton.TableExploration` for one table.
@@ -382,6 +384,7 @@ impl Cotton {
             Some("ordinary-cotton-exploration/3.0.0") => Recipe::Network,
             Some("ordinary-cotton-exploration/4.0.0") => Recipe::RailNetwork,
             Some("ordinary-cotton-exploration/5.0.0") => Recipe::Timed,
+            Some("ordinary-cotton-exploration/6.0.0") => Recipe::Retimed,
             _ => return Err("unknown ordinary cotton recipe".into()),
         };
         let seats: Vec<usize> = serde_json::from_value(value["seats"].clone())?;
@@ -394,7 +397,7 @@ impl Cotton {
     }
 
     fn network(&self) -> bool {
-        matches!(self.recipe, Recipe::Network | Recipe::RailNetwork | Recipe::Timed)
+        matches!(self.recipe, Recipe::Network | Recipe::RailNetwork | Recipe::Timed | Recipe::Retimed)
     }
 
     fn limited(&self) -> bool {
@@ -410,13 +413,20 @@ impl Cotton {
         if !self.seats.contains(&seat) || has_unflipped_cotton(view, seat) {
             return Some(vec![]);
         }
-        let minimum = if era == 1 && matches!(self.recipe, Recipe::RailNetwork | Recipe::Timed) { 3 } else { 2 };
-        // g3471: a quiet action explores no cotton; a build-only action targets cotton builds alone.
-        let (timed, wide) = if self.recipe == Recipe::Timed { crate::cpu_cotton::timing(&view.context) } else { (true, true) };
+        let minimum = if era == 1 && matches!(self.recipe, Recipe::RailNetwork | Recipe::Timed | Recipe::Retimed) { 3 } else { 2 };
+        // g3471 / g3528: a quiet action explores no cotton; some actions exclude develop or network targets.
+        let (timed, develop, network) = match self.recipe {
+            Recipe::Timed => {
+                let (timed, wide) = crate::cpu_cotton::timing(&view.context);
+                (timed, wide, wide)
+            }
+            Recipe::Retimed => crate::cpu_cotton::retiming(&view.context),
+            _ => (true, true, true),
+        };
         if !timed {
             return Some(vec![]);
         }
-        Some(network_cotton_candidates(view, choices, self.used[era] < COTTON_CAP, wide && self.network_used[era] < 1, wide, minimum))
+        Some(network_cotton_candidates(view, choices, self.used[era] < COTTON_CAP, network && self.network_used[era] < 1, develop, minimum))
     }
 
     fn options(&self, view: &Observation, choices: &[Choice]) -> (f64, bool) {
@@ -750,6 +760,19 @@ mod tests {
             view.context.phase = Phase::Action;
             assert_eq!(timed.targets(&view, &choices), Some(expected), "{era:?} {round} {left}");
             assert_eq!(plain.targets(&view, &choices), Some(vec![0, 1, 2]), "{era:?} {round} {left}");
+        }
+        // g3528 retiming: Canal 1 explores every target, Canal 14 builds and develops (no network); Rail as before.
+        let retimed = parse("ordinary-cotton-exploration/6.0.0");
+        for (era, round, left, expected) in [
+            (Era::CanalEra, 1, 1, vec![0, 1, 2]), (Era::CanalEra, 4, 2, vec![0, 1, 2]), (Era::CanalEra, 8, 2, vec![0, 1]),
+            (Era::CanalEra, 8, 1, vec![]), (Era::RailEra, 1, 2, vec![]), (Era::RailEra, 1, 1, vec![]),
+            (Era::RailEra, 2, 2, vec![0, 1, 2]), (Era::RailEra, 8, 2, vec![0]), (Era::RailEra, 8, 1, vec![]),
+        ] {
+            view.context.era = era;
+            view.context.round = round;
+            view.context.actions_remaining = left;
+            view.context.phase = Phase::Action;
+            assert_eq!(retimed.targets(&view, &choices), Some(expected), "{era:?} {round} {left}");
         }
     }
 

@@ -1,8 +1,10 @@
 """The cotton subset of the existing 70% ordinary self-play quota."""
 from brass_ai.learning.contracts import require
 from brass_ai.step5.policy import (BUILD_ONLY_COTTON_ACTIONS, COTTON_CANDIDATES, COTTON_DEVELOP_ONLY, COTTON_EXPLORATION,
-                                   COTTON_PROBABILITY, LIMITED_COTTON_PROBABILITY, QUIET_COTTON_ACTIONS, cotton_build_available,
-                                   cotton_candidates, cotton_seats, cotton_timing, has_unflipped_cotton, network_cotton_candidates)
+                                   COTTON_PROBABILITY, COTTON_TIMINGS, LIMITED_COTTON_PROBABILITY, QUIET_COTTON_ACTIONS,
+                                   RETIMED_NO_DEVELOP_COTTON_ACTIONS, RETIMED_NO_NETWORK_COTTON_ACTIONS,
+                                   RETIMED_QUIET_COTTON_ACTIONS, cotton_build_available, cotton_candidates, cotton_permissions,
+                                   cotton_seats, has_unflipped_cotton, network_cotton_candidates)
 
 KEY = COTTON_EXPLORATION
 CONTRACT = 'ordinary-cotton-exploration/1.0.0'
@@ -13,7 +15,11 @@ RAIL_NETWORK_CONTRACT = 'ordinary-cotton-exploration/4.0.0'
 # g3471: the g2654 recipe, timed within each era (step5.policy.cotton_timing): no cotton exploration at a seat's
 # first and last Canal action and first two and last Rail action; cotton builds only in each era's last two.
 TIMED_CONTRACT = 'ordinary-cotton-exploration/5.0.0'
-NETWORK_CONTRACTS = (NETWORK_CONTRACT, RAIL_NETWORK_CONTRACT, TIMED_CONTRACT)
+# g3528: the g3471 rule retimed (step5.policy.COTTON_TIMINGS['g3528']): the first Canal action explores all cotton
+# targets again, and Canal action 14 cotton develops too (no cotton-city network).
+RETIMED_CONTRACT = 'ordinary-cotton-exploration/6.0.0'
+NETWORK_CONTRACTS = (NETWORK_CONTRACT, RAIL_NETWORK_CONTRACT, TIMED_CONTRACT, RETIMED_CONTRACT)
+TIMINGS = {TIMED_CONTRACT: COTTON_TIMINGS['g3471'], RETIMED_CONTRACT: COTTON_TIMINGS['g3528']}
 LIMITED_CONTRACTS = (LIMITED_CONTRACT, *NETWORK_CONTRACTS)
 RAIL_MINIMUM_BUILD_LEVEL = 3
 CAP = 3
@@ -25,6 +31,8 @@ NETWORK = dict(LIMITED, contract=NETWORK_CONTRACT, network_max_per_seat_era=1)
 RAIL_NETWORK = dict(NETWORK, contract=RAIL_NETWORK_CONTRACT, rail_minimum_build_level=RAIL_MINIMUM_BUILD_LEVEL)
 TIMED = dict(RAIL_NETWORK, contract=TIMED_CONTRACT, quiet_actions=QUIET_COTTON_ACTIONS,
              build_only_actions=BUILD_ONLY_COTTON_ACTIONS)
+RETIMED = dict(RAIL_NETWORK, contract=RETIMED_CONTRACT, quiet_actions=RETIMED_QUIET_COTTON_ACTIONS,
+               no_develop_actions=RETIMED_NO_DEVELOP_COTTON_ACTIONS, no_network_actions=RETIMED_NO_NETWORK_COTTON_ACTIONS)
 
 
 def enabled(config):
@@ -91,8 +99,8 @@ class TableExploration:
         contract = proof.get(KEY, {}).get('contract')
         self.network = contract in NETWORK_CONTRACTS
         self.limited = self.network or contract == LIMITED_CONTRACT
-        self.rail_build_level = RAIL_MINIMUM_BUILD_LEVEL if contract in (RAIL_NETWORK_CONTRACT, TIMED_CONTRACT) else 2
-        self.timed = contract == TIMED_CONTRACT
+        self.rail_build_level = RAIL_MINIMUM_BUILD_LEVEL if contract in (RAIL_NETWORK_CONTRACT, TIMED_CONTRACT, RETIMED_CONTRACT) else 2
+        self.timing = TIMINGS.get(contract)  # g3471 / g3528: cotton exploration timed within each era
         self.used = {'CanalEra': 0, 'RailEra': 0} if self.limited else None
         self.network_used = {'CanalEra': 0, 'RailEra': 0} if self.network else None
 
@@ -102,11 +110,11 @@ class TableExploration:
         era = view['context']['era']
         if view['seat'] not in self.seats or has_unflipped_cotton(view, view['seat']):
             return []
-        targets, develop = cotton_timing(view['context']) if self.timed else (True, True)
+        targets, develop, network = cotton_permissions(view['context'], self.timing) if self.timing else (True, True, True)
         if not targets:
             return []
         return network_cotton_candidates(view, choices, industry=self.used[era] < CAP,
-                                         network=develop and self.network_used[era] < 1,
+                                         network=network and self.network_used[era] < 1,
                                          minimum_build_level=self.rail_build_level if era == 'RailEra' else 2, develop=develop)
 
     def options(self, view, choices):

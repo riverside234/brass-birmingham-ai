@@ -142,15 +142,16 @@ class SearchRows:
         self.kinds = counts([r for rows, _ in self.tables for r in rows])
         self.local_bootstrap = None  # g3471: the era heads' lambda-return corrections (prepare)
 
-    def prepare(self, model, local, settings):
+    def prepare(self, model, local, settings, *, rail_end=False):
         """g3471: freeze the era heads' predictions at every turn-start root and turn them into each row's
-        lambda-return correction on the table's turn clock (search_rows.search_corrections)."""
+        lambda-return correction on the table's turn clock (search_rows.search_corrections).
+        g3528 `rail_end`: the Canal roots' Rail-end predictions too, for the Rail-end corrections."""
         from brass_ai.learning.seat_descriptors import critic_inputs
         from .search_rows import Corrections, ENTITIES, WIDTH, kind, search_corrections
         began = time.perf_counter(); positions = []; offset = 0
         for rows, _ in self.tables:
             positions.extend(offset + j for j, r in enumerate(rows) if kind(r) == 'turn'); offset += len(rows)
-        frozen = {}
+        frozen, ends = {}, {}
         was, heads_were = model.training, local.heads.training
         model.eval(); local.heads.eval()
         try:
@@ -168,17 +169,30 @@ class SearchRows:
                     values = torch.cat(pieces, 1).cpu().numpy()
                     require(values.shape[1:] == (ENTITIES, WIDTH), 'Era-head outputs differ from the search-row targets')
                     frozen.update(zip(part, values))
+                    if rail_end:
+                        end = torch.cat([torch.cat((output['rail_end_' + name][0].float().softmax(-1),
+                                                    output['rail_end_' + name][1].float()), -1) for name in ('slots', 'links')], 1)
+                        ends.update((j, v) for j, v, c in zip(part, end.cpu().numpy(), canal.tolist()) if c)
         finally:
             model.train(was); local.heads.train(heads_were)
         lam = settings['auxiliary']['lam']; tables = []; offset = 0
         for rows, maps in self.tables:
-            tables.append((rows, maps, {j: frozen[offset + j] for j, r in enumerate(rows) if kind(r) == 'turn'})); offset += len(rows)
-        corrections = search_corrections(tables, lam)
+            roots = [j for j, r in enumerate(rows) if kind(r) == 'turn']
+            tables.append((rows, maps, {j: frozen[offset + j] for j in roots},
+                           {j: ends[offset + j] for j in roots if offset + j in ends})); offset += len(rows)
+        corrections = search_corrections(tables, lam, rail_end=rail_end)
         self.corrections = torch.as_tensor(corrections, device=self.device)
         self.local_bootstrap = Corrections(lambda ix: self.corrections[ix], settings['auxiliary']['search_share'], self.device)
-        return dict(roots=len(positions), rows=self.rows, lam=lam, share=settings['auxiliary']['search_share'],
-                    mean_owner_l1=float(np.abs(corrections[..., :5]).sum(-1).mean()),
-                    mean_vp_l1=float(np.abs(corrections[..., 5:]).sum(-1).mean() * 5), seconds=time.perf_counter() - began)
+        report = dict(roots=len(positions), rows=self.rows, lam=lam, share=settings['auxiliary']['search_share'],
+                      mean_owner_l1=float(np.abs(corrections[..., :5]).sum(-1).mean()),
+                      mean_vp_l1=float(np.abs(corrections[..., 5:WIDTH]).sum(-1).mean() * 5), seconds=time.perf_counter() - began)
+        if rail_end:
+            canal = np.array([m[0]['era'] == 'CanalEra' for m in self.meta], dtype=np.bool_)
+            end = corrections[canal, :, WIDTH:]
+            report['rail_end'] = dict(rows=int(canal.sum()), canal_roots=len(ends),
+                                      mean_owner_l1=float(np.abs(end[..., :5]).sum(-1).mean()) if len(end) else None,
+                                      mean_vp_l1=float(np.abs(end[..., 5:]).sum(-1).mean() * 5) if len(end) else None)
+        return report
 
     def __len__(self): return self.rows
 
@@ -205,10 +219,10 @@ class SearchAuxiliary:
         self.seconds = dict(rows=time.perf_counter() - began, train=0.)
         self.targets = None  # g3471: the training rows' lambda-return targets (prepare)
 
-    def prepare(self, model, local, settings):
+    def prepare(self, model, local, settings, *, rail_end=False):
         """g3471 search-rows: the training rows train on lambda returns of the heads' own frozen predictions at
-        the turn-start roots; the held-out rows keep the actual maps."""
-        if self.ready and settings is not None: self.targets = self.train.prepare(model, local, settings)
+        the turn-start roots; the held-out rows keep the actual maps. g3528 `rail_end`: the Rail-end head too."""
+        if self.ready and settings is not None: self.targets = self.train.prepare(model, local, settings, rail_end=rail_end)
 
     def share(self, epoch, position):
         """Search rows for ordinary batch `position` of `epoch`: a slice of that epoch's own permutation."""

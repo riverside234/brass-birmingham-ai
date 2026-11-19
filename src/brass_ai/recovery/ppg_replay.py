@@ -60,10 +60,11 @@ class Rows(DiskRows):
                 require(self.bootstrap.dtype==np.dtype('<f4') and self.bootstrap.shape==(receipt['rows'],2,4),'Invalid bootstrap target layout')
             if 'local-bootstrap.npy' in receipt['files']:
                 # g3471: the era heads' lambda-return corrections, by cache row (search_rows.ordinary_corrections).
-                from .search_rows import ENTITIES,WIDTH
+                # g3528: 18 channels when the age also carries the Canal rows' Rail-end corrections.
+                from .search_rows import ENTITIES,PAIRED,WIDTH
                 self.local_bootstrap=np.load(path.with_name(path.name.replace('critic.npy','local-bootstrap.npy')),mmap_mode='r',allow_pickle=False)
-                require(self.local_bootstrap.dtype==np.dtype('<f2') and self.local_bootstrap.shape==(receipt['rows'],ENTITIES,WIDTH),
-                        'Invalid era-head correction layout')
+                require(self.local_bootstrap.dtype==np.dtype('<f2') and self.local_bootstrap.shape in
+                        ((receipt['rows'],ENTITIES,WIDTH),(receipt['rows'],ENTITIES,PAIRED)),'Invalid era-head correction layout')
             require(self.array.dtype==row_dtype() and self.array.shape==(receipt['rows'],),'Invalid eight-age critic layout')
         except BaseException:self.close();raise
 
@@ -132,19 +133,23 @@ class BootstrapColumn:
 
 class LocalBootstrapColumn:
     """g3471: [n,118,9] float32 era-head corrections; an age without them (staged before adoption) reads zeros,
-    which leaves its targets the actual maps."""
-    def __init__(self,data):self.data=data
+    which leaves its targets the actual maps. g3528: [n,118,18] once any age carries the Rail-end corrections;
+    an age without them reads zeros there (the actual game-end map)."""
+    def __init__(self,data):
+        from .search_rows import WIDTH
+        self.data=data
+        self.width=max([p.local_bootstrap.shape[-1] for p in data.parts if p.local_bootstrap is not None],default=WIDTH)
     def __call__(self,indices):
-        from .search_rows import ENTITIES,WIDTH
+        from .search_rows import ENTITIES
         if isinstance(indices,torch.Tensor):indices=indices.detach().cpu().numpy()
         indices=np.asarray(indices,dtype=np.int64)
         parts=np.searchsorted(self.data.ends,indices,side='right')
-        result=np.zeros((len(indices),ENTITIES,WIDTH),dtype=np.float32)
+        result=np.zeros((len(indices),ENTITIES,self.width),dtype=np.float32)
         for p in np.unique(parts):
             part=self.data.parts[p]
             if part.local_bootstrap is None:continue
             selected=np.flatnonzero(parts==p);local=indices[selected]-(self.data.ends[p-1] if p else 0)
-            result[selected]=part.local_bootstrap[local]
+            result[selected,:,:part.local_bootstrap.shape[-1]]=part.local_bootstrap[local]
         return result
 
     def available(self):
@@ -426,9 +431,10 @@ class Buffer:
             p=self.path(generation,'bootstrap.npy');files['bootstrap.npy']=dict(bytes=p.stat().st_size,sha256=sha(p))
         if local_bootstrap is not None:
             # g3471: the era heads' lambda-return corrections in cache row order; older ages keep the actual maps.
-            from .search_rows import ENTITIES,WIDTH
+            from .search_rows import ENTITIES,PAIRED,WIDTH
             values=np.ascontiguousarray(np.asarray(local_bootstrap,dtype='<f2')[ids])
-            require(values.shape==(len(ids),ENTITIES,WIDTH) and np.isfinite(values).all(),'Invalid era-head corrections')
+            require(values.shape in ((len(ids),ENTITIES,WIDTH),(len(ids),ENTITIES,PAIRED)) and np.isfinite(values).all(),
+                    'Invalid era-head corrections')
             part=self.path(generation,'local-bootstrap.npy.partial')
             with open(part,'wb') as stream:np.save(stream,values,allow_pickle=False)
             part.replace(self.path(generation,'local-bootstrap.npy'))

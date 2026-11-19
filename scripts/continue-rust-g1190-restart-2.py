@@ -87,10 +87,12 @@ builds stay excluded in both eras. Develop and network targets, allowances,
 labels, buffers and the search-head stage are unchanged. The setting persists.
 
 --update-cotton-timing (at a committed boundary, after --update-rail-cotton) times cotton
-exploration within each era on PPO and teacher cotton tables: none at the first and last
-Canal action of a seat or its first two and last Rail actions; only cotton builds (no
-cotton develop or cotton-city network) in the last two actions of each era. Seats, quotas,
-rates, allowances, labels and buffers are kept. The setting persists.
+exploration within each era on PPO and teacher cotton tables by the newest reviewed rule,
+by a seat's action in the era (Canal 1-15, Rail 1-16). g3528 (from the g3471 rule or the
+g2654 recipe): no cotton exploration at Canal 15 or Rail 1, 2 and 16; no cotton-city
+network at Canal 14; only cotton builds (no develop or network) at Rail 15. (g3471 had
+also skipped Canal 1 and allowed only builds at Canal 14.) Seats, quotas, rates,
+allowances, labels and buffers are kept. The setting persists.
 
 --update-search-lambda (at a committed g2654 boundary) sets the search-value return
 lambda to .95 (was .8). Each fit recomputes the buffered games' returns at the new
@@ -108,7 +110,11 @@ comma-separated; adopted items persist and only move forward
   targets     win/utility heads train on half outcome, half lambda .95 return.
   weight=0.15, weight=0.5   local-scoring weight ladder (after heads).
   vp          total-VP training weight .1 -> .5.
-  rail-end    Canal rows also predict the Rail-end map (after heads).
+  rail-end    Canal rows also predict the Rail-end map (after heads), at half the
+              Canal weight. With search-rows (g3528) its targets are lambda .95
+              returns that run on through the Rail era's chain, ordinary rows half
+              actual map, search rows the full return; a fresh head fits the actual
+              map for four iterations first (ai-research/G3528_CONTINUATION.md).
   ownership-stop  (g3318, after heads) the era heads' own early stop: every 16
               steps their held-out owner CE on the validation games decides
               whether they keep the steps (an increase keeps 0 and ends their
@@ -133,6 +139,9 @@ comma-separated; adopted items persist and only move forward
               ordinary rows half actual map, half return; search rows the full return
               on the turn clock. Held-out checks keep the actual outcomes and maps
               (ai-research/G3471_SEARCH_ROWS.md).
+  drop-rail-end (g3528, after heads, Rail-end weight 0) removes the untrained
+              Rail-end outputs from the era heads; rail-end is refused afterwards
+              (ai-research/G3528_CONTINUATION.md).
 The held-out check, PPG cap .003, beta floor .25 and the strict early stop stay.
 
 --rating-every 20 (at a rated generation, a multiple of ten) runs the PL strength
@@ -160,8 +169,9 @@ label target softened at T=4 on the teacher term's 128 long-label rows per PPO s
 weight 8 x beta, with its own gradient call and Adam. Two head-only iterations, then
 the trunk multiplier .2, .4, .6, .8, 1. Not exported; PPO rows join only at step S4.
 
---soft-policy-weight 6 (at a committed boundary, after --soft-policy) lowers that weight
-to 6 x beta; the head, its Adam and warm-up carry over. Set once.
+--soft-policy-weight W (at a committed boundary, after --soft-policy) sets that weight
+to W x beta (2, 4, 6, 8, 10, 12 or 16; 6 from g3471); the head, its Adam and warm-up
+carry over. Each change is kept until the next.
 """
 import importlib.util
 from pathlib import Path

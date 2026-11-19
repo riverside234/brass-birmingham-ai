@@ -2,8 +2,10 @@
 import math
 from collections import Counter
 from brass_ai.learning.contracts import require
-from brass_ai.step5.policy import (BUILD_ONLY_COTTON_ACTIONS, QUIET_COTTON_ACTIONS, cotton_build_available,
-                                   cotton_network_targets, cotton_timing, has_unflipped_cotton)
+from brass_ai.step5.policy import (BUILD_ONLY_COTTON_ACTIONS, COTTON_TIMINGS, QUIET_COTTON_ACTIONS,
+                                   RETIMED_NO_DEVELOP_COTTON_ACTIONS, RETIMED_NO_NETWORK_COTTON_ACTIONS,
+                                   RETIMED_QUIET_COTTON_ACTIONS, cotton_build_available, cotton_network_targets,
+                                   cotton_permissions, has_unflipped_cotton)
 
 CONTRACT='teacher-cotton-exploration/1.0.0'
 DEVELOP_CONTRACT='teacher-cotton-exploration/2.0.0'
@@ -17,7 +19,12 @@ RAIL_NETWORK_CONTRACT='teacher-cotton-exploration/8.0.0'
 # g3471: the g2654 recipe, timed within each era (step5.policy.cotton_timing): no cotton exploration at a seat's
 # first and last Canal action and first two and last Rail action; cotton builds only in each era's last two.
 TIMED_NETWORK_CONTRACT='teacher-cotton-exploration/9.0.0'
-NETWORK_CONTRACTS=(NETWORK_CONTRACT, RAIL_NETWORK_CONTRACT, TIMED_NETWORK_CONTRACT)
+# g3528: the g3471 rule retimed (step5.policy.COTTON_TIMINGS['g3528']): the first Canal action explores all cotton
+# targets again, and Canal action 14 cotton develops too (no cotton-city network).
+RETIMED_NETWORK_CONTRACT='teacher-cotton-exploration/10.0.0'
+NETWORK_CONTRACTS=(NETWORK_CONTRACT, RAIL_NETWORK_CONTRACT, TIMED_NETWORK_CONTRACT, RETIMED_NETWORK_CONTRACT)
+TIMINGS={TIMED_NETWORK_CONTRACT:COTTON_TIMINGS['g3471'], RETIMED_NETWORK_CONTRACT:COTTON_TIMINGS['g3528']}
+RAIL_LEVEL_CONTRACTS=(RAIL_NETWORK_CONTRACT, TIMED_NETWORK_CONTRACT, RETIMED_NETWORK_CONTRACT)
 RAIL_MINIMUM_BUILD_LEVEL=3
 SEATS='cotton_seats'
 PROBABILITY=.2
@@ -40,10 +47,13 @@ def settings(*, develop=False, mixed=False, contract=None):
         value.update(minimum_build_level=2, short_window='all-actions')
     if contract in NETWORK_CONTRACTS:
         value['network_max_per_seat_era'] = 1
-    if contract in (RAIL_NETWORK_CONTRACT, TIMED_NETWORK_CONTRACT):
+    if contract in RAIL_LEVEL_CONTRACTS:
         value['rail_minimum_build_level'] = RAIL_MINIMUM_BUILD_LEVEL
     if contract == TIMED_NETWORK_CONTRACT:
         value.update(quiet_actions=QUIET_COTTON_ACTIONS, build_only_actions=BUILD_ONLY_COTTON_ACTIONS)
+    if contract == RETIMED_NETWORK_CONTRACT:
+        value.update(quiet_actions=RETIMED_QUIET_COTTON_ACTIONS, no_develop_actions=RETIMED_NO_DEVELOP_COTTON_ACTIONS,
+                     no_network_actions=RETIMED_NO_NETWORK_COTTON_ACTIONS)
     return value
 
 
@@ -79,16 +89,16 @@ def validate_label(label, choices, *, view=None):
     if single:
         require(view is not None and not has_unflipped_cotton(view, label['seat'])
                 and any(c['id'] == e['planned_action'] for c in choices), 'Invalid teacher cotton eligibility or plan')
-        rail = e['contract'] in (RAIL_NETWORK_CONTRACT, TIMED_NETWORK_CONTRACT) and view['context']['era'] == 'RailEra'
+        rail = e['contract'] in RAIL_LEVEL_CONTRACTS and view['context']['era'] == 'RailEra'
         builds = cotton_build_available(view, label['seat'], RAIL_MINIMUM_BUILD_LEVEL if rail else 2)
-    wide = True  # cotton develop and network targets allowed at this decision
-    if e['contract'] == TIMED_NETWORK_CONTRACT:
-        # g3471: a quiet action never explores cotton; a build-only action targets cotton builds alone.
-        allowed, wide = cotton_timing(view['context'])
+    networks = True  # cotton-city network targets allowed at this decision
+    if e['contract'] in TIMINGS:
+        # g3471 / g3528: a quiet action never explores cotton; some actions exclude develop or network targets.
+        allowed, develops, networks = cotton_permissions(view['context'], TIMINGS[e['contract']])
         require(allowed, 'Cotton exploration at a quiet action of the era')
-        develop = develop and wide
+        develop = develop and develops
     industry = not network or e['used_before'] < CAP
-    links = cotton_network_targets(view) if network and wide and e['network_used_before'] < 1 else ()
+    links = cotton_network_targets(view) if network and networks and e['network_used_before'] < 1 else ()
     def targeted(c):
         return (c['kind']=='network' and c.get('target') in links or
                 industry and c.get('industry')=='CottonMill' and (builds and c['kind']=='build' or develop and c['kind']=='develop'))

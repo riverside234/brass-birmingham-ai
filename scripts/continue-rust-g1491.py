@@ -115,9 +115,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         help='Exclude Rail-era level 1 and 2 cotton builds from PPO and teacher cotton exploration '
              '(level 1 stays excluded in both eras). Keeps labels, buffers and the search-head stage.')
     migrations.add_argument('--update-cotton-timing', action='store_true',
-        help='Time cotton exploration within each era on PPO and teacher cotton tables: none at the first and last '
-             'Canal action of a seat or its first two and last Rail actions; cotton builds only in the last two actions '
-             'of each era. Keeps labels, buffers and the search-head stage; set once (training_revision_g3471).')
+        help='Time cotton exploration within each era on PPO and teacher cotton tables by the newest reviewed rule '
+             '(g3528, from the g3471 or g2654 recipe): none at a seat\'s last Canal action or its first two and last Rail '
+             'actions; no cotton-city network at Canal 14 or Rail 15; cotton builds only at Rail 15. Keeps labels, '
+             'buffers and the search-head stage; the setting persists (training_revision_g3528).')
     migrations.add_argument('--update-search-lambda', action='store_true',
         help='Use lambda .95 (was .8) for search-value returns. Buffered games are retargeted; '
              'keeps labels, buffers, the search head and its stage.')
@@ -128,7 +129,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
     parser.add_argument('--value-revision', metavar='ITEMS',
         help='Adopt g3140 value-phase revision items at this committed generation, comma-separated: '
              'time, validation, heads, targets, weight=0.15, weight=0.5, vp, rail-end, ownership-stop, search-aux, '
-             'search-rows. '
+             'search-rows, drop-rail-end. '
              'Items persist and only move forward (training_revision_g3140).')
     parser.add_argument('--rating-every', type=int, choices=(20,),
         help='From this committed generation on, run the PL strength rating every 20 iterations '
@@ -143,9 +144,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'Linear(192->1) on the hidden layer of the policy scorer predicts the rebuilt label target at T=4 on the '
              '128 long-label rows per PPO step of the teacher term, weight 8 x beta; 2 head-only iterations, then a '
              '5-iteration trunk ramp. Needs the g3270 teacher revision. Set once (training_revision_g3423).')
-    parser.add_argument('--soft-policy-weight', type=float, choices=(6.,),
-        help='Lower the weight of the adopted soft policy head from 8 to 6 x beta at this committed generation; the head, '
-             'its Adam and warm-up carry over. Set once (training_revision_g3423).')
+    parser.add_argument('--soft-policy-weight', type=float, choices=(2., 4., 6., 8., 10., 12., 16.),
+        help='Set the weight of the adopted soft policy head to this many x beta at this committed generation (8 at '
+             'adoption, 6 from g3471); the head, its Adam and warm-up carry over. Each change is kept until the next '
+             '(training_revision_g3423).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')

@@ -150,10 +150,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             from brass_ai.recovery.config import validate_config
             config=validate_config(g2654.configure(config))
         from brass_ai.recovery import training_revision_g3471 as g3471
+        from brass_ai.recovery import training_revision_g3528 as g3528
         if update_cotton_timing:
-            # g3471: no cotton exploration at the era edges, cotton builds only in each era's last two actions.
+            # The newest reviewed cotton timing within each era: g3528 (from the g3471 or the g2654 recipe).
             from brass_ai.recovery.config import validate_config
-            config=validate_config(g3471.configure(config))
+            config=validate_config(g3528.configure(config))
         from brass_ai.recovery import training_revision_g2880 as g2880
         if update_search_lambda:
             from brass_ai.recovery.config import validate_config
@@ -179,7 +180,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             require(mode=='on','The g3423 soft policy head is adopted with teaching on')
             config=g3423.configure(config,state['iteration'])
         if soft_policy_weight is not None:
-            # g3471: the soft head's weight 8 -> 6 x beta; head, Adam and warm-up carry over.
+            # The soft head's weight x beta (8 -> 6 at g3471); head, Adam and warm-up carry over.
             require(mode=='on','The soft policy weight changes with teaching on')
             config=g3423.set_weight(config,soft_policy_weight,state['iteration'])
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
@@ -296,8 +297,10 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             if g3423.applied(before) and g3423.tag(before)!=g3423.tag(config):
                 stages.append(prefix.replace('-share', '-'+g3423.tag(before)+'-share'))
             prefix=prefix.replace('-share', '-'+g3423.tag(config)+'-share');stages.append(prefix)
-        if g3471.applied(config):
+        if g3471.applied(config) or g3528.applied(config):
             prefix=prefix.replace('-share', '-cotton-timed-share');stages.append(prefix)
+        if g3528.applied(config):
+            prefix=prefix.replace('-share', '-retimed-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
@@ -305,6 +308,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
                          g3471.applied(config) and not g3471.applied(before) or
+                         g3528.applied(config) and not g3528.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
                          g3140.changed(before,config) or adopting_teacher or adopting_soft)
         existing=read(output) if output.exists() else state['signature']['config']
@@ -499,6 +503,10 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g3471.applied(options):
             report['g3471_cotton_timing']=g3471.summary(options)
             print('Cotton exploration timing (actions of a seat within its era): '+str(report['g3471_cotton_timing']),flush=True)
+        from brass_ai.recovery import training_revision_g3528 as g3528
+        if g3528.applied(options):
+            report['g3528_cotton_timing']=g3528.summary(options)
+            print('Cotton exploration timing (actions of a seat within its era): '+str(report['g3528_cotton_timing']),flush=True)
         from brass_ai.recovery import training_revision_g3140 as g3140
         if g3140.applied(options):
             report['g3140_value_revision']=g3140.summary(options)
