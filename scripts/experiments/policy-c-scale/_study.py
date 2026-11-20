@@ -208,7 +208,7 @@ class Probes:
         require(not self.stop.is_set(), 'C_scale study cancelled')
         archived = row['teacher']
         profile = 'fast' if fast else 'full'
-        budget = dict(mode='count', full=REF_N if fast else n, full_k=K, fast=SHORT_N, fast_k=K,
+        budget = dict(mode='count', full=REF_N if fast else n, full_k=K, fast=n if fast else SHORT_N, fast_k=K,
                       c_scale=self.ref_scale if fast else scale)
         if fast:
             budget['fast_c_scale'] = scale
@@ -369,9 +369,8 @@ def compare_roots(sampler, rows, probes, targets, compare, scales, lanes):
 def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_choices=None,
          default_targets=TARGETS, default_weight=1):
     parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study')
-    if candidate_choices is not None:
-        parser.add_argument('--candidate-n', type=int, choices=candidate_choices, default=candidate_n,
-                            help=f'Candidate search trajectories with K={K} (default: {candidate_n})')
+    parser.add_argument('--candidate-n', type=int, choices=candidate_choices, default=candidate_n,
+                        help=f'Candidate search trajectories with requested K={K} (default: {candidate_n})')
     parser.add_argument('--run', default=RUN)
     parser.add_argument('--generation', type=int, default=os.getenv('GEN'),
                         help='Frozen checkpoint (default: GEN or the latest committed generation in the run)')
@@ -392,9 +391,10 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     parser.add_argument('--sampler', default=os.getenv('BRASS_NATIVE_WORKER'))
     parser.add_argument('--toolchain', default='1.99.1')
     args = parser.parse_args()
-    if candidate_choices is not None:
-        candidate_n = args.candidate_n
-        compare = partial(compare, candidate_n=candidate_n)
+    candidate_n = args.candidate_n
+    if candidate_choices is None and not 8 <= candidate_n <= 4096:
+        parser.error('--candidate-n must be between 8 and 4096.')
+    compare = partial(compare, candidate_n=candidate_n)
     run = project_path(ROOT, args.run)
     state = read_json(run / 'state.json')
     if args.generation is None:
@@ -430,11 +430,12 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     build = lab_cpu_runtime.resolve(ROOT)
     core = build['teacher_execution_core']
     lab_cpu_runtime.raise_open_file_limit()
-    cap_seconds = REF_N * lab_cpu_runtime.COUNT_CAP_PER_TRAJECTORY_NS / 1e9
+    cap_seconds = max(REF_N, candidate_n) * lab_cpu_runtime.COUNT_CAP_PER_TRAJECTORY_NS / 1e9
     lab_teacher.COUNT_TURN_SECONDS = max(lab_teacher.COUNT_TURN_SECONDS, cap_seconds + 30)
     sources = ', '.join(f'g{generation}' for generation in referenced)
     print(f'g{args.generation} | {sources} positions | targets {targets} | '
           f'{args.lanes} lanes | w={args.w:g} | reference K{K}/{REF_N} C_scale={args.ref_scale:g} | '
+          f'candidate K{K}/{candidate_n} | '
           f'opening T={STUDY_OPENING["temperature"]:g}',
           flush=True)
 

@@ -81,7 +81,7 @@ def inference_choice(args):
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
-            teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None):
+            teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None,teacher_search_revision=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -189,6 +189,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             require(ppg_beta_floor==g3658.FLOOR,'Only the reviewed .125 PPG beta floor')
             from brass_ai.recovery.config import validate_config
             config=validate_config(g3658.configure(config))
+        from brass_ai.recovery import training_revision_g4138 as g4138
+        if teacher_search_revision:
+            # 44+4 tables, short search 128 at C_scale .6; search-value games rebuilt from here; then kept.
+            require(mode=='on','The g4138 teacher search revision is adopted with teaching on')
+            config=g4138.configure(config,state['iteration'])
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -309,17 +314,20 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-retimed-share');stages.append(prefix)
         if g3658.applied(config):
             prefix=prefix.replace('-share', '-ppg-floor0125-share');stages.append(prefix)
+        if g4138.applied(config):
+            prefix=prefix.replace('-share', '-'+g4138.tag(config)+'-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
         adopting_floor=g3658.applied(config) and not g3658.applied(before)
+        adopting_search=g4138.applied(config) and not g4138.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
                          g3471.applied(config) and not g3471.applied(before) or
                          g3528.applied(config) and not g3528.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
-                         g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor)
+                         g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor or adopting_search)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -328,7 +336,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         elif inference!='keep':settings['native_inference']=inference
         elif profile is not None:
             block=settings.get('native_inference') or cpu_block()
-            budget=dict(block['teacher_budget'],**profile)
+            # g4138: the committed profile with the revision's short search when adopted.
+            budget=dict(block['teacher_budget'],**g4138.search_profile(config))
             if 'cotton_c_scale' not in profile:budget.pop('cotton_c_scale',None)
             settings['native_inference']=dict(block,teacher_budget=budget)
         validate_teacher_budget(config,settings.get('native_inference'))
@@ -343,7 +352,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 # Journal the prepared boundary so a retry cannot archive work
                 # that already belongs to the revised recipe.
                 from brass_ai.recovery.retention import safe
-                journal=('teacher-revision' if adopting_teacher else 'soft-policy' if adopting_soft else
+                journal=('teacher-revision' if adopting_teacher else 'teacher-search-revision' if adopting_search else
+                         'soft-policy' if adopting_soft else
                          'value-revision' if g3140.changed(before,config) else 'ppg-beta-floor' if adopting_floor else
                          'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
                 directory=safe(run, run/'configuration-history'/f"{journal}-{state['iteration']:04d}")
@@ -443,6 +453,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'soft_policy',False):kwargs['soft_policy']=True
         if getattr(args,'soft_policy_weight',None) is not None:kwargs['soft_policy_weight']=args.soft_policy_weight
         if getattr(args,'ppg_beta_floor',None) is not None:kwargs['ppg_beta_floor']=args.ppg_beta_floor
+        if getattr(args,'teacher_search_revision',False):kwargs['teacher_search_revision']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -532,7 +543,8 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g3270.applied(options):
             report['g3270_teacher_revision']=g3270.summary(options)
             r=report['g3270_teacher_revision'];v=r['search_value']
-            print(f"g3270 teacher revision (from g{r['from_generation']}): {r['tables']['train']}+{r['tables']['held_out']} tables every "
+            # The tables that run (g4138 raises them to 44+4); the rest is the g3270 block.
+            print(f"g3270 teacher revision (from g{r['from_generation']}): {tables['train']}+{tables['held_out']} tables every "
                   f"iteration, labels {r['buffer']['iterations']} iterations (ages {r['buffer']['age_weights']}), "
                   f"{r['rows_per_step']} rows per PPO step without repeats, targets rebuilt from the current policy at scale "
                   f"{r['targets']['label_scale']:g}, long-search labels only; search value buffer {v['buffer_iterations']} iterations, "
@@ -545,6 +557,14 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
                   f"label target at T={r['temperature']:g} on the teacher term's long-label rows, weight {r['weight']:g} x beta, "
                   f"PPO-row factor {r['ppo_row_factor']:g}; {w['head_only_iterations']} head-only iterations, then a "
                   f"{w['ramp_iterations']}-iteration trunk ramp.",flush=True)
+        from brass_ai.recovery import training_revision_g4138 as g4138
+        if g4138.applied(options):
+            report['g4138_teacher_search']=g4138.summary(options)
+            r=report['g4138_teacher_search'];s=r['short_search']
+            print(f"g4138 teacher search revision (from g{r['from_generation']}): {r['tables']['train']}+{r['tables']['held_out']} "
+                  f"tables every iteration; short search {s['simulations']} simulations, K={s['k']}, C_scale={s['c_scale']:g} "
+                  f"(long search unchanged). Search value trains on games collected from g{r['from_generation']} on, "
+                  f"after {r['search_value']['required_ages']} such ages; long labels, beta and held-out games kept.",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

@@ -277,9 +277,11 @@ class ShadowCollector:
         """
         cached.update({r['job_id']:r for r in live})
         results=[cached[j['expected']['job_id']] for j in jobs]
-        from brass_ai.recovery.training_revision_g1491 import UPDATED_SEARCH, count_search
+        from brass_ai.recovery.training_revision_g1491 import UPDATED_SEARCH
+        from brass_ai.recovery.training_revision_g4138 import search_profile
         from brass_ai.recovery.collector_runtime import teacher_c_scale, teacher_job_budget
-        profile=count_search(state['signature']['config'])
+        # g4138: the budget must also carry the revision's short search (128 simulations, K 8, C_scale .6).
+        profile=search_profile(state['signature']['config'])
         if profile is not None:
             for job, result in zip(jobs, results, strict=True):
                 budget=(result['metrics'].get('cpu_inference') or {}).get('budget',{})
@@ -288,7 +290,7 @@ class ShadowCollector:
                         all(row['teacher']['c2']==expected['c_scale'] and
                             row['teacher']['requested_k']==expected['full_k'] for row in result['rows']),
                         'Teacher table used another long-search K or c_scale')
-                if 'cotton_c_scale' in profile or profile == UPDATED_SEARCH:
+                if 'cotton_c_scale' in profile or profile == UPDATED_SEARCH or 'fast' in profile:
                     require(all(search.get('c_scale') == teacher_c_scale(expected, fast=search['profile']=='fast')
                                 for search in result['metrics']['searches'] if search['frozen_n'] > 0),
                             'Teacher search used another long- or short-search c_scale')

@@ -176,6 +176,17 @@ carry over. Each change is kept until the next.
 --ppg-beta-floor 0.125 (at a committed boundary) lowers the PPG beta floor from .25 to
 .125, in the value phase and in the search-head Stage C schedule, and sets the PPG beta
 to .125 once (hotfix). Trips, both Adams, RNG and replay carry over; the floor persists.
+
+--teacher-search-revision (at a committed boundary, after --teacher-revision) adopts the g4138
+teacher search revision (ai-research/G4138_TEACHER_SEARCH.md); set once, then kept:
+  tables       44 train + 4 validation teacher tables every iteration (was 36 + 4).
+  short search 128 simulations (was 96) at C_scale .6 (was .7), K=8; the recipe sets the CPU
+               budget, so --teacher-fast is not needed. The long search (640, K=8, C_scale .2)
+               and its labels are unchanged.
+  search value the head trains only on games collected from adoption (their returns bootstrap
+               from the new short searches), after eight such ages; older games age out.
+Long-search labels, teacher beta, the soft head, the search head and its stage, the held-out
+games and the era heads' search tables carry over. The continuation rebuilds the CPU teacher.
 """
 import importlib.util
 from pathlib import Path

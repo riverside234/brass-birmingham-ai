@@ -16,7 +16,7 @@ RUNTIME_KEYS = frozenset(DEFAULTS) | frozenset(OPTIONAL)
 MODES = ('production_fast', 'strict', 'profile')
 CPU_CONTRACT = 'brass-lab-cpu-inference/1.0.0'
 DEFAULT_C_SCALE = .1
-C_SCALES = (DEFAULT_C_SCALE, .15, .2, .5, .7, 1.)
+C_SCALES = (DEFAULT_C_SCALE, .15, .2, .5, .6, .7, 1.)  # .6: the g4138 short search
 FULL_K = (8, 16)
 TEACHER_BUDGET = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=DEFAULT_C_SCALE)
 _current = None
@@ -60,8 +60,10 @@ def validate_cpu(block):
 
 
 def validate_teacher_budget(config, block):
-    from .training_revision_g1491 import applied, count_search, settings
-    profile = count_search(config)
+    from .training_revision_g1491 import applied, settings
+    from .training_revision_g4138 import search_profile
+    # g4138: the committed profile with the revision's short search (128 simulations, K 8, C_scale .6).
+    profile = search_profile(config)
     cpu = block or {}
     budget = cpu.get('teacher_budget', {})
     if profile is not None:

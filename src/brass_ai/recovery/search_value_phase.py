@@ -21,12 +21,16 @@ def label_snapshot(ages):
 
 class SearchValuePhase:
     def __init__(self, directory, model, options, reward_id, *, saved=None, startup='immediate', trainable=True, pending_files=(), pending_directory=None, defer_install=False,
-                 revision=None):
+                 revision=None, rebuild=None):
         self.options = copy.deepcopy(validate(options))
         self.model, self.reward_id = model, reward_id
         # g3270: a 16-iteration training buffer and a rotating 32-game held-out set (dedicated schedule only).
         self.revision = copy.deepcopy(revision)
         require(revision is None or dedicated_holdout(options), 'The rotating search-value held-out set needs the dedicated schedule')
+        # g4138: only games collected from origin_generation on train the head, after required_ages such ages.
+        self.rebuild = copy.deepcopy(rebuild)
+        require(rebuild is None or (revision is not None and rebuild['required_ages'] == 8 and
+                                    type(rebuild['origin_generation']) is int), 'Invalid search-value training rebuild')
         saved = saved or {}
         self.machine = StageMachine(saved=saved.get('stage'), startup=startup,options=options)
         if options['stage'] == 'off': self.machine.manual('off')
@@ -215,6 +219,17 @@ class SearchValuePhase:
             buffered = buffered + rotation[1]
             self.report['heldout_rotation'] = dict(rotation[2], buffer_iterations=self.buffer.windows['train'],
                                                    train_rows=len(buffered))
+        if self.rebuild is not None:
+            # g4138: the short search changed and every return bootstraps from its roots' values, so only games
+            # collected from adoption on train the head (rotated held-out games included); it waits for eight ages.
+            origin = self.rebuild['origin_generation']
+            fresh = [r for r in buffered if r['generation'] >= origin]
+            ages = sorted({r['generation'] for r in fresh})
+            waiting_ages = len(ages) < self.rebuild['required_ages']
+            self.report['buffer_rebuild'] = dict(self.rebuild, scope='games-collected-from-origin', fresh_ages=len(ages),
+                                                 kept_rows=len(fresh), excluded_rows=len(buffered) - len(fresh),
+                                                 paused=waiting_ages)
+            buffered = fresh; paused = paused or waiting_ages
         if gated and dedicated:
             if rotation is not None:
                 validation, self.report['retention_holdout'] = rotation[0], rotation[2]

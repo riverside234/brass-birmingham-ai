@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "7f8399eaf569eb57cd7903339bd7dedad09e8d51a55921e7fc45d9e8d0521830",
+  "execution_implementation": "25c6c3adbbede30848ab9d6611ff01978b694cf7879fa27dc987a231fc33b77b",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -70,11 +70,11 @@
     },
     "src/brass_ai/recovery/collector_runtime.py": {
       "before": null,
-      "after": "c8c9b07b4b99d7a2b3766c2b15b616457f8092db32603a699666fc92d20eeeee"
+      "after": "a66924c500eecfe9411652b26fd842e7167ee062f1216143b9bc29b8592c76b5"
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
-      "after": "8d4606cf0bb4caddfea1e772eac95a3bda4521b81cc7424cb96ce7c5a2d100bb"
+      "after": "dc1255fb06e34ecc692b8004caf4b1619a3fd07955f364ac9be52bf8c1d47610"
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
@@ -158,11 +158,11 @@
     },
     "src/brass_ai/recovery/search_value_iteration.py": {
       "before": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae",
-      "after": "f23fdba63afdcd26508b786a96758d8996a2b13e805ff7b8954d8cf946de89d1"
+      "after": "52353fe61bb066d551ee276c2370c229f8cf926fce2dc58466c06863268bc373"
     },
     "src/brass_ai/recovery/search_value_phase.py": {
       "before": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2",
-      "after": "051feee390da9ad6cfab2bb6901a2688147184d1590a61a6f493e5c5cd0c4c92"
+      "after": "617991a0f32ba760015464a616b85a2bcbd54b29663d56e13b40382fdcc2bb14"
     },
     "src/brass_ai/recovery/search_value_retention.py": {
       "before": null,
@@ -286,11 +286,11 @@
     },
     "src/brass_ai/rust_backend/lab_shadow.py": {
       "before": null,
-      "after": "be0aee6303cd1cd6cdf02f187d2c4caf006d26f530da1af6c30e0748e13c5d84"
+      "after": "eee5f261659b007d1440b9d9e1ed551d1e03793a66f0ca889f8c4d431da327dd"
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "0fb2d1f3301fcce2f97a6378c6a559dac22c2f5024425452bad9aa6ef8c9c3ba"
+      "after": "65799237f5b9ee90d322dc60ad66bb1703d77fefd3cf480805105099fcbe3723"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "b4aa05888a69bfb8cc48845b1c1db516ec807b341f33f73104144a8145c18351"
+      "after": "69d83cb2538c55d18361c90c1e9f77780966a1c507c3de7de4bc9da6179adc0d"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -350,7 +350,7 @@
     },
     "src/brass_ai/rust_backend/lab_cpu_overlay.py": {
       "before": "e7fa0229a185321c91a6dfbb9c513ae50800ac201544e9e0c12812fff204ef21",
-      "after": "867503dcc6233a85438c7045990bfb5602ec2064cc1065184d2a21c71f2b05ee"
+      "after": "ca3e9dd52627343e8072dc7106ca9b47e53140c1e9f0660049b09369ca6968cd"
     },
     "src/brass_ai/rust_backend/lab_cpu_runtime.py": {
       "before": "71895897093679de776ad5a98a245f6dfca69a8ea7a0035ec7a310f0adb343c4",
@@ -382,7 +382,7 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "0ff6f05bc4ef66e452aecf8b63884f58b020c39a8d6e0700a05442371d162c07"
+      "after": "1b237870b68cecdeec789c5b92d5e940b133c77d0ef60e7637f0c9a41a4177bf"
     },
     "tests/RustBackendLab/test_collection_overlap.py": {
       "before": null,
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "047830fd19f303eefd93467181c43f4185bbb3a51c9b9068476acde70d2b4f5a"
+      "after": "6e864549d7822a71140f1216bce2c68ef514238eaf16be0bf14f0ed661c5a9a1"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -582,7 +582,7 @@
     },
     "src/brass_ai/recovery/training_revision_g3270.py": {
       "before": null,
-      "after": "3148479ee0925c70a2a41687e4fddd9e0b5b3d57516e197dfc7a94267755210a"
+      "after": "0d0b326b682937762189cf525eea0923693ae2a7e8a1bb55c89b83ec2ee6ce70"
     },
     "src/brass_ai/recovery/collection_gc.py": {
       "before": null,
@@ -691,6 +691,14 @@
     "tests/Recovery/test_ppg_floor_g3658.py": {
       "before": null,
       "after": "9779c4b9cf8886751f0780806770fbe19ea5fb6be2a710162ef5f059a0a51998"
+    },
+    "src/brass_ai/recovery/training_revision_g4138.py": {
+      "before": null,
+      "after": "72ba1fa3b94e37392c950b77a02685d5a7bbdfdee547c98536e37c144b297876"
+    },
+    "tests/Recovery/test_teacher_search_g4138.py": {
+      "before": null,
+      "after": "30a5e7f9418a1a34cdd704c2f45e6b6b763802403175a75992d2e759582a061a"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -1016,6 +1024,11 @@
       "implementation": "7f8431f5e14d9c3f70ad35cdeffe84aef21f98adc7743cf5a664a4cddfc1110c",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "27ccdd76a793244a89ee3a9ad6e3d6405a35d725a25335241bc75ad35500063d"
+    },
+    {
+      "implementation": "7f8399eaf569eb57cd7903339bd7dedad09e8d51a55921e7fc45d9e8d0521830",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "78150114632d49f3fa12d25506ce86dfd8244a237e1b185337f7a9f989d7e8e9"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1385,6 +1398,14 @@
   },
   "g3658_ppg_beta_floor": {
     "scope": "--ppg-beta-floor 0.125 (training_revision_g3658) lowers the PPG beta floor .25 -> .125 at a committed boundary in both places that hold it: value_phase.beta_clone_min (ppg-value-phase/26.0.0) and the refreshed search-head schedule's Stage C floor ppg_beta_floor_after_stage_b. The first resume under the new floor sets the restored PPG beta to .125 once (ppg_g210 ppg-beta-floor-eighth-hotfix/1.0.0, recorded as the adoption) and keeps the KL trip history, both Adams, RNG, replay and cadence; afterwards beta adapts as before. Recipe projections (training_revision_g3658.previous in previous_recipe and is_shadow) and the transition check accept only .25 -> .125 forward. Collection, labels, search and teacher job ids unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "engine_decision_reuse": {
+    "scope": "CPU teacher search speed, no training change. lab_cpu_overlay.TEACHER_CORE_FILES also copies native/brass-ai-core/src/state/observation.rs and search/reward.rs (and the changed search/brass.rs) into the detached teacher core; a zero-insolvency core's reward.rs patch is re-applied on the copied file. Each search root keeps the decisions it has built, keyed by exact bytes of everything the acting seat can see (all owned state except other hands, the deck order and hidden discard prefixes, plus its recall and the ledger), which refines the permitted view, recall, legal set and ledger of the search key. A repeated decision returns the same shared key, so tree and network-cache equality short-circuit on the pointer; the per-step observation DTO, legal set and full key hash are no longer rebuilt (the leaf still builds its view and legal set once). The key hash covers a cheap subset of the fields its equality compares; the ledger reads public accounts from the owned state and keeps those accounts, not a view copy, at a continuation Finish. Searches, labels, value rows, search rows and every recorded output are bit-identical: core unit tests rebuild every reused decision and compare searches with reuse off; old and new CPU teachers gave identical lab-budget tables. The teacher execution core changes, so ensure_cpu rebuilds the CPU workers; the sealed core and job fingerprint do not.",
+    "qualified_implementation_unchanged": true
+  },
+  "g4138_teacher_search": {
+    "scope": "--teacher-search-revision (training_revision_g4138, block teacher_search_revision, the user's request of 2026-11-20) at a committed boundary after the g3270 teacher revision: 44 train + 4 validation teacher tables every iteration (g3270 ran 36 + 4) and short teacher searches of 128 simulations at C_scale .6, K 8 (were 96 at .7); the long search (640, K 8, C_scale .2) is unchanged. The qualified teacher_phase, its g1491 marker and count_search are untouched, so the policy-label buffer identity, the long labels, beta and the soft head carry over. The CPU budget follows the recipe (search_profile: collector_runtime.validate_teacher_budget and table admission require fast 128, fast_k 8, fast_c_scale .6; C_scales and the CPU worker's budget parser accept .6). Search value: 48 of a value game's 64 roots are short searches and every return bootstraps from root search values, so the head trains only on games collected from adoption (rotated held-out games included), paused until eight such ages exist; the dedicated held-out check and the era heads' search tables keep every game. Recipe recognition peels the block (is_shadow) and signature_transition projects its adoption; pending work is archived. The continuation rebuilds the CPU teacher (lab-native-cpu cpu_eval.rs changed).",
     "qualified_implementation_unchanged": true
   }
 }

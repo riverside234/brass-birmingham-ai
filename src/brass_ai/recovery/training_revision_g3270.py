@@ -124,14 +124,16 @@ def phase_options(config, options):
     """The teacher-phase options the trainer runs: the qualified ones with this revision's overlay."""
     if not applied(config): return options
     result = copy.deepcopy(options)
-    result['tables'] = dict(SETTINGS['tables'])
+    result['tables'] = tables(config)
     result['buffer'] = copy.deepcopy(SETTINGS['buffer'])
     result['term'] = dict(result['term'], rows_per_step=SETTINGS['rows_per_step'])
     return result
 
 
 def tables(config):
-    t = SETTINGS['tables'] if applied(config) else config['teacher_phase']['tables']
+    # g4138: 44 + 4 tables once the teacher search revision is adopted (training_revision_g4138).
+    from .training_revision_g4138 import tables as g4138_tables
+    t = (g4138_tables(config) or SETTINGS['tables']) if applied(config) else config['teacher_phase']['tables']
     return dict(train=t['train'], held_out=t['held_out'])
 
 

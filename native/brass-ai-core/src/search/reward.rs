@@ -3,7 +3,7 @@ use super::*;
 use crate::{
     state::{
         dto::{Choice, Kind, ResultDto},
-        observation::Observation,
+        observation::{Accounts, Observation},
     },
     types::{Era, Phase},
 };
@@ -106,7 +106,8 @@ pub struct Ledger {
     reward: Reward,
     pub spent: [f64; 4],
     settled: BTreeSet<(u8, u8)>,
-    previous: Option<Observation>,
+    // Public accounts of a continuation Finish; never a full view copy.
+    previous: Option<Accounts>,
 }
 fn era(e: Era) -> u8 {
     if e == Era::CanalEra {
@@ -161,44 +162,51 @@ impl Ledger {
         // Only continuation Finish can infer an automatic settlement boundary.
         self.previous = if view.context.phase == Phase::Continuation && choice.kind == Kind::Finish
         {
-            Some(view.clone())
+            Some(Accounts::from_view(view))
         } else {
             None
         };
     }
     pub fn observe(&mut self, view: &Observation) -> Result<()> {
-        let c = &view.context;
-        let key = (era(c.era), c.round);
-        if c.phase == Phase::Debt && self.settled.insert(key) {
-            for p in &view.players {
-                if p.debt > 0 {
-                    self.charge(u8::from(p.seat) as usize);
+        self.observe_accounts(&Accounts::from_view(view))
+    }
+    /// The same accounting from public facts read off a view or the owned state.
+    pub fn observe_accounts(&mut self, now: &Accounts) -> Result<()> {
+        let key = (era(now.era), now.round);
+        if now.phase == Phase::Debt && self.settled.insert(key) {
+            for seat in 0..4 {
+                if now.debt[seat] > 0 {
+                    self.charge(seat);
                 }
             }
         }
         if let Some(before) = self.previous.take() {
-            let old = &before.context;
-            let oldkey = (era(old.era), old.round);
-            if (key != oldkey || c.terminal)
-                && !(c.terminal && old.era == Era::RailEra)
+            let oldkey = (era(before.era), before.round);
+            if (key != oldkey || now.terminal)
+                && !(now.terminal && before.era == Era::RailEra)
                 && !self.settled.contains(&oldkey)
             {
-                for p in &before.players {
-                    if p.cash + i32::from(p.income) < 0 {
-                        check(
-                            !before
-                                .slots
-                                .iter()
-                                .filter_map(|s| s.tile.as_ref())
-                                .any(|t| t.seat == p.seat),
-                            "missing simulated debt decisions",
-                        )?;
-                        self.charge(u8::from(p.seat) as usize);
+                for seat in 0..4 {
+                    if before.cash[seat] + i32::from(before.income[seat]) < 0 {
+                        check(!before.on_board[seat], "missing simulated debt decisions")?;
+                        self.charge(seat);
                     }
                 }
                 self.settled.insert(oldkey);
             }
         }
         Ok(())
+    }
+    /// Exact ledger bytes for a search identity; `previous` is always consumed
+    /// by `observe` before a decision is identified.
+    pub(crate) fn identity(&self, out: &mut Vec<u8>) {
+        for s in self.spent {
+            out.extend_from_slice(&s.to_bits().to_le_bytes());
+        }
+        out.push(self.previous.is_some() as u8);
+        out.extend_from_slice(&(self.settled.len() as u16).to_le_bytes());
+        for (e, r) in &self.settled {
+            out.extend_from_slice(&[*e, *r]);
+        }
     }
 }

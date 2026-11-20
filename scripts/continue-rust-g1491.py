@@ -152,6 +152,11 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         help='Lower the PPG beta floor .25 -> .125 at this committed generation, in the value phase and in the '
              'search-head Stage C schedule, and set the PPG beta to .125 once (hotfix); trips, Adams, RNG and replay '
              'carry over. The floor persists (training_revision_g3658).')
+    parser.add_argument('--teacher-search-revision', action='store_true',
+        help='Adopt the g4138 teacher search revision at this committed generation: 44+4 teacher tables every '
+             'iteration and short searches of 128 simulations at C_scale 0.6 (long search unchanged). Long-search '
+             'labels, beta and the search head carry over; the search-value head trains only on games collected '
+             'from here, after eight such ages. Set once (training_revision_g4138); the CPU teacher is rebuilt.')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -178,6 +183,11 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         profile = g1491.G2600_SEARCH
     elif args.retune_teacher_search and profile is None:
         profile = g1491.RETUNED_SEARCH
+    from brass_ai.recovery import training_revision_g4138 as g4138
+    if profile is not None and (args.teacher_search_revision or g4138.applied(state['signature']['config'])):
+        # g4138: the recipe owns the short search (128 simulations, K 8, C_scale .6), not --teacher-fast.
+        profile = g4138.short_search(profile)
+        args.teacher_fast, args.teacher_fast_k = profile['fast'], profile['fast_k']
     args.teacher_count_search = profile
     if args.teacher_search_head_weight is not None:
         require(profile is not None, 'Teacher game settings require the retuned g1190 recipe')
@@ -215,6 +225,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.soft_policy_weight = None
         recovery.update_cotton_timing = False
         recovery.ppg_beta_floor = None
+        recovery.teacher_search_revision = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

@@ -45,6 +45,8 @@ class SearchValueIteration:
             saved = search_payload(saved,rebuild)
         # g3270: at most 32 steps, a 16-iteration buffer and a rotating 32-game held-out set.
         from . import training_revision_g3270 as g3270
+        # g4138: after the short search changed, only games collected from adoption train the head.
+        from .training_revision_g4138 import rebuild as g4138_rebuild
         options = g3270.search_value_options(config, config['teacher_phase']['search_value'])
         if saved is None:
             require(options['stage'] in ('off','A') and options['blend']['w'] == options['trunk']['scale'] == 0,
@@ -65,7 +67,8 @@ class SearchValueIteration:
         self.phase = SearchValuePhase(run/'search-values', model, options, digest(model.config.utility),
             saved=saved, startup=config['teacher_phase']['startup'], trainable=self.mode == 'on',pending_files=pending_files,
             pending_directory=run/f"iteration-{state['iteration']:04d}"/'teacher-shadow/value-partials' if pending_files else None,
-            defer_install=is_on(config) and not hasattr(model,'search_value_head'),revision=g3270.value_settings(config))
+            defer_install=is_on(config) and not hasattr(model,'search_value_head'),revision=g3270.value_settings(config),
+            rebuild=g4138_rebuild(config))
         self.generation = state['iteration']
         # g3423 search-aux: admission keeps each table's era-end scoring maps on its value shard.
         from .training_revision_g3140 import search_auxiliary

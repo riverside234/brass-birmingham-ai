@@ -13,8 +13,12 @@ from brass_ai.learning.contracts import SOURCE_ROOT, digest, require
 CONTRACT = 'brass-lab-cpu-overlay/1.0.0'
 OVERLAY_DIR = 'lab-native-cpu'
 ORT = 'ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }'
+# observation.rs/reward.rs/brass.rs: exact search decision reuse (no per-step
+# views, legal sets or full key hashes); see ai-research/ENGINE_SEARCH_SPEED.md.
 TEACHER_CORE_FILES = tuple('brass-ai-core/src/' + name for name in
-                           ('state/mod.rs', 'state/choices.rs', 'search/brass.rs'))
+                           ('state/mod.rs', 'state/choices.rs', 'state/observation.rs',
+                            'search/brass.rs', 'search/reward.rs'))
+REWARD_FILE = 'brass-ai-core/src/search/reward.rs'
 
 PATCHES = {
     'Cargo.toml': (
@@ -327,8 +331,13 @@ def apply_teacher_performance(directory, root=SOURCE_ROOT):
     from .lab_contract import native_fingerprint
     directory, root = Path(directory).resolve(), Path(root).resolve()
     require(directory != root/'native', 'Teacher performance overlay requires a detached core')
+    # A zero-insolvency teacher core carries an exact reward.rs patch; keep it on the faster file.
+    zero_cost = b'post_transfer_reward_tests' in (directory/REWARD_FILE).read_bytes()
     for name in TEACHER_CORE_FILES:
         (directory/name).write_bytes((root/'native'/name).read_bytes().replace(b'\r\n', b'\n'))
+    if zero_cost:
+        from .lab_reward_runtime import patch
+        patch(directory)
     return native_fingerprint(directory)
 
 

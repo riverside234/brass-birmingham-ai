@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run K8/96 searches at each scale against a K8/3000 reference."""
+"""Run short K8 searches (default 96 simulations) against a K8/3000 reference."""
 
 from statistics import mean
 
@@ -11,7 +11,7 @@ SCALES = (0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 HEADER = 'short_scale  match_long_move  differs_from_policy  mean_Q_gap  miss_Q_gap  Q_supported_misses'
 
 
-def compare(probes, case, scales):
+def compare(probes, case, scales, *, candidate_n=SHORT_N):
     _, row, origin = case
     trial = probes.trial(row['teacher'])
     reference = probes.run(trial, origin, row, REF_N, probes.ref_scale)
@@ -22,7 +22,7 @@ def compare(probes, case, scales):
     policy = int(np.argmax(reference['logits']))
     picks = [policy]
     for scale in scales:
-        short = probes.run(trial, origin, row, SHORT_N, scale, fast=True)
+        short = probes.run(trial, origin, row, candidate_n, scale, fast=True)
         if short is None:
             return None
         picks.append(ids.index(short['played_action']))

@@ -426,7 +426,8 @@ fn budget_k(value: &Value, name: &str, default: usize) -> Result<usize> {
 fn budget_c_scale(value: &Value) -> Result<f64> {
     let c_scale = value.as_f64().ok_or("invalid teacher c_scale")?;
     check(
-        [DEFAULT_C_SCALE, 0.15, 0.20, 0.5, 0.7, 1.0].contains(&c_scale),
+        // 0.6: the g4138 short search.
+        [DEFAULT_C_SCALE, 0.15, 0.20, 0.5, 0.6, 0.7, 1.0].contains(&c_scale),
         "teacher c_scale outside its bounds",
     )?;
     Ok(c_scale)
@@ -1474,7 +1475,11 @@ mod tests {
             budget(&json!({"mode":"count","full":640,"full_k":8,"fast":96,"fast_k":8,"c_scale":0.15,"fast_c_scale":0.5})).unwrap(),
             Budget::Count { full: 640, full_k: 8, fast: 96, fast_k: 8, c_scale: 0.15, fast_c_scale: Some(0.5) }
         );
-        for bad in [0.0, -1.0, 2.0] {
+        assert_eq!(
+            budget(&json!({"mode":"count","full":640,"full_k":8,"fast":128,"fast_k":8,"c_scale":0.2,"fast_c_scale":0.6})).unwrap(),
+            Budget::Count { full: 640, full_k: 8, fast: 128, fast_k: 8, c_scale: 0.2, fast_c_scale: Some(0.6) }
+        );
+        for bad in [0.0, -1.0, 2.0, 0.65] {
             let value = json!({"mode":"count","full":640,"fast":96,"c_scale":bad});
             assert!(budget(&value).is_err());
             let value = json!({"mode":"count","full":640,"fast":96,"fast_c_scale":bad});

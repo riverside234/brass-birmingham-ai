@@ -189,6 +189,63 @@ impl InformationState {
     }
 }
 
+/// Public accounting facts read by the insolvency ledger. A permitted view and
+/// the owned state it was projected from give identical facts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Accounts {
+    pub era: Era,
+    pub round: u8,
+    pub phase: Phase,
+    pub terminal: bool,
+    pub debt: [i32; 4],
+    pub cash: [i32; 4],
+    pub income: [i8; 4],
+    pub on_board: [bool; 4],
+}
+impl Accounts {
+    pub fn from_view(view: &Observation) -> Self {
+        let c = &view.context;
+        let mut a = Self {
+            era: c.era,
+            round: c.round,
+            phase: c.phase,
+            terminal: c.terminal,
+            debt: [0; 4],
+            cash: [0; 4],
+            income: [0; 4],
+            on_board: [false; 4],
+        };
+        for p in &view.players {
+            let s = seat(p.seat);
+            a.debt[s] = p.debt;
+            a.cash[s] = p.cash;
+            a.income[s] = p.income;
+        }
+        for t in view.slots.iter().filter_map(|s| s.tile.as_ref()) {
+            a.on_board[seat(t.seat)] = true;
+        }
+        a
+    }
+}
+
+fn put_ids(out: &mut Vec<u8>, ids: impl ExactSizeIterator<Item = usize>) {
+    out.extend_from_slice(&(ids.len() as u16).to_le_bytes());
+    for id in ids {
+        out.extend_from_slice(&(id as u16).to_le_bytes());
+    }
+}
+fn put_target(out: &mut Vec<u8>, t: Option<Target>) {
+    let (tag, index) = match t {
+        None => (0u8, 0usize),
+        Some(Target::Slot(s)) => (1, s.0),
+        Some(Target::Link(l)) => (2, l.0),
+        Some(Target::Merchant(m)) => (3, m.0),
+        Some(Target::Market) => (4, 0),
+    };
+    out.push(tag);
+    out.extend_from_slice(&(index as u16).to_le_bytes());
+}
+
 /// One immutable public projection, four small private hand/recall records.
 /// Chance preserves the last permitted reveal; it never refreshes temporary hands.
 #[derive(Debug, Clone, Default)]
@@ -278,6 +335,75 @@ impl ObservationMemory {
     pub fn refresh(&mut self, state: &NativeState) {
         self.refresh_checked(state).expect("uncontrolled reveal");
     }
+    /// Search hot path: the same hands and recall as `refresh_checked`, but the
+    /// public projection is dropped rather than rebuilt. `information_at` and
+    /// `accounts_at` then read the owned state directly.
+    pub fn refresh_recall(&mut self, state: &NativeState) -> Result<(), CoreError> {
+        crate::work::checkpoint(crate::work::Stage::Observation)?;
+        self.chance = state.chance.as_ref().map(|c| c.kind);
+        if self.chance.is_some() {
+            return Ok(());
+        }
+        self.public = None;
+        for s in 0..4 {
+            self.hands[s] = state.sorted_hand(s);
+            if self.recall[s]
+                .last()
+                .is_none_or(|r| r.hand != self.hands[s])
+            {
+                self.recall[s].push(RecallEntry {
+                    revision: state.context.revision,
+                    hand: self.hands[s].clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+    /// `information(observer)` for the reveal `state`; equal to the published
+    /// projection, built directly when `refresh_recall` dropped it.
+    pub fn information_at(
+        &self,
+        state: &NativeState,
+        observer: Seat,
+    ) -> Result<InformationState, CoreError> {
+        if self.public.is_some() || self.chance.is_some() {
+            return Ok(self.information(observer));
+        }
+        Ok(InformationState {
+            observation: ObservationEnvelope {
+                view: Some(state.observation(observer)?),
+                setup: false,
+                chance: None,
+            },
+            recall: self.recall[seat(observer)].clone(),
+        })
+    }
+    /// Facts of `accounting_view`, read off the owned state when no projection is kept.
+    pub fn accounts_at(&self, state: &NativeState) -> Option<Accounts> {
+        if let Some(view) = self.accounting_view() {
+            Some(Accounts::from_view(view))
+        } else if self.chance.is_some() {
+            None
+        } else {
+            Some(state.accounts())
+        }
+    }
+    pub fn recall_len(&self, observer: Seat) -> usize {
+        self.recall[seat(observer)].len()
+    }
+    /// Recall bytes after a caller-certified common prefix of `skip` entries.
+    pub fn recall_identity(&self, observer: Seat, skip: usize, out: &mut Vec<u8>) {
+        let recall = &self.recall[seat(observer)];
+        out.extend_from_slice(&(recall.len() as u32).to_le_bytes());
+        for entry in &recall[skip.min(recall.len())..] {
+            out.extend_from_slice(&entry.revision.to_le_bytes());
+            out.push(entry.hand.len() as u8);
+            for card in &entry.hand {
+                out.push(card.len() as u8);
+                out.extend_from_slice(card.as_bytes());
+            }
+        }
+    }
     pub fn refresh_checked(&mut self, state: &NativeState) -> Result<(), CoreError> {
         crate::work::checkpoint(crate::work::Stage::Observation)?;
         self.chance = state.chance.as_ref().map(|c| c.kind);
@@ -342,6 +468,136 @@ impl ObservationMemory {
 }
 
 impl NativeState {
+    pub fn accounts(&self) -> Accounts {
+        let c = &self.context;
+        let mut a = Accounts {
+            era: c.era,
+            round: c.round,
+            phase: c.phase,
+            terminal: c.terminal,
+            debt: self.players.each_ref().map(|p| p.debt),
+            cash: self.players.each_ref().map(|p| p.cash),
+            income: self
+                .players
+                .each_ref()
+                .map(|p| CATALOG.incomes[usize::from(p.income_marker)]),
+            on_board: [false; 4],
+        };
+        for id in self.slots.iter().flatten() {
+            a.on_board[seat(CATALOG.tiles[id.0].seat)] = true;
+        }
+        a
+    }
+    /// Compact refinement of `observation(observer)` and of the observer's legal
+    /// set: every owned field except other seats' hands, the deck order and the
+    /// hidden discard prefixes. Equal bytes imply an equal permitted view and
+    /// equal legal choices; nothing here is read from a sampled hidden zone.
+    pub fn visible_identity(&self, observer: Seat, out: &mut Vec<u8>) {
+        let o = seat(observer);
+        let c = &self.context;
+        out.push(o as u8);
+        out.extend_from_slice(&c.revision.to_le_bytes());
+        out.extend_from_slice(&[
+            c.actor as u8,
+            u8::from(c.turn_owner),
+            c.phase as u8,
+            c.actions_remaining,
+            c.era as u8,
+            c.round,
+            c.turn,
+            c.terminal as u8,
+            c.chance as u8,
+            c.protocol.len() as u8,
+        ]);
+        out.extend_from_slice(c.protocol.as_bytes());
+        out.push(c.rules.len() as u8);
+        out.extend_from_slice(c.rules.as_bytes());
+        out.extend_from_slice(&[
+            u8::from(self.current_player),
+            self.round_pending as u8,
+            self.debt_pending as u8,
+        ]);
+        for d in self.settlement_debts {
+            out.extend_from_slice(&d.to_le_bytes());
+        }
+        for s in self.order {
+            out.push(u8::from(s));
+        }
+        for p in &self.players {
+            for x in [p.cash, p.vp, p.bonus_vp, p.spent, p.debt] {
+                out.extend_from_slice(&x.to_le_bytes());
+            }
+            out.extend_from_slice(&[p.income_marker, p.link_tiles]);
+            for m in &p.mat {
+                put_ids(out, m.iter().map(|t| t.0));
+            }
+        }
+        for t in &self.tiles {
+            out.extend_from_slice(&[t.flipped as u8, t.resource]);
+        }
+        for s in &self.slots {
+            out.extend_from_slice(&s.map_or(u16::MAX, |t| t.0 as u16).to_le_bytes());
+        }
+        for l in &self.links {
+            out.push(l.map_or(u8::MAX, u8::from));
+        }
+        for m in &self.merchants {
+            out.extend_from_slice(&[m.defined as u8, m.beer, m.types.len() as u8]);
+            for t in &m.types {
+                out.push(*t as u8);
+            }
+        }
+        put_ids(out, self.removed.iter().map(|t| t.0));
+        put_ids(out, self.retired.iter().map(|t| t.0));
+        let cards = &self.cards;
+        for s in 0..4 {
+            out.push(cards.hands[s].len() as u8);
+            let start = if c.era == Era::CanalEra {
+                1
+            } else {
+                cards.discard_starts[s]
+            };
+            out.extend_from_slice(&(cards.discard_starts[s] as u16).to_le_bytes());
+            let visible = &cards.discards[s][start.min(cards.discards[s].len())..];
+            put_ids(out, visible.iter().map(|c| c.0));
+        }
+        let mut hand = [usize::MAX; 8];
+        let held = &cards.hands[o];
+        for (slot, card) in hand.iter_mut().zip(held) {
+            *slot = card.0;
+        }
+        let hand = &mut hand[..held.len().min(8)];
+        hand.sort_unstable();
+        out.push(held.len() as u8);
+        put_ids(out, hand.iter().copied());
+        put_ids(out, cards.wild_industry.iter().map(|c| c.0));
+        put_ids(out, cards.wild_location.iter().map(|c| c.0));
+        out.extend_from_slice(&(cards.deck.len() as u16).to_le_bytes());
+        out.extend_from_slice(&[self.coal_market, self.iron_market]);
+        let p = &self.pending;
+        out.push(p.kind.map_or(u8::MAX, |k| k as u8));
+        put_target(out, p.target);
+        out.push(p.merchant.map_or(u8::MAX, |m| m.0 as u8));
+        out.extend_from_slice(&[p.parts, p.coal, p.iron, p.beer]);
+        out.extend_from_slice(&(self.history.len() as u32).to_le_bytes());
+        for h in &self.history {
+            out.extend_from_slice(&[u8::from(h.seat), h.era as u8, h.kind as u8]);
+            put_target(out, h.target);
+            out.extend_from_slice(&h.card.map_or(u16::MAX, |c| c.0 as u16).to_le_bytes());
+            out.push(h.industry.map_or(u8::MAX, |i| i as u8));
+            out.push(h.merchant.map_or(u8::MAX, |m| m.0 as u8));
+            match &h.cards {
+                None => out.push(u8::MAX),
+                Some(v) => {
+                    out.push(v.len() as u8);
+                    for card in v {
+                        out.extend_from_slice(&(card.0 as u16).to_le_bytes());
+                    }
+                }
+            }
+        }
+        out.push(self.chance.is_some() as u8);
+    }
     fn sorted_hand(&self, s: usize) -> Vec<String> {
         let mut hand: Vec<_> = self.cards.hands[s]
             .iter()
