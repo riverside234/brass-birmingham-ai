@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare two C_scale values in a seat-balanced Rust CPU head-to-head."""
+"""Compare search scales or simulation counts in a seat-balanced Rust CPU match."""
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,6 +17,7 @@ import sys
 from tempfile import TemporaryDirectory
 from threading import Event
 from time import monotonic
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / 'src'))
@@ -44,26 +45,38 @@ K = 8
 DEFAULT_SCALES = (0.2, 0.7)
 SEAT_ASSIGNMENTS = tuple(combinations(range(4), 2))
 SEED = 41_380_200
-FORMAT = 'brass-c-scale-head-to-head/2.0.0'
+FORMAT = 'brass-c-scale-head-to-head/2.1.0'
 MATCH_NAMESPACE = 'brass-c-scale-head-to-head/1.0.0'  # Preserve setup sampling and game IDs.
+
+
+class SearchConfig(NamedTuple):
+    c_scale: float
+    simulations: int
+
+    def label(self):
+        return f'C_scale {self.c_scale}, n={self.simulations}'
 
 
 def patch_worker(source):
     guard = '    let h2h = job["h2h"] == true;\n'
     arena = '''    let scales: [f64; 4] = serde_json::from_value(job["arena_scales"].clone())?;
-    let mut sorted_scales = scales;
-    sorted_scales.sort_by(f64::total_cmp);
+    let simulations: [u64; 4] = serde_json::from_value(job["arena_simulations"].clone())?;
+    let mut configs: [(f64, u64); 4] = std::array::from_fn(|seat| (scales[seat], simulations[seat]));
+    configs.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
     check(request["op"] == "run" && all_seat && h2h && job["teacher_revision"].is_null()
         && job["search_value"]["w"].as_f64() == Some(0.0)
         && job["seat_values"].as_array().is_some_and(|values|
             values.len() == 4 && values.iter().all(|value| value == &job["search_value"]))
         && scales.iter().all(|scale| scale.is_finite() && *scale > 0.0)
-        && sorted_scales[0] == sorted_scales[1] && sorted_scales[1] < sorted_scales[2]
-        && sorted_scales[2] == sorted_scales[3],
-        "expected experiment table with two seats at each scale and main utility only")?;
+        && simulations.iter().all(|n| (64..=4096).contains(n))
+        && configs[0] == configs[1] && configs[1] != configs[2] && configs[2] == configs[3],
+        "expected experiment table with two seats per search configuration and main utility only")?;
 '''
     scale_hook = '            turn_work.c_scale = crate::cpu_eval::teacher_c_scale(turn_work.fast);\n'
-    for before, after in ((guard, guard + arena), (scale_hook, '            turn_work.c_scale = scales[seat];\n')):
+    count_hook = '                simulations: crate::cpu_eval::teacher_simulations(turn_work.fast, calibration),\n'
+    for before, after in ((guard, guard + arena),
+                          (scale_hook, '            turn_work.c_scale = scales[seat];\n'),
+                          (count_hook, '                simulations: simulations[seat],\n')):
         require(source.count(before) == 1, f'CPU teacher experiment hook changed: {before.strip()}')
         source = source.replace(before, after, 1)
     return source
@@ -100,12 +113,15 @@ def plan(state, entry, calibration, games, seed, matchup):
     for setup in seeds:
         sampling_seed = int(digest([MATCH_NAMESPACE, seed, setup])[:16], 16)
         for a_seats in SEAT_ASSIGNMENTS:
-            scales = [matchup[0] if seat in a_seats else matchup[1] for seat in range(4)]
-            key = digest([MATCH_NAMESPACE, entry['sha256'], setup, sampling_seed, scales, SIMULATIONS, K])
+            configs = [matchup[0] if seat in a_seats else matchup[1] for seat in range(4)]
+            scales = [config.c_scale for config in configs]
+            simulations = [config.simulations for config in configs]
+            quota = simulations[0] if matchup[0].simulations == matchup[1].simulations else simulations
+            key = digest([MATCH_NAMESPACE, entry['sha256'], setup, sampling_seed, scales, quota, K])
             expected = dict(template['expected'], job_id=key, game_id=f'arena/{key}')
             jobs.append(dict(template, expected=expected, seed=setup, sampling_seed=sampling_seed,
                              h2h=True, split='heldout', readiness=receipt, search_value=search_value,
-                             seat_values=[search_value] * 4, arena_scales=scales))
+                             seat_values=[search_value] * 4, arena_scales=scales, arena_simulations=simulations))
     return jobs
 
 
@@ -125,23 +141,25 @@ class ArenaTurns:
 def score_game(job, result, matchup):
     searches = result['metrics']['searches']
     scales = job['arena_scales']
-    require(searches and all(search['profile'] == 'full' and search['frozen_n'] == SIMULATIONS
-                            and search['completed'] == SIMULATIONS and 1 <= search['effective_k'] <= K
-                            and not search['deadline_hit'] and search['c_scale'] == scales[search['seat']]
+    simulations = job['arena_simulations']
+    configs = list(zip(scales, simulations))
+    require(searches and all(search['profile'] == 'full' and 1 <= search['effective_k'] <= K
+                            and not search['deadline_hit'] and search['completed'] == search['frozen_n']
+                            and (search['c_scale'], search['frozen_n']) == configs[search['seat']]
                             for search in searches),
             f"A search missed the fixed quota or used the wrong scale in game {job['expected']['job_id']}")
     terminal = result['result']
     seats = terminal['seats']
     require(terminal['objective'] == 'win-share/1.0.0' and [s['seat'] for s in seats] == list(range(4))
             and math.isclose(sum(s['utility'] for s in seats), 1.), 'Missing or invalid final scores')
-    side_a, side_b = ([s for s in seats if scales[s['seat']] == scale] for scale in matchup)
+    side_a, side_b = ([s for s in seats if configs[s['seat']] == config] for config in matchup)
     win_share_a = sum(s['utility'] for s in side_a)
     vp_a, vp_b = (statistics.mean(s['vp'] for s in side) for side in (side_a, side_b))
     rank_a, rank_b = (statistics.mean(s['rank'] for s in side) for side in (side_a, side_b))
     scores_a, scores_b = ([(s['vp'], s['income'], s['cash']) for s in side] for side in (side_a, side_b))
     outrank = statistics.mean(1. if a > b else .5 if a == b else 0. for a in scores_a for b in scores_b)
     return dict(job_id=job['expected']['job_id'], seed=job['seed'], sampling_seed=job['sampling_seed'],
-                arena_scales=scales, seats=seats, win_share_a=win_share_a,
+                arena_scales=scales, arena_simulations=simulations, seats=seats, win_share_a=win_share_a,
                 mean_vp_a=vp_a, mean_vp_b=vp_b, vp_difference=vp_a-vp_b,
                 mean_rank_a=rank_a, mean_rank_b=rank_b, rank_difference=rank_a-rank_b,
                 cross_scale_outrank_a=outrank,
@@ -174,18 +192,25 @@ def summarize(games, seed, matchup):
     bounds = np.quantile(means[samples].mean(axis=1), (0.025, 0.975), axis=0)
     share, vp_diff, rank_diff, outrank = means.mean(axis=0).tolist()
     share_ci, vp_ci, rank_ci, outrank_ci = bounds.T.tolist()
-    winner = matchup[0] if share_ci[0] > .5 else matchup[1] if share_ci[1] < .5 else None
+    winner_index = 0 if share_ci[0] > .5 else 1 if share_ci[1] < .5 else None
+    sides = ('a', 'b')
+    winner = None if winner_index is None else matchup[winner_index]
 
     by_scale = []
-    for side, scale in zip(('a', 'b'), matchup):
-        seats = [seat for game in games for seat in game['seats'] if game['arena_scales'][seat['seat']] == scale]
-        by_scale.append(dict(side=side, c_scale=scale, seat_games=len(seats),
+    for side, config in zip(sides, matchup):
+        seats = [seat for game in games
+                 for seat, scale, count in zip(game['seats'], game['arena_scales'], game['arena_simulations'])
+                 if (scale, count) == config]
+        by_scale.append(dict(side=side, c_scale=config.c_scale, simulations=config.simulations, seat_games=len(seats),
                              seat_win_share=statistics.mean(s['utility'] for s in seats),
                              mean_vp=statistics.mean(s['vp'] for s in seats),
                              mean_rank=statistics.mean(s['rank'] for s in seats),
                              top_two_rate=statistics.mean(s['rank'] <= 2 for s in seats),
                              last_place_rate=statistics.mean(s['rank'] == 4 for s in seats)))
-    return dict(games=len(games), setup_seeds=len(groups), winner=winner, by_scale=by_scale,
+    return dict(games=len(games), setup_seeds=len(groups), by_scale=by_scale,
+                winner=None if winner is None else winner.c_scale,
+                winner_side=None if winner_index is None else sides[winner_index],
+                winner_simulations=None if winner is None else winner.simulations,
                 win_share_a=share, win_share_b=1-share, win_share_a_ci95=share_ci,
                 outright_wins_a=sum(g['win_share_a'] == 1. for g in games),
                 outright_wins_b=sum(g['win_share_a'] == 0. for g in games),
@@ -202,10 +227,15 @@ def main():
     parser.add_argument('--generation', type=int, default=GENERATION)
     parser.add_argument('--games', type=int, default=GAMES, help=f'Positive multiple of six (default: {GAMES})')
     parser.add_argument('--workers', type=int, default=WORKERS, help=f'Concurrent games (default: {WORKERS})')
-    parser.add_argument('--c-scale-a', type=float, default=DEFAULT_SCALES[0],
+    parser.add_argument('--c-scale', type=float, help='Use the same C_scale for both sides')
+    parser.add_argument('--c-scale-a', type=float,
                         help=f'C_scale for side A (default: {DEFAULT_SCALES[0]})')
-    parser.add_argument('--c-scale-b', type=float, default=DEFAULT_SCALES[1],
+    parser.add_argument('--c-scale-b', type=float,
                         help=f'C_scale for side B (default: {DEFAULT_SCALES[1]})')
+    parser.add_argument('--simulations-a', type=int, default=SIMULATIONS,
+                        help=f'Simulations per search for side A (default: {SIMULATIONS})')
+    parser.add_argument('--simulations-b', type=int, default=SIMULATIONS,
+                        help=f'Simulations per search for side B (default: {SIMULATIONS})')
     parser.add_argument('--seed', type=int, default=SEED)
     parser.add_argument('--mono', default='mono')
     parser.add_argument('--toolchain', default='1.99.1')
@@ -214,9 +244,21 @@ def main():
         parser.error('Use a positive multiple of six games and at least one worker.')
     if not 0 <= args.seed < 2**31:
         parser.error('Use a setup seed in [0, 2^31).')
-    matchup = (args.c_scale_a, args.c_scale_b)
-    if not all(math.isfinite(scale) and scale > 0 for scale in matchup) or matchup[0] == matchup[1]:
-        parser.error('--c-scale-a and --c-scale-b must be distinct, finite positive numbers.')
+    if args.c_scale is None:
+        scales = [default if scale is None else scale
+                  for scale, default in zip((args.c_scale_a, args.c_scale_b), DEFAULT_SCALES)]
+    else:
+        if args.c_scale_a is not None or args.c_scale_b is not None:
+            parser.error('Use --c-scale by itself or specify --c-scale-a and --c-scale-b separately.')
+        scales = [args.c_scale, args.c_scale]
+    simulations = [args.simulations_a, args.simulations_b]
+    if not all(math.isfinite(scale) and scale > 0 for scale in scales):
+        parser.error('C_scale must be a finite positive number.')
+    if not all(64 <= count <= 4096 for count in simulations):
+        parser.error('Each simulation count must be between 64 and 4096.')
+    matchup = tuple(SearchConfig(scale, count) for scale, count in zip(scales, simulations))
+    if matchup[0] == matchup[1]:
+        parser.error('Sides must differ in C_scale or simulation count.')
 
     state = read_json(project_path(ROOT, args.run) / 'state.json')
     entry = generation_entry(state, args.generation)
@@ -246,13 +288,15 @@ def main():
     output = ROOT / 'artifacts/experiments/c-scale-head-to-head' / f'g{args.generation}-{stamp}'
     output.mkdir(parents=True)
     report = dict(format=FORMAT, checkpoint=entry, requested_games=args.games, workers=workers, seed=args.seed,
-                  simulations=SIMULATIONS, k=K, w=0., scales=list(matchup), core_sha256=core,
+                  simulations=simulations[0] if simulations[0] == simulations[1] else None,
+                  simulations_by_side=simulations, k=K, w=0., scales=scales, core_sha256=core,
                   exploration='Search selection with no opening or cotton overrides', status='incomplete')
     write_json(output / 'plan.json', dict(report, jobs=[dict(job_id=j['expected']['job_id'], seed=j['seed'],
-                                                            sampling_seed=j['sampling_seed'], scales=j['arena_scales'])
+                                                            sampling_seed=j['sampling_seed'], scales=j['arena_scales'],
+                                                            simulations=j['arena_simulations'])
                                                        for j in jobs]))
-    print(f'g{args.generation}: {args.games} games | {workers} workers | n={SIMULATIONS} K={K} w=0 | '
-          f'C_scale {matchup[0]} vs {matchup[1]}', flush=True)
+    print(f'g{args.generation}: {args.games} games | {workers} workers | K={K} w=0 | '
+          f'A ({matchup[0].label()}) vs B ({matchup[1].label()})', flush=True)
     print(f'Results: {output}', flush=True)
     began = monotonic()
     games = []
@@ -266,11 +310,12 @@ def main():
             # A private model pack cannot be pruned by ongoing lab training.
             manifest = scratch / 'model/manifest.json'
             lab_cpu_models.export_bundle(model, manifest.parent)
-            # Each search uses its seat's scale. The count budget only supplies N and K.
+            # The worker uses each seat's count and scale. The shared budget sets K and the watchdog allowance.
+            max_count = max(simulations)
             inference = dict(contract=lab_cpu_runtime.CONTRACT,
                              runtime=dict(path=str(runtime_path(build['runtime']['path'])), sha256=build['runtime']['sha256']),
                              bundle=dict(manifest=str(manifest), sha256=sha(manifest)),
-                             budget=dict(mode='count', full=SIMULATIONS, full_k=K, fast=SIMULATIONS, fast_k=K))
+                             budget=dict(mode='count', full=max_count, full_k=K, fast=max_count, fast_k=K))
             calibration = lab_teacher.count_calibration(core, jobs[0])
             timing = dict(estimate_ns=calibration['estimate_ns'], calibration_id=digest(calibration))
             one = partial(play, binary=binary, core=core, bootstrap=bootstrap, inference=inference, timing=timing,
@@ -299,13 +344,17 @@ def main():
     finally:
         write_json(output / 'report.json', dict(report, wall_seconds=monotonic()-began))
     lo, hi = report['win_share_a_ci95']
-    print('C_scale   Win share   Mean VP   Mean rank   Top two   Fourth', flush=True)
+    print('Side   C_scale    Sims   Win share   Mean VP   Mean rank   Top two   Fourth', flush=True)
     for side in report['by_scale']:
-        print(f'{str(side["c_scale"]):>7}   {2*side["seat_win_share"]:>9.1%}   {side["mean_vp"]:>7.2f}   '
+        print(f'{side["side"].upper():>4}   {str(side["c_scale"]):>7}   {side["simulations"]:>5}   '
+              f'{2*side["seat_win_share"]:>9.1%}   {side["mean_vp"]:>7.2f}   '
               f'{side["mean_rank"]:>9.3f}   {side["top_two_rate"]:>7.1%}   {side["last_place_rate"]:>6.1%}', flush=True)
-    print(f'C_scale {matchup[0]}: win share 95% CI {lo:.1%}–{hi:.1%} | '
-          f'cross-scale outrank {report["cross_scale_outrank_a"]:.1%}', flush=True)
-    verdict = 'inconclusive' if report['winner'] is None else f'C_scale {report["winner"]} wins'
+    print(f'A ({matchup[0].label()}): win share 95% CI {lo:.1%}–{hi:.1%} | '
+          f'cross-side outrank {report["cross_scale_outrank_a"]:.1%}', flush=True)
+    verdict = 'inconclusive'
+    if report['winner_side'] is not None:
+        winner = SearchConfig(report['winner'], report['winner_simulations'])
+        verdict = f'{report["winner_side"].upper()} ({winner.label()}) wins'
     print(f'{verdict}. Report: {output / "report.json"}', flush=True)
 
 
