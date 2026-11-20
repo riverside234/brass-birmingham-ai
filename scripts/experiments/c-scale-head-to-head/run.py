@@ -52,31 +52,41 @@ MATCH_NAMESPACE = 'brass-c-scale-head-to-head/1.0.0'  # Preserve setup sampling 
 class SearchConfig(NamedTuple):
     c_scale: float
     simulations: int
+    w: float = 0.
 
-    def label(self):
-        return f'C_scale {self.c_scale}, n={self.simulations}'
+    def label(self, show_weight=False):
+        label = f'C_scale {self.c_scale}, n={self.simulations}'
+        return f'{label}, w={self.w:g}' if show_weight else label
 
 
 def patch_worker(source):
     guard = '    let h2h = job["h2h"] == true;\n'
     arena = '''    let scales: [f64; 4] = serde_json::from_value(job["arena_scales"].clone())?;
     let simulations: [u64; 4] = serde_json::from_value(job["arena_simulations"].clone())?;
-    let mut configs: [(f64, u64); 4] = std::array::from_fn(|seat| (scales[seat], simulations[seat]));
-    configs.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    let bindings: [Value; 4] = serde_json::from_value(job["seat_values"].clone())?;
+    let weights = bindings.each_ref().map(|v| v["w"].as_f64().unwrap_or(f64::NAN));
+    let mut configs: [(f64, u64, f64); 4] =
+        std::array::from_fn(|seat| (scales[seat], simulations[seat], weights[seat]));
+    configs.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.total_cmp(&b.2)));
     check(request["op"] == "run" && all_seat && h2h && job["teacher_revision"].is_null()
         && job["search_value"]["w"].as_f64() == Some(0.0)
-        && job["seat_values"].as_array().is_some_and(|values|
-            values.len() == 4 && values.iter().all(|value| value == &job["search_value"]))
+        && bindings.iter().zip(weights).all(|(v, w)|
+            v["protocol"] == job["search_value"]["protocol"]
+            && ((w == 0.0 && v["value_source"] == "main")
+                || (w == 1.0 && v["value_source"] == "corrected")))
         && scales.iter().all(|scale| scale.is_finite() && *scale > 0.0)
         && simulations.iter().all(|n| (64..=4096).contains(n))
         && configs[0] == configs[1] && configs[1] != configs[2] && configs[2] == configs[3],
-        "expected experiment table with two seats per search configuration and main utility only")?;
+        "expected experiment table with two seats per search configuration")?;
 '''
     scale_hook = '            turn_work.c_scale = crate::cpu_eval::teacher_c_scale(turn_work.fast);\n'
     count_hook = '                simulations: crate::cpu_eval::teacher_simulations(turn_work.fast, calibration),\n'
+    metric_hook = '"c_scale":turn_work.c_scale}));'
+    metric = '"c_scale":turn_work.c_scale,"w":peer.search_value.as_ref().map(|v| &v["w"])}));'
     for before, after in ((guard, guard + arena),
                           (scale_hook, '            turn_work.c_scale = scales[seat];\n'),
-                          (count_hook, '                simulations: simulations[seat],\n')):
+                          (count_hook, '                simulations: simulations[seat],\n'),
+                          (metric_hook, metric)):
         require(source.count(before) == 1, f'CPU teacher experiment hook changed: {before.strip()}')
         source = source.replace(before, after, 1)
     return source
@@ -108,6 +118,7 @@ def plan(state, entry, calibration, games, seed, matchup):
     reward_id = template['expected']['reward_id']
     receipt, _ = readiness(None, calibration, reward_id, skip=True)
     search_value = binding(0.)
+    bindings = {config.w: binding(config.w) for config in matchup}
     seeds, _ = seeds_for(seed, games // len(SEAT_ASSIGNMENTS), partition='validation')
     jobs = []
     for setup in seeds:
@@ -116,12 +127,17 @@ def plan(state, entry, calibration, games, seed, matchup):
             configs = [matchup[0] if seat in a_seats else matchup[1] for seat in range(4)]
             scales = [config.c_scale for config in configs]
             simulations = [config.simulations for config in configs]
+            weights = [config.w for config in configs]
             quota = simulations[0] if matchup[0].simulations == matchup[1].simulations else simulations
-            key = digest([MATCH_NAMESPACE, entry['sha256'], setup, sampling_seed, scales, quota, K])
+            identity = [MATCH_NAMESPACE, entry['sha256'], setup, sampling_seed, scales, quota, K]
+            if any(weights):
+                identity.append(weights)
+            key = digest(identity)
             expected = dict(template['expected'], job_id=key, game_id=f'arena/{key}')
             jobs.append(dict(template, expected=expected, seed=setup, sampling_seed=sampling_seed,
                              h2h=True, split='heldout', readiness=receipt, search_value=search_value,
-                             seat_values=[search_value] * 4, arena_scales=scales, arena_simulations=simulations))
+                             seat_values=[bindings[weight] for weight in weights],
+                             arena_scales=scales, arena_simulations=simulations))
     return jobs
 
 
@@ -132,9 +148,10 @@ class ArenaTurns:
 
     def verify(self, frame, _received):
         self.index += 1
+        value = frame['value_row']
         require(frame['job'] == self.job['expected'] and frame['index'] == self.index
                 and frame['profile'] == 'full' and not frame['rows']
-                and frame['value_row']['search_value'] == self.job['search_value'],
+                and value['search_value'] == self.job['seat_values'][value['seat']],
                 'Experiment turn has the wrong identity, profile or value blend')
 
 
@@ -142,12 +159,13 @@ def score_game(job, result, matchup):
     searches = result['metrics']['searches']
     scales = job['arena_scales']
     simulations = job['arena_simulations']
-    configs = list(zip(scales, simulations))
+    weights = [value['w'] for value in job['seat_values']]
+    configs = list(zip(scales, simulations, weights))
     require(searches and all(search['profile'] == 'full' and 1 <= search['effective_k'] <= K
                             and not search['deadline_hit'] and search['completed'] == search['frozen_n']
-                            and (search['c_scale'], search['frozen_n']) == configs[search['seat']]
+                            and (search['c_scale'], search['frozen_n'], search['w']) == configs[search['seat']]
                             for search in searches),
-            f"A search missed the fixed quota or used the wrong scale in game {job['expected']['job_id']}")
+            f"A search used the wrong quota, scale or value blend in game {job['expected']['job_id']}")
     terminal = result['result']
     seats = terminal['seats']
     require(terminal['objective'] == 'win-share/1.0.0' and [s['seat'] for s in seats] == list(range(4))
@@ -159,7 +177,7 @@ def score_game(job, result, matchup):
     scores_a, scores_b = ([(s['vp'], s['income'], s['cash']) for s in side] for side in (side_a, side_b))
     outrank = statistics.mean(1. if a > b else .5 if a == b else 0. for a in scores_a for b in scores_b)
     return dict(job_id=job['expected']['job_id'], seed=job['seed'], sampling_seed=job['sampling_seed'],
-                arena_scales=scales, arena_simulations=simulations, seats=seats, win_share_a=win_share_a,
+                arena_scales=scales, arena_simulations=simulations, arena_weights=weights, seats=seats, win_share_a=win_share_a,
                 mean_vp_a=vp_a, mean_vp_b=vp_b, vp_difference=vp_a-vp_b,
                 mean_rank_a=rank_a, mean_rank_b=rank_b, rank_difference=rank_a-rank_b,
                 cross_scale_outrank_a=outrank,
@@ -199,9 +217,10 @@ def summarize(games, seed, matchup):
     by_scale = []
     for side, config in zip(sides, matchup):
         seats = [seat for game in games
-                 for seat, scale, count in zip(game['seats'], game['arena_scales'], game['arena_simulations'])
-                 if (scale, count) == config]
-        by_scale.append(dict(side=side, c_scale=config.c_scale, simulations=config.simulations, seat_games=len(seats),
+                 for seat, scale, count, w in zip(game['seats'], game['arena_scales'],
+                                                   game['arena_simulations'], game['arena_weights'])
+                 if (scale, count, w) == config]
+        by_scale.append(dict(side=side, c_scale=config.c_scale, simulations=config.simulations, w=config.w, seat_games=len(seats),
                              seat_win_share=statistics.mean(s['utility'] for s in seats),
                              mean_vp=statistics.mean(s['vp'] for s in seats),
                              mean_rank=statistics.mean(s['rank'] for s in seats),
@@ -211,6 +230,7 @@ def summarize(games, seed, matchup):
                 winner=None if winner is None else winner.c_scale,
                 winner_side=None if winner_index is None else sides[winner_index],
                 winner_simulations=None if winner is None else winner.simulations,
+                winner_w=None if winner is None else winner.w,
                 win_share_a=share, win_share_b=1-share, win_share_a_ci95=share_ci,
                 outright_wins_a=sum(g['win_share_a'] == 1. for g in games),
                 outright_wins_b=sum(g['win_share_a'] == 0. for g in games),
@@ -221,21 +241,26 @@ def summarize(games, seed, matchup):
                 interval_method='10,000 bootstrap resamples of full six-game setup-seed groups')
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(*, compare_weights=False):
+    description = 'Compare w=0 and w=1 at the same scale and search count.' if compare_weights else __doc__
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--run', default=RUN)
     parser.add_argument('--generation', type=int, default=GENERATION)
     parser.add_argument('--games', type=int, default=GAMES, help=f'Positive multiple of six (default: {GAMES})')
     parser.add_argument('--workers', type=int, default=WORKERS, help=f'Concurrent games (default: {WORKERS})')
-    parser.add_argument('--c-scale', type=float, help='Use the same C_scale for both sides')
-    parser.add_argument('--c-scale-a', type=float,
-                        help=f'C_scale for side A (default: {DEFAULT_SCALES[0]})')
-    parser.add_argument('--c-scale-b', type=float,
-                        help=f'C_scale for side B (default: {DEFAULT_SCALES[1]})')
-    parser.add_argument('--simulations-a', type=int, default=SIMULATIONS,
-                        help=f'Simulations per search for side A (default: {SIMULATIONS})')
-    parser.add_argument('--simulations-b', type=int, default=SIMULATIONS,
-                        help=f'Simulations per search for side B (default: {SIMULATIONS})')
+    if compare_weights:
+        parser.add_argument('--c-scale', type=float, default=0.7, help='Shared C_scale (default: 0.7)')
+        parser.add_argument('--simulations', type=int, default=96, help='Shared simulations per search (default: 96)')
+    else:
+        parser.add_argument('--c-scale', type=float, help='Use the same C_scale for both sides')
+        parser.add_argument('--c-scale-a', type=float,
+                            help=f'C_scale for side A (default: {DEFAULT_SCALES[0]})')
+        parser.add_argument('--c-scale-b', type=float,
+                            help=f'C_scale for side B (default: {DEFAULT_SCALES[1]})')
+        parser.add_argument('--simulations-a', type=int, default=SIMULATIONS,
+                            help=f'Simulations per search for side A (default: {SIMULATIONS})')
+        parser.add_argument('--simulations-b', type=int, default=SIMULATIONS,
+                            help=f'Simulations per search for side B (default: {SIMULATIONS})')
     parser.add_argument('--seed', type=int, default=SEED)
     parser.add_argument('--mono', default='mono')
     parser.add_argument('--toolchain', default='1.99.1')
@@ -244,19 +269,25 @@ def main():
         parser.error('Use a positive multiple of six games and at least one worker.')
     if not 0 <= args.seed < 2**31:
         parser.error('Use a setup seed in [0, 2^31).')
-    if args.c_scale is None:
-        scales = [default if scale is None else scale
-                  for scale, default in zip((args.c_scale_a, args.c_scale_b), DEFAULT_SCALES)]
+    if compare_weights:
+        scales = [args.c_scale] * 2
+        simulations = [args.simulations] * 2
+        weights = [0., 1.]
     else:
-        if args.c_scale_a is not None or args.c_scale_b is not None:
-            parser.error('Use --c-scale by itself or specify --c-scale-a and --c-scale-b separately.')
-        scales = [args.c_scale, args.c_scale]
-    simulations = [args.simulations_a, args.simulations_b]
+        if args.c_scale is None:
+            scales = [default if scale is None else scale
+                      for scale, default in zip((args.c_scale_a, args.c_scale_b), DEFAULT_SCALES)]
+        else:
+            if args.c_scale_a is not None or args.c_scale_b is not None:
+                parser.error('Use --c-scale by itself or specify --c-scale-a and --c-scale-b separately.')
+            scales = [args.c_scale] * 2
+        simulations = [args.simulations_a, args.simulations_b]
+        weights = [0., 0.]
     if not all(math.isfinite(scale) and scale > 0 for scale in scales):
         parser.error('C_scale must be a finite positive number.')
     if not all(64 <= count <= 4096 for count in simulations):
         parser.error('Each simulation count must be between 64 and 4096.')
-    matchup = tuple(SearchConfig(scale, count) for scale, count in zip(scales, simulations))
+    matchup = tuple(SearchConfig(*config) for config in zip(scales, simulations, weights))
     if matchup[0] == matchup[1]:
         parser.error('Sides must differ in C_scale or simulation count.')
 
@@ -270,6 +301,8 @@ def main():
 
     model, raw = load_checkpoint(checkpoint)
     require(raw['step'] == args.generation and raw['model_id'] == entry['model_id'], 'Checkpoint identity differs')
+    if compare_weights:
+        require(hasattr(model, 'search_value_head'), f'g{args.generation} has no Search Value head')
     model.eval()
     jobs = plan(state, entry, raw['training'].get('utility_calibration'), args.games, args.seed, matchup)
     del raw
@@ -285,24 +318,29 @@ def main():
     for cpu in cores:
         core_queue.put(cpu)
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
-    output = ROOT / 'artifacts/experiments/c-scale-head-to-head' / f'g{args.generation}-{stamp}'
+    experiment = 'search-value-head-to-head' if compare_weights else 'c-scale-head-to-head'
+    output = ROOT / 'artifacts/experiments' / experiment / f'g{args.generation}-{stamp}'
     output.mkdir(parents=True)
-    report = dict(format=FORMAT, checkpoint=entry, requested_games=args.games, workers=workers, seed=args.seed,
+    report_format = 'brass-search-value-head-to-head/1.0.0' if compare_weights else FORMAT
+    report = dict(format=report_format, checkpoint=entry, requested_games=args.games, workers=workers, seed=args.seed,
                   simulations=simulations[0] if simulations[0] == simulations[1] else None,
-                  simulations_by_side=simulations, k=K, w=0., scales=scales, core_sha256=core,
+                  simulations_by_side=simulations, k=K, w=None if compare_weights else 0.,
+                  weights_by_side=weights, scales=scales, core_sha256=core,
                   exploration='Search selection with no opening or cotton overrides', status='incomplete')
     write_json(output / 'plan.json', dict(report, jobs=[dict(job_id=j['expected']['job_id'], seed=j['seed'],
                                                             sampling_seed=j['sampling_seed'], scales=j['arena_scales'],
-                                                            simulations=j['arena_simulations'])
+                                                            simulations=j['arena_simulations'],
+                                                            weights=[value['w'] for value in j['seat_values']])
                                                        for j in jobs]))
-    print(f'g{args.generation}: {args.games} games | {workers} workers | K={K} w=0 | '
-          f'A ({matchup[0].label()}) vs B ({matchup[1].label()})', flush=True)
+    search = f'K={K}' if compare_weights else f'K={K} w=0'
+    print(f'g{args.generation}: {args.games} games | {workers} workers | {search} | '
+          f'A ({matchup[0].label(compare_weights)}) vs B ({matchup[1].label(compare_weights)})', flush=True)
     print(f'Results: {output}', flush=True)
     began = monotonic()
     games = []
     cancel = Event()
     try:
-        with TemporaryDirectory(prefix='brass-c-scale-match-', dir=ROOT / 'artifacts',
+        with TemporaryDirectory(prefix=f'brass-{experiment}-', dir=ROOT / 'artifacts',
                                 ignore_cleanup_errors=os.name == 'nt') as directory:
             scratch = Path(directory)
             binary = arena_worker(build, scratch, args.toolchain)
@@ -344,17 +382,19 @@ def main():
     finally:
         write_json(output / 'report.json', dict(report, wall_seconds=monotonic()-began))
     lo, hi = report['win_share_a_ci95']
-    print('Side   C_scale    Sims   Win share   Mean VP   Mean rank   Top two   Fourth', flush=True)
+    weight_header = '     w' if compare_weights else ''
+    print(f'Side   C_scale    Sims{weight_header}   Win share   Mean VP   Mean rank   Top two   Fourth', flush=True)
     for side in report['by_scale']:
-        print(f'{side["side"].upper():>4}   {str(side["c_scale"]):>7}   {side["simulations"]:>5}   '
+        weight_cell = f'{side["w"]:>6g}' if compare_weights else ''
+        print(f'{side["side"].upper():>4}   {str(side["c_scale"]):>7}   {side["simulations"]:>5}{weight_cell}   '
               f'{2*side["seat_win_share"]:>9.1%}   {side["mean_vp"]:>7.2f}   '
               f'{side["mean_rank"]:>9.3f}   {side["top_two_rate"]:>7.1%}   {side["last_place_rate"]:>6.1%}', flush=True)
-    print(f'A ({matchup[0].label()}): win share 95% CI {lo:.1%}–{hi:.1%} | '
+    print(f'A ({matchup[0].label(compare_weights)}): win share 95% CI {lo:.1%}–{hi:.1%} | '
           f'cross-side outrank {report["cross_scale_outrank_a"]:.1%}', flush=True)
     verdict = 'inconclusive'
     if report['winner_side'] is not None:
-        winner = SearchConfig(report['winner'], report['winner_simulations'])
-        verdict = f'{report["winner_side"].upper()} ({winner.label()}) wins'
+        winner = SearchConfig(report['winner'], report['winner_simulations'], report['winner_w'])
+        verdict = f'{report["winner_side"].upper()} ({winner.label(compare_weights)}) wins'
     print(f'{verdict}. Report: {output / "report.json"}', flush=True)
 
 
