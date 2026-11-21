@@ -72,8 +72,9 @@ def patch_worker(source):
         && job["search_value"]["w"].as_f64() == Some(0.0)
         && bindings.iter().zip(weights).all(|(v, w)|
             v["protocol"] == job["search_value"]["protocol"]
-            && ((w == 0.0 && v["value_source"] == "main")
-                || (w == 1.0 && v["value_source"] == "corrected")))
+            && (0.0..=1.0).contains(&w)
+            && (w * 100.0 - (w * 100.0).round()).abs() < 1e-8
+            && v["value_source"] == if w == 0.0 { "main" } else { "corrected" })
         && scales.iter().all(|scale| scale.is_finite() && *scale > 0.0)
         && simulations.iter().all(|n| (64..=4096).contains(n))
         && configs[0] == configs[1] && configs[1] != configs[2] && configs[2] == configs[3],
@@ -242,7 +243,7 @@ def summarize(games, seed, matchup):
 
 
 def main(*, compare_weights=False):
-    description = 'Compare w=0 and w=1 at the same scale and search count.' if compare_weights else __doc__
+    description = 'Compare search residual weights at the same scale and search count.' if compare_weights else __doc__
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--run', default=RUN)
     parser.add_argument('--generation', type=int, default=GENERATION)
@@ -251,6 +252,8 @@ def main(*, compare_weights=False):
     if compare_weights:
         parser.add_argument('--c-scale', type=float, default=0.7, help='Shared C_scale (default: 0.7)')
         parser.add_argument('--simulations', type=int, default=96, help='Shared simulations per search (default: 96)')
+        parser.add_argument('--w-a', type=float, default=0.0, help='Search residual weight for side A (default: 0)')
+        parser.add_argument('--w-b', type=float, default=1.0, help='Search residual weight for side B (default: 1)')
     else:
         parser.add_argument('--c-scale', type=float, help='Use the same C_scale for both sides')
         parser.add_argument('--c-scale-a', type=float,
@@ -272,7 +275,10 @@ def main(*, compare_weights=False):
     if compare_weights:
         scales = [args.c_scale] * 2
         simulations = [args.simulations] * 2
-        weights = [0., 1.]
+        try:
+            weights = [binding(weight)['w'] for weight in (args.w_a, args.w_b)]
+        except ValueError:
+            parser.error('--w-a and --w-b must be between 0 and 1 in steps of 0.01.')
     else:
         if args.c_scale is None:
             scales = [default if scale is None else scale
@@ -289,7 +295,8 @@ def main(*, compare_weights=False):
         parser.error('Each simulation count must be between 64 and 4096.')
     matchup = tuple(SearchConfig(*config) for config in zip(scales, simulations, weights))
     if matchup[0] == matchup[1]:
-        parser.error('Sides must differ in C_scale or simulation count.')
+        parser.error('Sides must have different weights.' if compare_weights
+                     else 'Sides must differ in C_scale or simulation count.')
 
     state = read_json(project_path(ROOT, args.run) / 'state.json')
     entry = generation_entry(state, args.generation)

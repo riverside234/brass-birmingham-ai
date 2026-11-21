@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the Rust CPU arena with main Utility versus corrected Search Value."""
+"""Compare two search residual weights in the Rust CPU arena."""
 
 from pathlib import Path
 from runpy import run_path
