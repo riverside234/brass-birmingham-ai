@@ -171,8 +171,10 @@ def diagnostic_job(config, state, entry, saved, utility_calibration, *, weight):
     job = dict(next(j for j in jobs if not j.get('shadow_probe')), split='heldout', search_value=binding(weight))
     # The diagnostic binary uses the native visit sampler only inside game_opening.
     # All source groups use the same job recipe and an empty set of cotton seats.
+    # Fractional blends travel in search_value, as they do during Stage B.
+    override = int(weight) if weight in (0, 1) else None
     job['teacher_revision'] = _job_block(dict(EXPLORATION, game_opening=GAME_OPENING),
-                                         short_labels=False, search_head_weight=weight, seats=[])
+                                         short_labels=False, search_head_weight=override, seats=[])
     job['readiness'], _ = readiness(None, utility_calibration, job['expected']['reward_id'], skip=True)
     lab_teacher.validate_job(job)
     # Validate the training recipe first. Only the isolated probe worker accepts the study temperature.
@@ -379,8 +381,9 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     parser.add_argument('--lanes', type=int, default=int(os.getenv('LANES', str(DEFAULT_LANES))),
                         help=f'Concurrent CPU workers (default: {DEFAULT_LANES} or LANES)')
     parser.add_argument('--ref-scale', type=float, choices=(0.1, 1.0), default=float(os.getenv('REF_SCALE', '0.1')))
-    parser.add_argument('--w', type=int, choices=(0, 1), default=default_weight,
-                        help=f'Search head weight for reference and candidate searches (default: {default_weight})')
+    parser.add_argument('--w', type=float, default=default_weight,
+                        help=f'Search head weight from 0 to 1 in steps of 0.01, applied to both searches '
+                             f'(default: {default_weight})')
     parser.add_argument('--normal-positions', type=int, default=default_targets['normal'],
                         help=f'Normal position target (default: {default_targets["normal"]})')
     parser.add_argument('--cotton-positions', type=int, default=default_targets['cotton'],
@@ -391,6 +394,10 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     parser.add_argument('--sampler', default=os.getenv('BRASS_NATIVE_WORKER'))
     parser.add_argument('--toolchain', default='1.99.1')
     args = parser.parse_args()
+    try:
+        binding(args.w)
+    except ValueError:
+        parser.error('--w must be between 0 and 1 in steps of 0.01.')
     candidate_n = args.candidate_n
     if candidate_choices is None and not 8 <= candidate_n <= 4096:
         parser.error('--candidate-n must be between 8 and 4096.')
