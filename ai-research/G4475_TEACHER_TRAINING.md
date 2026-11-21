@@ -154,9 +154,9 @@ positions gain most, about 0.6×.
 After installation, the audit started each package from the game folder: warm-up passed, a search completed, and
 the receipt matches the build. The game itself was not opened.
 
-**Optional follow-up (not done).** To turn the speed into strength, the 7.26 ms per-simulation estimate would need
-re-calibrating, so the same allowance gives a larger quota. That is a policy change: it needs new `policy.json`
-pins and a new qualification.
+**Follow-up (done the same day).** The 7.26 ms estimate was re-calibrated to 6.36 ms in release 1.4.62, also
+installed. A turn's search now runs about 14% more simulations in the same time. See
+`LOCAL_SEARCH_V1_CALIBRATION.md`.
 
 ## What to check after the first iteration
 
