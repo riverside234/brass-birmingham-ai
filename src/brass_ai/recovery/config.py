@@ -704,6 +704,10 @@ def validate_config(config):
     if TEACHER_SEARCH in config:
         require(TEACHER_REVISION in config,'The g4138 teacher search revision needs the g3270 teacher revision')
         fields.add(TEACHER_SEARCH);validate_teacher_search(config[TEACHER_SEARCH])
+    from .training_revision_g4475 import KEY as TEACHER_TRAINING,validate as validate_teacher_training
+    if TEACHER_TRAINING in config:
+        require(TEACHER_REVISION in config,'The g4475 teacher training revision needs the g3270 teacher revision')
+        fields.add(TEACHER_TRAINING);validate_teacher_training(config[TEACHER_TRAINING])
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

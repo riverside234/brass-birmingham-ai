@@ -157,6 +157,11 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'iteration and short searches of 128 simulations at C_scale 0.6 (long search unchanged). Long-search '
              'labels, beta and the search head carry over; the search-value head trains only on games collected '
              'from here, after eight such ages. Set once (training_revision_g4138); the CPU teacher is rebuilt.')
+    parser.add_argument('--teacher-training-revision', action='store_true',
+        help='Adopt the g4475 teacher training revision at this committed generation: 160 teacher label rows per '
+             'PPO step (was 128), and the search-value head\'s training paused (no post-PPG pass, no stage '
+             'advance; head, Adam and stage kept). Search tables still publish their value shards and train the '
+             'era heads. Trainer-only; set once (training_revision_g4475).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -226,6 +231,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.update_cotton_timing = False
         recovery.ppg_beta_floor = None
         recovery.teacher_search_revision = False
+        recovery.teacher_training_revision = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

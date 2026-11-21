@@ -49,6 +49,7 @@ See the [local patch guide](../../docs/LOCAL_PATCH.md) for the managed package.
 
 | Feature | Build or package | Install or restore | Verify or archive |
 | --- | --- | --- | --- |
+| Engine speed (1.4.61) | [build-engine-speed.py](engine-speed/build-engine-speed.py) | [install-engine-speed.ps1](engine-speed/install-engine-speed.ps1) | [qualify-engine-speed.py](engine-speed/qualify-engine-speed.py) |
 | Era AI | [build-era-ai.ps1](era-ai/build-era-ai.ps1) | — | [archive-era-release.ps1](era-ai/archive-era-release.ps1) |
 | Masked ISMCTS and strength | — | — | [verify-masked-ismcts.py](masked-ismcts/verify-masked-ismcts.py)<br>[archive-masked-release.ps1](masked-ismcts/archive-masked-release.ps1)<br>[archive-masked-strength-release.ps1](masked-ismcts/archive-masked-strength-release.ps1) |
 | V4 search time | [build-v4-search-time.ps1](v4-search/build-v4-search-time.ps1) | — | [archive-v4-search-time-release.ps1](v4-search/archive-v4-search-time-release.ps1) |

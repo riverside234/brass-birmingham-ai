@@ -81,7 +81,8 @@ def inference_choice(args):
 def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',revise_stages=False,inference='keep',revision=None,
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
-            teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None,teacher_search_revision=False):
+            teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None,teacher_search_revision=False,
+            teacher_training_revision=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -194,6 +195,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             # 44+4 tables, short search 128 at C_scale .6; search-value games rebuilt from here; then kept.
             require(mode=='on','The g4138 teacher search revision is adopted with teaching on')
             config=g4138.configure(config,state['iteration'])
+        from brass_ai.recovery import training_revision_g4475 as g4475
+        if teacher_training_revision:
+            # 160 teacher rows per PPO step, search-value head paused (era heads keep the search tables); then kept.
+            require(mode=='on','The g4475 teacher training revision is adopted with teaching on')
+            config=g4475.configure(config,state['iteration'])
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -316,18 +322,22 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-ppg-floor0125-share');stages.append(prefix)
         if g4138.applied(config):
             prefix=prefix.replace('-share', '-'+g4138.tag(config)+'-share');stages.append(prefix)
+        if g4475.applied(config):
+            prefix=prefix.replace('-share', '-'+g4475.tag(config)+'-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
         adopting_floor=g3658.applied(config) and not g3658.applied(before)
         adopting_search=g4138.applied(config) and not g4138.applied(before)
+        adopting_training=g4475.applied(config) and not g4475.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
                          g3471.applied(config) and not g3471.applied(before) or
                          g3528.applied(config) and not g3528.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
-                         g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor or adopting_search)
+                         g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor or adopting_search or
+                         adopting_training)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -353,6 +363,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 # that already belongs to the revised recipe.
                 from brass_ai.recovery.retention import safe
                 journal=('teacher-revision' if adopting_teacher else 'teacher-search-revision' if adopting_search else
+                         'teacher-training-revision' if adopting_training else
                          'soft-policy' if adopting_soft else
                          'value-revision' if g3140.changed(before,config) else 'ppg-beta-floor' if adopting_floor else
                          'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
@@ -454,6 +465,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'soft_policy_weight',None) is not None:kwargs['soft_policy_weight']=args.soft_policy_weight
         if getattr(args,'ppg_beta_floor',None) is not None:kwargs['ppg_beta_floor']=args.ppg_beta_floor
         if getattr(args,'teacher_search_revision',False):kwargs['teacher_search_revision']=True
+        if getattr(args,'teacher_training_revision',False):kwargs['teacher_training_revision']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -546,7 +558,8 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
             # The tables that run (g4138 raises them to 44+4); the rest is the g3270 block.
             print(f"g3270 teacher revision (from g{r['from_generation']}): {tables['train']}+{tables['held_out']} tables every "
                   f"iteration, labels {r['buffer']['iterations']} iterations (ages {r['buffer']['age_weights']}), "
-                  f"{r['rows_per_step']} rows per PPO step without repeats, targets rebuilt from the current policy at scale "
+                  f"{g3270.phase_options(options,options['teacher_phase'])['term']['rows_per_step']} rows per PPO step "
+                  f"without repeats, targets rebuilt from the current policy at scale "
                   f"{r['targets']['label_scale']:g}, long-search labels only; search value buffer {v['buffer_iterations']} iterations, "
                   f"at most {v['steps_per_iteration']} steps, {v['heldout_games']} rotating held-out games.",flush=True)
         from brass_ai.recovery import training_revision_g3423 as g3423
@@ -565,6 +578,13 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
                   f"tables every iteration; short search {s['simulations']} simulations, K={s['k']}, C_scale={s['c_scale']:g} "
                   f"(long search unchanged). Search value trains on games collected from g{r['from_generation']} on, "
                   f"after {r['search_value']['required_ages']} such ages; long labels, beta and held-out games kept.",flush=True)
+        from brass_ai.recovery import training_revision_g4475 as g4475
+        if g4475.applied(options):
+            report['g4475_teacher_training']=g4475.summary(options)
+            r=report['g4475_teacher_training']
+            print(f"g4475 teacher training revision (from g{r['from_generation']}): {r['rows_per_step']} teacher label rows "
+                  f"per PPO step; the search-value head's training is paused (head, Adam and stage kept); the search "
+                  f"tables still publish their value shards and train the era heads.",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

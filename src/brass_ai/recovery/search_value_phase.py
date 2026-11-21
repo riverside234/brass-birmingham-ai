@@ -180,6 +180,23 @@ class SearchValuePhase:
                                       any(i['accepted'] for i in self.report.get('update',{}).get('intervals',[])))
         return copy.deepcopy(self.report)
 
+    def paused(self, generation):
+        """g4475: the head's training is paused. No pass, no predictions and no stage advance; the shards outside
+        their windows still retire exactly as `buffer.rows` would retire them, and the era heads read the rest."""
+        began = time.perf_counter()
+        for key in ('update', 'validation', 'extra_validation', 'gate', 'heldout_rotation', 'retention_holdout',
+                    'buffer_rebuild', 'lambda_selection', 'delta', 'stage_guard_rollback'):
+            self.report.pop(key, None)
+        retired = self.buffer.retire(generation)
+        counts = dict.fromkeys(('train', 'heldout'), 0)
+        for receipt in self.buffer.receipts: counts[receipt['split']] += 1
+        self.report.update(updated=False, paused=dict(contract='search-value-head-paused/1.0.0', generation=generation,
+            reason='g4475 teacher training revision: the search-value head does not train; its stage, head and Adam are kept',
+            retired_shards=retired, shards=counts),
+            stage=copy.deepcopy(self.machine.state), training_scale=0.)
+        self.report['timings'] = dict(total_seconds=time.perf_counter() - began)
+        return copy.deepcopy(self.report)
+
     def trunk_scale(self):
         if 'schedule' in self.options:
             from .search_value_schedule import trunk_scale

@@ -74,6 +74,9 @@ class SearchValueIteration:
         from .training_revision_g3140 import search_auxiliary
         self.auxiliary = search_auxiliary(config)
         self.phase.scoring_maps = self.auxiliary is not None
+        # g4475: the head's training is paused; admission, shard retirement and the era heads' search rows go on.
+        from .training_revision_g4475 import search_value_paused
+        self.paused = self.mode == 'on' and search_value_paused(config)
         self.report = None
         self.pending_generation = None
         self._publication = None
@@ -91,7 +94,8 @@ class SearchValueIteration:
         self.pending_generation, self.report = generation, None
         self.ordinary, self.annealing = ordinary, annealing
         if phases is not None:
-            phases.post_value_fit = self.post_fit if self.mode == 'on' else None
+            # g4475: no post-PPG search-value pass while the head is paused.
+            phases.post_value_fit = self.post_fit if self.mode == 'on' and not getattr(self, 'paused', False) else None
             # A schedule may raise the PPG beta floor once the head has left Stage A.
             from .search_value_schedule import beta_floor
             phases.beta_floor = beta_floor(self.config['teacher_phase']['search_value'], self.phase.machine.state.get('stage'))
@@ -171,6 +175,9 @@ class SearchValueIteration:
 
     def finish_ppg(self):
         require(self.pending_generation is not None, 'Search value PPG boundary missing')
+        if self.report is None and getattr(self, 'paused', False):
+            # g4475: retire aged-out shards at the collection checkpoint G, as the training pass would, and stop.
+            self.report = self.phase.paused(self.generation)
         if self.report is None:
             if self.mode == 'on' and self.phase.trunk_scale() > 0 and 'schedule' not in self.phase.options:
                 self.report = dict(updated=False,reason='No ordinary PPG probe; guarded pass deferred')

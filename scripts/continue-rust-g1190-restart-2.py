@@ -187,6 +187,17 @@ teacher search revision (ai-research/G4138_TEACHER_SEARCH.md); set once, then ke
                from the new short searches), after eight such ages; older games age out.
 Long-search labels, teacher beta, the soft head, the search head and its stage, the held-out
 games and the era heads' search tables carry over. The continuation rebuilds the CPU teacher.
+
+--teacher-training-revision (at a committed boundary, after --teacher-revision) adopts the g4475
+teacher training revision (ai-research/G4475_TEACHER_TRAINING.md); set once, then kept, trainer-only:
+  rows         160 teacher label rows per PPO step (was 128), drawn without repeats as before;
+               the soft head trains on the same rows; the adaptive beta carries over.
+  search value the search-value head's training is paused: no post-PPG pass, no trunk or head
+               steps, no stage advance; its head, Adam and stage are kept. The tables still
+               publish their value shards, old shards still retire, and the era heads keep
+               training on the search tables with the same pool and held-out set.
+Code-only in the same change: the soft held-out check also runs once after PPO, before PPG
+(teacher_phase.heldout.soft.after_ppo, ppo_delta and ppg_delta).
 """
 import importlib.util
 from pathlib import Path

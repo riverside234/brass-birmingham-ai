@@ -38,9 +38,11 @@ def is_shadow(config):
     from brass_ai.recovery.training_revision_g3423 import previous as before_soft_policy
     from brass_ai.recovery.training_revision_g3658 import previous as before_eighth_floor
     from brass_ai.recovery.training_revision_g4138 import previous as before_teacher_search
+    from brass_ai.recovery.training_revision_g4475 import previous as before_teacher_training
     try:
         config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(
-            before_teacher_revision(before_soft_policy(before_eighth_floor(before_teacher_search(recipe(config)))))))))
+            before_teacher_revision(before_soft_policy(before_eighth_floor(before_teacher_search(
+                before_teacher_training(recipe(config))))))))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -150,6 +152,11 @@ def signature_transition(before,after):
     # It changes the collection, so pending work is archived, not preserved.
     from brass_ai.recovery import training_revision_g4138 as g4138
     old=g4138.project(old,new)
+    if old is None:return False
+    # g4475 teacher training revision: 160 teacher rows per PPO step, search-value head paused; adopted once,
+    # then kept; trainer-only, no collection setting.
+    from brass_ai.recovery import training_revision_g4475 as g4475
+    old=g4475.project(old,new)
     if old is None:return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False

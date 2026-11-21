@@ -126,7 +126,9 @@ def phase_options(config, options):
     result = copy.deepcopy(options)
     result['tables'] = tables(config)
     result['buffer'] = copy.deepcopy(SETTINGS['buffer'])
-    result['term'] = dict(result['term'], rows_per_step=SETTINGS['rows_per_step'])
+    # g4475: 160 rows per PPO step once the teacher training revision is adopted (training_revision_g4475).
+    from .training_revision_g4475 import rows_per_step as g4475_rows
+    result['term'] = dict(result['term'], rows_per_step=g4475_rows(config) or SETTINGS['rows_per_step'])
     return result
 
 

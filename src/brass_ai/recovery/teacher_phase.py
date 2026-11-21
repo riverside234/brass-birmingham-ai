@@ -216,7 +216,7 @@ class TeacherPhase:
         self.receipt, self.ready = readiness(self.receipt, getattr(model, 'utility_calibration', None), self.reward_id,
                                             skip=self.options.get('skip_utility_qualification', False))
         self.jobs = []; self.heldout = []; self.term = None; self.metrics = {}; self.pre = self.post = None
-        self.pre_logits = None; self.admission_seconds = 0.; self.soft = None; self.pre_soft = None
+        self.pre_logits = None; self.admission_seconds = 0.; self.soft = None; self.pre_soft = None; self.post_ppo = None
         self.buffer.window(self.generation)
         if self.options['mode'] != 'off' and self.ready:
             require(isinstance(export_hash, str) and len(export_hash) == 64 and epoch is not None,
@@ -324,6 +324,7 @@ class TeacherPhase:
         else:
             self.pre_logits = policy_logits(model, self.heldout) if settings is not None else None
         self.pre = heldout_measure(model, self.heldout, logits=self.pre_logits)
+        self.post_ppo = None
         rows = self.buffer.rows(self.generation) if self.options['mode'] != 'off' else []
         self.term = TeacherTerm(model, self.options, rows, seed=self.config['seed'], generation=self.generation, state=self.weight,
                                 revision=settings, soft=self.soft)
@@ -337,6 +338,19 @@ class TeacherPhase:
             collection_seconds=self.metrics.get('wall_seconds'),model_id=self.jobs[0]['expected']['model_id'] if self.jobs else None,
             export_hash=self.jobs[0]['expected']['export_hash'] if self.jobs else None)
         return self.term if self.term.active else None
+
+    def after_ppo(self, model):
+        """g4475: the soft head's held-out check once more, after the PPO update and before PPG.
+
+        The same validation-table rows and the same forwards as `prepare` and `finish` (no gradients, RNG forked,
+        train mode restored), so it changes nothing that trains. The policy's teacher KL comes from the same
+        logits at no extra cost. Splits the iteration's soft change into its PPO and PPG parts."""
+        self.post_ppo = None
+        if getattr(self, 'soft', None) is None or getattr(self, 'pre_soft', None) is None: return
+        began = time.perf_counter()
+        logits, soft = self.soft.heldout(model, self.heldout)
+        self.post_ppo = dict(soft=soft, policy=heldout_measure(model, self.heldout, logits=logits),
+                             seconds=time.perf_counter() - began)
 
     def finish(self, model, update):
         if self.term is not None: self.weight = self.term.finish()
@@ -365,6 +379,16 @@ class TeacherPhase:
             heldout['soft'] = dict(before=self.pre_soft, after=post_soft,
                 delta=post_soft['kl'] - self.pre_soft['kl'] if post_soft['kl'] is not None and self.pre_soft['kl'] is not None else None,
                 scope='KL(stored target ** (1/T), renormalized || soft head) on the validation tables\' long labels')
+            measured = getattr(self, 'post_ppo', None)
+            if measured is not None:
+                # g4475: the same check after PPO, before PPG; the iteration's change split into its two parts.
+                change = lambda a, b: a - b if a is not None and b is not None else None
+                mid = measured['soft']
+                heldout['soft'].update(after_ppo=mid, ppo_delta=change(mid['kl'], self.pre_soft['kl']),
+                                       ppg_delta=change(post_soft['kl'], mid['kl']), after_ppo_seconds=measured['seconds'])
+                policy = measured['policy']
+                heldout['after_ppo'] = policy
+                heldout['ppo_delta'] = {p: change(policy[p]['kl'], before[p]['kl']) for p in before}
         return dict(contract=CONTRACT, mode=self.options['mode'], ready=self.ready, collection=self.metrics,
             term=self.term.report() if self.term else {}, heldout=heldout,
             admission_encoding_seconds=self.admission_seconds, buffer=self.buffer.payload(),

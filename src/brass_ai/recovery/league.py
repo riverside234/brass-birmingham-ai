@@ -637,6 +637,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 update['lr_controller']=finish_iteration(optimizer,update,config,sampling,games,behavior.policy_id,
                     kind_by_group,active_anchor,calibrated_anchor=limit_report['lr_gate'] if limit_report and not observations_off else None,
                     economic_health=limit_report['health'] if observations_off else None)
+                # g4475: the soft held-out check once more, after PPO and before PPG (measurement only).
+                if teacher_phase is not None:teacher_phase.after_ppo(model)
                 ppo_finished=time.monotonic()
                 search_values = teacher_phase.search_value if teacher_phase is not None else None
                 if search_values is not None:
@@ -1078,7 +1080,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         g4=lambda v:'None' if v is None else f'{v:.4g}'
                         teacher_line+=(f' soft={sp["stage"]}:{sp["multiplier"]:.1f} soft_kl={g4(sp["kl"]["first"])}->{g4(sp["kl"]["last"])}'
                             f' soft_share={g4(sp["share"]["median"])} soft_moved={g4(sp["head_change"])}'
-                            f' soft_heldout={g4((sh.get("before") or {}).get("kl"))}->{g4((sh.get("after") or {}).get("kl"))}')
+                            f' soft_heldout={g4((sh.get("before") or {}).get("kl"))}->'
+                            # g4475: the after-PPO check between them, when measured.
+                            + (f'{g4(sh["after_ppo"].get("kl"))}(ppo)->' if sh.get('after_ppo') else '')
+                            + f'{g4((sh.get("after") or {}).get("kl"))}')
                     qualification=tt.get('gradient_qualification') or {}
                     if qualification:
                         teacher_line+=(f' grad_qualification={"passed" if qualification["passed"] else "pending"}'

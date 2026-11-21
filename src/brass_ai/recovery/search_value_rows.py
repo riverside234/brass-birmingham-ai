@@ -207,16 +207,22 @@ class ValueBuffer:
         # Caller supplies the *same* per-age label KL decision, not a second
         # expensive policy evaluation of every 8-age value tensor.
         require(split in ('train', 'heldout'), 'Invalid value split')
+        self.retire(generation)
+        return [row for r in self.receipts if r['reward_id'] == self.reward_id and r['split'] == split
+                and (split == 'heldout' or generation-r['generation'] not in stale_ages)
+                for row in self._read(r)]
+
+    def retire(self, generation):
+        """Retire the shards outside their split's window at `generation`; returns how many left the buffer."""
         keep = [r for r in self.receipts if r['reward_id'] == self.reward_id and
                 0 <= generation-r['generation'] < self.windows[r['split']]]
         for r in self.receipts:
             if r not in keep:
                 if r not in self.retired: self.retired.append(r)
                 self.cache.pop(r['sha256'], None)
+        left = len(self.receipts) - len(keep)
         self.receipts = keep
-        return [row for r in self.receipts if r['reward_id'] == self.reward_id and r['split'] == split
-                and (split == 'heldout' or generation-r['generation'] not in stale_ages)
-                for row in self._read(r)]
+        return left
 
     def payload(self):
         return dict(contract=CONTRACT, reward_id=self.reward_id, receipts=copy.deepcopy(self.receipts), retired=copy.deepcopy(self.retired))
