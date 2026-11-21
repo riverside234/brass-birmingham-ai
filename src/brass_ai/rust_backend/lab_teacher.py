@@ -313,6 +313,162 @@ class Worker:
         if getattr(self, 'spool', None) is not None:self.spool.close()
 
 
+GROUP = 'BRASS_TEACHER_GROUP'
+GROUP_CONTRACT = 'brass-lab-teacher-group/1.0.0'
+
+
+def group_enabled():
+    value = os.environ.get(GROUP, '1')
+    require(value in ('0', '1'), GROUP+' must be 0 or 1')
+    return value == '1'
+
+
+class TableGroup:
+    """Streamed CPU count tables sharing one worker process (g4288; lab-native-cpu/src/cpu_group.rs).
+
+    Each table runs the unchanged single-table teacher on its own thread and CPU, and every
+    table's ONNX session shares one prepacked copy of the network weights. With a process per
+    table, 48 private copies were read at every forward (about 440 GB/s at g4287), and a search
+    simulation cost 1.85 ms while all tables ran against 0.48 ms once most had finished.
+    One reader thread tails the group's spool and routes each tagged frame to its table, in
+    place of one polling reader per table. BRASS_TEACHER_GROUP=0 keeps a process per table.
+    """
+    def __init__(self, executable, cancel):
+        from .lab_paths import runtime_path
+        self.cancel = cancel
+        self.spool = Spool() if spool_enabled() else None
+        try:
+            self.process = subprocess.Popen([str(runtime_path(executable))], stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE if self.spool is None else self.spool.writer,
+                stderr=subprocess.PIPE, bufsize=0, creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        except BaseException:
+            if self.spool is not None:self.spool.close()
+            raise
+        if self.spool is not None:self.spool.started()
+        self.source = self.process.stdout if self.spool is None else self.spool.reader
+        self.lock = threading.Lock(); self.writing = threading.Lock()
+        self.tables = {}; self.done = set(); self.count = 0; self.inputs_closed = False; self.closed = False
+        self.stop = threading.Event(); self.stderr = bytearray(); self.exit_seconds = None
+        self.reader = threading.Thread(target=self.pump, daemon=True, name='teacher-group-reader'); self.reader.start()
+        self.err_reader = threading.Thread(target=self.errors, daemon=True); self.err_reader.start()
+        try:
+            self.write(dict(contract=GROUP_CONTRACT))
+        except BaseException:
+            self.close(kill=True)
+            raise
+
+    def write(self, value):
+        data = json.dumps(value,separators=(',',':'),allow_nan=False).encode()
+        require(len(data) <= LIMIT,'Teacher input bound')
+        view = memoryview(struct.pack('<I',len(data))+data)
+        with self.writing:
+            while view:
+                n = self.process.stdin.write(view);require(n,'Teacher input closed');view = view[n:]
+
+    def read(self, n):
+        data = bytearray(n)
+        remaining = memoryview(data)
+        while remaining:
+            got = self.source.readinto(remaining)
+            if got:
+                remaining = remaining[got:];continue
+            require(self.spool is not None, 'Native teacher closed output')
+            require(not self.stop.is_set(), 'Teacher output reader stopped')
+            if self.process.poll() is not None:
+                got = self.source.readinto(remaining)
+                require(got, 'Native teacher closed output')
+                remaining = remaining[got:];continue
+            time.sleep(SPOOL_POLL_SECONDS)
+        return data
+
+    def pump(self):
+        try:
+            while not self.stop.is_set():
+                n = struct.unpack('<I',self.read(4))[0]; require(12 < n <= LIMIT+8,'Teacher group frame bound')
+                data = self.read(n); index = struct.unpack('<I',data[:4])[0]
+                m = struct.unpack('<I',data[4:8])[0]; require(4 < m == n-8,'Teacher frame bound')
+                size = struct.unpack('<I',data[8:12])[0]; require(0 < size <= m-4,'Teacher metadata bound')
+                received = time.monotonic()
+                meta = json.loads(data[12:12+size])
+                with self.lock: table = self.tables.get(index)
+                require(table is not None,'Teacher group frame for an unknown table')
+                if meta.get('event') == 'thread':
+                    # The table's thread (Linux): pinned to its CPU, as a table process was.
+                    require(type(meta.get('tid')) is int and meta['tid'] > 0,'Invalid teacher table thread')
+                    if table.cpu is not None and hasattr(os, 'sched_setaffinity'):
+                        os.sched_setaffinity(meta['tid'], {table.cpu})
+                elif meta.get('event') == 'error':
+                    table.events.put(ValueError(f"Grouped teacher table {index} failed: {meta.get('error')}"))
+                else:
+                    table.events.put((meta,memoryview(data)[12+size:].toreadonly(),received))
+        except BaseException as error:
+            with self.lock: waiting = [t for i, t in self.tables.items() if i not in self.done]
+            for table in waiting: table.events.put(error)
+
+    def errors(self):
+        while part := self.process.stderr.read(4096):
+            if len(self.stderr) < 32768:self.stderr.extend(part[:32768-len(self.stderr)])
+
+    def table(self, request, cpu):
+        """Start one table on the group's process; its frames reach the returned table's queue."""
+        require(cpu is None or (type(cpu) is int and cpu >= 0), 'Invalid teacher table CPU')
+        with self.lock:
+            require(not self.inputs_closed and not self.closed, 'Teacher group closed')
+            index = self.count; self.count += 1
+            table = GroupTable(self, index, request, cpu); self.tables[index] = table
+        self.write(dict(table=index, cpu=cpu, request=request))
+        return table
+
+    def finish(self, index):
+        with self.lock: self.done.add(index)
+
+    def close(self, *, kill=False):
+        """No more tables. A clean group exits once its tables finish; a failed one is killed."""
+        if self.closed:return
+        self.closed = True
+        began = time.monotonic()
+        try:
+            if not self.inputs_closed:
+                self.inputs_closed = True
+                try:self.process.stdin.close()
+                except OSError:kill = True
+            if kill and self.process.poll() is None:self.process.kill()
+            try:self.process.wait(timeout=EXIT_GRACE_SECONDS)
+            except subprocess.TimeoutExpired:
+                self.process.kill();self.process.wait(timeout=EXIT_GRACE_SECONDS)
+            require(kill or self.process.returncode == 0,
+                    'Teacher group exited with '+str(self.process.returncode)+': '+self.stderr.decode(errors='replace'))
+        finally:
+            self.exit_seconds = time.monotonic()-began
+            self.stop.set()
+            self.reader.join(timeout=2);self.err_reader.join(timeout=2)
+            self.process.stderr.close()
+            if self.process.stdout is not None:self.process.stdout.close()
+            if self.spool is not None:self.spool.close()
+
+
+class GroupTable(Worker):
+    """One table of a TableGroup. Worker.collect reads its frames unchanged."""
+    def __init__(self, group, index, request, cpu=None):
+        self.group, self.index, self.cpu = group, index, cpu
+        self.client, self.cancel = None, group.cancel
+        self.job = request.get('job', {})
+        self.counted = request.get('inference', {}).get('budget', {}).get('mode') == 'count'
+        self.stream_turns = request.get('turn_handoff') == STREAM_TURNS
+        require(self.counted and self.stream_turns, 'Teacher groups run streamed CPU count tables only')
+        self.spool = None; self.process = group.process
+        self.events = queue.Queue(); self.stop = group.stop; self.stderr = group.stderr
+        self.reader, self.err_reader = group.reader, group.err_reader
+        self.exit_seconds = None
+
+    def send(self, value):
+        raise ValueError('A grouped teacher table takes no input after its request')
+
+    def close(self):
+        self.group.finish(self.index)
+        self.exit_seconds = 0.
+
+
 class TeacherCollector:
     """Explicit frozen-model collector used by the phase collection barrier.
 
@@ -320,7 +476,8 @@ class TeacherCollector:
     gated by B05/B07; this class is also the exact two-table qualification path.
     """
     def __init__(self, executable, core_source, bootstrap, service, calibration, *, lanes=2, cancel=None,
-                 model=None, history=(), inference=None, cores=(), core_plan=None, row_workers=0, parity_rows=None):
+                 model=None, history=(), inference=None, cores=(), core_plan=None, row_workers=0, parity_rows=None,
+                 group=False):
         self.executable, self.core_source, self.bootstrap = executable,core_source,bootstrap
         self.service, self.calibration = service, calibration
         require(type(lanes) is int and 1 <= lanes <= 256,'Invalid teacher lanes')
@@ -332,6 +489,7 @@ class TeacherCollector:
         # Helper processes for labelled-row validation and encoding (fixed-count CPU tables only).
         self.row_workers = row_workers
         self.parity_rows = parity_rows  # g3270: model-logit parity on this many rows per table
+        self.group = group  # g4288: streamed CPU count tables share one worker process (TableGroup)
         self.verifier = None
         self.failures = []
         self.finalization = {}
@@ -370,6 +528,8 @@ class TeacherCollector:
         defer_logits = (self.inference is not None and
                         self.inference['budget']['mode'] == 'count' and all(j.get('teacher_revision') for j in jobs))
         batcher = TableLogitBatcher(self.verifier, len(jobs), pending=2*count) if defer_logits else None
+        # g4288: streamed CPU count tables share one worker process and one prepacked copy of the weights.
+        group = TableGroup(self.executable, self.cancel) if defer_logits and getattr(self, 'group', False) else None
         began = time.monotonic()
         search_ended = 0.
         self.finalization = {}
@@ -432,7 +592,11 @@ class TeacherCollector:
                         if table_budget['mode'] == 'count':
                             request['turn_handoff'] = STREAM_TURNS
                     client = Client(endpoint,job['expected'],self.cancel,job.get('search_value'),job.get('seat_values'))
-                    worker = Worker(self.executable,request,client,self.cancel,cpu=getattr(endpoint,'cpu',None))
+                    if group is not None and request.get('turn_handoff') == STREAM_TURNS:
+                        # g4288: the table runs in the collection's shared worker process.
+                        worker = group.table(request,getattr(endpoint,'cpu',None))
+                    else:
+                        worker = Worker(self.executable,request,client,self.cancel,cpu=getattr(endpoint,'cpu',None))
                     result = worker.collect(job['expected'],self.core_source,verifier=self.verifier,
                                             **({'defer_logits': True} if defer_logits else {}))
                 with failure_lock:
@@ -493,9 +657,15 @@ class TeacherCollector:
                                          tables_published_seconds=time.monotonic()-began)
                 if row_pool is not None:
                     self.finalization['row_preparation'] = self.verifier.rows.report()
+                if group is not None:
+                    self.finalization['table_group'] = dict(tables=group.count, processes=1,
+                        scope='Tables in one worker process sharing one prepacked copy of the network weights')
             return results
         finally:
             close_errors = []
+            if group is not None:
+                try:group.close(kill=bool(first_failure) or self.cancel.is_set())
+                except BaseException as error:close_errors.append(error)
             for e in owned:
                 try:e.close()
                 except BaseException as error:close_errors.append(error)

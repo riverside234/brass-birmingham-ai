@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "25c6c3adbbede30848ab9d6611ff01978b694cf7879fa27dc987a231fc33b77b",
+  "execution_implementation": "535226dab77e7c3b9fc950d13ca99680e244fb99633d2b88d11defe810919dfb",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -286,7 +286,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow.py": {
       "before": null,
-      "after": "eee5f261659b007d1440b9d9e1ed551d1e03793a66f0ca889f8c4d431da327dd"
+      "after": "fbe228975ed33c41a8e70e83ad3fd2f58b96072b57202dd5495a1aab348df1cc"
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
@@ -298,7 +298,7 @@
     },
     "src/brass_ai/rust_backend/lab_teacher.py": {
       "before": "2fa41cbf32b1bdfb21e4f92c7a755119ea011e38a01727dd099352f7cb0a93fb",
-      "after": "577ad734f154a6e29953573003bcc78b3247e32de9770b7b0cc794ad9d7067d1"
+      "after": "850ac61b361e689fc08f0e5ea35df5b9d73f8d7d9a677aea970a94f7fbfbb19d"
     },
     "src/brass_ai/rust_backend/lab_teacher_activation.py": {
       "before": null,
@@ -338,7 +338,7 @@
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
-      "after": "0568d007a3afa4d5c3f334857ab1d30880a53414a8a74bdee69859a04b514030"
+      "after": "0af8792e65d7f8b4909983bcd64df7146e0e3e6b2e95c5406c6cdd89200822e8"
     },
     "scripts/qualify-rust-cpu-inference.py": {
       "before": "8637dea571eaf0351830870dd7c1904ff03d7ee95c4c55c24cdab9151bee044e",
@@ -350,7 +350,7 @@
     },
     "src/brass_ai/rust_backend/lab_cpu_overlay.py": {
       "before": "e7fa0229a185321c91a6dfbb9c513ae50800ac201544e9e0c12812fff204ef21",
-      "after": "ca3e9dd52627343e8072dc7106ca9b47e53140c1e9f0660049b09369ca6968cd"
+      "after": "8611b51b02978fdeb5b4de73257931d9a5c98609fcef1f99247a7724a529e356"
     },
     "src/brass_ai/rust_backend/lab_cpu_runtime.py": {
       "before": "71895897093679de776ad5a98a245f6dfca69a8ea7a0035ec7a310f0adb343c4",
@@ -390,7 +390,7 @@
     },
     "tests/RustBackendLab/test_cpu_inference.py": {
       "before": null,
-      "after": "0bec05bc9258b668471e4ab1819af2a6e78aa48e977ae7fa573752023affe590"
+      "after": "da4540a2d54b491912a409c6a926399a625ad5058f49c8367970de35b4942062"
     },
     "tests/RustBackendLab/test_cpu_qualification.py": {
       "before": "746a19f5f85f7026f1ef511603d1aa40a2d75dd3d28535bb75dd4df791f67b60",
@@ -1029,6 +1029,11 @@
       "implementation": "7f8399eaf569eb57cd7903339bd7dedad09e8d51a55921e7fc45d9e8d0521830",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "78150114632d49f3fa12d25506ce86dfd8244a237e1b185337f7a9f989d7e8e9"
+    },
+    {
+      "implementation": "25c6c3adbbede30848ab9d6611ff01978b694cf7879fa27dc987a231fc33b77b",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "ad15126ee3afe7c46951dc8182227712558c408748bc6fc9ebeeb69d2880ece9"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1406,6 +1411,10 @@
   },
   "g4138_teacher_search": {
     "scope": "--teacher-search-revision (training_revision_g4138, block teacher_search_revision, the user's request of 2026-11-20) at a committed boundary after the g3270 teacher revision: 44 train + 4 validation teacher tables every iteration (g3270 ran 36 + 4) and short teacher searches of 128 simulations at C_scale .6, K 8 (were 96 at .7); the long search (640, K 8, C_scale .2) is unchanged. The qualified teacher_phase, its g1491 marker and count_search are untouched, so the policy-label buffer identity, the long labels, beta and the soft head carry over. The CPU budget follows the recipe (search_profile: collector_runtime.validate_teacher_budget and table admission require fast 128, fast_k 8, fast_c_scale .6; C_scales and the CPU worker's budget parser accept .6). Search value: 48 of a value game's 64 roots are short searches and every return bootstraps from root search values, so the head trains only on games collected from adoption (rotated held-out games included), paused until eight such ages exist; the dedicated held-out check and the era heads' search tables keep every game. Recipe recognition peels the block (is_shadow) and signature_transition projects its adoption; pending work is archived. The continuation rebuilds the CPU teacher (lab-native-cpu cpu_eval.rs changed).",
+    "qualified_implementation_unchanged": true
+  },
+  "g4288_teacher_group": {
+    "scope": "Code-only, no recipe flag; searches, labels, value rows, search rows and every recorded output are unchanged. Fixed-count streamed CPU teacher tables share one worker process (lab_teacher.TableGroup; lab-native-cpu cpu_group.rs, teacher.rs split into run/run_request by a lab_cpu_overlay patch): each table runs the unchanged single-table teacher on its own thread, pinned by the trainer to its own CPU from the thread id it reports, with its own ONNX session; every session in the process is built on one loader thread that owns the process's prepacked-weights container (cpu_eval.shared_session), so all tables read one prepacked copy of the weights instead of 48 private 17 MB copies (about 440 GB/s of weight reads at g4287). One trainer reader thread tails the group's spool and routes tagged frames to each table's unchanged Worker.collect, in place of one polling reader per table. Exactness: a single table with the shared container equals the HEAD binary bit for bit; three grouped tables equal the same tables run alone on group threads; the lab's focused CPU regressions add test_grouped_tables_equal_single_tables (grouped against one process per table on Linux). BRASS_TEACHER_GROUP=0 restores one process per table. The teacher execution core and the sealed lab-native tree are unchanged; the CPU overlay fingerprint changes, so ensure_cpu rebuilds the workers.",
     "qualified_implementation_unchanged": true
   }
 }

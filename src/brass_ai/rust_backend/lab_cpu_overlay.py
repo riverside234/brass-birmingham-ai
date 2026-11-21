@@ -26,7 +26,8 @@ PATCHES = {
          '[dependencies]\n' + ORT + '\nbrass-ai-core = { path = "../native/brass-ai-core" }\n'),
     ),
     'src/lib.rs': (
-        ('pub mod scoring;\n', 'pub mod cpu_autoplay;\npub mod cpu_capture;\npub mod cpu_cotton;\npub mod cpu_eval;\npub mod scoring;\n'),
+        ('pub mod scoring;\n', 'pub mod cpu_autoplay;\npub mod cpu_capture;\npub mod cpu_cotton;\npub mod cpu_eval;\n'
+                              'pub mod cpu_group;\npub mod scoring;\n'),
         ('impl Lane {\n    pub fn new(',
          'impl Lane {\n'
          '    /// Tensors of the last `feature_arrays` call, for in-process inference.\n'
@@ -102,6 +103,21 @@ PATCHES = {
          '            "choice_ids":choices.iter().map(|x| &x.id).collect::<Vec<_>>(),"context":context}))\n'),
     ),
     'src/teacher.rs': (
+        # g4288: a group header runs several tables in one process (cpu_group.rs), each on
+        # its own thread with the unchanged single-table body below.
+        ('pub fn run() -> Result<()> {\n'
+         '    let mut input = io::stdin().lock();\n'
+         '    let output = io::stdout().lock();\n'
+         '    let request: Value = serde_json::from_slice(&read_frame(&mut input)?)?;\n',
+         'pub fn run() -> Result<()> {\n'
+         '    let mut input = io::stdin().lock();\n'
+         '    let request: Value = serde_json::from_slice(&read_frame(&mut input)?)?;\n'
+         '    if request["contract"] == crate::cpu_group::CONTRACT {\n'
+         '        return crate::cpu_group::run(input, run_request::<io::Empty, crate::cpu_group::Tagged>);\n'
+         '    }\n'
+         '    run_request(request, input, io::stdout().lock())\n'
+         '}\n\n'
+         'pub fn run_request<R: Read, W: Write>(request: Value, input: R, output: W) -> Result<()> {\n'),
         ('    let ack: Value = serde_json::from_slice(&read_frame(&mut peer.input)?)?;\n'
          '    let after = peer.clock.now_ns();\n'
          '    check(ack["job"] == peer.expected && ack["index"] == index && ack["status"] == "ok",\n'
@@ -359,5 +375,6 @@ def apply(directory, root=SOURCE_ROOT):
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_capture.rs', directory/'src/cpu_capture.rs')
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_eval.rs', directory/'src/cpu_eval.rs')
     shutil.copyfile(root/OVERLAY_DIR/'src/cpu_cotton.rs', directory/'src/cpu_cotton.rs')
+    shutil.copyfile(root/OVERLAY_DIR/'src/cpu_group.rs', directory/'src/cpu_group.rs')
     shutil.copyfile(root/OVERLAY_DIR/'Cargo.lock', directory/'Cargo.lock')
     return dict(contract=CONTRACT, source=fingerprint(root))

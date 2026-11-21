@@ -241,9 +241,12 @@ class ShadowCollector:
                     overlap=overlap and counted
                     if overlap:core_plan=CorePlan(cores)
                     from brass_ai.recovery.training_revision_g3270 import parity_rows
+                    from .lab_teacher import group_enabled
+                    # g4288: fixed-count tables share one worker process and one prepacked copy of the weights.
                     collector=TeacherCollector(plan['binary'],plan['core_source'],bootstrap,service,calibration,
                         lanes=lanes,model=model,history=state['history'],inference=plan['inference'],cores=cores,core_plan=core_plan,
-                        row_workers=row_workers,parity_rows=parity_rows(state['signature']['config']))
+                        row_workers=row_workers,parity_rows=parity_rows(state['signature']['config']),
+                        group=counted and group_enabled())
                     cpu_metrics=dict(receipt=plan['receipt'],budget=plan['inference']['budget'],
                         exported_bundles=plan['exported_bundles'],lanes=lanes,cores=len(cores),pinning=block['pinning'])
                 else:

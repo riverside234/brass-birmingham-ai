@@ -691,6 +691,69 @@ class NativeWorkers(unittest.TestCase):
         result = worker.collect(job['expected'], os.environ['BRASS_CPU_CORE'], verifier=verifier)
         return job, result, verifier
 
+    def test_grouped_tables_equal_single_tables(self):
+        """g4288: tables sharing one worker process (and one prepacked copy of the weights) equal tables alone.
+
+        Linux: against one process per table, each on its main thread. Windows: MinGW's runtime sets
+        the main thread's x87 precision differently from new threads, which moves a rare last digit of
+        exp-based values, so each table alone runs on a group thread there.
+        """
+        from brass_ai.rust_backend.lab_teacher import STREAM_TURNS, TableGroup, Worker, group_enabled
+        from brass_ai.rust_backend.lab_teacher_finalization import TurnVerifier
+        from brass_ai.rust_backend.lab_cpu_runtime import count_search_limits
+        from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
+        from brass_ai.recovery.search_value_config import adopt
+        from brass_ai.recovery.teacher_phase import plan_jobs
+        from brass_ai.rust_backend.lab_teacher_overlay import source_fingerprint
+        if not group_enabled(): self.skipTest('BRASS_TEACHER_GROUP=0 runs one process per table')
+        c = adopt(config()); c['teacher_phase']['mode'] = 'shadow'; c['teacher_phase']['search_value']['stage'] = 'B'
+        jobs, _ = plan_jobs(c, dict(iteration=10, search_value=dict(stage=dict(stage='B', w=0.))), model_id=self.identity,
+                            export_hash='a'*64, epoch=1, ready=True, native_source=source_fingerprint())
+        jobs = [j for j in jobs if j['split'] == 'train'][:2]
+        revision = G._job_block(dict(G.EXPLORATION, cotton=C.settings(contract=C.RETIMED_NETWORK_CONTRACT)),
+                                short_labels=False, search_head_weight=0, cotton_table=False)
+        for job in jobs:
+            job['readiness'] = dict(ready=True, reward_id=job['expected']['reward_id']); job['teacher_revision'] = revision
+        budget = dict(mode='count', full=64, fast=24, fast_k=8, **dict(G.G2600_SEARCH, fast_c_scale=.6))
+        state = json.loads((Path(os.environ['BRASS_CPU_NATIVE'])/'brass-ai-core/tests/data/initial-state.json').read_text())
+        def request(job):
+            return dict(self.teacher_request(job, state, budget), turn_handoff=STREAM_TURNS)
+        def exact(result):
+            timing = lambda k: k.endswith('_ns') or k in ('budget', 'overrun_seconds', 'deadline_hit', 'cpu_inference', 'turns')
+            strip = lambda v: ({k: strip(x) for k, x in v.items() if not timing(k)} if isinstance(v, dict) else
+                               [strip(x) for x in v] if isinstance(v, list) else v)
+            return json.dumps(dict(rows=strip(result['rows']), values=strip(result['value_rows']), result=result['result'],
+                                   spent=result['final_spent'], searches=strip(result['metrics']['searches']),
+                                   positions=result['metrics']['cpu_inference']['positions']), sort_keys=True)
+        def verifier(selected, cancel):
+            return TurnVerifier(self.model, [dict(generation=10, model_id=self.identity)], selected, cancel,
+                                search_limits=count_search_limits(dict(budget=budget)))
+        def grouped(selected):
+            cancel = threading.Event(); check = verifier(selected, cancel)
+            group = TableGroup(os.environ['BRASS_CPU_TEACHER'], cancel)
+            tables = [group.table(request(job), None) for job in selected]
+            results = [None] * len(selected); errors = []
+            def run(i):
+                try:results[i] = tables[i].collect(selected[i]['expected'], os.environ['BRASS_CPU_CORE'], verifier=check)
+                except BaseException as error:errors.append(error);cancel.set()
+            threads = [threading.Thread(target=run, args=(i,)) for i in range(len(selected))]
+            for thread in threads:thread.start()
+            for thread in threads:thread.join()
+            group.close(kill=bool(errors))
+            self.assertFalse(errors, errors)
+            self.assertEqual(group.process.returncode, 0)
+            return results
+        expected = []
+        for job in jobs:
+            if os.name == 'nt':
+                expected.append(exact(grouped([job])[0]))
+            else:
+                cancel = threading.Event()
+                expected.append(exact(Worker(os.environ['BRASS_CPU_TEACHER'], request(job), None, cancel).collect(
+                    job['expected'], os.environ['BRASS_CPU_CORE'], verifier=verifier([job], cancel))))
+        self.assertEqual([exact(r) for r in grouped(jobs)], expected,
+                         'Grouped teacher tables differ from one process per table; BRASS_TEACHER_GROUP=0 restores the latter')
+
     def test_streamed_turns_preserve_both_search_profiles_and_admitted_data(self):
         from brass_ai.recovery import teacher_cotton as C, training_revision_g1491 as G
         from brass_ai.step5.policy import cotton_seats

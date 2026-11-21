@@ -22,7 +22,7 @@ use brass_ai_core::{
     types::{Era, Phase},
 };
 use ort::{
-    session::{builder::GraphOptimizationLevel, Session},
+    session::{builder::{GraphOptimizationLevel, PrepackedWeights}, Session},
     tensor::TensorElementType,
     value::{TensorRef, ValueType},
 };
@@ -63,6 +63,64 @@ const MAX_MANIFEST: u64 = 1024 * 1024;
 const COUNT_CAP_PER_TRAJECTORY_NS: u64 = 60_000_000;
 
 static RUNTIME: OnceLock<std::result::Result<String, String>> = OnceLock::new();
+
+type Built = std::result::Result<Session, String>;
+type Loader = std::sync::mpsc::Sender<(Vec<u8>, std::sync::mpsc::Sender<Built>)>;
+static LOADER: OnceLock<std::sync::Mutex<Loader>> = OnceLock::new();
+
+/// g4288: every session is built on one thread that owns the process's prepacked-weights
+/// container, so all sessions in a process (cpu_group runs several tables per process) read
+/// one prepacked copy of the weights. Packing is deterministic: the shared packed matrix is
+/// exactly the one a session would have built for itself. The container lives as long as
+/// that thread, which is the life of the process.
+fn shared_session(bytes: Vec<u8>) -> Result<Session> {
+    let loader = LOADER.get_or_init(|| {
+        let (requests, inbox) = std::sync::mpsc::channel::<(Vec<u8>, std::sync::mpsc::Sender<Built>)>();
+        std::thread::Builder::new()
+            .name("cpu-session-loader".into())
+            .spawn(move || {
+                let weights = PrepackedWeights::new();
+                for (bytes, reply) in inbox {
+                    let _ = reply.send(build_session(&bytes, &weights).map_err(|e| e.to_string()));
+                }
+            })
+            .expect("CPU session loader thread");
+        std::sync::Mutex::new(requests)
+    });
+    let (reply, answer) = std::sync::mpsc::channel();
+    loader
+        .lock()
+        .map_err(|_| "CPU session loader poisoned")?
+        .send((bytes, reply))
+        .map_err(|_| "CPU session loader stopped")?;
+    let built = answer.recv().map_err(|_| "CPU session loader stopped")?;
+    Ok(built?)
+}
+
+fn build_session(bytes: &[u8], weights: &PrepackedWeights) -> Result<Session> {
+    Ok(Session::builder()
+        .map_err(ort_error)?
+        .with_prepacked_weights(weights)
+        .map_err(ort_error)?
+        .with_intra_threads(1)
+        .map_err(ort_error)?
+        .with_inter_threads(1)
+        .map_err(ort_error)?
+        .with_parallel_execution(false)
+        .map_err(ort_error)?
+        .with_intra_op_spinning(false)
+        .map_err(ort_error)?
+        .with_inter_op_spinning(false)
+        .map_err(ort_error)?
+        .with_optimization_level(GraphOptimizationLevel::Level3)
+        .map_err(ort_error)?
+        .with_config_entry("optimization.enable_gelu_approximation", "0")
+        .map_err(ort_error)?
+        .with_log_level(ort::logging::LogLevel::Error)
+        .map_err(ort_error)?
+        .commit_from_memory(bytes)
+        .map_err(ort_error)?)
+}
 
 fn ort_error(error: ort::Error) -> Box<dyn std::error::Error + Send + Sync> {
     format!("ONNX runtime: {error}").into()
@@ -164,27 +222,8 @@ impl Model {
             export_sha256 == text(&manifest, "export_sha256")?,
             "CPU bundle graph differs from its manifest",
         )?;
-        let session = Session::builder()
-            .map_err(ort_error)?
-            .with_intra_threads(1)
-            .map_err(ort_error)?
-            .with_inter_threads(1)
-            .map_err(ort_error)?
-            .with_parallel_execution(false)
-            .map_err(ort_error)?
-            .with_intra_op_spinning(false)
-            .map_err(ort_error)?
-            .with_inter_op_spinning(false)
-            .map_err(ort_error)?
-            .with_optimization_level(GraphOptimizationLevel::Level3)
-            .map_err(ort_error)?
-            .with_config_entry("optimization.enable_gelu_approximation", "0")
-            .map_err(ort_error)?
-            .with_log_level(ort::logging::LogLevel::Error)
-            .map_err(ort_error)?
-            .commit_from_memory(&bytes)
-            .map_err(ort_error)?;
-        drop(bytes);
+        // g4288: built on the loader thread, sharing the process's prepacked weights.
+        let session = shared_session(bytes)?;
         let has_delta = validate_session(&session, &manifest)?;
         let max_cost = manifest["max_cost"]
             .as_f64()

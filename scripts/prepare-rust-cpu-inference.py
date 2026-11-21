@@ -112,6 +112,8 @@ def regressions(out,*,teacher,collector,runtime,fixtures,core,native,focused=Fal
     with (out/'regressions.log').open('w') as log:
         cases=(['test_teacher_cotton','test_training_revision_g1491','test_cpu_inference.Overlay',
                 'test_cpu_inference.NativeWorkers.test_retuned_budget_reaches_long_search_and_its_labels',
+                # g4288: grouped tables (one process, shared prepacked weights) equal one process per table.
+                'test_cpu_inference.NativeWorkers.test_grouped_tables_equal_single_tables',
                 'test_ordinary_autoplay']
                if focused else ['test_cpu_inference','test_teacher_cotton','test_ordinary_autoplay'])
         subprocess.run([sys.executable,'-B','-m','unittest',*cases,'-v'],cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=180 if focused else 900)
