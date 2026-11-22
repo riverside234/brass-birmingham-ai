@@ -59,9 +59,10 @@ def binding(job, producer, *, generation, model_id, config, scope='ordinary'):
             and proof['spec'] == producer['signature'] and proof['learner_behavior']['model_id'] == model_id,
             'Frozen ordinary job/signature/learner differs')
     from brass_ai.recovery import ordinary_cotton
-    cotton = (ordinary_cotton.planned_assignment(config['table_plan'][ordinary_cotton.KEY],
-                                                proof['ordinary_game_index'], job['sampling_seed'])
-              if ordinary_cotton.enabled(config) and proof['kind'] == 'selfplay' else None)
+    # g4551: no self-play cotton seats once the table revision is adopted.
+    settings = ordinary_cotton.selfplay_settings(config)
+    cotton = (ordinary_cotton.planned_assignment(settings, proof['ordinary_game_index'], job['sampling_seed'])
+              if settings is not None and proof['kind'] == 'selfplay' else None)
     require(proof.get(ordinary_cotton.KEY) == cotton and (cotton is None or
             (proof['sampling_seed'] == job['sampling_seed'] and not job.get('branching') and
              all(p.get('exploration_version') == 3 and

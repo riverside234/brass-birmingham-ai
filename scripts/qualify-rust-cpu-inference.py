@@ -483,7 +483,9 @@ def bundles(c):
             c.service.register_checkpoint(path)
     registered = time.perf_counter()-began
     began = time.perf_counter()
-    receipts, exported = ensure(ROOT, c.service.models, list(entries))
+    # The full bundles: this qualification also checks the search head's blend (g4551 training workers load the
+    # head-less ones unless a teacher table blends the head).
+    receipts, exported = ensure(ROOT, c.service.models, list(entries), search_delta=True)
     seconds = time.perf_counter()-began
     models = {}
     worst = 0.

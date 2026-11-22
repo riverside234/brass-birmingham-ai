@@ -708,6 +708,11 @@ def validate_config(config):
     if TEACHER_TRAINING in config:
         require(TEACHER_REVISION in config,'The g4475 teacher training revision needs the g3270 teacher revision')
         fields.add(TEACHER_TRAINING);validate_teacher_training(config[TEACHER_TRAINING])
+    from .training_revision_g4551 import KEY as TABLE_REVISION,validate as validate_table_revision
+    if TABLE_REVISION in config:
+        require(TEACHER_SEARCH in config and TEACHER_TRAINING in config,
+                'The g4551 table revision needs the g4138 and g4475 teacher revisions')
+        fields.add(TABLE_REVISION);validate_table_revision(config[TABLE_REVISION])
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

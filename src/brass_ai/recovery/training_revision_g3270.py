@@ -126,16 +126,21 @@ def phase_options(config, options):
     result = copy.deepcopy(options)
     result['tables'] = tables(config)
     result['buffer'] = copy.deepcopy(SETTINGS['buffer'])
-    # g4475: 160 rows per PPO step once the teacher training revision is adopted (training_revision_g4475).
+    # g4475: 160 rows per PPO step once the teacher training revision is adopted (training_revision_g4475);
+    # g4551: 176 once the table revision is adopted (training_revision_g4551).
     from .training_revision_g4475 import rows_per_step as g4475_rows
-    result['term'] = dict(result['term'], rows_per_step=g4475_rows(config) or SETTINGS['rows_per_step'])
+    from .training_revision_g4551 import rows_per_step as g4551_rows
+    result['term'] = dict(result['term'], rows_per_step=g4551_rows(config) or g4475_rows(config) or SETTINGS['rows_per_step'])
     return result
 
 
 def tables(config):
-    # g4138: 44 + 4 tables once the teacher search revision is adopted (training_revision_g4138).
+    # g4138: 44 + 4 tables once the teacher search revision is adopted (training_revision_g4138);
+    # g4551: 50 + 4 once the table revision is adopted (training_revision_g4551).
     from .training_revision_g4138 import tables as g4138_tables
-    t = (g4138_tables(config) or SETTINGS['tables']) if applied(config) else config['teacher_phase']['tables']
+    from .training_revision_g4551 import tables as g4551_tables
+    t = ((g4551_tables(config) or g4138_tables(config) or SETTINGS['tables']) if applied(config)
+         else config['teacher_phase']['tables'])
     return dict(train=t['train'], held_out=t['held_out'])
 
 

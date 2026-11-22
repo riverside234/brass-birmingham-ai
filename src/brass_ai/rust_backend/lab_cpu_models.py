@@ -4,6 +4,13 @@ Uses the local game's export pipeline (exact GELU, opset 17, parity at the same
 six shapes). A model with a search head gains one output, ``search_delta_4``,
 so workers can blend it exactly as the GPU path does. Weights are never changed.
 
+g4551: only a teacher table that blends the head (w > 0) reads that output, and
+ONNX Runtime runs every node of a graph whatever outputs a caller fetches. Every
+other worker (ordinary games, ratings, teacher tables at w = 0) therefore loads
+the model's head-less bundle, ``<model_id>-main``: the same export without the
+search head, whose five outputs are the same forward. A model with no search head
+has one bundle, which serves both.
+
 League anchors such as the imitation-learning model have no utility head. Their
 bundle carries an all-zero utility output so every bundle has one shape, and its
 manifest records ``utility=false`` so evaluators omit that field as the GPU does.
@@ -25,10 +32,34 @@ DIRECTORY = 'artifacts/rust-backend/cpu-bundles'
 RETAINED = 128
 SEARCH_DELTA = 'search_delta_4'
 NO_REWARD = ''
+MAIN = '-main'  # suffix of a head-less bundle of a model that has a search head
 
 
 def bundle_root(root):
     return Path(root)/DIRECTORY
+
+
+def _manifest(directory):
+    path = Path(directory)/'manifest.json'
+    return json.loads(path.read_text(encoding='utf-8')) if path.is_file() else None
+
+
+def bundle_directory(base, identity, search_delta):
+    """Where the bundle a worker loads sits: the full export, or the head-less one when no blend reads the head.
+
+    A full bundle without the head output (a model with no search head) serves both."""
+    full = Path(base)/identity
+    if search_delta:
+        return full
+    manifest = _manifest(full)
+    return full if manifest is not None and manifest.get('search_delta') is False else Path(base)/(identity+MAIN)
+
+
+def needs_search_delta(jobs):
+    """True when some teacher job blends the search head (w > 0) for any seat."""
+    def blends(value):
+        return value is not None and value['w'] > 0
+    return any(blends(job.get('search_value')) or any(blends(v) for v in job.get('seat_values') or ()) for job in jobs)
 
 
 def _graph(model, head, utility, torch):
@@ -61,8 +92,12 @@ def _manifest_receipt(directory):
     return dict(manifest=str(path.resolve()), sha256=sha(path))
 
 
-def export_bundle(model, destination):
-    """Publish one bundle atomically; a concurrent identical export may win."""
+def export_bundle(model, destination, *, search_delta=True):
+    """Publish one bundle atomically; a concurrent identical export may win.
+
+    ``search_delta=False`` leaves the search head out of the graph (its output and every node only it
+    reads), for workers that never blend it. The other five outputs are the same forward.
+    """
     import numpy as np
     import onnx
     import onnxruntime as ort
@@ -81,7 +116,8 @@ def export_bundle(model, destination):
     partial = destination.with_name(destination.name+'.'+uuid.uuid4().hex+'.partial')
     partial.mkdir(parents=True)
     try:
-        head = hasattr(model, 'search_value_head')
+        require(type(search_delta) is bool, 'Invalid search_delta choice')
+        head = search_delta and hasattr(model, 'search_value_head')
         outputs = BASE_OUTPUTS+([SEARCH_DELTA] if head else [])
         config = model.config.to_dict()
         utility = config.get('utility') is not None
@@ -142,37 +178,43 @@ def export_bundle(model, destination):
     return manifest
 
 
-def bundle_ready(root, identity):
-    return (bundle_root(root)/identity/'manifest.json').is_file()
+def bundle_ready(root, identity, *, search_delta=False):
+    return (bundle_directory(bundle_root(root), identity, search_delta)/'manifest.json').is_file()
 
 
-def ensure(root, models, identities, *, materialize=None):
+def ensure(root, models, identities, *, materialize=None, search_delta=False):
     """Return ``{model_id: {manifest, sha256}}``, exporting anything missing.
 
     ``materialize`` loads a checkpoint whose load was deferred, for a model
-    whose bundle turns out to be gone.
+    whose bundle turns out to be gone. ``search_delta`` selects the full bundles
+    (a teacher table that blends the search head); otherwise every model's bundle
+    is head-less.
     """
+    require(type(search_delta) is bool, 'Invalid search_delta choice')
     base = bundle_root(root)
     base.mkdir(parents=True, exist_ok=True)
     wanted = sorted(set(identities))
     require(wanted, 'CPU inference needs at least one frozen model')
     result = {}
+    kept = set()
     exported = 0
     for identity in wanted:
-        directory = base/identity
+        directory = bundle_directory(base, identity, search_delta)
         if not (directory/'manifest.json').is_file():
             if materialize is not None:
                 materialize(identity)
             require(identity in models, 'Unregistered model cannot be exported for CPU inference')
-            manifest = export_bundle(models[identity], directory)
+            manifest = export_bundle(models[identity], directory, search_delta=search_delta)
             require(manifest['model_id'] == identity, 'CPU bundle model identity differs')
             exported += 1
         receipt = _manifest_receipt(directory)
         value = json.loads((directory/'manifest.json').read_text(encoding='utf-8'))
         require(value['contract'] == CONTRACT and value['model_id'] == identity, 'Foreign CPU bundle')
+        require(search_delta or value['search_delta'] is False, 'A head-less CPU bundle carries the search head')
         os.utime(directory/'manifest.json')
         result[identity] = receipt
-    prune(base, set(wanted))
+        kept.add(directory.name)
+    prune(base, kept)
     return result, exported
 
 

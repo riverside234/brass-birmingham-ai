@@ -82,7 +82,7 @@ def plan_collection(root,directory,state,config,signature,service,current,profil
         verify_pool_checkpoints(root,state['quality_pool']['members'],verified_snapshots)
     v4_in_history=v4_history.active(state.get('quality_pool'))
     from .training_revision_g1041 import mixed,exposure
-    cotton = config['table_plan'].get(ordinary_cotton.KEY)
+    cotton = ordinary_cotton.selfplay_settings(config)  # g4551: None when every self-play table is standard
     if mixed(config):
         require(v4_in_history and config['table_plan']['origin_games']<=state['games_done'],
             '70/30 collection requires committed v4 retirement and mix origin')
@@ -265,7 +265,7 @@ def sampling_report(games,data,policy_id,kinds,config,*,legacy_profiles=None):
             exploration_versions=dict(Counter(str(d[0]['behavior'].get('exploration_version',2)) for d in data)),
             observed_temperatures=dict(Counter(str(d[0]['behavior'].get('temperature',1.)) for d in data))),
         scope='Actual completed tables and learner seats; forced decisions are critic-only. Table fractions do not define PPO sample fractions.')
-    if ordinary_cotton.enabled(config):
+    if ordinary_cotton.selfplay_settings(config) is not None:
         counts = Counter(len(g.get('_cotton_seats', ())) for g in games if kinds[g['setup_group']] == 'selfplay')
         report['selfplay_exploration'] = dict(standard_tables=counts[0], cotton_tables=counts[1]+counts[2],
             one_cotton_seat_tables=counts[1], two_cotton_seat_tables=counts[2])

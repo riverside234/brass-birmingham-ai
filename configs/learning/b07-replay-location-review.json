@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "ca3ea6e9715e3b7a1d9fecb3b5052c04a83b97ed8bef8c35194750e2a076916d",
+  "execution_implementation": "7e52ba1d71db2119d1e12c6bdb76cd6266372b4a39d8ef4f5b18446f8e828429",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -70,11 +70,11 @@
     },
     "src/brass_ai/recovery/collector_runtime.py": {
       "before": null,
-      "after": "a66924c500eecfe9411652b26fd842e7167ee062f1216143b9bc29b8592c76b5"
+      "after": "0539120b14fc714c0d08fe22ac26c30a866a0d8d7d228be1d159d442f24d171d"
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
-      "after": "98bf57c748ca5dea94780cc2b9da13f2728d3689f1a5882b168ca6fe41a4b483"
+      "after": "181e24ac08f631715a233ef1efbb263abd742fa2d83ebc963414a1e72f7e17ac"
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
@@ -118,7 +118,7 @@
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
-      "after": "75b7c3e2760dd5bd635eebca6e92e909f0ef16e912f2fac04084dceaed37506b"
+      "after": "1562e576ca82f1177e841fed8a6b2a441c687c46e06c5dc939768adb4b9e932a"
     },
     "src/brass_ai/recovery/ppg_cache_writer.py": {
       "before": null,
@@ -230,7 +230,7 @@
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
-      "after": "497548db5d4cf7be5ec2258a45d6cd9cd5aa3f3e1fa7ce363e73e085f1e0717b"
+      "after": "4b8a033bcb3efe9634e726d156d5f8ccc945be06ac9134ce1540211a35409150"
     },
     "src/brass_ai/rust_backend/lab_backend.py": {
       "before": "8e6496a7e67371bb9f5898e1dde864731f49a60062768ab66773ec4e5a9749d3",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "f05ae99b976798248ba31996261504ed865e4c46ec56d2f2e99e3e7983dd05a1"
+      "after": "5696cbee737338b6fdb152f64f0f209db5a4ab63c5fad0c94aa2e4bad93fbab4"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "03bec48a0c93f8292162c2fdde54e0c1ffd1037117dbd4bcb053341b65ffc7ef"
+      "after": "9e60ddfab8ae595a6edc29fe02b5afee6fce4eeeedb22f642dd4519756fcd4fb"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -342,7 +342,7 @@
     },
     "scripts/qualify-rust-cpu-inference.py": {
       "before": "8637dea571eaf0351830870dd7c1904ff03d7ee95c4c55c24cdab9151bee044e",
-      "after": "2047321988976f6e52bb73600607598d579db829b326f74b8950e38565dbc685"
+      "after": "8f1a2d06f236f0a1173794b5253d4483a89007313df479bdc9080677ccf0575d"
     },
     "src/brass_ai/recovery/training_revision_g1491.py": {
       "before": "5c6caf54055c00bc4ef2c06a33bfc651b1f82d37dcb9351bb71f997920fb832e",
@@ -354,7 +354,7 @@
     },
     "src/brass_ai/rust_backend/lab_cpu_runtime.py": {
       "before": "71895897093679de776ad5a98a245f6dfca69a8ea7a0035ec7a310f0adb343c4",
-      "after": "14f260f06efb6a01255f1124795cd04ca0cfcab3d2f70dd0711afadd6f683669"
+      "after": "a32669f9fe7dbcec2a94b1f5e2e629c7ef0cbb01ce7779a25fe2a5ba41652c5a"
     },
     "tests/Recovery/test_training_revision_g1491.py": {
       "before": "4f474254a5884adf988a508252425aef17e32debf681dc8992718dc7e40e0f44",
@@ -382,7 +382,7 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "863a0e3237481b751dd985e5d09984431bbab82727a2c64fab06c56c8d48ff9e"
+      "after": "0bf86eb9f24c00879e705017f400320cffce9239e9271c6e429e5dd0f86bdf75"
     },
     "tests/RustBackendLab/test_collection_overlap.py": {
       "before": null,
@@ -390,7 +390,7 @@
     },
     "tests/RustBackendLab/test_cpu_inference.py": {
       "before": null,
-      "after": "da4540a2d54b491912a409c6a926399a625ad5058f49c8367970de35b4942062"
+      "after": "7bfac8b013d12c1ba124f46050418b148c1d7154c1197bd6b87bbeeacb57f978"
     },
     "tests/RustBackendLab/test_cpu_qualification.py": {
       "before": "746a19f5f85f7026f1ef511603d1aa40a2d75dd3d28535bb75dd4df791f67b60",
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "d169e785ea684d67726e4a22ec29f55d414f1ee85a467c645a82cbf9a174b1e7"
+      "after": "0782318ed0f819f013bbe84454f6e244f4d302581532f744e0e72de943782efb"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -502,7 +502,7 @@
     },
     "tests/Recovery/test_training_speedups.py": {
       "before": null,
-      "after": "5f25d092ba448789d7c374768960bd8d9f455055f7912f3647362b0bb3513b9d"
+      "after": "5897055d788d7feab17dbf0a9fdcc713378bbc951cb506b4bbd94d44edbfb573"
     },
     "tests/RustBackendLab/test_value_work_optimization.py": {
       "before": null,
@@ -562,7 +562,7 @@
     },
     "src/brass_ai/recovery/ordinary_cotton.py": {
       "before": null,
-      "after": "463a2bdda57d5109910fb6eefcbcda02b51f26a9b8ac29627b97d87f459c74d4"
+      "after": "6f1a733e4d34d0b6d95fdfd6a315ac2a42cf314f1375f927a7a4c9e4f2230d58"
     },
     "tests/Recovery/test_ordinary_cotton.py": {
       "before": null,
@@ -582,7 +582,7 @@
     },
     "src/brass_ai/recovery/training_revision_g3270.py": {
       "before": null,
-      "after": "04b10df9bb47dee880b2e5d50042b97ea4ff810969b761f78b923a7b1961f54d"
+      "after": "756fa14e9f7b6869fc90f50326e1129490303ac5e26ddf9dbd256d41768f67eb"
     },
     "src/brass_ai/recovery/collection_gc.py": {
       "before": null,
@@ -715,6 +715,18 @@
     "tests/Recovery/test_teacher_training_g4475.py": {
       "before": null,
       "after": "c5348488cbf8c925a5a41377d304c859befce88b372cdfcc76ce66e517bc9af5"
+    },
+    "src/brass_ai/recovery/training_revision_g4551.py": {
+      "before": null,
+      "after": "3b37d8e0c77c6b87c6407f01ecf7d8f387465b281d67d5685e0e043141bf0282"
+    },
+    "src/brass_ai/rust_backend/lab_cpu_models.py": {
+      "before": "e4e613d083b64a04ee8b6d5b7feb8db86bdd5c8f4d35a0d5c701d0d5a08a23ad",
+      "after": "31a573e38d7de0a7a20278cc24ea2a7d685c7725a5a98e5b0e01a862f95e4885"
+    },
+    "tests/Recovery/test_table_revision_g4551.py": {
+      "before": null,
+      "after": "eab00e148b09d7cb8319784b6934015c018af73e4c503198002e117bbbedae02"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -1055,6 +1067,11 @@
       "implementation": "535226dab77e7c3b9fc950d13ca99680e244fb99633d2b88d11defe810919dfb",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "42c77ec5b33be1ce1f4597ee0bb42b751acdfa1f16271143c53d8d1522e2ae29"
+    },
+    {
+      "implementation": "ca3ea6e9715e3b7a1d9fecb3b5052c04a83b97ed8bef8c35194750e2a076916d",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "13d8969ef689eab6fabeaf3e9ed4dc32af46003b47a67c6d2c632c5f0870e19f"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1440,6 +1457,18 @@
   },
   "g4475_teacher_training": {
     "scope": "Recipe revision --teacher-training-revision (training_revision_g4475, top-level block teacher_training_revision), adopted once at a committed boundary, trainer-only: the teacher term draws 160 label rows per PPO step (was 128; g3270.phase_options), still without repeats and width-grouped, and the soft head trains on the same rows; the search-value head's training is paused (no post-PPG pass, no head or trunk steps, no guarded probes, no held-out predictions, no stage advance; head, Adam, stage and lambda kept) while the tables still publish their search-value shards, aged-out shards still retire (ValueBuffer.retire, the same rule buffer.rows applied) and the era heads keep training on the search tables (search-aux 2.0.0, same pool and held-out set). Code-only in the same change: the soft held-out check runs once more after the PPO update and before PPG (teacher_phase.after_ppo; heldout.soft.after_ppo, ppo_delta, ppg_delta, and the policy's heldout.after_ppo from the same forwards), measurement only: no gradients, RNG forked, train mode restored. The collection, CPU teacher jobs and every table output are unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "g4551_table_revision": {
+    "scope": "Recipe revision --table-revision (training_revision_g4551, top-level block table_revision), adopted once at a committed boundary: every PPO self-play table is a standard game (ordinary_cotton.selfplay_settings returns None, so the planner assigns no self-play cotton seats and the admission audit refuses one; the committed table_plan block, the 70/30 mix and every table's seeds and policies are unchanged); the teacher's cotton tables are unchanged (teacher_phase g3528 rule, 3/20 of the train tables, one held-out table); 50+4 teacher tables every iteration (was 44+4; g3270.tables), each holding one of the 64 CPU lanes; 176 teacher label rows per PPO step (was 160; g3270.phase_options), drawn without repeats and width-grouped as before, the soft head on the same rows and the adaptive beta carried over. The qualified teacher_phase, its label buffer identity, the search profile and the paused search-value head are unchanged. It changes the collection, so pending work is archived at adoption.",
+    "qualified_implementation_unchanged": true
+  },
+  "g4551_headless_cpu_bundles": {
+    "scope": "Code-only: CPU workers load a model's bundle without the search head (<model_id>-main: the same export with search_delta=False, whose five outputs are bit-identical to the full graph's) unless a teacher table blends the head (any job or seat binding with w > 0; lab_cpu_models.needs_search_delta). ONNX Runtime runs every node of a graph whatever outputs are fetched, so at w = 0 the teacher tables, ordinary games and ratings no longer compute search_delta_4. A model with no search head keeps one bundle. Rust workers and the teacher job fingerprint are unchanged; the CPU qualification script keeps the full bundles.",
+    "qualified_implementation_unchanged": true
+  },
+  "g4551_cpu_worker_cap": {
+    "scope": "Code-only: collector_runtime.MAX_WORKERS = 64; validate_cpu and the continuation's --workers refuse more than 64 CPU lanes (the lab trainer's logical CPUs). Teacher tables and ordinary lanes share those lanes.",
     "qualified_implementation_unchanged": true
   }
 }

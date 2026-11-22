@@ -198,6 +198,16 @@ teacher training revision (ai-research/G4475_TEACHER_TRAINING.md); set once, the
                training on the search tables with the same pool and held-out set.
 Code-only in the same change: the soft held-out check also runs once after PPO, before PPG
 (teacher_phase.heldout.soft.after_ppo, ppo_delta and ppg_delta).
+
+--table-revision (at a committed boundary, after --teacher-search-revision and
+--teacher-training-revision) adopts the g4551 table revision (ai-research/G4551_TABLE_REVISION.md);
+set once, then kept:
+  self-play    every PPO self-play table is a standard game (no ordinary cotton seats); the
+               teacher's cotton tables stay as they are.
+  tables       50+4 teacher tables every iteration (was 44+4), one CPU lane each of the 64.
+  rows         176 teacher label rows per PPO step (was 160); the adaptive beta carries over.
+Code-only in the same change: CPU workers load each model's bundle without the search head unless
+a teacher table blends it (w > 0), and --workers is capped at 64.
 """
 import importlib.util
 from pathlib import Path

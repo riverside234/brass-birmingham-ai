@@ -288,10 +288,10 @@ class BundleFallback(unittest.TestCase):
             models = {}
             def materialize(identity):
                 models[identity] = 'loaded-model'
-            def export(model, directory):
+            def export(model, directory, search_delta=True):
                 self.assertEqual(model, 'loaded-model')
                 directory.mkdir(parents=True)
-                value = dict(contract=M.CONTRACT, model_id='m')
+                value = dict(contract=M.CONTRACT, model_id='m', search_delta=False)
                 (directory/'manifest.json').write_text(json.dumps(value), encoding='utf-8')
                 return value
             with mock.patch.object(M, 'export_bundle', export):

@@ -19,6 +19,8 @@ DEFAULT_C_SCALE = .1
 C_SCALES = (DEFAULT_C_SCALE, .15, .2, .5, .6, .7, 1.)  # .6: the g4138 short search
 FULL_K = (8, 16)
 TEACHER_BUDGET = dict(mode='count', full=640, full_k=16, fast=96, fast_k=8, c_scale=DEFAULT_C_SCALE)
+# g4551: at most 64 CPU lanes, one per logical CPU the lab trainer sees. Teacher tables and ordinary lanes share them.
+MAX_WORKERS = 64
 _current = None
 
 
@@ -50,7 +52,7 @@ def validate_cpu(block):
     require(type(block) is dict and set(block) in (_RECORDED_BLOCK, set(cpu_block())) and block['contract'] == CPU_CONTRACT and
             all(block[k] in ('cpu-ort', 'gpu') for k in ('ordinary', 'teacher', 'rating')) and
             block['pinning'] in ('one-lane-per-cpu', 'none') and
-            type(block['workers']) is int and 1 <= block['workers'] <= 256 and
+            type(block['workers']) is int and 1 <= block['workers'] <= MAX_WORKERS and
             type(block['model_cache']) is int and 4 <= block['model_cache'] <= 64 and
             type(block.get('overlap', False)) is bool and
             type(block.get('readers', 16)) is int and 1 <= block.get('readers', 16) <= 64, 'Invalid native_inference block')

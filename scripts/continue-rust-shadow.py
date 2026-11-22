@@ -62,6 +62,14 @@ def share_target_arg(text):
     return value
 
 
+def workers_arg(text):
+    from brass_ai.recovery.collector_runtime import MAX_WORKERS
+    try:value=int(text)
+    except ValueError:raise argparse.ArgumentTypeError('workers must be an integer')
+    if not 1<=value<=MAX_WORKERS:raise argparse.ArgumentTypeError(f'workers must be between 1 and {MAX_WORKERS}')
+    return value
+
+
 def inference_choice(args):
     """Parse --inference: keep the recorded choice, or select CPU/GPU explicitly."""
     if args.inference=='keep':return 'keep'
@@ -82,7 +90,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
             teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None,teacher_search_revision=False,
-            teacher_training_revision=False):
+            teacher_training_revision=False,table_revision=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -200,6 +208,11 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             # 160 teacher rows per PPO step, search-value head paused (era heads keep the search tables); then kept.
             require(mode=='on','The g4475 teacher training revision is adopted with teaching on')
             config=g4475.configure(config,state['iteration'])
+        from brass_ai.recovery import training_revision_g4551 as g4551
+        if table_revision:
+            # Standard PPO self-play tables (teacher cotton kept), 50+4 teacher tables, 176 teacher rows per PPO step.
+            require(mode=='on','The g4551 table revision is adopted with teaching on')
+            config=g4551.configure(config,state['iteration'])
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -324,12 +337,15 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-'+g4138.tag(config)+'-share');stages.append(prefix)
         if g4475.applied(config):
             prefix=prefix.replace('-share', '-'+g4475.tag(config)+'-share');stages.append(prefix)
+        if g4551.applied(config):
+            prefix=prefix.replace('-share', '-'+g4551.tag(config)+'-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
         adopting_floor=g3658.applied(config) and not g3658.applied(before)
         adopting_search=g4138.applied(config) and not g4138.applied(before)
         adopting_training=g4475.applied(config) and not g4475.applied(before)
+        adopting_tables=g4551.applied(config) and not g4551.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
@@ -337,7 +353,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                          g3528.applied(config) and not g3528.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
                          g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor or adopting_search or
-                         adopting_training)
+                         adopting_training or adopting_tables)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -364,6 +380,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 from brass_ai.recovery.retention import safe
                 journal=('teacher-revision' if adopting_teacher else 'teacher-search-revision' if adopting_search else
                          'teacher-training-revision' if adopting_training else
+                         'table-revision' if adopting_tables else
                          'soft-policy' if adopting_soft else
                          'value-revision' if g3140.changed(before,config) else 'ppg-beta-floor' if adopting_floor else
                          'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
@@ -406,7 +423,8 @@ def parser(*,default_mode='shadow',default_stage_revision=False,workers=64,teach
     p.add_argument('--device',default='cuda');p.add_argument('--mono',default='mono')
     p.add_argument('--inference',choices=('keep','cpu','gpu'),default=inference,
         help='cpu: in-worker ONNX Runtime for search, ordinary and rating lanes; gpu: original service; keep: last recorded choice')
-    p.add_argument('--workers',type=int,default=workers,help='CPU lanes; each owns one logical CPU')
+    p.add_argument('--workers',type=workers_arg,default=workers,
+        help='CPU lanes; each owns one logical CPU (at most 64, the CPUs the lab trainer sees)')
     p.add_argument('--teacher-budget',choices=('count','timed'),default='count',help='Teacher search budget on the CPU path')
     p.add_argument('--teacher-full',type=int,default=640,help='Trajectories per full teacher search')
     p.add_argument('--teacher-fast',type=int,default=teacher_fast,help='Trajectories per quick teacher search')
@@ -466,6 +484,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'ppg_beta_floor',None) is not None:kwargs['ppg_beta_floor']=args.ppg_beta_floor
         if getattr(args,'teacher_search_revision',False):kwargs['teacher_search_revision']=True
         if getattr(args,'teacher_training_revision',False):kwargs['teacher_training_revision']=True
+        if getattr(args,'table_revision',False):kwargs['table_revision']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -505,9 +524,12 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
             print(f'{opening_scope} opening temperature {opening["temperature"]:g} for the first '
                   f'{opening["action_decisions_per_seat"]} actions per seat. PPO cotton targeting {cotton["probability"]:.0%}.', flush=True)
             if g1491.cotton_only(options):
+                from brass_ai.recovery.ordinary_cotton import selfplay_settings
                 fraction=g1491.cotton_settings(options)['table_fraction']
-                print(f'Teacher cotton tables {fraction:.0%}; normal teacher sampling off. '
-                      f'PPO cotton self-play {cotton["cotton_selfplay"]}% of all PPO tables.', flush=True)
+                # g4551: every PPO self-play table is standard; the teacher cotton tables stay.
+                selfplay=(f'PPO cotton self-play {cotton["cotton_selfplay"]}% of all PPO tables.'
+                          if selfplay_settings(options) is not None else 'PPO cotton self-play off (all self-play tables standard).')
+                print(f'Teacher cotton tables {fraction:.0%}; normal teacher sampling off. '+selfplay, flush=True)
         from brass_ai.learning.post_transfer_reward import is_revised
         if is_revised(options):
             r=options['reward'];cost=options['insolvency']
@@ -585,6 +607,13 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
             print(f"g4475 teacher training revision (from g{r['from_generation']}): {r['rows_per_step']} teacher label rows "
                   f"per PPO step; the search-value head's training is paused (head, Adam and stage kept); the search "
                   f"tables still publish their value shards and train the era heads.",flush=True)
+        from brass_ai.recovery import training_revision_g4551 as g4551
+        if g4551.applied(options):
+            report['g4551_table_revision']=g4551.summary(options)
+            r=report['g4551_table_revision']
+            print(f"g4551 table revision (from g{r['from_generation']}): every PPO self-play table is a standard game "
+                  f"(teacher cotton tables kept); {r['tables']['train']}+{r['tables']['held_out']} teacher tables every "
+                  f"iteration; {r['rows_per_step']} teacher label rows per PPO step.",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

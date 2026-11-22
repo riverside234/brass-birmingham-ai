@@ -162,6 +162,10 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'PPO step (was 128), and the search-value head\'s training paused (no post-PPG pass, no stage '
              'advance; head, Adam and stage kept). Search tables still publish their value shards and train the '
              'era heads. Trainer-only; set once (training_revision_g4475).')
+    parser.add_argument('--table-revision', action='store_true',
+        help='Adopt the g4551 table revision at this committed generation: every PPO self-play table is a standard '
+             'game (the teacher cotton tables stay), 50+4 teacher tables every iteration (was 44+4) and 176 teacher '
+             'label rows per PPO step (was 160). Set once (training_revision_g4551).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -232,6 +236,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.ppg_beta_floor = None
         recovery.teacher_search_revision = False
         recovery.teacher_training_revision = False
+        recovery.table_revision = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

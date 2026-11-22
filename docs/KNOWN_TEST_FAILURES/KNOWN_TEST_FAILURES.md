@@ -139,3 +139,16 @@ Found while testing the g3180 post-commit save fix ([G3170_PUBLISHER_LEASES_RATI
 | `test_source_reviews.SourceReviewTests.test_repository_registry_is_canonical_and_keeps_pinned_history` | `AssertionError` (the compacted registry differs from the stored one) | Not analysed further |
 | `test_lab_review.LabReviewTests.test_bc_eligibility_needs_no_per_row_device_scalar_reads` | `ValueError: V11 link topology differs: CanalBelperDerby` | Not analysed further |
 | `test_lab_review.LabReviewTests.test_neural_rows_never_enter_a_heuristic_audit_manifest` | same | Not analysed further |
+
+## Planning-suite failures on unmodified HEAD (found 2026-11-22, still in the tree)
+
+Found while testing the g4551 table revision ([G4551_TABLE_REVISION.md](../../ai-research/G4551_TABLE_REVISION.md)). Each fails the same way with HEAD `c828dc26` and every g4551 edit stashed (`git stash -u`); the four modules gave `FAILED (failures=2, errors=4)` both ways. They have not been deleted.
+
+| Test | Message | Cause |
+|---|---|---|
+| `test_training_g1041.Revision.test_real_checkpoint_and_preparation_are_retry_safe` | `ValueError: This self-play source transition has not been reviewed` (raised in `scripts/training/migrations/configure-training-g1041.py` through `resume.check_signature`) | Old source transition not reviewed |
+| `test_fresh_neutral_selfplay.FreshNeutral.test_exact_recipe_defaults_legacy_unchanged_and_cutoff_inventory` | `FileNotFoundError: …results\joint7-v11-2-grouped-lr-critic-g1360-20261101T011723464975Z\state.json` | Missing old results export |
+| `test_fresh_neutral_selfplay.FreshNeutral.test_no_rehearsal_is_scoped_and_signed_before_preparation` | same g1360 export | Missing old results export |
+| `test_fresh_neutral_selfplay.FreshNeutral.test_seed_bundle_fresh_start_resume_retention_and_source_unchanged` | same g1360 export | Missing old results export |
+| `test_quality_pool.Quality.test_defaults_and_legacy_config_validation_are_versioned` | `AssertionError` (`latest_model_config` returns a config that differs from the test's defaults, for example 0.02 against 0.05) | Assertion on old behaviour; not analysed further |
+| `test_pfsp_pool.PFSP.test_only_history_pairs_and_original_probabilities_can_update` | `AssertionError: "separate snapshot seats" does not match "PFSP requires two learner and two separate opponent seats"` | Assertion on an old message |

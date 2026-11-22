@@ -196,10 +196,11 @@ def pin_child(pid, cpu):
         os.sched_setaffinity(pid, {cpu})
 
 
-def worker_settings(root, block, service, identities, value):
-    """Runtime pin plus bundles for the models one collection will use."""
+def worker_settings(root, block, service, identities, value, *, search_delta=False):
+    """Runtime pin plus bundles for the models one collection will use (head-less unless a blend reads the head)."""
     from .lab_cpu_models import ensure
-    bundles, exported = ensure(root, service.models, identities, materialize=getattr(service, 'materialize', None))
+    bundles, exported = ensure(root, service.models, identities, materialize=getattr(service, 'materialize', None),
+                               search_delta=search_delta)
     return dict(contract=CONTRACT, runtime=dict(path=value['runtime']['path'], sha256=value['runtime']['sha256']),
                 bundles=bundles, exported_bundles=exported, model_cache=block['model_cache'], pinning=block['pinning'])
 
@@ -211,8 +212,11 @@ def ordinary_plan(root, gpu_build, service, jobs, block):
 
 
 def teacher_plan(root, build, service, jobs, block):
+    from .lab_cpu_models import needs_search_delta
     value = resolve(root, teacher_core=build['core_source'])
-    settings = worker_settings(root, block, service, [jobs[0]['expected']['model_id']], value)
+    # g4551: the search head runs only for tables that blend it (w > 0); at w = 0 the head-less bundle.
+    settings = worker_settings(root, block, service, [jobs[0]['expected']['model_id']], value,
+                               search_delta=needs_search_delta(jobs))
     bundle = settings['bundles'][jobs[0]['expected']['model_id']]
     inference = dict(contract=CONTRACT, runtime=settings['runtime'], bundle=bundle, budget=copy.deepcopy(block['teacher_budget']))
     return dict(binary=value['teacher']['path'], core_source=value['teacher_execution_core'], inference=inference, receipt=value['receipt'], exported_bundles=settings['exported_bundles'],

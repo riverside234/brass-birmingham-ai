@@ -321,6 +321,58 @@ class Bundles(unittest.TestCase):
             self.assertGreater(np.abs(delta).max(), 0)
             np.testing.assert_allclose(out[-1], delta, rtol=2e-4, atol=2e-4)
 
+    def test_g4551_headless_bundle_is_the_same_forward_without_the_search_head(self):
+        import onnx
+        import onnxruntime as ort
+        from brass_ai.learning.onnx_tools import cpu_options
+        from brass_ai.personality.laptop.export import samples
+        from brass_ai.rust_backend.lab_cpu_models import export_bundle
+        size = lambda graph: sum(int(np.prod(t.dims)) for t in graph.initializer)
+        head = sum(p.numel() for p in self.model.search_value_head.parameters())
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'main'
+            manifest = export_bundle(self.model, path, search_delta=False)
+            self.assertEqual(manifest['model_id'], self.manifest['model_id'])
+            self.assertEqual((manifest['search_delta'], manifest['outputs']), (False, self.manifest['outputs'][:-1]))
+            self.assertLess(max(manifest['parity']['errors'].values()), 2e-4)
+            full, main = (onnx.load(str(p/'model.onnx')).graph for p in (self.path, path))
+            self.assertLess(len(main.node), len(full.node))
+            self.assertGreaterEqual(size(full) - size(main), head)  # the head's weights are gone from the graph
+            sessions = [ort.InferenceSession(str(p/'model.onnx'), cpu_options(1), providers=['CPUExecutionProvider'])
+                        for p in (self.path, path)]
+            for batch in samples(self.model.config.to_dict(), False):
+                with_head, without = (s.run(None, batch) for s in sessions)
+                self.assertEqual(len(without), 5)
+                for a, b in zip(with_head[:5], without, strict=True):
+                    np.testing.assert_array_equal(a, b)  # bit-identical: w = 0 searches do not change
+
+    def test_g4551_workers_load_the_headless_bundle_unless_a_blend_reads_the_head(self):
+        import shutil
+        from brass_ai.rust_backend import lab_cpu_models as M
+        identity = model_id(self.model)
+        with tempfile.TemporaryDirectory() as root:
+            base = M.bundle_root(root)
+            base.mkdir(parents=True)
+            shutil.copytree(self.path, base/identity)
+            self.assertTrue(M.bundle_ready(root, identity, search_delta=True))
+            self.assertFalse(M.bundle_ready(root, identity))
+            full, exported = M.ensure(root, {}, [identity], search_delta=True)
+            self.assertEqual((exported, full[identity]['manifest']), (0, str((base/identity/'manifest.json').resolve())))
+            main, exported = M.ensure(root, {identity: self.model}, [identity])
+            self.assertEqual((exported, main[identity]['manifest']),
+                             (1, str((base/(identity+M.MAIN)/'manifest.json').resolve())))
+            self.assertFalse(json.loads((base/(identity+M.MAIN)/'manifest.json').read_text())['search_delta'])
+            self.assertTrue(M.bundle_ready(root, identity))
+            self.assertEqual(M.ensure(root, {}, [identity])[1], 0)  # cached; the full bundle stays too
+            self.assertTrue((base/identity/'manifest.json').is_file())
+            # A model without a search head has one bundle, which serves both.
+            anchor = anchor_model()
+            other = model_id(anchor)
+            M.export_bundle(anchor, base/other)
+            for search_delta in (False, True):
+                bundles, exported = M.ensure(root, {}, [other], search_delta=search_delta)
+                self.assertEqual((exported, bundles[other]['manifest']), (0, str((base/other/'manifest.json').resolve())))
+
     def test_cache_reuses_exports_and_rejects_foreign_bundles(self):
         from brass_ai.rust_backend import lab_cpu_models as M
         identity = model_id(self.model)
@@ -329,15 +381,16 @@ class Bundles(unittest.TestCase):
             base.mkdir(parents=True)
             import shutil
             shutil.copytree(self.path, base/identity)
-            bundles, exported = M.ensure(root, {}, [identity])
+            # The full bundle (a teacher table that blends the head); the head-less one is tested apart (g4551).
+            bundles, exported = M.ensure(root, {}, [identity], search_delta=True)
             self.assertEqual(exported, 0)
             self.assertEqual(bundles[identity]['manifest'], str((base/identity/'manifest.json').resolve()))
             with self.assertRaises(ValueError):
-                M.ensure(root, {}, ['0'*64])
+                M.ensure(root, {}, ['0'*64], search_delta=True)
             manifest = json.loads((base/identity/'manifest.json').read_text())
             shutil.copytree(base/identity, base/('1'*64))
             with self.assertRaises(ValueError):
-                M.ensure(root, {}, ['1'*64])
+                M.ensure(root, {}, ['1'*64], search_delta=True)
             self.assertEqual(manifest['model_id'], identity)
 
     def test_pruning_keeps_active_and_recent_bundles(self):

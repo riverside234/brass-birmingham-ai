@@ -39,6 +39,15 @@ def enabled(config):
     return KEY in config.get('table_plan', {})
 
 
+def selfplay_settings(config):
+    """The cotton recipe PPO self-play tables run, or None when every self-play table is a standard game.
+
+    g4551: the table revision keeps the committed table_plan block (its contract still names the teacher's
+    cotton rule) but assigns no self-play cotton seats (training_revision_g4551)."""
+    from .training_revision_g4551 import selfplay_cotton_off
+    return None if selfplay_cotton_off(config) else config.get('table_plan', {}).get(KEY)
+
+
 def configure(config, *, probability=COTTON_PROBABILITY, limited=False):
     settings = dict(LIMITED) if limited else dict(SETTINGS, probability=probability)
     return dict(config, table_plan=dict(config['table_plan'], **{KEY: settings}))
