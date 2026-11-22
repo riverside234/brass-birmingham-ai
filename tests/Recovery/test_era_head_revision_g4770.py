@@ -129,6 +129,74 @@ class Restoration(unittest.TestCase):
         with self.assertRaises(ValueError):  # a restoration is never undone
             self.companion(removed, 6, raw=dict(training={auxiliary.KEY: b.payload(6)}))
 
+    def test_the_restored_outputs_warm_up_like_the_era_heads_did(self):
+        from types import SimpleNamespace
+        from brass_ai.learning.local_scoring_heads_v2 import EraScoringHeads
+        from brass_ai.recovery import local_scoring_v3 as v3
+        torch.manual_seed(7); full = EraScoringHeads(64)
+        torch.manual_seed(7); restored = v3.RestoredHeads(64)
+        with torch.no_grad():
+            for p in (*restored.owner.values(), *restored.vp.values()): p.weight.normal_(); p.bias.normal_()
+        full.load_state_dict(restored.state_dict())
+        context = torch.randn(3, 64, requires_grad=True)
+        encoded = SimpleNamespace(context=context, targets=torch.randn(3, 130, 64))
+        descriptors = torch.randn(3, 4, 32)
+        a = full(encoded, descriptors)
+        for gradient in (0., .4, 1.):
+            restored.rail_end_gradient = gradient
+            b = restored(encoded, descriptors)
+            for k in a:  # the same values for every output
+                for x, y in zip(a[k], b[k]): self.assertTrue(torch.equal(x, y))
+            restored.zero_grad(); context.grad = None
+            sum(o.sum() + v.sum() for k, (o, v) in b.items() if k.startswith('rail_end_')).backward()
+            self.assertGreater(float(restored.owner['rail_end_slots'].weight.grad.abs().sum()), 0.)  # its own layers train
+            shared, trunk = restored.shared.weight.grad, context.grad
+            if gradient == 0.:
+                self.assertTrue(shared is None or not shared.any()); self.assertTrue(trunk is None or not trunk.any())
+            else:
+                self.assertGreater(float(shared.abs().sum()), 0.); self.assertGreater(float(trunk.abs().sum()), 0.)
+        # The trunk and shared-layer gradient scales linearly with the multiplier.
+        grads = {}
+        for gradient in (.4, 1.):
+            restored.rail_end_gradient = gradient; restored.zero_grad(); context.grad = None
+            b = restored(encoded, descriptors)
+            sum(o.sum() + v.sum() for k, (o, v) in b.items() if k.startswith('rail_end_')).backward()
+            grads[gradient] = (restored.shared.weight.grad.clone(), context.grad.clone())
+        for x, y in zip(grads[.4], grads[1.]): torch.testing.assert_close(x, .4 * y)
+
+    def test_the_rail_end_warm_up_is_its_own_and_follows_the_kept_steps(self):
+        from brass_ai.recovery import local_scoring_auxiliary as auxiliary
+        from brass_ai.recovery import local_scoring_v3 as v3
+        removed = dict(v3.default(5, weight=.15), rail_end_removed=5)
+        restored = dict(removed, rail_end_restored=6, weights=dict(removed['weights'], rail_end=.05))
+        saved = self.companion(removed, 5).payload(6)
+        self.assertNotIn('rail_end_warmup', saved)
+        b = self.companion(restored, 6, raw=dict(training={auxiliary.KEY: saved}))
+        self.assertEqual((b.rail_end_scale, b.heads.rail_end_gradient), (0., 0.))  # head-only at restoration
+        self.assertEqual(b.scale, saved['warmup']['encoder_stage'] / 5)  # the Canal/Rail heads keep theirs
+        scales = []
+        for generation in range(6, 14):
+            b.fitting_steps, b.fitting_used = 20, {('teacher/g', 'CanalEra', 1, 0)}  # 20 kept steps a game
+            b.retained_steps['ppg'] += 20
+            payload = b.payload(generation + 1)
+            self.assertEqual(payload['rail_end_warmup'], b.next_rail_end_warmup())
+            b.committed(generation + 1)
+            scales.append(b.rail_end_scale); self.assertEqual(b.heads.rail_end_gradient, b.rail_end_scale)
+        # Two qualifying iterations and 32 kept steps head-only, then a five-iteration ramp.
+        self.assertEqual(scales, [0., .2, .4, .6, .8, 1., 1., 1.])
+        again = self.companion(restored, 14, raw=dict(training={auxiliary.KEY: b.payload(14)}))
+        self.assertEqual(again.rail_end_warmup, b.rail_end_warmup); self.assertEqual(again.heads.rail_end_gradient, 1.)
+        warm = again.report()['rail_end_heads']['warmup']['before']
+        self.assertEqual((warm['stage'], warm['encoder_gradient_multiplier']), ('full', 1.))
+
+    def test_the_rail_end_ce_joins_the_stop_from_weight_025(self):
+        from brass_ai.recovery import local_scoring_v3 as v3
+        removed = dict(v3.default(6), rail_end_removed=6)
+        for weight, decides in ((.05, False), (.25, True)):
+            c = self.companion(dict(removed, rail_end_restored=7, weights=dict(canal=.05, rail=.05, rail_end=weight)), 6)
+            self.assertEqual(c.rail_end_decides_stop, decides)
+            self.assertEqual(c.report()['rail_end_heads']['in_stop_criterion'], decides)
+
     def test_frozen_ppo_outputs_leave_the_restored_heads_out(self):
         from brass_ai.recovery import local_scoring_v3 as v3
         from brass_ai.recovery.value_preservation import FrozenValues
@@ -147,7 +215,7 @@ class Restoration(unittest.TestCase):
 class Phase(unittest.TestCase):
     """Through ppg_g210.fit with the restored Rail-end head and the revision's actual PPO-game targets."""
 
-    def run_phase(self, *, lam=.95, returns=True):
+    def run_phase(self, *, lam=.95, returns=True, rail_end=.05):
         from brass_ai.learning.contracts import SOURCE_ROOT
         from brass_ai.recovery import local_scoring_auxiliary as auxiliary
         from brass_ai.recovery import local_scoring_v3 as v3
@@ -167,7 +235,7 @@ class Phase(unittest.TestCase):
                         ownership_stop=copy.deepcopy(G.OWNERSHIP_STOP), search_auxiliary=copy.deepcopy(G.SEARCH_AUX),
                         search_rows=rows)
         c['local_scoring_auxiliary'] = dict(v3.default(1), rail_end_removed=1, rail_end_restored=2,
-                                            weights=dict(canal=.05, rail=.05, rail_end=.05))
+                                            weights=dict(canal=.05, rail=.05, rail_end=rail_end))
         c[R.KEY] = dict(copy.deepcopy(R.SETTINGS), from_generation=2)
         with tempfile.TemporaryDirectory(dir=SOURCE_ROOT / 'artifacts') as tmp, mock.patch.object(G, 'SEARCH_ROWS', settings):
             p = TrainingPhases(m, c, root=SOURCE_ROOT, run=Path(tmp))
@@ -221,6 +289,15 @@ class Phase(unittest.TestCase):
             low, high = sorted((measured['canal_owner_ce'], measured['rail_owner_ce']))
             self.assertIsNotNone(measured['rail_end_owner_ce'])
             self.assertTrue(low - 1e-9 <= measured['owner_ce'] <= high + 1e-9, measured)
+
+
+    def test_from_weight_025_the_stop_weighs_the_rail_end_ce_at_its_loss_weight(self):
+        r = self.run_phase(rail_end=.25)
+        for measured in (r['ownership_stop']['before'], r['ownership_stop']['after']):
+            # Each Canal row adds .25/.05 = 5 times its Rail-end CE, so the criterion lies above both era CEs.
+            self.assertGreater(measured['owner_ce'], max(measured['canal_owner_ce'], measured['rail_owner_ce']))
+        self.assertTrue(r['_report']['rail_end_heads']['in_stop_criterion'])
+        self.assertEqual(r['_report']['rail_end_heads']['warmup']['before']['stage'], 'head_only')
 
 
 class Pool(unittest.TestCase):

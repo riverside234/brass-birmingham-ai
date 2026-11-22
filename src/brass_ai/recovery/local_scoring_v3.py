@@ -123,14 +123,46 @@ def rail_end_removed(config): return is_v3(config) and 'rail_end_removed' in con
 
 # ---- g4770: the Rail-end heads restored ----------------------------------------------------------------
 # Fresh Rail-end owner and VP outputs (zero-initialised, as the original heads) on the trained shared, slice and
-# hidden layers, trained only in PPG, in the same batches and steps as the Canal and Rail outputs. PPO neither
-# snapshots nor preserves them, and the ownership stop reports their CE without deciding on it: a fresh head's
-# falling CE would otherwise accept steps that cost the trained Canal and Rail outputs.
+# hidden layers, trained only in PPG, in the same batches and steps as the Canal and Rail outputs, on their own
+# warm-up (RestoredHeads). PPO neither snapshots nor preserves them. The ownership stop reports their CE and, from
+# weight .25 on, weighs it in like the Canal and Rail CE (at its loss weight); below that a fresh head's falling CE
+# would accept steps that cost the trained Canal and Rail outputs.
 
 RESTORED_LADDER = (.05, .25)
+RAIL_END_STOP_WEIGHT = .25  # from this weight on, the restored head's CE joins the ownership stop's criterion
 
 
 def rail_end_restored(config): return is_v3(config) and 'rail_end_restored' in config
+
+
+class RestoredHeads(EraScoringHeads):
+    """The full era heads with the restored Rail-end outputs on their own warm-up (g4770).
+
+    The same parameters, outputs and values as EraScoringHeads. Only the gradient differs: the Rail-end outputs
+    read the shared hidden features through `rail_end_gradient`, the restored head's warm-up multiplier. At 0
+    (head-only) the Rail-end loss trains only its own output layers, on the trained shared features; as it ramps
+    to 1 the same loss reaches the shared head layers and, through the heads' own trunk scale, the trunk. This is
+    the warm-up the era heads had when they were added (local_scoring_warmup), applied to the new outputs alone,
+    so the trained Canal/Rail outputs and the trunk are not pulled by a fresh head."""
+    def __init__(self, context_width=512):
+        super().__init__(context_width)
+        self.rail_end_gradient = 1.
+
+    def forward(self, encoded, descriptors, scale=1.):
+        from brass_ai.learning.local_scoring_heads import scale_gradient
+        from brass_ai.learning.local_scoring_heads_v2 import HORIZONS, KINDS, LINKS, SLICE_WIDTH, SLOTS
+        context = scale_gradient(torch.cat((encoded.context, descriptors.flatten(1)), -1), scale)
+        entities = scale_gradient(encoded.targets[:, :SLOTS + LINKS], scale)
+        shared = F.gelu(self.shared(context))
+        slices = self.slices(shared).view(len(context), SLOTS + LINKS, SLICE_WIDTH)
+        result = {}
+        for kind, lo, hi in KINDS:
+            hidden = F.gelu(self.hidden[kind](torch.cat((entities[:, lo:hi], slices[:, lo:hi]), -1)))
+            for horizon in HORIZONS:
+                name = f'{horizon}_{kind}'
+                features = scale_gradient(hidden, self.rail_end_gradient) if horizon == 'rail_end' else hidden
+                result[name] = (self.owner[name](features), self.vp[name](features))
+        return result
 
 
 def two_era(config):
@@ -302,8 +334,12 @@ def build(base):
             require(self.age >= 0, 'Auxiliary activation origin is in the future')
             self.seed = int(digest(dict(origin=origin, head=HEAD))[:15], 16)
             removed = two_era(self.config); self.rail_end_removal = None; self.rail_end_restoration = None
+            restored = rail_end_restored(self.config)
             with torch.random.fork_rng(devices=list(range(torch.cuda.device_count()))):
-                torch.manual_seed(self.seed); self.heads = (TwoEraHeads if removed else EraScoringHeads)(model.config.hidden)
+                torch.manual_seed(self.seed)
+                self.heads = (TwoEraHeads if removed else RestoredHeads if restored else EraScoringHeads)(model.config.hidden)
+            # g4770: the restored Rail-end outputs' own warm-up, from their restoration (None otherwise).
+            self.rail_end_warmup = dict(warmup.initial(), generation=generation) if restored else None
             self.heads.to(next(model.parameters()).device)
             lr = self.config['optimizer']['learning_rate']
             self.optimizers = {p: torch.optim.Adam(self.heads.parameters(), lr=lr, weight_decay=0.) for p in ('ppo', 'ppg')}
@@ -312,7 +348,9 @@ def build(base):
             self.warmup = dict(warmup.initial(), generation=generation)
             if saved is not None:
                 keys(saved, ('contract', 'config', 'config_sha256', 'head_sha256', 'origin', 'seed', 'generation', 'age', 'heads',
-                             'optimizers', 'retained_steps', 'retained_samples', 'warmup', 'replacement', 'identity'))
+                             'optimizers', 'retained_steps', 'retained_samples', 'warmup', 'replacement', 'identity'),
+                     ('rail_end_warmup',))
+                require(('rail_end_warmup' in saved) == rail_end_restored(saved['config']), 'Rail-end warm-up state differs')
                 require(saved['identity'] == bundle_id({k: v for k, v in saved.items() if k != 'identity'}), 'Corrupt companion bundle identity')
                 require(saved['config_sha256'] == digest(saved['config']) and saved['head_sha256'] == head_identity(),
                         'Companion architecture/config hash differs')
@@ -341,11 +379,16 @@ def build(base):
                 self.retained_samples = copy.deepcopy(saved['retained_samples'])
                 self.warmup = copy.deepcopy(warmup.validate(saved['warmup'], self.config, generation))
                 require(self.warmup['fitting_steps'] == self.retained_steps['ppg'], 'Auxiliary fitting counters differ from kept head steps')
+                if 'rail_end_warmup' in saved:  # a restored head's warm-up carries on; at its restoration it starts fresh
+                    self.rail_end_warmup = copy.deepcopy(warmup.validate(saved['rail_end_warmup'], self.config, generation))
                 self.replacement_record = copy.deepcopy(saved['replacement'])
             else:
                 warmup.validate(self.warmup, self.config, generation)
                 self.replacement_record = copy.deepcopy(self.replacement) if self.replacement else dict(
                     contract='local-scoring-head-replacement/1.0.0', generation=generation, previous=None)
+            if self.rail_end_warmup is not None:
+                warmup.validate(self.rail_end_warmup, self.config, generation)
+                self.heads.rail_end_gradient = self.rail_end_scale
             for phase, o in self.optimizers.items():
                 require(len(o.param_groups) == 1 and o.param_groups[0]['weight_decay'] == 0 and math.isfinite(o.param_groups[0]['lr'])
                         and 0 < o.param_groups[0]['lr'] <= lr * (1 + 1e-12), 'Invalid companion Adam settings')
@@ -366,8 +409,22 @@ def build(base):
 
         @property
         def rail_end_decides_stop(self):
-            """g4770: a restored Rail-end head's CE is reported by the ownership stop but does not decide it."""
-            return not rail_end_restored(self.config)
+            """g4770: a restored Rail-end head's CE joins the ownership stop's criterion from weight .25 on (at its
+            loss weight, like the Canal and Rail CE); below that it is reported only."""
+            return not rail_end_restored(self.config) or self.horizon_weight('rail_end') >= RAIL_END_STOP_WEIGHT
+
+        @property
+        def rail_end_scale(self):
+            """g4770: the restored Rail-end outputs' warm-up multiplier (0 head-only, then 1/5 ... 1); 1 otherwise."""
+            if self.rail_end_warmup is None: return 1.
+            from .local_scoring_warmup import scale
+            return scale(self.rail_end_warmup, self.config)
+
+        def next_rail_end_warmup(self):
+            """Advanced on the same kept PPG fitting steps as the heads' own warm-up: the Rail-end loss is in every one."""
+            from .local_scoring_warmup import advance
+            return advance(self.rail_end_warmup, self.config, self.generation + 1, self.fitting_steps,
+                           len({r[0] for r in self.fitting_used}))
 
         @property
         def scale(self):
@@ -613,11 +670,17 @@ def build(base):
                 warmup=self.next_warmup() if advancing else copy.deepcopy(self.warmup), replacement=self.replacement_record)
             require(result['warmup']['fitting_steps'] == self.retained_steps['ppg'],
                     'Auxiliary warm-up must account for exactly the kept head steps')
+            if self.rail_end_warmup is not None:  # g4770: only a restored head's payload carries its own warm-up
+                result['rail_end_warmup'] = self.next_rail_end_warmup() if advancing else copy.deepcopy(self.rail_end_warmup)
             return dict(result, identity=bundle_id(result))
 
         def committed(self, generation):
+            if self.rail_end_warmup is not None:  # before the report (and its fitting counters) resets
+                require(generation == self.generation + 1, 'Auxiliary commit discontinuity')
+                self.rail_end_warmup = self.next_rail_end_warmup()
             super().committed(generation)
             self.replacement = None
+            if self.rail_end_warmup is not None: self.heads.rail_end_gradient = self.rail_end_scale
 
         # ---- reports ------------------------------------------------------------------------
 
@@ -641,11 +704,16 @@ def build(base):
             if rail_end_removed(self.config):
                 result['rail_end_heads'] = dict(removed_at=self.config['rail_end_removed'], migration=copy.deepcopy(self.rail_end_removal))
             if rail_end_restored(self.config):
+                from .local_scoring_warmup import report as warmup_report
                 result['rail_end_heads'].update(restored_at=self.config['rail_end_restored'], weight=self.horizon_weight('rail_end'),
-                    restoration=copy.deepcopy(self.rail_end_restoration),
+                    restoration=copy.deepcopy(self.rail_end_restoration), in_stop_criterion=self.rail_end_decides_stop,
+                    warmup=dict(before=warmup_report(self.rail_end_warmup, self.config),
+                                after_commit=warmup_report(self.next_rail_end_warmup(), self.config)),
                     scope='Restored Rail-end outputs: PPG only (same batches and steps as Canal/Rail), no PPO snapshot '
-                          'or preservation; PPO-game Canal rows on the actual game-end map, search rows on lambda '
-                          'returns after the warm-up; their CE is reported by the ownership stop, not decisive.')
+                          'or preservation; their own warm-up (head-only on the shared features for two qualifying '
+                          'iterations and 32 kept steps, then a five-iteration ramp into the shared head layers and '
+                          'the trunk); PPO-game Canal rows on the actual game-end map, search rows on lambda returns '
+                          'after the target warm-up; in the ownership stop\'s criterion at their loss weight from .25.')
             return result
 
         def diagnostics(self, model, dataset, heldout, *, maximum=None):

@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "3d95823a318f69566f1c7e33cb26afbd3d5790472a01d041e527f44db4a27f71",
+  "execution_implementation": "2df2cf08d72ab161e39a5281818be75e2c592bc0d150186b69b706b9a925b393",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -606,7 +606,7 @@
     },
     "src/brass_ai/recovery/ownership_stop.py": {
       "before": null,
-      "after": "7959cac683c2d4c7b1538554bee37e7b88b58674dbd891095b0d46c11f40db1f"
+      "after": "ea5632ad3f47e2b93d990bff9ff72f9fbbffe7a882fc13a557c742c0aedc62da"
     },
     "src/brass_ai/recovery/training_revision_g3140.py": {
       "before": "ee5e47d2b5d9c85c0b7a1e3a7265a27a98367d5ec46b5e999be99784c54085ba",
@@ -614,7 +614,7 @@
     },
     "src/brass_ai/recovery/local_scoring_v3.py": {
       "before": "4d47c9100516c3269b1bd04ca9c7596b3d012f7d9762db30031a313a11bcc27c",
-      "after": "1527cc7100eab280445f9f5d9686201247861a7cc13c4b434610f1a9abe5829b"
+      "after": "f920148551dda6d018d2c2b8d933b25cfc140187c4bb40e6fc6297db39bde7de"
     },
     "tests/Recovery/test_ownership_stop_g3318.py": {
       "before": null,
@@ -738,7 +738,7 @@
     },
     "tests/Recovery/test_era_head_revision_g4770.py": {
       "before": null,
-      "after": "0c80a2e86da575efd93c0f1ec69bbb4fd15cb45c3536da29325ca8e68c663125"
+      "after": "e9ab669918cb5f667c9f1e024b28c194c60e536e2aaf52ff7c3c9cedb7172cdb"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -1089,6 +1089,11 @@
       "implementation": "7e52ba1d71db2119d1e12c6bdb76cd6266372b4a39d8ef4f5b18446f8e828429",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "28e38df4c7531f709eaa32744765786557e382a79a2b172aae790749f1780694"
+    },
+    {
+      "implementation": "3d95823a318f69566f1c7e33cb26afbd3d5790472a01d041e527f44db4a27f71",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "205ef9b612c8b858b03502e8169ff69989a408dd7e2463d0694e57bde3109752"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1489,7 +1494,7 @@
     "qualified_implementation_unchanged": true
   },
   "g4770_rail_end_restored": {
-    "scope": "--era-head-revision (training_revision_g4770) restores the era heads' Rail-end owner and VP outputs, removed untrained at g3528: local_scoring_auxiliary.rail_end_restored = the adoption generation and weight .05 (ladder .05 -> .25, --rail-end-weight 0.25). The two-era checkpoint gains zero-initialised Rail-end layers once, at that generation, with no Adam state (local_scoring_v3.add_rail_end); every other parameter and Adam slot carries over. They train only in PPG, in the same batches, forward and steps as the Canal/Rail outputs; PPO neither snapshots, transfers nor preserves them (preservation_weights, value_preservation.outputs). PPO-game Canal rows train them on the actual game-end map; search rows on lambda .95 returns after a four-iteration warm-up on the actual map (value_revision.search_rows rail_end). The ownership stop reports their held-out CE (railend_ce in the log); only Canal and Rail decide it.",
+    "scope": "--era-head-revision (training_revision_g4770) restores the era heads' Rail-end owner and VP outputs, removed untrained at g3528: local_scoring_auxiliary.rail_end_restored = the adoption generation and weight .05 (ladder .05 -> .25, --rail-end-weight 0.25). The two-era checkpoint gains zero-initialised Rail-end layers once, at that generation, with no Adam state (local_scoring_v3.add_rail_end); every other parameter and Adam slot carries over. They train only in PPG, in the same batches, forward and steps as the Canal/Rail outputs; PPO neither snapshots, transfers nor preserves them (preservation_weights, value_preservation.outputs). PPO-game Canal rows train them on the actual game-end map; search rows on lambda .95 returns after a four-iteration warm-up on the actual map (value_revision.search_rows rail_end). They have the era heads' own warm-up rule, applied to them alone (local_scoring_v3.RestoredHeads, payload rail_end_warmup): head-only on the shared features for two qualifying iterations and 32 kept PPG steps, then a five-iteration ramp of their gradient into the shared head layers and the trunk; outputs are unchanged. The ownership stop reports their held-out CE (railend_ce in the log) and, from weight .25, weighs it into its criterion at its loss weight relative to the Canal weight, like the Canal and Rail CE.",
     "qualified_implementation_unchanged": true
   },
   "g4770_ordinary_actual_targets": {

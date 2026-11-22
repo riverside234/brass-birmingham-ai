@@ -124,7 +124,10 @@ class OwnershipStop:
     def _score(self, scored):
         began = time.perf_counter(); local, model = self.local, self.model
         wc, wr, we = (local.horizon_weight(h) for h in ('canal', 'rail', 'rail_end'))
-        # g4770: a restored Rail-end head's CE is measured and reported, but only Canal and Rail decide.
+        # The criterion is the held-out version of the heads' owner-CE loss: each head's CE at its loss weight,
+        # relative to the Canal weight (a Canal row: its Canal CE plus we/wc of its Rail-end CE; a Rail row: wr/wc
+        # of its Rail CE), so a step is kept only if the loss the heads train on did not rise on held-out games.
+        # g4770: a restored Rail-end head joins from weight .25; below that its CE is measured and reported only.
         decisive = we if getattr(local, 'rail_end_decides_stop', True) else 0.
         sums = None
         was, heads_was = model.training, local.heads.training
