@@ -21,7 +21,10 @@ def outputs(model,inputs,ds,ix,companion=None,diversity=None):
     if diversity is not None and diversity.active:
         result['intrinsic']=diversity.prediction(model,inputs,ds,ix,encoded=encoded,embeddings=embeddings)
     if companion is not None and companion.active:
+        # g4770: only the outputs PPO preserves are frozen and transferred (a restored Rail-end head is PPG-only).
+        preserved=companion.preservation_weights()
         for kind,(owner,vp) in companion.heads(encoded,embeddings,companion.scale).items():
+            if kind not in preserved:continue
             result[kind+'_owner']=owner.float().softmax(-1)
             result[kind+'_vp']=vp.float()
     return result

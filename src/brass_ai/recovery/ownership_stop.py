@@ -124,6 +124,8 @@ class OwnershipStop:
     def _score(self, scored):
         began = time.perf_counter(); local, model = self.local, self.model
         wc, wr, we = (local.horizon_weight(h) for h in ('canal', 'rail', 'rail_end'))
+        # g4770: a restored Rail-end head's CE is measured and reported, but only Canal and Rail decide.
+        decisive = we if getattr(local, 'rail_end_decides_stop', True) else 0.
         sums = None
         was, heads_was = model.training, local.heads.training
         model.eval(); local.heads.eval()
@@ -139,7 +141,7 @@ class OwnershipStop:
                         if we > 0:
                             end += _mean_ce(predictions['rail_end_' + kind][0], *entry['end_' + kind]) * entry['end_rows']
                     scale = torch.where(canal, torch.full_like(era, wc / wc), torch.full_like(era, wr / wc))
-                    row = scale * era + (we / wc) * end
+                    row = scale * era + (decisive / wc) * end
                     values = torch.stack(((weight * row).sum(), weight.sum(),
                                           (weight * era * canal).sum(), (weight * canal).sum(),
                                           (weight * era * ~canal).sum(), (weight * ~canal).sum(),
@@ -174,6 +176,9 @@ class OwnershipStop:
             owner_ce_before=self.current['owner_ce'], owner_ce_attempted=attempt['owner_ce'],
             canal_owner_ce_attempted=attempt['canal_owner_ce'], rail_owner_ce_attempted=attempt['rail_owner_ce'],
             accepted=not increased, kept_head_steps=0 if increased else head_steps))
+        if attempt.get('rail_end_owner_ce') is not None:  # g4770: reported beside the decisive CE
+            self.intervals[-1].update(rail_end_owner_ce_before=self.current['rail_end_owner_ce'],
+                                      rail_end_owner_ce_attempted=attempt['rail_end_owner_ce'])
         if self.search is not None:
             self.intervals[-1].update(search_before=self.search_current['owner_ce'], search_attempted=search['owner_ce'],
                                       criterion_before=before, criterion_attempted=after)

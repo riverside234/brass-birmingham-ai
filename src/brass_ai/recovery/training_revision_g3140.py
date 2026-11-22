@@ -187,7 +187,9 @@ def configure(config, items, generation):
             else:
                 value = float(item.split('=')[1])
                 require(v3.LADDER.index(value) >= v3.LADDER.index(weights['canal']), 'The local-scoring weight only moves up')
-                weights.update(canal=value, rail=value, rail_end=value / 2 if weights['rail_end'] else 0.)
+                # g4770: a restored Rail-end head keeps its own ladder (training_revision_g4770.set_rail_end_weight).
+                end = weights['rail_end'] if v3.rail_end_restored(local) else (value / 2 if weights['rail_end'] else 0.)
+                weights.update(canal=value, rail=value, rail_end=end)
             v3.validate_config(local)
     require('search_auxiliary' not in revision or 'ownership_stop' in revision,
             'search-aux early-stops through the ownership stop (--value-revision ownership-stop)')
@@ -302,8 +304,11 @@ def tag(config):
     local = config.get(LOCAL)
     if v3.is_v3(local):
         parts.append('eraheads-w' + str(local['weights']['canal']).replace('.', ''))
-        if local['weights']['rail_end']: parts.append('railend')
-        if v3.rail_end_removed(local): parts.append('norailend')
+        if v3.rail_end_restored(local):  # g4770: restored at its own weight
+            parts.append('railend' + str(local['weights']['rail_end']).replace('.', ''))
+        else:
+            if local['weights']['rail_end']: parts.append('railend')
+            if v3.rail_end_removed(local): parts.append('norailend')
     if b['bootstrap']: parts.append('blend50')
     if b['value_weights']['vp'] != OFF['value_weights']['vp']: parts.append('vp05')
     if 'ownership_stop' in b: parts.append('cestop16')

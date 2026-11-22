@@ -40,10 +40,11 @@ def is_shadow(config):
     from brass_ai.recovery.training_revision_g4138 import previous as before_teacher_search
     from brass_ai.recovery.training_revision_g4475 import previous as before_teacher_training
     from brass_ai.recovery.training_revision_g4551 import previous as before_table_revision
+    from brass_ai.recovery.training_revision_g4770 import previous as before_era_head_revision
     try:
         config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(
             before_teacher_revision(before_soft_policy(before_eighth_floor(before_teacher_search(
-                before_teacher_training(before_table_revision(recipe(config)))))))))))
+                before_teacher_training(before_table_revision(before_era_head_revision(recipe(config))))))))))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -163,6 +164,12 @@ def signature_transition(before,after):
     # adopted once, then kept. It changes the collection, so pending work is archived, not preserved.
     from brass_ai.recovery import training_revision_g4551 as g4551
     old=g4551.project(old,new)
+    if old is None:return False
+    # g4770 era-head revision: Rail-end heads restored (PPG only), PPO-game rows on actual maps, the search pool a
+    # 4-iteration sample of the last 8; adopted once, then kept; trainer-only (the local-scoring and value-revision
+    # changes it makes pass g3140.project above).
+    from brass_ai.recovery import training_revision_g4770 as g4770
+    old=g4770.project(old,new)
     if old is None:return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False

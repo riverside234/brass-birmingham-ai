@@ -1040,6 +1040,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             f'{ce(stop["after"] and stop["after"]["owner_ce"])}'
                             f' aux_kept={stop["kept_head_steps"]}/{stop["attempted_head_steps"]}'
                             f' heads_only={stop["head_only_steps"]} aux_stop={stop["stop_reason"]}')
+                        if stop['before'] and stop['before'].get('rail_end_owner_ce') is not None:
+                            # g4770: the restored Rail-end head's held-out CE (reported; Canal/Rail decide the stop).
+                            controller_line+=(f' railend_ce={ce(stop["before"]["rail_end_owner_ce"])}->'
+                                f'{ce(stop["after"] and stop["after"]["rail_end_owner_ce"])}')
                     search_aux=(report.get('value_phase') or {}).get('search_auxiliary')
                     if search_aux:
                         # g3423: search-table roots mixed into the PPG batches; their validation tables pooled in the stop.

@@ -509,8 +509,11 @@ def fit(phases,model,preparation_pool):
         boot_report=dict(bootstrap_report(phases.critic_dataset,boot),**blend)
     # g3471 search-rows: the era heads' lambda returns of their own outputs PPO froze, per seat chain.
     from .training_revision_g3140 import rail_end_returns_on,search_rows
+    from .training_revision_g4770 import ordinary_actual
     rows_settings=search_rows(phases.config);local_boot=local_report=None
-    if rows_settings is not None:
+    # g4770: PPO-game rows train every era head on the actual map: no corrections, no sidecar.
+    actual_targets=ordinary_actual(phases.config)
+    if rows_settings is not None and not actual_targets:
         from .search_rows import ordinary_corrections
         require(getattr(phases,'frozen_local',None),'Era-head lambda targets need the era-head outputs PPO froze')
         began_local=time.perf_counter()
@@ -523,6 +526,7 @@ def fit(phases,model,preparation_pool):
         phases.collection_source,model,phases.split['selection'],bootstrap=boot,local_bootstrap=local_boot)
     if boot_report is not None:cache['bootstrap']=boot_report
     if local_report is not None:cache['local_bootstrap']=local_report
+    if rows_settings is not None and actual_targets:cache['era_head_targets']='actual-map'
     staged=time.perf_counter()
     clock=None
     if two_iteration(c):
@@ -581,8 +585,9 @@ def fit(phases,model,preparation_pool):
             offset+=r['rows']
         snapshot_weight=phases.critic_state['snapshot_weight'] if phases.critic_state else 1.
         ds.critic_weights=torch.tensor([snapshot_weight if r=='snapshot' else 1. for r in ds.roles],device=ds.device)
-        if rows_settings is not None:
+        if rows_settings is not None and not actual_targets:
             # g3471: ordinary rows train the era heads on the actual map plus half the lambda-return correction.
+            # g4770: not with actual targets, even where an older age still has its sidecar.
             from .ppg_replay import LocalBootstrapColumn
             from .search_rows import Corrections
             column=LocalBootstrapColumn(ds.data)

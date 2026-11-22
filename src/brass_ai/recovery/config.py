@@ -713,6 +713,14 @@ def validate_config(config):
         require(TEACHER_SEARCH in config and TEACHER_TRAINING in config,
                 'The g4551 table revision needs the g4138 and g4475 teacher revisions')
         fields.add(TABLE_REVISION);validate_table_revision(config[TABLE_REVISION])
+    from .training_revision_g4770 import KEY as ERA_HEAD_REVISION,validate as validate_era_head_revision
+    from .local_scoring_v3 import rail_end_restored
+    # The restored Rail-end heads and the revision come together: PPO keeps no outputs of theirs for returns.
+    require((ERA_HEAD_REVISION in config)==rail_end_restored(config.get('local_scoring_auxiliary')),
+            'The restored Rail-end heads come with the g4770 era-head revision')
+    if ERA_HEAD_REVISION in config:
+        require('value_revision' in config,'The g4770 era-head revision needs the g3140 value revision')
+        fields.add(ERA_HEAD_REVISION);validate_era_head_revision(config[ERA_HEAD_REVISION])
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

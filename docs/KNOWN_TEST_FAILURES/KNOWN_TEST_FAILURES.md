@@ -152,3 +152,24 @@ Found while testing the g4551 table revision ([G4551_TABLE_REVISION.md](../../ai
 | `test_fresh_neutral_selfplay.FreshNeutral.test_seed_bundle_fresh_start_resume_retention_and_source_unchanged` | same g1360 export | Missing old results export |
 | `test_quality_pool.Quality.test_defaults_and_legacy_config_validation_are_versioned` | `AssertionError` (`latest_model_config` returns a config that differs from the test's defaults, for example 0.02 against 0.05) | Assertion on old behaviour; not analysed further |
 | `test_pfsp_pool.PFSP.test_only_history_pairs_and_original_probabilities_can_update` | `AssertionError: "separate snapshot seats" does not match "PFSP requires two learner and two separate opponent seats"` | Assertion on an old message |
+
+## Teacher-phase and GAE value-phase failures on unmodified HEAD (found 2026-11-18, still in the tree)
+
+The three `DistinctUsageTests` failures were found while testing the g3423 soft policy head ([G3423_SOFT_POLICY_S1.md](../../ai-research/G3423_SOFT_POLICY_S1.md)). The three `test_gae_value_phase` failures were found while testing the g3471 search rows ([G3471_SEARCH_ROWS.md](../../ai-research/G3471_SEARCH_ROWS.md)) and failed the same way with those edits stashed (`git stash -u`). All six were re-run on 2026-11-22 with the same messages. They have not been deleted.
+
+| Test | Message | Cause |
+|---|---|---|
+| `test_teacher_phase_revision.DistinctUsageTests.test_five_games_use_all_80_positions_before_reuse` | `ValueError: V11 link topology differs: CanalBelperDerby` (in `distill_update`'s board-topology check) | Old board-topology fixture |
+| `test_teacher_phase_revision.DistinctUsageTests.test_retention_keeps_per_collection_usage_coverage_and_drift` | same | Old board-topology fixture |
+| `test_teacher_phase_revision.DistinctUsageTests.test_unused_rows_and_partial_batches_are_reported` | same | Old board-topology fixture |
+| `test_gae_value_phase.Gates.test_runtime_warmup_and_ppo_stop_block_switch_and_clone_beta_caps` | `AttributeError: 'TrainingPhases' object has no attribute 'gae_floor_migration'` | Old attribute |
+| `test_gae_value_phase.Advantages.test_strict_config_old_recipe_and_new_generator` | `AssertionError: 0.05 != 0.0` (exploration) | Assertion on old behaviour; not analysed further |
+| `test_gae_value_phase.ValuePhase.test_split_is_deterministic_all_seats_and_calibration_excludes_it` | `AssertionError: [] is not true` (an empty `seen` list) | Assertion on old behaviour; not analysed further |
+
+## DOMiNO config failure on unmodified HEAD (found 2026-11-22, still in the tree)
+
+Found while testing the g4770 era-head revision ([G4770_ERA_HEAD_REVISION.md](../../ai-research/G4770_ERA_HEAD_REVISION.md)). It fails the same way with HEAD `72dba6f8` and every g4770 edit stashed (`git stash -u`). It has not been deleted.
+
+| Test | Message | Cause |
+|---|---|---|
+| `test_domino.Training.test_new_config_only_diversity_and_off_no_mutation` | `AssertionError` (the configured recipe also gains a `context_evaluation` block, which the test's expected config lacks) | Assertion on old behaviour; not analysed further |

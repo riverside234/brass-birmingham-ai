@@ -9,7 +9,8 @@ from statistics import fmean
 
 
 DEFAULT_MAX_POINTS = 30
-RECENT_GENERATIONS = 200
+RECENT_GENERATIONS = 200  # Shared by the VP companion charts.
+PL_RECENT_GENERATIONS = 500
 
 
 def display_points(generations, scores, max_points=DEFAULT_MAX_POINTS):
@@ -167,7 +168,7 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
     v4_reference = values(V4) if baseline == IL else ()
     previous = points[-2] if len(points) > 1 else None
     change = paired_change(report, previous[1], latest_name) if previous else None
-    recent_start = max(0, latest - RECENT_GENERATIONS)
+    recent_start = max(0, latest - PL_RECENT_GENERATIONS)
     recent = [i for i, generation in enumerate(x) if generation >= recent_start]
     rx = [x[i] for i in recent]; ry = [y[i] for i in recent]
     rlo = [lower[i] for i in recent]; rhi = [upper[i] for i in recent]

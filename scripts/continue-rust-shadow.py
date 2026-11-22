@@ -90,7 +90,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             skip_utility_qualification=False,adaptive_teacher_beta=False,teacher_search_head_weight=None,
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
             teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None,teacher_search_revision=False,
-            teacher_training_revision=False,table_revision=False):
+            teacher_training_revision=False,table_revision=False,era_head_revision=False,rail_end_weight=None):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -213,6 +213,13 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             # Standard PPO self-play tables (teacher cotton kept), 50+4 teacher tables, 176 teacher rows per PPO step.
             require(mode=='on','The g4551 table revision is adopted with teaching on')
             config=g4551.configure(config,state['iteration'])
+        from brass_ai.recovery import training_revision_g4770 as g4770
+        if era_head_revision:
+            # Rail-end heads back at .05 (PPG only), PPO-game era-head rows on actual maps, search pool 4 of 8 iterations.
+            config=g4770.configure(config,state['iteration'])
+        if rail_end_weight is not None:
+            # The restored Rail-end head's weight, .05 -> .25 only.
+            config=g4770.set_rail_end_weight(config,rail_end_weight)
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -339,6 +346,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-'+g4475.tag(config)+'-share');stages.append(prefix)
         if g4551.applied(config):
             prefix=prefix.replace('-share', '-'+g4551.tag(config)+'-share');stages.append(prefix)
+        if g4770.applied(config):
+            prefix=prefix.replace('-share', '-'+g4770.tag(config)+'-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
@@ -346,6 +355,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         adopting_search=g4138.applied(config) and not g4138.applied(before)
         adopting_training=g4475.applied(config) and not g4475.applied(before)
         adopting_tables=g4551.applied(config) and not g4551.applied(before)
+        adopting_era_heads=g4770.applied(config) and not g4770.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
@@ -353,7 +363,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                          g3528.applied(config) and not g3528.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
                          g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor or adopting_search or
-                         adopting_training or adopting_tables)
+                         adopting_training or adopting_tables or adopting_era_heads)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -381,6 +391,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 journal=('teacher-revision' if adopting_teacher else 'teacher-search-revision' if adopting_search else
                          'teacher-training-revision' if adopting_training else
                          'table-revision' if adopting_tables else
+                         'era-head-revision' if adopting_era_heads else
                          'soft-policy' if adopting_soft else
                          'value-revision' if g3140.changed(before,config) else 'ppg-beta-floor' if adopting_floor else
                          'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
@@ -485,6 +496,8 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'teacher_search_revision',False):kwargs['teacher_search_revision']=True
         if getattr(args,'teacher_training_revision',False):kwargs['teacher_training_revision']=True
         if getattr(args,'table_revision',False):kwargs['table_revision']=True
+        if getattr(args,'era_head_revision',False):kwargs['era_head_revision']=True
+        if getattr(args,'rail_end_weight',None) is not None:kwargs['rail_end_weight']=args.rail_end_weight
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -614,6 +627,15 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
             print(f"g4551 table revision (from g{r['from_generation']}): every PPO self-play table is a standard game "
                   f"(teacher cotton tables kept); {r['tables']['train']}+{r['tables']['held_out']} teacher tables every "
                   f"iteration; {r['rows_per_step']} teacher label rows per PPO step.",flush=True)
+        from brass_ai.recovery import training_revision_g4770 as g4770
+        if g4770.applied(options):
+            report['g4770_era_head_revision']=g4770.summary(options)
+            r=report['g4770_era_head_revision'];pool=r['search_pool']
+            print(f"g4770 era-head revision (from g{r['from_generation']}): Rail-end heads restored at g{r['rail_end_restored']}, "
+                  f"weight {r['local_weights']['rail_end']:g} (PPG only, same batches as Canal/Rail; no PPO snapshot or "
+                  f"preservation); PPO-game rows on actual maps for every era head; search rows lambda "
+                  f"{r['search_targets']['lam']:g}; search pool a {pool['sampled_iterations']}-iteration sample of the last "
+                  f"{pool['window_iterations']}.",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

@@ -63,16 +63,21 @@ def head_identity():
 
 
 def validate_config(config):
-    keys(config, tuple(default(0)), ('rail_end_removed',))
+    keys(config, tuple(default(0)), ('rail_end_removed', 'rail_end_restored'))
+    restored = 'rail_end_restored' in config
     if 'rail_end_removed' in config:  # g3528 drop-rail-end: the Rail-end outputs are gone from that generation on
         require(type(config['rail_end_removed']) is int and config['rail_end_removed'] >= config['replacement']['generation']
-                and config['weights']['rail_end'] == 0, 'Invalid Rail-end head removal')
+                and (restored or config['weights']['rail_end'] == 0), 'Invalid Rail-end head removal')
+    if restored:  # g4770: fresh Rail-end outputs again from that generation on (training_revision_g4770)
+        require('rail_end_removed' in config and type(config['rail_end_restored']) is int
+                and config['rail_end_restored'] > config['rail_end_removed'], 'Invalid Rail-end head restoration')
     require(config['contract'] == CONTRACT and config['head_contract'] == HEAD and config['target'] == targets.identity()
             and config['mode'] in ('off', 'shadow', 'apply') and config['vp_scale'] == VP_SCALE,
             'Local scoring 3.0.0 contract differs')
     w = config['weights']; keys(w, ('canal', 'rail', 'rail_end'))
     require(all(type(v) in (int, float) and math.isfinite(v) for v in w.values()) and w['canal'] in LADDER
-            and w['rail'] == w['canal'] and w['rail_end'] in (0., w['canal'] / 2), 'Invalid local scoring 3.0.0 weights')
+            and w['rail'] == w['canal'] and w['rail_end'] in (RESTORED_LADDER if restored else (0., w['canal'] / 2)),
+            'Invalid local scoring 3.0.0 weights')
     o = config['optimizer']; keys(o, ('kind', 'learning_rate', 'weight_decay', 'grad_clip'))
     require(o == dict(kind='Adam', learning_rate=1e-4, weight_decay=0., grad_clip=1.), 'Invalid local scoring 3.0.0 optimizer')
     require((config['head_only_iterations'], config['minimum_fitting_steps'], config['ramp_iterations']) == (2, 32, 5),
@@ -86,20 +91,25 @@ def validate_config(config):
 
 
 def weights_forward(old, new):
-    """Only up the ladder; the Rail-end target only switches on, at half the Canal weight."""
+    """Only up the ladder; the Rail-end target only switches on (at half the Canal weight, or from g4770 on
+    the restored ladder .05 -> .25) and never moves down."""
     if old == new: return True
     if LADDER.index(new['canal']) < LADDER.index(old['canal']): return False
-    return not (old['rail_end'] and not new['rail_end'])
+    return new['rail_end'] >= old['rail_end']
 
 
 def config_forward(old, new):
-    """A reviewed 3.0.0 -> 3.0.0 change: mode, the weight ladder and (g3528) the Rail-end heads' removal only."""
+    """A reviewed 3.0.0 -> 3.0.0 change: mode, the weight ladder, (g3528) the Rail-end heads' removal and
+    (g4770) their restoration only."""
     if not (is_v3(old) and is_v3(new)): return False
     validate_config(old); validate_config(new)
     a, b = copy.deepcopy(old), copy.deepcopy(new)
     a.pop('mode'); b.pop('mode'); wa, wb = a.pop('weights'), b.pop('weights')
     ra, rb = a.pop('rail_end_removed', None), b.pop('rail_end_removed', None)
     if ra is not None and ra != rb: return False  # a removal is kept
+    ea, eb = a.pop('rail_end_restored', None), b.pop('rail_end_restored', None)
+    if ea is not None and ea != eb: return False  # a restoration is kept
+    if eb is not None and ea is None and ra is None: return False  # only removed heads are restored
     return a == b and weights_forward(wa, wb)
 
 
@@ -109,6 +119,23 @@ RAIL_END = ('rail_end_slots', 'rail_end_links')
 
 
 def rail_end_removed(config): return is_v3(config) and 'rail_end_removed' in config
+
+
+# ---- g4770: the Rail-end heads restored ----------------------------------------------------------------
+# Fresh Rail-end owner and VP outputs (zero-initialised, as the original heads) on the trained shared, slice and
+# hidden layers, trained only in PPG, in the same batches and steps as the Canal and Rail outputs. PPO neither
+# snapshots nor preserves them, and the ownership stop reports their CE without deciding on it: a fresh head's
+# falling CE would otherwise accept steps that cost the trained Canal and Rail outputs.
+
+RESTORED_LADDER = (.05, .25)
+
+
+def rail_end_restored(config): return is_v3(config) and 'rail_end_restored' in config
+
+
+def two_era(config):
+    """True when the heads have no Rail-end outputs (removed at g3528 and not restored)."""
+    return rail_end_removed(config) and not rail_end_restored(config)
 
 
 class TwoEraHeads(EraScoringHeads):
@@ -152,6 +179,26 @@ def drop_rail_end(heads, optimizers, full_names, kept_names):
     record = dict(contract='rail-end-head-removal/1.0.0', parameters=int(sum(heads[n].numel() for n in removed)),
                   max_abs=float(max(heads[n].detach().abs().max() for n in removed)))
     return Ordered((n, heads[n]) for n in kept_names), result, record
+
+
+def add_rail_end(heads, optimizers, fresh, kept_names):
+    """g4770: a two-era checkpoint (state dict and the two Adams) with the full heads' fresh Rail-end parameters
+    (`fresh`, the full heads' state dict) added, and a record. The Rail-end slots start with no Adam state."""
+    from collections import OrderedDict as Ordered
+    full_names = list(fresh)
+    added = [n for n in full_names if n not in kept_names]
+    require(sorted(heads) == sorted(kept_names) and [n for n in full_names if n in kept_names] == list(kept_names)
+            and all(n.split('.')[1] in RAIL_END for n in added), 'Era-head checkpoint layout differs')
+    index = [full_names.index(n) for n in kept_names]
+    result = {}
+    for phase, state in optimizers.items():
+        groups = state['param_groups']
+        require(len(groups) == 1 and list(groups[0]['params']) == list(range(len(kept_names))), 'Era-head Adam layout differs')
+        result[phase] = dict(state={index[old]: copy.deepcopy(value) for old, value in state['state'].items()},
+                             param_groups=[dict(copy.deepcopy(groups[0]), params=list(range(len(full_names))))])
+    record = dict(contract='rail-end-head-restoration/1.0.0', parameters=int(sum(fresh[n].numel() for n in added)),
+                  max_abs=float(max(fresh[n].detach().abs().max() for n in added)))
+    return Ordered((n, heads[n] if n in heads else fresh[n]) for n in full_names), result, record
 
 
 class StateColumns:
@@ -254,7 +301,7 @@ def build(base):
             self.origin = origin; self.age = generation - origin['generation']
             require(self.age >= 0, 'Auxiliary activation origin is in the future')
             self.seed = int(digest(dict(origin=origin, head=HEAD))[:15], 16)
-            removed = rail_end_removed(self.config); self.rail_end_removal = None
+            removed = two_era(self.config); self.rail_end_removal = None; self.rail_end_restoration = None
             with torch.random.fork_rng(devices=list(range(torch.cuda.device_count()))):
                 torch.manual_seed(self.seed); self.heads = (TwoEraHeads if removed else EraScoringHeads)(model.config.hidden)
             self.heads.to(next(model.parameters()).device)
@@ -272,6 +319,14 @@ def build(base):
                 require(config_forward(saved['config'], self.config) and saved['seed'] == self.seed and
                         saved['generation'] == generation and saved['age'] == self.age, 'Companion checkpoint/config/progress differs')
                 heads, optimizers = saved['heads'], saved['optimizers']
+                if rail_end_restored(self.config) and two_era(saved['config']):
+                    # g4770, once at its generation: the two-era checkpoint gains fresh Rail-end outputs (zero, as the
+                    # heads' own initialisation) with no Adam state; every other parameter and Adam slot carries over.
+                    require(self.config['rail_end_restored'] == generation,
+                            'The Rail-end heads are restored at their committed generation')
+                    kept = [n for n in self.heads.state_dict() if n.split('.')[1] not in RAIL_END]
+                    heads, optimizers, self.rail_end_restoration = add_rail_end(heads, optimizers, self.heads.state_dict(), kept)
+                    self.rail_end_restoration['generation'] = generation
                 if removed and not rail_end_removed(saved['config']):
                     # g3528 drop-rail-end, once at its generation: the full heads' checkpoint loses the Rail-end
                     # outputs, which trained at weight 0 (no loss or preservation term reached them).
@@ -304,7 +359,15 @@ def build(base):
             return float(self.config['weights'][horizon])
 
         def preservation_weights(self):
-            return {name: (self.horizon_weight(name.rsplit('_', 1)[0]),) * 2 for name in output_names() if name in self.heads.owner}
+            # g4770: restored Rail-end outputs train only in PPG; PPO neither snapshots nor preserves them.
+            ppg_only = RAIL_END if rail_end_restored(self.config) else ()
+            return {name: (self.horizon_weight(name.rsplit('_', 1)[0]),) * 2 for name in output_names()
+                    if name in self.heads.owner and name not in ppg_only}
+
+        @property
+        def rail_end_decides_stop(self):
+            """g4770: a restored Rail-end head's CE is reported by the ownership stop but does not decide it."""
+            return not rail_end_restored(self.config)
 
         @property
         def scale(self):
@@ -577,6 +640,12 @@ def build(base):
             if stop is not None: result['ownership_stop'] = copy.deepcopy(stop)
             if rail_end_removed(self.config):
                 result['rail_end_heads'] = dict(removed_at=self.config['rail_end_removed'], migration=copy.deepcopy(self.rail_end_removal))
+            if rail_end_restored(self.config):
+                result['rail_end_heads'].update(restored_at=self.config['rail_end_restored'], weight=self.horizon_weight('rail_end'),
+                    restoration=copy.deepcopy(self.rail_end_restoration),
+                    scope='Restored Rail-end outputs: PPG only (same batches and steps as Canal/Rail), no PPO snapshot '
+                          'or preservation; PPO-game Canal rows on the actual game-end map, search rows on lambda '
+                          'returns after the warm-up; their CE is reported by the ownership stop, not decisive.')
             return result
 
         def diagnostics(self, model, dataset, heldout, *, maximum=None):

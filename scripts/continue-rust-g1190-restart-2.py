@@ -208,6 +208,17 @@ set once, then kept:
   rows         176 teacher label rows per PPO step (was 160); the adaptive beta carries over.
 Code-only in the same change: CPU workers load each model's bundle without the search head unless
 a teacher table blends it (w > 0), and --workers is capped at 64.
+
+--era-head-revision (at a committed boundary, after drop-rail-end, search-aux and search-rows) adopts
+the g4770 era-head revision (ai-research/G4770_ERA_HEAD_REVISION.md); set once, then kept:
+  rail-end     the Rail-end heads come back fresh at weight 0.05, trained only in PPG in the same
+               batches and steps as the Canal/Rail heads; no PPO snapshot, transfer or preservation;
+               PPO-game Canal rows on the actual game-end map, search rows on lambda .95 returns
+               after a four-iteration warm-up; the ownership stop reports their CE, Canal/Rail decide.
+  ordinary     every era head trains PPO-game rows on actual maps (lambda 1): no frozen outputs kept,
+               no corrections, no local-bootstrap sidecar. Search rows keep lambda .95.
+  search pool  a uniform 4-iteration-sized sample of the last 8 iterations' search training tables.
+--rail-end-weight 0.25 (any later committed boundary) raises the restored Rail-end weight.
 """
 import importlib.util
 from pathlib import Path

@@ -166,6 +166,15 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         help='Adopt the g4551 table revision at this committed generation: every PPO self-play table is a standard '
              'game (the teacher cotton tables stay), 50+4 teacher tables every iteration (was 44+4) and 176 teacher '
              'label rows per PPO step (was 160). Set once (training_revision_g4551).')
+    parser.add_argument('--era-head-revision', action='store_true',
+        help='Adopt the g4770 era-head revision at this committed generation: the Rail-end heads come back fresh at '
+             'weight 0.05, trained only in PPG in the same batches as the Canal/Rail heads (no PPO snapshot or '
+             'preservation; PPO-game rows on the actual game-end map, search rows on lambda 0.95 returns after a '
+             'four-iteration warm-up); every era head trains PPO-game rows on actual maps (lambda 1); the search '
+             'pool is a 4-iteration sample of the last 8 iterations\' tables. Set once (training_revision_g4770).')
+    parser.add_argument('--rail-end-weight', type=float, choices=(0.25,),
+        help='Raise the restored Rail-end heads\' weight from 0.05 to 0.25 at this committed generation '
+             '(after --era-head-revision). The setting persists.')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -237,6 +246,8 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.teacher_search_revision = False
         recovery.teacher_training_revision = False
         recovery.table_revision = False
+        recovery.era_head_revision = False
+        recovery.rail_end_weight = None
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

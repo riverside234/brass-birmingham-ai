@@ -105,9 +105,11 @@ class SearchValueIteration:
                 from .search_auxiliary import tables
                 require(self.phase.revision is not None, 'Search auxiliary rows need the g3270 rotating held-out set')
                 from .training_revision_g3140 import rail_end_returns_on, search_rows
+                from .training_revision_g4770 import search_pool
                 phases.search_auxiliary = dict(settings=copy.deepcopy(self.auxiliary),
                     tables=tables(self.phase.buffer, self.generation, heldout_games=self.phase.revision['heldout_games'],
-                                  iterations=self.auxiliary['train_iterations']),
+                                  iterations=self.auxiliary['train_iterations'],
+                                  pool=search_pool(self.config)),  # g4770: a 4-iteration sample of the last 8
                     rows=search_rows(self.config),  # g3471: the era heads' lambda targets on the expanded rows
                     rail_end=rail_end_returns_on(self.config, self.generation))  # g3528: the Rail-end head's too
 

@@ -44,6 +44,7 @@ SOURCE = 'search-teacher-table'
 ERAS = ('CanalEra', 'RailEra')
 CHUNK = 512
 SEED = 3423  # the search permutation's own generator: (SEED, generation, epoch)
+POOL_STREAM = 4770  # g4770: the pool sample's own generator: (SEED, POOL_STREAM, generation)
 
 
 # ---- the table's maps -----------------------------------------------------------------------
@@ -74,7 +75,7 @@ def latest(held, generation, games):
     return order[-games:]
 
 
-def tables(buffer, generation, *, heldout_games=32, iterations=4):
+def tables(buffer, generation, *, heldout_games=32, iterations=4, pool=None):
     """Search training and held-out tables for the era heads, read without changing the buffer.
 
     train     the search-value training tables admitted in the last `iterations` iterations: the train
@@ -83,19 +84,39 @@ def tables(buffer, generation, *, heldout_games=32, iterations=4):
     heldout   the latest `heldout_games` held-out tables: the search-value validation set.
     Tables without a stored map (collected before adoption or by a binary that does not send them) are
     counted and left out, so the held-out set grows from 4 to `heldout_games` after adoption.
+
+    `pool` (g4770, training_revision_g4770.search_pool): the train tables are instead a uniform sample, without
+    replacement, of the tables admitted in the last `window_iterations` iterations, as many as the last
+    `sampled_iterations` admitted, drawn by a generator of its own seeded with the generation.
     """
+    window = iterations if pool is None else pool['window_iterations']
+    size_iterations = iterations if pool is None else pool['sampled_iterations']
+    require(1 <= size_iterations <= window, 'Invalid search pool window')
     groups = dict(train=defaultdict(list), heldout=defaultdict(list))
     for receipt in buffer.receipts:
         if receipt['reward_id'] != buffer.reward_id: continue
         age = generation - receipt['generation']
         if not 0 <= age < buffer.windows[receipt['split']]: continue
-        if receipt['split'] == 'train' and age >= iterations: continue
+        if receipt['split'] == 'train' and age >= window: continue
         for row in buffer._read(receipt): groups[receipt['split']][row['game_id']].append(row)
     held = groups['heldout']; first = lambda rows: rows[0]['generation']
     now = latest(held, generation, heldout_games); current = set(now)
-    selected = dict(train=sorted(groups['train'], key=lambda g: (first(groups['train'][g]), g)),
-                    rotated=[g for g in latest(held, generation - iterations, heldout_games) if g not in current],
-                    heldout=now)
+    train = sorted(groups['train'], key=lambda g: (first(groups['train'][g]), g))
+    rotated = [g for g in latest(held, generation - window, heldout_games) if g not in current]
+    sampled = None
+    if pool is not None:
+        # As many tables as the last `sampled_iterations` admitted: their train tables and the held-out tables
+        # that left the latest set in those iterations.
+        recent = set(latest(held, generation - size_iterations, heldout_games)) - current
+        size = (sum(generation - first(groups['train'][g]) < size_iterations for g in train)
+                + sum(g in recent for g in rotated))
+        candidates = [('train', g) for g in train] + [('rotated', g) for g in rotated]
+        size = min(size, len(candidates))
+        picked = sorted(np.random.default_rng((SEED, POOL_STREAM, generation)).choice(len(candidates), size, replace=False).tolist())
+        train = [candidates[i][1] for i in picked if candidates[i][0] == 'train']
+        rotated = [candidates[i][1] for i in picked if candidates[i][0] == 'rotated']
+        sampled = dict(window_iterations=window, sampled_iterations=size_iterations, candidates=len(candidates), size=size)
+    selected = dict(train=train, rotated=rotated, heldout=now)
     source = dict(train=groups['train'], rotated=held, heldout=held)
     chosen = {name: [] for name in selected}; missing = Counter()
     for name, games in selected.items():
@@ -111,6 +132,9 @@ def tables(buffer, generation, *, heldout_games=32, iterations=4):
                   train_generations=generations('train'), rotated_generations=generations('rotated'),
                   heldout_generations=generations('heldout'), without_maps=dict(missing),
                   candidates={k: len(v) for k, v in selected.items()})
+    if sampled is not None:
+        report['sampled'] = dict(sampled, by_generation={str(k): v for k, v in sorted(Counter(
+            first(source[name][g]) for name in ('train', 'rotated') for g, _, _ in chosen[name]).items())})
     return dict(train=chosen['train'] + chosen['rotated'], heldout=chosen['heldout'], report=report)
 
 
@@ -277,7 +301,8 @@ class SearchAuxiliary:
             heldout_owner_ce=dict(before=search.get('before'), after=search.get('after')),
             criterion=dict(before=criterion.get('before'), after=criterion.get('after'), search_share=criterion.get('search_share')),
             by_era=local.search_report() if local is not None else None, seconds=self.seconds,
-            scope='Search-value training tables of the last four iterations, mixed into every PPG batch the heads train '
+            scope='Search-value training tables of the last four iterations (from g4770 a uniform sample of that size from '
+                  'the last eight: selection.sampled), mixed into every PPG batch the heads train '
                   'on (each root once per epoch, at the ordinary rows\' rate): era-head ownership and local-VP losses only, '
                   'each row weighted as one ordinary row of its step. kept.heads_rows: rows in intervals the ownership stop '
                   'kept; kept.trunk_rows: rows in joint steps the value check kept. Held-out: the search-value validation '

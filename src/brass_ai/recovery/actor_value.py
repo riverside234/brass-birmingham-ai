@@ -546,9 +546,11 @@ class TrainingPhases:
         # g3471 search-rows: the era heads' own frozen ownership probabilities and local VP, for their lambda targets.
         # g3528: the Rail-end head's too, once its own lambda targets are on.
         from .training_revision_g3140 import rail_end_returns_on,search_rows
+        from .training_revision_g4770 import ordinary_actual
         heads=('canal_','rail_slots','rail_links')+(('rail_end_',) if rail_end_returns_on(self.config,self.state['generation']) else ())
+        # g4770: PPO-game rows train the era heads on the actual map, so no outputs are kept for their returns.
         self.frozen_local=({k:v for k,v in values.items() if k.startswith(heads)}
-                           if search_rows(self.config) is not None else None)
+                           if search_rows(self.config) is not None and not ordinary_actual(self.config) else None)
 
     def prepare(self,dataset):
         from .updates import Dataset
