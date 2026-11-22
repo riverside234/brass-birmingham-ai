@@ -96,6 +96,9 @@ pub struct Package {
     pub k_by_allowance_ms: BTreeMap<u64, usize>,
     pub startup_ns: u64,
     pub startup_source: String,
+    /// 1.4.63: the startup estimate by era stage; `startup_ns` stays the fallback and bounds it.
+    #[serde(default)]
+    pub startup_ns_by_stage: Option<crate::local_startup::StartupByStage>,
     pub warmup_sha256: String,
     #[serde(default)]
     pub method: search::session::focus::Method,
@@ -129,7 +132,8 @@ impl Package {
                 && p.config.k == 8
                 && p.startup_ns >= 1_000_000
                 && p.startup_ns <= 100_000_000
-                && manifest::label(&p.startup_source),
+                && manifest::label(&p.startup_source)
+                && p.startup_ns_by_stage.as_ref().map_or(true, |t| t.valid(p.startup_ns)),
             "unsupported local search settings",
         )?;
         p.config.validate()?;
@@ -375,6 +379,7 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
         "policy_temperature":package_temperature,"temperature_scope":"all_nn_policy_evaluations",
         "request_policy_temperature":true,
         "industry_focuses":INDUSTRY_FOCUSES,
+        "startup_ns_by_stage":package.startup_ns_by_stage,
         "measured_readiness":{"warmup_passed":true,"native_nn_positions":warmup.lanes.iter().map(|l| l.neural.positions).sum::<usize>()},
         "max_frame_bytes":brass_ai_core::framing::MAX_FRAME_BYTES}),
     )?;
@@ -545,10 +550,13 @@ pub fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
                     export_sha256: EXPORT.into(),
                     reward_id: input.context.reward_id.clone(),
                     phase: input.view.context.phase,
-                    estimate: search::session::clock::Estimate {
-                        nanoseconds: package.startup_ns,
-                        source: package.startup_source.clone(),
-                    },
+                    estimate: crate::local_startup::estimate(
+                        package.startup_ns_by_stage.as_ref(),
+                        package.startup_ns,
+                        &package.startup_source,
+                        input.view.context.era,
+                        input.view.context.round,
+                    ),
                 };
                 let pair_id = pair.start(
                     input,

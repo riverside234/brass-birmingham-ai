@@ -85,15 +85,7 @@ To undo it:
 & "scripts/local-game/search-calibration/install-search-calibration.ps1" -Action Rollback
 ```
 
-## Further gain (not done)
+## Further gain (done in 1.4.63)
 
-Most positions could run about 1.5–2× the simulations they now get. Rail and later roots finish their quota in
-1.2–1.9 s of the 3 s of search time. Getting that needs a position-aware startup estimate: for example by era and
-round, or by the root's legal width, measured the same way per bucket.
-
-That is a worker change, not a policy edit:
-- a new policy field and its check in `brass-ai-worker/src/local.rs`;
-- the estimate chosen per request;
-- four rebuilt binaries;
-- calibration per bucket;
-- a new qualification.
+The position-aware estimate was built the same day as release 1.4.63, by era stage. It is installed; see
+`LOCAL_SEARCH_V1_STAGE_ESTIMATE.md`.

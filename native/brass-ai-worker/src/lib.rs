@@ -3,6 +3,7 @@ pub mod focus;
 pub mod local;
 mod local_model;
 pub mod local_profile;
+mod local_startup;
 mod local_temperature;
 pub mod pair;
 pub mod pair_harness;
