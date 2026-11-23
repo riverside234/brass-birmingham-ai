@@ -41,6 +41,7 @@ def restore_ratings(state, source, run):
     archive = read(ROOT / ratings['archive']['path'])
     archive['slots'] = [slot for slot in archive['slots'] if slot['generation'] <= GENERATION]
     archive['games'] = [game for game in archive['games'] if game['slot'] <= GENERATION]
+    ratings['panel_gates']['last_generation'] = (ratings['slots'] or archive['slots'])[-1]['generation']
     path = run / 'ratings' / f'history-{digest(archive)}.json'
     write_json(path, archive, compact=True)
     ratings['archive'] = receipt(ROOT, path)
@@ -159,6 +160,25 @@ def prepare(source, run):
     return state
 
 
+def repair_panel_progress(run, state):
+    last = state['ratings']['panel_gates']['last_generation']
+    if last is None or last <= state['iteration']:
+        return state
+
+    from brass_ai.bank import read
+    from brass_ai.recovery.retention import run_lock
+    from brass_ai.step5.league import write_json
+
+    path = run / 'state.json'
+    with run_lock(run):
+        state = read(path)
+        ratings = state['ratings']
+        report = read(ROOT / ratings['latest_report']['path'])
+        ratings['panel_gates']['last_generation'] = report['generation']
+        write_json(path, state, compact=True)
+    return state
+
+
 def main():
     from brass_ai.bank import read
 
@@ -174,7 +194,7 @@ def main():
     if args.expected_generation == GENERATION and not state_path.is_file():
         state = prepare(ROOT / SOURCE, run)
     else:
-        state = read(state_path)
+        state = repair_panel_progress(run, read(state_path))
     share = args.share_target if args.share_target is not None else state['signature']['config']['teacher_phase']['term']['share_target']
     return subprocess.call([
         sys.executable, str(ROOT / 'scripts' / 'continue-rust-g1190-restart-2.py'),
