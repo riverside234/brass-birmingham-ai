@@ -9,7 +9,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = Path('artifacts/step5/joint7-v11-2-g1190-restart-3')
-RUN = Path('artifacts/step5/joint7-v11-2-g4970-rail025-soft8')
+RUN = Path('artifacts/step5/joint7-v11-2-g4970-rail025-soft8-beta0.02')
 GENERATION = 4970
 sys.path.insert(0, str(ROOT / 'src'))
 
@@ -90,6 +90,7 @@ def prepare(source, run):
     from brass_ai.bank import read
     from brass_ai.learning.contracts import digest
     from brass_ai.learning.utility_model import UtilityConfig, UtilityNet
+    from brass_ai.recovery import adaptive_teacher_beta as adaptive
     from brass_ai.recovery.branch_restart import ppg_state, ppo_optimizer, rewrite
     from brass_ai.recovery.ratings import receipt
     from brass_ai.recovery.search_value_iteration import stamp
@@ -131,6 +132,10 @@ def prepare(source, run):
     limit['probe'] = dict(receipt(ROOT, probe_path), probe_hash=probe['probe_hash'])
 
     teacher = saved['teacher_phase']
+    weight = teacher['weight']
+    weight.update(beta=.02, shadow_shares=[], outside_streak=0)
+    weight[adaptive.REMEASUREMENT] = dict(requested_generation=GENERATION, previous_beta=weight['beta'])
+    weight.pop(adaptive.KEY, None)
     teacher['buffer'].update(receipts=[], retired=[])
     search = saved['search_value']
     search['buffer'].update(receipts=[], retired=[])
@@ -156,7 +161,8 @@ def prepare(source, run):
                       iterations=[row for row in vp['iterations'] if row['generation'] <= GENERATION])
             write_json(run / 'ratings' / name, vp, compact=True)
     write_json(run / 'state.json', state, compact=True)
-    print(f'Prepared {run_name} from the saved g{GENERATION} weights with fresh PPO/PPG Adam and replay.', flush=True)
+    print(f'Prepared {run_name} from the saved g{GENERATION} weights with fresh PPO/PPG Adam and replay. '
+          f'Teacher beta is {weight["beta"]:g} for the first iteration while remeasuring.', flush=True)
     return state
 
 
