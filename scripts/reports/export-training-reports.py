@@ -23,7 +23,8 @@ ratings/vp-history.json and latest progress_vp.svg are rebuilt from both and
 marked as derived in the manifest. The run's own files are never edited.
 The latest VP chart is redrawn from valid cumulative VP history using the current renderer.
 Teacher VP history and progress_teacher_vp.svg are included when present.
-The default run is the current g1190 restart (artifacts/step5/joint7-v11-2-g1190-restart-3); pass --run for another.
+With --continue, the g4970 beta restart is the default when its state exists.
+Otherwise the default is the g1190 restart. Use --run to choose a run explicitly.
 A branch-restart run reports the fresh-start seed recorded by its source run (checked by SHA-256), and its first --continue
 export copies everything because earlier exports belong to the source run.
 The CLI publishes to the independent ai-training-results repository by default.
@@ -54,6 +55,8 @@ import results_git
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1190-restart-3'
+G4970_RUN = 'artifacts/step5/joint7-v11-2-g4970-rail025-soft8-beta0.02'
+G4970_SOURCE = DEFAULT_RUN
 BRANCH_RESTART = 'rust-branch-restart/1.0.0'
 FORMAT = 'selfplay-report-export/1.4.0'
 PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0',
@@ -66,7 +69,7 @@ DERIVED = (COMPACT_JSON, GZIP_JSON, VP_MERGE, VP_RENDER)
 REPORT_NAMES = {'state.json', 'retention-history.json', 'report.json', 'spec.json',
                 'config.json', 'best.json', 'summary.json', 'comparison.json',
                 'validation-comparison.json', 'receipt.json', 'manifest.json',
-                'collection.json', 'calibration.json'}
+                'collection.json', 'calibration.json', 'restart-points.json'}
 SKIP_DIRS = {'.git', '.retention', '.retention-trash', '__pycache__', 'population'}
 # Performance documents are recognised by name, so a newly added profiler or
 # timing report needs no change here. Torch/TensorBoard traces are bulk data.
@@ -437,7 +440,9 @@ def incremental_files(root,run,generation,files,warnings,*,index=None):
 def branch_source(root,run):
     """The run a branch restart was prepared from (its signed config keeps that run's paths), else this run."""
     receipt=below(root,run/'branch-restart.json')
-    if not receipt.is_file():return run
+    if not receipt.is_file():
+        # The g4970 launcher inherits the source recipe without a branch-restart receipt.
+        return below(root, G4970_SOURCE) if run == root / G4970_RUN else run
     binding=load_json(receipt).get('binding')
     require(isinstance(binding,dict) and binding.get('contract')==BRANCH_RESTART and
             binding.get('destination_run')==run.relative_to(root).as_posix() and isinstance(binding.get('source_run'),str),
@@ -915,7 +920,8 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT, help='Project root; defaults to this script\'s project')
-    parser.add_argument('--run', default=DEFAULT_RUN, help=f'Self-play run under artifacts/ (default: {DEFAULT_RUN})')
+    parser.add_argument('--run', help=f'Self-play run under artifacts/ (--continue prefers {G4970_RUN} when present; '
+                        f'otherwise defaults to {DEFAULT_RUN})')
     parser.add_argument('--output', help='New results/ folder; default includes run, generation and UTC timestamp')
     parser.add_argument('--latest', type=int, default=2, help='Number of latest detailed committed iterations (default: 2)')
     parser.add_argument('--continue', dest='continue_export', action='store_true',
@@ -932,8 +938,12 @@ def main():
                 commit = results_git.push(args.root, directory, args.results_remote)
                 print(f'Uploaded results commit {commit} to {results_git.display(args.results_remote)}')
             return
+        run = args.run
+        if run is None:
+            run = (G4970_RUN if args.continue_export and (args.root / G4970_RUN / 'state.json').is_file()
+                   else DEFAULT_RUN)
         def collect():
-            return export(args.root, args.run, args.output, latest=args.latest, extras=args.extra,
+            return export(args.root, run, args.output, latest=args.latest, extras=args.extra,
                           continue_export=args.continue_export)
         if args.no_push:
             output, manifest = collect()

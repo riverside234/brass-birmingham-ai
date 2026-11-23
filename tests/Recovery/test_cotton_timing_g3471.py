@@ -118,7 +118,7 @@ class Recipe(unittest.TestCase):
 
 
 class SelfPlayVP(unittest.TestCase):
-    def test_learner_vp_is_kept_by_table_type_and_drawn_apart(self):
+    def test_learner_vp_is_kept_by_table_type_without_split_curves(self):
         from brass_ai.recovery import diagnostics, vp_plot
 
         class Game(dict):
@@ -158,8 +158,12 @@ class SelfPlayVP(unittest.TestCase):
             out_path = Path(tmp) / 'progress_vp.svg'
             vp_plot.render(history, out_path, generation=20)
             svg = out_path.read_text(encoding='utf-8')
-        self.assertIn('vp-recent-cotton-line', svg); self.assertIn('vp-recent-standard-line', svg)
-        self.assertIn('Cotton exploration tables', svg)
+        for panel in ('history', 'recent'):
+            self.assertIn(f'vp-{panel}-line', svg)
+            self.assertNotIn(f'vp-{panel}-cotton-line', svg)
+            self.assertNotIn(f'vp-{panel}-standard-line', svg)
+        self.assertNotIn('Cotton exploration tables', svg)
+        self.assertNotIn('Standard tables', svg)
 
 
 if __name__ == '__main__':

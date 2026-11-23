@@ -332,13 +332,9 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
                 typed_range = []
                 line, = axes.plot(x, y, color=blue, linewidth=2., zorder=4)
                 line.set_gid('vp-' + name + '-line')
-                # g3471: standard and cotton-exploration tables apart, where the groups record them.
-                for kind, color, style in (('standard', '#6F8790', (0, (4, 3))), ('cotton', '#C47A2C', (0, (1.5, 2)))):
+                for kind in ('standard', 'cotton'):
                     values = [_type_mean(r, kind) for r in part]
                     if any(v is not None for v in values):
-                        typed, = axes.plot(x, [v if v is not None else math.nan for v in values], color=color,
-                                           linewidth=1.5, linestyle=style, zorder=3)
-                        typed.set_gid('vp-' + name + '-' + kind + '-line')
                         present_values = [v for v in values if v is not None]
                         low_typed, high_typed = min(present_values), max(present_values)
                         typed_range.append((low_typed, high_typed))
@@ -363,9 +359,6 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
                 ax.axvline(start, color=blue, alpha=.25, linewidth=.8, linestyle=(0, (3, 4)), zorder=1)
             handles = [Line2D([], [], color=blue, marker='o', markerfacecolor='white',
                               linewidth=1.8, markersize=4, label='Seat-weighted pooled mean VP')]
-            if any(r.get('by_table') for r in data):
-                handles += [Line2D([], [], color='#6F8790', linestyle=(0, (4, 3)), linewidth=1.5, label='Standard tables'),
-                            Line2D([], [], color='#C47A2C', linestyle=(0, (1.5, 2)), linewidth=1.5, label='Cotton exploration tables')]
             fig.legend(handles=handles, loc='center left', bbox_to_anchor=(.066, .095), frameon=False, fontsize=8.4,
                        labelcolor=muted, ncol=len(handles))
             text(.055, .055, 'Full history: adjacent 10-iteration groups pooled; first/latest exact. Recent panel: original groups. Zero-VP seats included.'
