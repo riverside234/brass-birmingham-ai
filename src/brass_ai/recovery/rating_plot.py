@@ -9,7 +9,7 @@ from statistics import fmean
 
 
 DEFAULT_MAX_POINTS = 30
-RECENT_GENERATIONS = 200  # Shared by the VP companion charts.
+RECENT_GENERATIONS = 400  # Shared by the VP companion charts.
 PL_RECENT_GENERATIONS = 500
 
 

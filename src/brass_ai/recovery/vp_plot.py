@@ -251,7 +251,7 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
     shown_count = sum(r['mean_vp'] is not None for r in shown)
     latest = valid[-1] if valid else None
     previous = next((r for r in valid if r['last'] == latest['first']-1), None) if latest else None
-    recent_start = max(0, generation-RECENT_GENERATIONS)
+    recent_start = max(0, generation-RECENT_GENERATIONS+1)
     ink = '#203B43'; muted = '#5D737C'; blue = '#167D8D'; dark = '#0A6473'
     grid = '#E5ECEE'; paper = '#F6F8F7'
     with plt.rc_context({'font.family': 'DejaVu Sans', 'font.size': 10,
@@ -307,7 +307,7 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
                 text(rect[0], .760, subtitle, fontsize=8.4, color=muted)
                 return ax
 
-            ax = panel([.075, .190, .460, .527], 'Full training history',
+            ax = panel([.075, .190, .430, .527], 'Full training history',
                        f'{shown_count} points / {len(valid)} complete groups · ' +
                        ('adjacent pooled averages' if averaged else f'maximum {max_points} points'), 0, 7)
             # Only available groups occupy space; labels retain their real generations.
@@ -317,7 +317,7 @@ def render(history, output, *, generation=None, preview=None, max_points=DEFAULT
             ax.set_xlim(-.5, max(.5, len(shown)-.5))
             ax.set_xticks(tick_positions, [str(shown[i]['last']) for i in tick_positions])
             ax.set_xlabel('Generation at group end · missing VP groups omitted', fontsize=9, labelpad=12)
-            detail = panel([.635, .190, .313, .527], 'Recent progress',
+            detail = panel([.596, .190, .352, .527], 'Recent progress',
                            f'g{recent_start}–g{generation} · same groups · separate y-axis', recent_start, 4)
             for axes, part, name in ((ax, shown, 'history'),
                                       (detail, [r for r in data if r['last'] >= recent_start], 'recent')):

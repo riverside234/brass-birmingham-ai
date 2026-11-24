@@ -155,7 +155,7 @@ def marker_indices(observations, limit):
 
 
 def render(history, output, *, generation=None):
-    """Plot comparable teacher VP from g2269 and a recent 200-generation view."""
+    """Plot comparable teacher VP from g2269 and a recent 400-generation view."""
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
@@ -247,7 +247,7 @@ def render(history, output, *, generation=None):
 
         positions = range(len(generations))
         overview_ticks = sorted({round(i*(len(generations)-1)/7) for i in range(8)}) if generations else []
-        overview = panel((.073, .160, .458, .474), 'Full training history',
+        overview = panel((.073, .160, .428, .474), 'Full training history',
                          f'From g{FULL_HISTORY_START} · {len(generations):,} recorded iterations',
                          positions, generations, means, HISTORY_MAX_POINTS, 'teacher-vp-',
                          f'No teacher VP recorded from g{FULL_HISTORY_START}')
@@ -262,7 +262,7 @@ def render(history, output, *, generation=None):
             figure.text(overview.get_position().x1, .667, 'Recent window', ha='right',
                         fontsize=9, color=muted, bbox=dict(facecolor=window, edgecolor='none', pad=3))
 
-        detail = panel((.615, .160, .330, .474), f'Recent {RECENT_GENERATIONS} iterations',
+        detail = panel((.575, .160, .370, .474), f'Recent {RECENT_GENERATIONS} iterations',
                        f'g{recent_start}–g{generation} · {recent_count:,} recorded · separate VP scale',
                        recent, recent, recent_means, RECENT_MAX_POINTS, 'teacher-vp-recent-',
                        'No teacher VP available in this window')
