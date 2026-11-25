@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "991862cad5dbbcf7084b5d8d786c20f36d67500939bfde942ac45a8f2652faf3",
+  "execution_implementation": "d73df28c746fd7bbd38a623563a3d12608dcbcd9916b5947769d12458178d545",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -94,7 +94,7 @@
     },
     "src/brass_ai/recovery/il_kl_probe.py": {
       "before": "56d2bb9dc162013f087a2210ccdaf9779f5f97acf3212f603d48172cf9791894",
-      "after": "2d292dfc218ebd8282c4d612fec5ea5c2185f6db1e2a962c118033f016b9a52f"
+      "after": "9ed65f94440ef90a8df25e783302c3278430aeac79fab518bb8a96a90f7cfd89"
     },
     "src/brass_ai/recovery/inference.py": {
       "before": "c05fad975a8f1bc230523ed977b8c46863576791ec51408c53e6129e45d29e5d",
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "3452a8eecf82ace670e1909fff697ca35f0ea66337d381f08c49e8a3509cf3b5"
+      "after": "3ce1931e56526177359de15672a75e85f67c4a51db73eee5420b46b78f98d5bc"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -242,7 +242,7 @@
     },
     "src/brass_ai/rust_backend/lab_continuation.py": {
       "before": "1ff80d1ff8523676fd03a03f9890d14895543029d81715aa9006acd0c2444512",
-      "after": "33f3950dfd9114dfe0e1b0d8515365f4fdef63c6572952a91e27b9e745c9acb7"
+      "after": "f63a8fd13f2bf8e01b1deb26b04f164d2f59622787edd9b262470e57349ca994"
     },
     "src/brass_ai/rust_backend/lab_contract.py": {
       "before": "54e74106662ea82fe4c215930d092caba4c9205d3276e88aa225156c5640f236",
@@ -803,6 +803,14 @@
     "tests/Recovery/test_clip_revision_g5685.py": {
       "before": null,
       "after": "564d65b3f32cb5560a3ec69900c6535575590b7f3538fef99e8aaabf0e426a41"
+    },
+    "tests/Recovery/test_il_replay_unlinked_g5685.py": {
+      "before": null,
+      "after": "1aee9595e683533d3990fd6a3ccf47e58ace1327001cf182b6cbf0ae68a96ae9"
+    },
+    "tests/RustBackendLab/test_b03.py": {
+      "before": "3018f9c923d93dba64f5a47087c6d0f27855f76a973f7fabc1458e9962649b7c",
+      "after": "0201846742830375443df76201dbe5fb71483f54269883b72ae135cbe122ac39"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -1173,6 +1181,11 @@
       "implementation": "3aea42362141ce2bf63a2b039780b8931acda542f82af179862d9ae4d9bc7c6e",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "2bf60057591fd9db80e7d45c4bd1438f66eeee36680c796882d5e6a2ad4ba026"
+    },
+    {
+      "implementation": "991862cad5dbbcf7084b5d8d786c20f36d67500939bfde942ac45a8f2652faf3",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "a71285249269880bebd9530b4698d39572c2ee027b9e28ae68d2ad26b04e4f45"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1602,6 +1615,10 @@
   },
   "g5685_clip_revision": {
     "scope": "--clip-revision (training_revision_g5685) at a committed boundary, after g5466: PPO clips at 6.5 (update.grad_clip; was 5.83) and the PPG value phase at 2.4 (ppg_grad_clip; was 2.2); the era heads' and soft head's own clips stay 1.0; once, on the adoption generation's checkpoint, every PPO Adam exp_avg / exp_avg_sq is multiplied by E[min(n, 6.5)] / E[min(n, 5.83)] and the same with squares, from a normal fit of the last 30 committed iterations' logged PPO norm mean and std (resume.apply_optimizer_config -> rescale_ppo), and every PPG Adam moment by the same from 2.2 to 2.4, from their logged PPG mean and P98 (ppg_g210.initialize -> rescale_ppg); each receipt kept in its Adam group. Rates and schedules unchanged. Logging: the era heads' own per-phase norm summary (g5466 gradient_norms.ppo/ppg) is no longer measured or reported; their gradient_norm_max stays.",
+    "qualified_implementation_unchanged": true
+  },
+  "g5685_il_replay_unlinked": {
+    "scope": "Code-only, no training change: a resumed run no longer reads the IL replay dataset (artifacts/il-replay, deleted on the lab). league.imitation_handoff binds the run's committed state.signature.imitation_source instead of walking the completed IL lineage (completed_imitation: BC runs and their dataset manifest), which only a new run still does; a committed IL-KL probe is checked against that origin by il_kl_probe.committed_source instead of re-reading the dataset manifest (load, and lab_continuation's dependency listing and diagnostic-fork restore_probe); the continuation dependency listing no longer names the IL dataset manifest. Rehearsal from the dataset stays off (rehearsal_weight 0).",
     "qualified_implementation_unchanged": true
   }
 }

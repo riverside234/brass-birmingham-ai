@@ -396,11 +396,13 @@ class Continuation(Base):
         try:
             receipt=self.preflight()
             self.assertNotIn('il-kl/.prepared/unknown.bin',receipt['dependencies']['files'])
+            # g5685: the IL dataset manifest is a probe build input, not a continuation dependency (the committed
+            # probe binds its source descriptor); the IL checkpoint still is.
             validation=self.base/'il'/'validation.json'
-            self.assertIn(validation.relative_to(SOURCE_ROOT).as_posix(),receipt['dependencies']['external'])
-            before=validation.read_bytes();validation.write_bytes(b'changed')
-            try:
-                with self.assertRaisesRegex(ValueError,'dependency'):self.preflight()
+            self.assertNotIn(validation.relative_to(SOURCE_ROOT).as_posix(),receipt['dependencies']['external'])
+            self.assertIn((self.base/'il'/'candidate.pt').relative_to(SOURCE_ROOT).as_posix(),receipt['dependencies']['external'])
+            before=validation.read_bytes();validation.unlink()
+            try:self.assertEqual(self.preflight()['dependencies'],receipt['dependencies'])
             finally:validation.write_bytes(before)
         finally:unknown.unlink();scratch.rmdir()
 

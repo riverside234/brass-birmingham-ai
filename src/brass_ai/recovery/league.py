@@ -85,6 +85,25 @@ def require_start_generation(run,expected):
             f'Expected committed generation {expected}; refusing to start from a different checkpoint')
 
 
+def imitation_handoff(root,run,imitation_run):
+    """The completed IL a self-play run starts from: (model, origin) for a new run, (None, the committed origin) when
+    the run resumes.
+
+    g5685: a resumed run does not walk its IL lineage again. That walk re-hashed the BC runs and their IL replay
+    dataset (artifacts/il-replay, deleted on the lab), which the run used only at generation 0: the IL weights seeded
+    it, the dataset's validation positions built the fixed IL-KL probe now kept in the run (il-kl/, bound by
+    state.il_kl_limit.probe), and rehearsal from it is off (rehearsal_weight 0). The origin was verified when the run
+    started and is signed in state.signature; the caller still binds it to the config's imitation_checkpoint."""
+    state_path=run/'state.json'
+    if state_path.is_file():
+        origin=read(state_path)['signature'].get('imitation_source')
+        require(type(origin) is dict and project_path(root,origin['bc_run'])==project_path(root,imitation_run),
+                'Resuming needs the committed imitation source of --imitation-run')
+        return None,copy.deepcopy(origin)
+    from .demonstrations import completed_imitation
+    return completed_imitation(root,imitation_run)
+
+
 def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=None,from_run=None,imitation_run=None,resume_reviewed_source=False,inference_devices=None,il_kl_probe_from_run=None):
     from .config import time_budget_config,champion_mix_config,latest_model_recipe,quality_selfplay_recipe
     from .gae import evidence_config
@@ -115,12 +134,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         require(imitation_run is not None,'Latest-model recipe requires the pinned completed --imitation-run')
     if imitation_run is not None:
         require(config['imitation']['manifest'] is None,'Use --imitation-run OR in-run imitation, not both')
-        from .demonstrations import completed_imitation
-        bc_model,bc_origin=completed_imitation(root,imitation_run)
+        bc_model,bc_origin=imitation_handoff(root,run,imitation_run)
         if latest_model_recipe(config):
             bound_reference(root,bc_origin,config['imitation_checkpoint'],('bc_run','path','manifest'))
         require(project_path(root,imitation_run)!=run,'Self-play needs its own run directory')
-        require(bc_model.config==ModelConfig.preset(config['model_size']),'BC and self-play architecture differ')
+        require(bc_model is None or bc_model.config==ModelConfig.preset(config['model_size']),
+                'BC and self-play architecture differ')
         config=copy.deepcopy(config)
         if config['rehearsal_manifest'] is None:config['rehearsal_manifest']=bc_origin['manifest']
         require(project_path(root,config['rehearsal_manifest'])==project_path(root,bc_origin['manifest']),

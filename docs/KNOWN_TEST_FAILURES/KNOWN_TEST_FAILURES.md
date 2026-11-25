@@ -193,3 +193,62 @@ Found while testing the g5466 auxiliary revision ([G5466_AUXILIARY_REVISION.md](
 |---|---|---|
 | `test_policy_anchor.Configuration.test_g270_reviewed_continuation_preserves_progress_and_rejects_other_recipe_edits` | `FileNotFoundError` for `results/joint7-v11-2-grouped-lr-critic-g0270-20261020T233304700657Z/state.json` | The g270 export is not in the local results repository |
 | `test_policy_anchor.Configuration.test_only_explicit_blocks_change_and_epsilon_behavior_identity` | `AssertionError: 0.05 != 0.02` (`latest_model_config(...)['exploration']`) | The same `latest_model_config` difference as the LR-recipe tests above; not analysed further |
+
+## Old IL, resume and recipe tests failing on unmodified HEAD (found 2026-11-25, still in the tree)
+
+Found while unlinking the IL replay dataset ([G5685_IL_REPLAY_UNLINKED.md](../../ai-research/G5685_IL_REPLAY_UNLINKED.md)). 27 related modules gave 271 tests with the change (14 failures, 45 errors). The 53 failing tests were then run alone with HEAD `fa0857c8` and every edit stashed (`git stash -u`), and each one fails the same way there. The one exception is a `test_rehearsal_window` reader-reuse test that failed once with the change and passes when run alone (timing). The 46 below were not yet listed; the rest are in the sections above. They have not been deleted.
+
+- Assertion on old behaviour or an old attribute; not analysed further: 15
+- Old source transition not reviewed: 11
+- Missing old results export: 8
+- Old IL fixture (source or map topology): 7
+- Needs more CPU slots than the laptop has: 5
+
+| Test | Message | Cause |
+|---|---|---|
+| `test_auto_il_kl.Rules.test_archived_vp_check_reaches_11520_only_with_stated_baseline_assumption` | `FileNotFoundError for results/selfplay-v2-70...` | Missing old results export |
+| `test_auto_il_kl.Rules.test_defaults_signature_and_legacy_config_are_explicit` | `AssertionError: a config differs from the test's (Diff is 35697 characters long)` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_b03.Qualification.test_sealed_family_smoke_reuses_all_three_tables_and_branch` | `ValueError: Four frozen opponents required` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_b07_completion.Completion.test_shipped_source_review_and_resume_command_keep_exact_saved_recipe` | `ValueError: Completion source review changed` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_branch_restart.Pause.test_counts_pause_through_the_first_eight_iterations` | `AttributeError: 'SearchValuePhase' object has no attribute 'rebuild'` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_factored_scorer_resume.FactoredScorerResumeTests.test_checkpoint_optimizer_rng_progress_population` | `ValueError: This self-play source transition has not been reviewed` | Old source transition not reviewed |
+| `test_factored_scorer_resume.FactoredScorerResumeTests.test_completed_preceding_il_handoff_retains_checkpoint_and_origin` | `ValueError: Imitation must be fresh training from the current or reviewed compatible source` | Old IL fixture (source or map topology) |
+| `test_factored_scorer_resume.FactoredScorerResumeTests.test_guard_unrelated_changes` | `ValueError: This self-play source transition has not been reviewed` | Old source transition not reviewed |
+| `test_factored_scorer_resume.FactoredScorerResumeTests.test_pending_old_collections_rejected` | `AssertionError: "Uncommitted iteration" does not match "This self-play source transition has not been reviewed"` | Old source transition not reviewed |
+| `test_imitation.ImitationTests.test_completed_bc_handoff_rejects_unfinished_or_changed_candidate` | `ValueError: V11 link topology differs: CanalBelperDerby` | Old IL fixture (source or map topology) |
+| `test_imitation.ImitationTests.test_new_dataset_continuation_keeps_parent_and_resets_optimizer` | `ValueError: V11 link topology differs: CanalBelperDerby` | Old IL fixture (source or map topology) |
+| `test_imitation.ImitationTests.test_parallel_compact_load_preserves_targets_features_and_split` | `ValueError: V11 link topology differs: CanalBelperDerby` | Old IL fixture (source or map topology) |
+| `test_imitation.ImitationTests.test_progress_milestones_and_prefetch_order` | `ValueError: V11 link topology differs: CanalBelperDerby` | Old IL fixture (source or map topology) |
+| `test_imitation_extension.ExactExtensionTests.test_real_update_matches_uninterrupted_after_committed_interruption` | `TypeError: 'NoneType' object is not subscriptable` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_imitation_extension.ExactExtensionTests.test_reviewed_old_prepared_files_are_reused_but_still_check_raw_hashes` | `AssertionError: [] is not true` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_imitation_extension.ExtensionAdmissionTests.test_completed_extension_uses_handoff_review_and_replay_effective_limit` | `ValueError: 16 bootstrap workers require at least 16 available reader/CPU slots` | Needs more CPU slots than the laptop has |
+| `test_imitation_extension.ExtensionAdmissionTests.test_exact_review_and_cache_aliases_require_current_source` | `AssertionError: unexpectedly None` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_latest_model_recipe.LearningTests.test_initialization_is_pinned_il_with_empty_adam_zero_progress_and_no_gate` | `ValueError: 16 bootstrap workers require at least 16 available reader/CPU slots` | Needs more CPU slots than the laptop has |
+| `test_latest_model_recipe.LearningTests.test_missing_or_wrong_il_is_rejected_without_creating_a_checkpoint` | `ValueError: 16 bootstrap workers require at least 16 available reader/CPU slots` | Needs more CPU slots than the laptop has |
+| `test_latest_model_recipe.RecipeTests.test_conflicting_gate_curriculum_and_wall_limit_fail_closed` | `KeyError: 'legacy_boost'` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_latest_model_recipe.RecipeTests.test_defaults_generation_and_migration_are_idempotent` | `AssertionError: a config differs from the test's (Diff is 35697 characters long)` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_latest_model_recipe.RecipeTests.test_existing_ppo_run_cannot_switch_recipe_even_with_review` | `FileNotFoundError for results/v4-selfplay-joint-g0179-20261014T200020968013Z...` | Missing old results export |
+| `test_latest_model_recipe.RecipeTests.test_joint7_pin_agrees_with_completed_exported_lineage` | `FileNotFoundError for results/v4-selfplay-joint-g0150-20261013T173011108713Z...` | Missing old results export |
+| `test_latest_model_recipe.RecipeTests.test_ordinary_counts_boundaries_and_resume_window` | `KeyError: 'legacy_boost'` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_latest_model_recipe.RecipeTests.test_planner_latest_snapshot_seats_rotation_and_exact_final_counts` | `KeyError: 'iteration'` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_rehearsal_window.RehearsalWindowTests.test_config_is_strict_and_generator_preserves_unrelated_recipe` | `AssertionError: a config differs from the test's (Diff is 1838 characters long)` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_six_group_rollback.FeatureLabConfigTests.test_configure_binds_fresh_imitation_rehearsal_and_preserves_recipe` | `AssertionError: a config differs from the test's (insolvency block)` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_teacher_value_resume.TeacherValueResumeTests.test_completed_il_from_pre_default_source_starts_enabled_without_retraining` | `ValueError: Imitation must be fresh training from the current or reviewed compatible source` | Old IL fixture (source or map topology) |
+| `test_teacher_value_resume.TeacherValueResumeTests.test_completed_previous_il_admission_and_old_review_prefix_unchanged` | `AssertionError: False is not true` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_teacher_value_resume.TeacherValueResumeTests.test_guards_unrelated_config_sources_and_contracts` | `ValueError: This self-play source transition has not been reviewed` | Old source transition not reviewed |
+| `test_teacher_value_resume.TeacherValueResumeTests.test_pending_work_still_blocks` | `AssertionError: "Uncommitted iteration" does not match "This self-play source transition has not been reviewed"` | Old source transition not reviewed |
+| `test_teacher_value_resume.TeacherValueResumeTests.test_preserves_checkpoint_adam_rng_progress_population` | `ValueError: This self-play source transition has not been reviewed` | Old source transition not reviewed |
+| `test_teacher_value_resume.TeacherValueResumeTests.test_same_source_opt_in_out_and_diagnostic_changes_require_review` | `ValueError: This self-play source transition has not been reviewed` | Old source transition not reviewed |
+| `test_trained_startup.Startup.test_explicit_settings_immediate_branching_and_preserved_recipe` | `FileNotFoundError for results/joint7-v11-2-grouped-lr-critic-g1360-20261101T011723464975Z...` | Missing old results export |
+| `test_trained_startup.Startup.test_gae_98_fresh_evidence_twenty_observations_and_guards` | `FileNotFoundError for results/joint7-v11-2-grouped-lr-critic-g1360-20261101T011723464975Z...` | Missing old results export |
+| `test_trained_startup.Startup.test_isolated_ppo_ppg_smoke_with_startup_gae_and_fresh_heads` | `FileNotFoundError for results/joint7-v11-2-grouped-lr-critic-g1360-20261101T011723464975Z...` | Missing old results export |
+| `test_trained_startup.Startup.test_new_run_exact_main_weights_fresh_heads_restart_and_manual_planning` | `FileNotFoundError for results/joint7-v11-2-grouped-lr-critic-g1360-20261101T011723464975Z...` | Missing old results export |
+| `test_trained_startup.Startup.test_optimizer_step_warmup_restarts_exactly_and_never_imports_Adam` | `FileNotFoundError for results/joint7-v11-2-grouped-lr-critic-g1360-20261101T011723464975Z...` | Missing old results export |
+| `test_training_performance_resume.TrainingPerformanceResumeTests.test_completed_v7_il_source_handoff_is_accepted_without_rewriting_weights` | `ValueError: Imitation must be fresh training from the current or reviewed compatible source` | Old IL fixture (source or map topology) |
+| `test_training_performance_resume.TrainingPerformanceResumeTests.test_existing_approval_prefixes_and_definitions_are_unchanged` | `AssertionError: an approval-prefix hash differs (1ae769e2...)` | Assertion on old behaviour or an old attribute; not analysed further |
+| `test_training_performance_resume.TrainingPerformanceResumeTests.test_review_flag_settings_unknown_sources_and_old_contracts_are_rejected` | `ValueError: This self-play source transition has not been reviewed` | Old source transition not reviewed |
+| `test_training_performance_resume.TrainingPerformanceResumeTests.test_reviewed_commit_preserves_weights_adam_rng_population_and_counters` | `ValueError: This self-play source transition has not been reviewed` | Old source transition not reviewed |
+| `test_training_performance_resume.TrainingPerformanceResumeTests.test_source_review_does_not_admit_an_old_checkpoint_architecture` | `AssertionError: "fresh version-11" does not match "This self-play source transition has not been reviewed"` | Old source transition not reviewed |
+| `test_training_performance_resume.TrainingPerformanceResumeTests.test_uncommitted_collection_and_checkpoint_are_not_reused_or_modified` | `AssertionError: "Uncommitted iteration" does not match "This self-play source transition has not been reviewed"` | Old source transition not reviewed |
+| `test_v11_selector_resume.V11SelectorResumeTests.test_completed_current_il_retains_weights_origin_and_source_files` | `ValueError: 16 bootstrap workers require at least 16 available reader/CPU slots` | Needs more CPU slots than the laptop has |
+| `test_v11_selector_resume.V11SelectorResumeTests.test_completed_previous_source_not_admitted_as_v11_1` | `ValueError: 16 bootstrap workers require at least 16 available reader/CPU slots` | Needs more CPU slots than the laptop has |

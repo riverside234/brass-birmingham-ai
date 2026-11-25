@@ -164,14 +164,13 @@ def inventory(root, run, state, raw):
         # The committed fixed probe is independently bound to its manifest,
         # cache and source descriptor. Raw IL shards are build inputs, not
         # continuation dependencies (including after a machine transfer).
-        from brass_ai.recovery.il_kl_probe import source_binding
-        require(metadata['source']==source_binding(root,state['signature']['imitation_source'],verify_shards=False),
-                'Committed IL probe source descriptor changed')
+        # g5685: nor is the IL dataset manifest (artifacts/il-replay is gone).
+        from brass_ai.recovery.il_kl_probe import committed_source
+        committed_source(metadata, state['signature']['imitation_source'])
     # Do not copy il-kl/.prepared, unrelated scratch files or stale probe caches.
     source = state['signature'].get('imitation_source')
-    if source:
-        for key, hash_key in (('path', 'sha256'), ('manifest', 'manifest_sha256')):
-            if key in source: add(source[key], source[hash_key])
+    if source and 'path' in source:
+        add(source['path'], source['sha256'])  # the IL checkpoint; its dataset manifest is not a dependency (g5685)
     refs(state.get('native_backend'))
     return dict(files=files, external=external)
 
@@ -379,12 +378,13 @@ def restore(fork, *, device='cpu', allow_cuda_topology_change=False):
 def restore_probe(fork, config, receipt):
     """Resolve the signed original paths without rewriting probe metadata."""
     import numpy as np
-    from brass_ai.recovery.il_kl_probe import FORMAT, Probe, semantic_hash, source_binding, current_config
+    from brass_ai.recovery.il_kl_probe import FORMAT, Probe, semantic_hash, committed_source, current_config
     path = fork.resolve(project_path(fork.root, receipt['path']))
     require(sha(path) == receipt['sha256'], 'Committed fixed probe manifest changed')
     metadata = read(path)
-    require(metadata['format'] == FORMAT and current_config(metadata['config']) == current_config(config['il_kl_limit'])
-            and metadata['source'] == source_binding(fork.root, fork.state['signature']['imitation_source']),
+    committed_source(metadata, fork.state['signature']['imitation_source'],  # g5685: without the IL dataset
+                     'Diagnostic fixed probe source/config differs')
+    require(metadata['format'] == FORMAT and current_config(metadata['config']) == current_config(config['il_kl_limit']),
             'Diagnostic fixed probe source/config differs')
     cache = fork.resolve(project_path(fork.root, metadata['cache']['path']))
     require(sha(cache) == metadata['cache']['sha256'], 'Diagnostic fixed probe arrays changed')

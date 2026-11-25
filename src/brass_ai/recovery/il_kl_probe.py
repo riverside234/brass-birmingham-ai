@@ -213,6 +213,23 @@ def source_binding(root,origin,*,verify_shards=True):
                 il_model_id=origin['model_id'],il_checkpoint_sha256=origin['sha256'],compatibility=compatibility())
 
 
+SOURCE_FIELDS=('manifest','manifest_sha256','sources','il_model_id','il_checkpoint_sha256','compatibility')
+
+
+def committed_source(metadata,origin,message='Committed IL probe source descriptor changed'):
+    """g5685: a committed probe's source descriptor, checked against the run's signed IL origin without opening the
+    IL replay dataset (artifacts/il-replay, deleted on the lab). source_binding re-read the dataset manifest only to
+    list its validation shards again; they were bound when the probe was built, and the probe's own manifest and
+    arrays stay bound by hash (state.il_kl_limit.probe and the manifest's cache entry)."""
+    source=metadata.get('source')
+    require(type(source) is dict and set(source)==set(SOURCE_FIELDS) and type(source['sources']) is dict
+            and bool(source['sources'])
+            and source==dict(manifest=origin['manifest'],manifest_sha256=origin['manifest_sha256'],sources=source['sources'],
+                             il_model_id=origin['model_id'],il_checkpoint_sha256=origin['sha256'],compatibility=compatibility()),
+            message)
+    return source
+
+
 def build(root,directory,origin,model,config,update,workers):
     from .demonstrations import load_dataset
     directory.mkdir(parents=True,exist_ok=True)
@@ -260,11 +277,13 @@ def load(root,run,origin,model,config,update,workers,receipt=None):
         # A committed manifest + exact array/semantic hashes are the complete
         # fixed-probe input. Original IL shards are needed to BUILD a probe,
         # not to read its independently bound immutable 2048 positions.
+        # g5685: nor is the IL dataset manifest (committed_source).
         if receipt is not None:
             require(receipt==dict(path=path.relative_to(root).as_posix(),sha256=sha(path),
                                  probe_hash=receipt['probe_hash']), 'Committed fixed IL probe manifest changed')
-        source=source_binding(root,origin,verify_shards=receipt is None)
         metadata=read(path)
+        source=(committed_source(metadata,origin,'Fixed IL probe source/config differs') if receipt is not None
+                else source_binding(root,origin))
         # Retiring a health-only sales field does not change fixed probe
         # selection, tensors or reference probabilities. Keep its original
         # manifest/hash/receipt; reject every other config/source difference.
