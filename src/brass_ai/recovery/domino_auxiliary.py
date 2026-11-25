@@ -205,8 +205,10 @@ class PPGCompanions:
         self.fit_batch=[];self._local_loss=None
     def inventory(self,*args):
         if self.local is not None:self.local.inventory(*args)
-    def begin(self,phase):
-        if self.local is not None:self.local.begin(phase)
+    @property
+    def linked_rates(self):return bool(getattr(self.local,'linked_rates',False))  # g5402: the era heads' rate link
+    def begin(self,phase,**rates):
+        if self.local is not None:self.local.begin(phase,**rates)
         self.diversity.begin(phase)
     def batch(self,ds,ids):
         valid=self.diversity.eligible(ds,ids)

@@ -193,6 +193,8 @@ def main():
     parser.add_argument('--iterations', type=int, default=10)
     parser.add_argument('--share-target', type=float, help='Defaults to the current share target in this run')
     parser.add_argument('--workers', type=int, default=64)
+    parser.add_argument('--optimizer-revision', action='store_true',
+                        help='Adopt the g5402 optimizer revision at this committed generation (set once, then kept)')
     args = parser.parse_args()
 
     run = ROOT / RUN
@@ -207,6 +209,7 @@ def main():
         '--run', RUN.as_posix(), '--expected-generation', str(args.expected_generation),
         '--iterations', str(args.iterations), '--share-target', str(share), '--workers', str(args.workers),
         '--rail-end-weight', '0.25', '--soft-policy-weight', '8',
+        *(['--optimizer-revision'] if args.optimizer_revision else []),
     ], cwd=ROOT)
 
 

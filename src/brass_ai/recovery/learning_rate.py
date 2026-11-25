@@ -54,6 +54,17 @@ def step(optimizer,*,ppo=False):
         if KEY in group:group[KEY]['completed_steps']+=1
 
 
+def upcoming(optimizer,*,ppo=False):
+    """The rate the next step(optimizer, ppo=ppo) applies, without stepping (g5402: heads linked to it)."""
+    require(len(optimizer.param_groups)==1,'A linked rate needs one optimizer group')
+    group=optimizer.param_groups[0]
+    lr=rate(group[KEY],group[KEY]['completed_steps']+1) if KEY in group else group['lr']
+    if ppo:
+        from .lr_controller import multiplier
+        lr*=multiplier(group)
+    return lr
+
+
 def report(optimizer):
     if optimizer is None:return None
     values=[dict(copy.deepcopy(g[KEY]),effective_lr=g['lr'],next_lr=rate(g[KEY],g[KEY]['completed_steps']+1))

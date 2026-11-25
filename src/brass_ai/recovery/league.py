@@ -302,7 +302,13 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     optimizer=torch.optim.AdamW(ordinary_parameters(model),lr=config['learning_rate'],weight_decay=config['weight_decay'])
     cuda_resume=resume_optimizer(raw,optimizer,allow_cuda_topology_change=True)
     from .resume import apply_optimizer_config
-    optimizer_resume=apply_optimizer_config(optimizer,config)
+    optimizer_resume=apply_optimizer_config(optimizer,config,generation=state['iteration'])
+    if optimizer_resume.get('optimizer_revision'):
+        change=optimizer_resume['optimizer_revision']
+        scale=change['adam_rescale']
+        print(f'g5402 optimizer revision: PPO rate {change["before"]["rate"]:.3g} -> {change["after"]["rate"]:.3g} '
+              f'(base at multiplier 1); KL window restarted, cooldown {change["after"]["cooldown"]}; Adam exp_avg '
+              f'x{scale["first_moment"]:.3f}, exp_avg_sq x{scale["second_moment"]:.2f} on {scale["parameters"]} tensors',flush=True)
     from . import exploration
     exploration_state=exploration.restore(config,state,raw['training'].get('exploration'))
     pool_migration=resumed_pool=None
@@ -360,6 +366,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
     if 'local_scoring_auxiliary' in config:
         from .local_scoring_auxiliary import Companion
         local_scoring=Companion(model,config['local_scoring_auxiliary'],raw=raw,generation=state['iteration'],adopting=local_adopting)
+        from .training_revision_g5402 import era_heads_follow
+        local_scoring.linked_rates=era_heads_follow(config)  # g5402: PPG's step rate in PPG, PPO's in PPO
     if 'advantage' in config:
         from .actor_value import TrainingPhases
         phases=TrainingPhases(model,config,raw=phase_raw,generation=state['iteration'],root=root,run=run)
@@ -593,7 +601,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         quality_report['v4_history']['next_table_counts']=dict(plan['table_mix']['tables'])
                     if pool_migration and not summaries:quality_report['migration']=pool_migration
                 rehearsal_status=rehearsal_schedule(config,state['games_done'],iteration)
-                teacher_term=teacher_phase.prepare(model) if teacher_phase is not None else None
+                teacher_term=teacher_phase.prepare(model,ppo_optimizer=optimizer) if teacher_phase is not None else None
                 weight=rehearsal_status['weight']
                 sampling_finished=time.monotonic();rehearsal_seconds=0.
                 with ExitStack() as rehearsal_scope:
@@ -976,6 +984,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     gate=update['gae']['gate']
                     controller_line+=f' GAE={gate["lambda_used"]:.2f}->{gate["lambda_next"]:.2f} value_steps={value_report["optimizer_steps"]}'
                     controller_line+=f'/{value_report["attempted_steps"]} value_stop={value_report["early_stop_reason"] or "none"}'
+                    clipping=value_report.get('gradient_clipping')
+                    if clipping and clipping['steps']:
+                        # g5402: PPG's clipped/attempted steps at its own clip, and the median pre-clip norm.
+                        controller_line+=(f' value_clip={clipping["clipped_steps"]}/{clipping["steps"]}@{clipping["max_norm"]:g}'
+                            f' value_gnorm={clipping["pre_clip_norm"]["median"]:.2f}')
                     controller_line+=(f' value_lr={value_report["learning_rate"]:.2g}' if value_report['enabled'] else ' PPG=off')
                     if (value_report.get('learning_rate_source') or {}).get('source')=='ppo-last-applied':
                         controller_line+=f' value_peak={value_report["peak_learning_rate"]:.2g}[PPO]'

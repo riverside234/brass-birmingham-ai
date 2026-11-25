@@ -321,6 +321,19 @@ class DeferredKL:
         raise AssertionError('Missing frozen post-PPO KL-safe checkpoint')
 
 
+def clipping_report(norms,max_norm):
+    """g5402: the pre-clip total gradient norms clip_grad_norm_ returned for every attempted PPG optimizer step,
+    steps later rolled back included. `norms` are its device scalars, moved to the host once here."""
+    values=torch.stack(norms).double().cpu().numpy() if norms else np.zeros(0)
+    clipped=int((values>max_norm).sum())
+    return dict(max_norm=max_norm,steps=len(values),clipped_steps=clipped,
+        clipped_percent=100.*clipped/len(values) if len(values) else None,
+        pre_clip_norm=dict(mean=float(values.mean()),median=float(np.median(values)),p95=float(np.quantile(values,.95)))
+            if len(values) else dict(mean=None,median=None,p95=None),
+        scope='All attempted PPG optimizer steps, including steps later rolled back (loss intervals, KL restores); '
+              'a step clips when its pre-clip norm exceeds max_norm. Logging only.')
+
+
 def defer_train_metrics(model,config):
     from .updates import state_value_model
     return state_value_model(model) and config['contract'] in ('ppg-value-phase/24.0.0','ppg-value-phase/25.0.0','ppg-value-phase/26.0.0')
@@ -330,7 +343,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
         companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None,
         bootstrap_share=0.,loss_weights=None,train_metrics=True,ownership_stop=None,search_auxiliary=None,
-        gate_from_acceptance=False,descriptor_diagnostics=True):
+        gate_from_acceptance=False,descriptor_diagnostics=True,grad_clip=None):
     """bootstrap_share/loss_weights change the training loss only (g3140 steps 7-8); the held-out
     check always scores the four main terms on real outcomes with the original weights.
     train_metrics=False skips the two full-buffer scans (g3140 step 1); held-out evidence then
@@ -343,9 +356,15 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     gate_from_acceptance (g3658): the caller found the gate rows are the acceptance rows (the same
     held-out games of the current age), so the gate before/after are the acceptance measurements of
     the same weights instead of a second scan. descriptor_diagnostics=False skips the masked-descriptor
-    scan when no critic-data controller reads its gain."""
+    scan when no critic-data controller reads its gain.
+    grad_clip (g5402): the phase's own clip; None clips at update['grad_clip'] as PPO does. Every report carries
+    gradient_clipping (clipping_report) over all attempted optimizer steps. Linked era heads (companion.linked_rates)
+    step at this phase's rate of the same step."""
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
+    clip=update['grad_clip'] if grad_clip is None else grad_clip
+    clip_norms=[]  # device scalars: no host sync per step
+    linked=dict(learning_rate=config['learning_rate']) if getattr(companion,'linked_rates',False) else {}
     timings={}
     def measure(name,*args,**kwargs):
         start=time.perf_counter()
@@ -371,6 +390,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         branch_distinct_rows_used=0,branch_presentations=0,
         attempted_value_presentations=0,attempted_clone_presentations=0,
         distinct_current_rows_used=0,distinct_previous_rows_used=0,current_presentations=0,previous_presentations=0,
+        gradient_clipping=clipping_report([],clip),
         scope='Critic: current plus configured previous iteration; validation/cloning/probes: current only; separate Adam/configured value LR, no PPO counters; KL-safe prefixes require non-increasing held-out loss')
     if not config['enabled']:report['early_stop_reason']='disabled'
     elif not value_train_ids or not heldout_ids:report['early_stop_reason']='insufficient_critic_split'
@@ -475,10 +495,11 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 if companion is not None:
                     # New work-based companions retain the current phase's Adam
                     # lifecycle, but use its warmup/decay factor on their own
-                    # 1e-4 base rate. Main-model value LR is unchanged.
+                    # 1e-4 base rate, or (g5402, linked) on this phase's peak.
+                    # Main-model value LR is unchanged.
                     if scheduled and getattr(companion,'work_warmup',False):
-                        companion.begin('ppg',rate_factor=rate_factor(report['attempted_steps']+attempted+1,total_steps,config))
-                    else:companion.begin('ppg')
+                        companion.begin('ppg',rate_factor=rate_factor(report['attempted_steps']+attempted+1,total_steps,config),**linked)
+                    else:companion.begin('ppg',**linked)
                 if companion is not None and hasattr(companion,'batch'):companion.batch(value_dataset,batch)
                 for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
                     drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
@@ -504,7 +525,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     inputs=reference.inputs(part)
                     with autocast(update,dataset.device):loss=reference.loss(part,inputs,model)
                     (beta*loss.sum()/len(sample)).backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(),update['grad_clip'],error_if_nonfinite=True)
+                clip_norms.append(torch.nn.utils.clip_grad_norm_(model.parameters(),clip,error_if_nonfinite=True))
                 if scheduled:
                     rate=config['learning_rate']*rate_factor(report['attempted_steps']+attempted+1,total_steps,config)
                     for group in optimizer.param_groups:group['lr']=rate
@@ -614,9 +635,10 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         # planned batches with the trunk frozen until their own CE check stops them.
         def head_step(item,step,epoch):
             position,batch=item;local=stop.local
+            own=dict(learning_rate=config['learning_rate']) if getattr(local,'linked_rates',False) else {}
             if scheduled and getattr(local,'work_warmup',False):
-                local.begin('ppg',rate_factor=rate_factor(step,total_steps,config))
-            else:local.begin('ppg')
+                local.begin('ppg',rate_factor=rate_factor(step,total_steps,config),**own)
+            else:local.begin('ppg',**own)
             model.train()
             for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
                 drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
@@ -640,6 +662,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         report['ownership_stop']=stop.finish()
         if search is not None:report['search_auxiliary']=search.finish(stop.local,report['ownership_stop'],report)
     timings['training_and_retention_seconds']=time.perf_counter()-training_began
+    report['gradient_clipping']=clipping_report(clip_norms,clip)
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the
     # holdout, and no stale pre-value-phase receipt after trunk movement.

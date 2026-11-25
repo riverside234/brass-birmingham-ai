@@ -146,6 +146,12 @@ class SoftPolicy:
         self.origin_head = origin.to(device); self.m = m.to(device); self.v = v.to(device)
         self.multiplier = multiplier(self.trained, settings['warmup'])
         self.steps = []; self.iteration_steps = 0; self.clipped = 0; self.seconds = 0.; self.beta_weight = None
+        self.rate_source = None; self.last_rate = None
+
+    def follow(self, optimizer):
+        """g5402: step at the PPO LR of the same PPO step (learning_rate.upcoming of the PPO Adam), not the settings' own
+        rate. The head's own step runs inside the teacher term's apply, before PPO's scheduled step sets that rate."""
+        self.rate_source = optimizer
 
     @property
     def trunk(self):
@@ -185,8 +191,13 @@ class SoftPolicy:
         self.m.mul_(b1).add_(g, alpha=1 - b1)
         self.v.mul_(b2).addcmul_(g, g, value=1 - b2)
         c1, c2 = 1 - b1 ** self.t, 1 - b2 ** self.t
+        if self.rate_source is not None:
+            from .learning_rate import upcoming
+            rate = upcoming(self.rate_source, ppo=True)
+        else: rate = self.learning_rate
+        self.last_rate = rate
         with torch.no_grad():
-            self.head.addcdiv_(self.m, (self.v.sqrt() / math.sqrt(c2)).add_(EPS), value=-self.learning_rate / c1)
+            self.head.addcdiv_(self.m, (self.v.sqrt() / math.sqrt(c2)).add_(EPS), value=-rate / c1)
         self.total_steps += 1; self.iteration_steps += 1
 
     def record(self, **values):
@@ -244,6 +255,8 @@ class SoftPolicy:
             share=_summary([s['share'] for s in self.steps]), trunk_norm=_summary([s['trunk_norm'] for s in self.steps]),
             head_gradient_norm=_summary([s['head_norm'] for s in self.steps]),
             head_change=change, distance_from_main=distance, seconds=self.seconds,
+            learning_rate=dict(source='ppo-step-rate' if self.rate_source is not None else 'settings',
+                               last=self.last_rate, configured=self.learning_rate),
             scope='Soft KL on the teacher term\'s label rows before each step; share = 8 beta x soft trunk norm / PPO actor '
                   'norm on the measured steps (shared state/entity encoders, before clipping); head_change = |w - w0| / |w0| '
                   'from the copy at adoption; distance_from_main = |w - main/T| / |main/T| after the update')

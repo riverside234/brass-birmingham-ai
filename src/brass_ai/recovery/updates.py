@@ -680,7 +680,12 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                 crit=critic_order[critic_cursor:critic_cursor+config['critic_batch_size']];critic_cursor+=len(crit)
                 optimizer.zero_grad(set_to_none=True);model.train()
                 companion=getattr(phases,'local_scoring',None)
-                if companion is not None:companion.begin('ppo')
+                if companion is not None:
+                    # g5402: linked era heads take this PPO step's rate (the one scheduled_step applies below).
+                    if getattr(companion,'linked_rates',False):
+                        from .learning_rate import upcoming
+                        companion.begin('ppo',learning_rate=upcoming(optimizer,ppo=True))
+                    else:companion.begin('ppo')
                 if diversity is not None:diversity.begin('ppo')
                 intrinsic_count=sum(diversity.eligible(critic_ds,crit)) if diversity is not None and diversity.active else 0
                 gradient_terms=TrunkGradients(model,measure=measure_actor_gradients(steps,teacher_term)) if frozen or teacher_term is not None else None

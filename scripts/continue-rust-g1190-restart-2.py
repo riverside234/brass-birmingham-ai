@@ -219,6 +219,20 @@ the g4770 era-head revision (ai-research/G4770_ERA_HEAD_REVISION.md); set once, 
                no corrections, no local-bootstrap sidecar. Search rows keep lambda .95.
   search pool  a uniform 4-iteration-sized sample of the last 8 iterations' search training tables.
 --rail-end-weight 0.25 (any later committed boundary) raises the restored Rail-end weight.
+
+--optimizer-revision (at a committed boundary, with the applied PPO LR controller and its 4e-6
+floor) adopts the g5402 optimizer revision (ai-research/G5402_OPTIMIZER_REVISION.md); set once,
+then kept:
+  grad clip    PPO clips its gradient norm at 5.83 (was 1.0); PPG has its own clip, kept at 1.0.
+  PPO LR       the rate in force is cut by 20% (6e-6 -> 4.8e-6) and becomes the base, multiplier 1;
+               the controller restarts its KL window and runs its cooldown; the 4e-6 floor stays.
+  Adam         the PPO Adam moments are rescaled once to the new clip (exp_avg x E[min(n, 5.83)],
+               exp_avg_sq x E[min(n, 5.83)^2] from the committed pre-clip norms), so the first
+               steps are 0.8x today's instead of ~2.7x.
+  heads        the soft policy head steps at the PPO rate of each PPO step; the era heads at the PPG
+               rate of each PPG step (warm-up and decay included), and at the PPO rate in PPO.
+Code-only in the same change: every PPG value-phase report carries gradient_clipping (pre-clip
+norm mean/median/P95, clipped steps and percent over all attempted steps).
 """
 import importlib.util
 from pathlib import Path

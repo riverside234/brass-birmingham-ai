@@ -500,6 +500,8 @@ def fit(phases,model,preparation_pool):
     from .ppo_preparation import phase_preparation
     require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
     began=time.perf_counter();c=phases.options['value_phase'];rate=getattr(phases,'ppo_peak',None)
+    from .training_revision_g5402 import ppg_grad_clip
+    clip=ppg_grad_clip(phases.config)  # g5402: PPG keeps its own clip (1.0) while PPO clips at 5.83
     from .training_revision_g3140 import bootstrap as bootstrap_settings
     blend=bootstrap_settings(phases.config);boot=boot_report=None
     if blend is not None:
@@ -540,7 +542,7 @@ def fit(phases,model,preparation_pool):
             effective=dict(c,learning_rate=0.)
             report=value_phase.fit(model,phases.optimizer,phases.dataset,phases.train_ids,
                 phases.heldout_ids,[],phases.probe_ids,effective,phases.config['update'],beta=phases.beta,
-                value_dataset=phases.critic_dataset,validation_dataset=phases.critic_dataset)
+                value_dataset=phases.critic_dataset,validation_dataset=phases.critic_dataset,grad_clip=clip)
             report.update(scheduled=False,early_stop_reason='not_due',buffer=cache,split=phases.split,
                 phase_interval=c['phase_interval'],buffer_iterations=c['buffer_iterations'],schedule=clock,
                 validation_iterations=c['validation_iterations'],gate_critic_training=dict(source='ppg',optimizer_steps=0),
@@ -619,7 +621,7 @@ def fit(phases,model,preparation_pool):
             train_metrics=train_metrics_due(phases.config,phases.state['generation']+1),
             ownership_stop=ownership_stop(phases.config),
             search_auxiliary=getattr(phases,'search_auxiliary',None),  # g3423: set by the search-value iteration
-            gate_from_acceptance=gate_reuse,
+            gate_from_acceptance=gate_reuse,grad_clip=clip,
             descriptor_diagnostics=critic_data.reads_descriptor_gain(phases.critic_state,phases.config.get('critic_data')))
         if blend is not None:report['bootstrap_ages']=ds.bootstrap.available()
         if getattr(phases,'diversity',None) is not None:

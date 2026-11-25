@@ -721,6 +721,15 @@ def validate_config(config):
     if ERA_HEAD_REVISION in config:
         require('value_revision' in config,'The g4770 era-head revision needs the g3140 value revision')
         fields.add(ERA_HEAD_REVISION);validate_era_head_revision(config[ERA_HEAD_REVISION])
+    from .training_revision_g5402 import KEY as OPTIMIZER_REVISION,validate as validate_optimizer_revision
+    if OPTIMIZER_REVISION in config:
+        # g5402: the recipe holds the adopted PPO clip, base LR and floor multiplier the block records.
+        block=validate_optimizer_revision(config[OPTIMIZER_REVISION])
+        require('ppo_lr_controller' in config and config['update']['grad_clip']==block['ppo_grad_clip'] and
+                config['learning_rate']==block['after']['learning_rate'] and
+                config['ppo_lr_controller']['min_multiplier']==block['after']['min_multiplier'],
+                'The g5402 optimizer revision differs from the PPO clip/LR it adopted')
+        fields.add(OPTIMIZER_REVISION)
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

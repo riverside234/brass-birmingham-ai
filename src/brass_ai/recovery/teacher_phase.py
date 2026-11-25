@@ -307,7 +307,8 @@ class TeacherPhase:
             values = verifier if hasattr(verifier,'take_value_rows') else None
             self.search_value.admit(results,self.jobs,post_spent=post_spent if verifier is not None else 0.,value_verifier=values)
 
-    def prepare(self, model):
+    def prepare(self, model, ppo_optimizer=None):
+        """ppo_optimizer (g5402): the PPO Adam whose step rate a linked soft head follows."""
         from . import training_revision_g3270 as g3270
         settings = g3270.term_settings(self.config)
         from . import training_revision_g3423 as g3423
@@ -317,6 +318,10 @@ class TeacherPhase:
             from .soft_policy import SoftPolicy
             require(settings is not None, 'The soft policy head needs the g3270 teacher revision')
             self.soft = SoftPolicy(model, soft_settings, self.soft_state, generation=self.generation)
+            from .training_revision_g5402 import soft_follows_ppo
+            if soft_follows_ppo(self.config):
+                require(ppo_optimizer is not None, 'A linked soft head needs the PPO optimizer')
+                self.soft.follow(ppo_optimizer)
         # g3270: keep the validation rows' pre-update logits for the policy's movement on them.
         if self.soft is not None:
             # The same logits as policy_logits, plus the soft head's KL from the same forwards.

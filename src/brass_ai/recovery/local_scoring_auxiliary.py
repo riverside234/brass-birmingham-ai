@@ -136,6 +136,10 @@ _ERA_COMPANION=None
 
 
 class Companion:
+    # g5402 (training_revision_g5402.era_heads_follow): each step takes the main network's rate for that step,
+    # passed to begin(); otherwise the configured 1e-4 (x the PPG schedule factor in PPG).
+    linked_rates=False
+
     def __new__(cls,model=None,config=None,**kwargs):
         # A 3.0.0 config builds the era-head companion; every call site stays the same.
         if cls is Companion and isinstance(config,dict) and era_heads(config):
@@ -212,7 +216,9 @@ class Companion:
         self.rollbacks=0;self.restorations=0;self.steps=dict(ppo=0,ppg=0);self.gradient_norms=[]
         self.fitting_steps=0;self.fitting_used=set()
 
-    def begin(self,phase,*,reset=False,rate_factor=1.):
+    def begin(self,phase,*,reset=False,rate_factor=1.,learning_rate=None):
+        """learning_rate (g5402): the main network's base rate for this step (PPG's peak, or PPO's step rate);
+        used in place of the configured rate when the rates are linked."""
         optimizer=self.optimizers[phase]
         self.phase=phase;self.batch_fitting=set()
         if not self.active:
@@ -220,7 +226,12 @@ class Companion:
         if reset:optimizer.state.clear()
         optimizer.zero_grad(set_to_none=True);self.pending=False;self.batch_used=set()
         require(math.isfinite(rate_factor) and 0<rate_factor<=1+1e-12,'Invalid companion phase LR factor')
-        for group in optimizer.param_groups:group['lr']=self.config['optimizer']['learning_rate']*min(1.,rate_factor)
+        base=self.config['optimizer']['learning_rate']
+        if self.linked_rates:
+            require(type(learning_rate) in (int,float) and math.isfinite(learning_rate) and 0<learning_rate<=base,
+                'Linked era-head rates need the main network rate of the step')
+            base=learning_rate
+        for group in optimizer.param_groups:group['lr']=base*min(1.,rate_factor)
 
     def metadata(self,ds,ids):
         if hasattr(ds,'scoring_metadata'):return ds.scoring_metadata(ids)
@@ -402,6 +413,7 @@ class Companion:
             shared_gradient_scale=self.scale,parameter_count=sum(p.numel() for p in self.heads.parameters()),
             available=support(self.available),unavailable=support(self.unavailable),attempted=support(self.attempted),retained=support(self.retained),companion_steps=self.steps,
             companion_lr={p:o.param_groups[0]['lr'] for p,o in self.optimizers.items()},
+            companion_lr_source='main-network-step-rate' if self.linked_rates else 'configured',
             gradient_norm_max=gradient_norm,rollbacks=self.rollbacks,state_restorations=self.restorations,
             training=dict(self.stats,**totals),training_scope='Detached device totals transferred together at reporting; attempted presentations/loss totals include rejected intervals. Retained counts follow joint checkpoint selection.',
             target=targets.identity(),audit_discrepancies=0,scope='Critic-train rows only; official held-out loss and exact policy KL remain the acceptance criteria. Invalid scoring audits fail admission.')

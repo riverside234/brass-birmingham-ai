@@ -173,3 +173,14 @@ Found while testing the g4770 era-head revision ([G4770_ERA_HEAD_REVISION.md](..
 | Test | Message | Cause |
 |---|---|---|
 | `test_domino.Training.test_new_config_only_diversity_and_off_no_mutation` | `AssertionError` (the configured recipe also gains a `context_evaluation` block, which the test's expected config lacks) | Assertion on old behaviour; not analysed further |
+
+## LR-recipe, IL-admission and VP-chart failures on unmodified HEAD (found 2026-11-24, still in the tree)
+
+Found while testing the g5402 optimizer revision ([G5402_OPTIMIZER_REVISION.md](../../ai-research/G5402_OPTIMIZER_REVISION.md)). Each fails the same way with HEAD `fc640bd7` and every g5402 edit stashed (`git stash -u`). The six tests run together gave `FAILED (failures=3, errors=3)` both ways. That run also included the two `test_ppg_g210.Restored` g660 tests already listed above, which still lack their export. They have not been deleted.
+
+| Test | Message | Cause |
+|---|---|---|
+| `test_ppo_lr_controller.FixedRecipe.test_defaults_generator_and_archived_recipe_validation` | `AssertionError` (`latest_model_config` returns a config that differs from the test's, for example 0.05 against 0.02) | Assertion on old behaviour; not analysed further |
+| `test_v11_learning_rate.V11LearningRateTests.test_new_config_scales_once_and_preserves_other_recipe_fields` | same `latest_model_config` difference | Assertion on old behaviour; not analysed further |
+| `test_ppo_lr_controller.FixedRecipe.test_completed_reviewed_v11_2_il_is_admitted_without_file_changes` | `ValueError: 16 bootstrap workers require at least 16 available reader/CPU slots` (`throughput_config.configure`) | Needs more CPU slots than the laptop has |
+| `test_table_revision_g4551.SelfPlay.test_the_vp_report_and_chart_take_a_split_with_no_cotton_tables` | `AssertionError: 'vp-recent-standard-line' not found` in the VP chart SVG | The VP chart changed after the test was written (plot commits c7d53b80, fc640bd7) |
