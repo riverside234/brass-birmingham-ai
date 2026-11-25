@@ -468,9 +468,14 @@ def initialize(phases,model,config,*,raw,generation,root,run):
     group=phases.optimizer.param_groups[0]
     require(len(phases.optimizer.param_groups)==1 and math.isfinite(group['lr']) and group['lr']>0
         and group['weight_decay']==0,'Invalid g210 value Adam')
-    # g5466: once, on the adoption generation's checkpoint, the moments move from the 1.0 clip to 2.2.
+    # g5466: once, on the adoption generation's checkpoint, the moments move from the 1.0 clip to 2.2;
+    # g5685: the same from 2.2 to 2.4 (g5466's receipt in the group makes its own a no-op).
     from .training_revision_g5466 import rescale_ppg
-    phases.ppg_adam_rescale=rescale_ppg(phases.optimizer,config,generation) if saved is not None else None
+    from .training_revision_g5685 import rescale_ppg as rescale_ppg_g5685
+    phases.ppg_adam_rescale=None
+    if saved is not None:
+        phases.ppg_adam_rescale=(rescale_ppg(phases.optimizer,config,generation) or
+                                 rescale_ppg_g5685(phases.optimizer,config,generation))
     require(type(phases.cache_origin) is int and 0<=phases.cache_origin<=generation,'Invalid g210 replay origin')
     from .utility import reward_spec,reviewed_reward_upgrade
     previous_reward=(raw or {}).get('model_config',{}).get('utility')
@@ -504,7 +509,8 @@ def fit(phases,model,preparation_pool):
     require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
     began=time.perf_counter();c=phases.options['value_phase'];rate=getattr(phases,'ppo_peak',None)
     from . import training_revision_g5466 as g5466
-    clip=g5466.ppg_grad_clip(phases.config)  # g5402: PPG's own clip (1.0) while PPO clips at 5.83; g5466: 2.2
+    from .training_revision_g5685 import ppg_grad_clip
+    clip=ppg_grad_clip(phases.config)  # g5402: PPG's own clip (1.0) while PPO clips at 5.83; g5466: 2.2; g5685: 2.4
     # g5466: the era heads step at the PPO rate (the one PPG's peak is .65 of), fixed for the phase.
     heads_rate=rate['ppo_lr'] if rate is not None and g5466.fixed_head_rate(phases.config) else None
     from .training_revision_g3140 import bootstrap as bootstrap_settings
@@ -646,7 +652,7 @@ def fit(phases,model,preparation_pool):
         if getattr(phases,'retired_tables',()):report['retired_table_checks']=list(phases.retired_tables)
     if rate is None:report['early_stop_reason']='no_applied_ppo_rate'
     if getattr(phases,'ppg_adam_rescale',None) is not None:
-        # g5466: the one-time PPG Adam rescale for the 2.2 clip, reported with the first phase after it.
+        # g5466/g5685: the one-time PPG Adam rescale for the 2.2 (2.4) clip, reported with the first phase after it.
         report['adam_rescale']=phases.ppg_adam_rescale;phases.ppg_adam_rescale=None
     report.update(buffer=cache,split=phases.split,migration=copy.deepcopy(phases.g210_migration),
         phase_interval=c['phase_interval'],buffer_iterations=2,validation_iterations=c['validation_iterations'],scheduled=True,

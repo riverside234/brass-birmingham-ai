@@ -242,6 +242,14 @@ auxiliary revision (ai-research/G5466_AUXILIARY_REVISION.md); set once, then kep
                30 committed PPG phases' logged pre-clip norms (mean and P95).
   head rates   the era heads step at the PPO rate in PPG too, fixed for the phase (no warm-up or
                decay); PPO-phase rates are unchanged.
+
+--clip-revision (at a committed boundary, after --auxiliary-revision) adopts the g5685 clip
+revision (ai-research/G5685_CLIP_REVISION.md); set once, then kept:
+  clips        PPO 6.5 (was 5.83), PPG 2.4 (was 2.2); the heads' own clips stay 1.0.
+  Adam         both Adams' moments are rescaled once to the new clips, from normal fits of the last
+               30 committed iterations' logged pre-clip norms (PPO mean and std, PPG mean and P98).
+Code-only in the same change: the era heads' own per-phase norm summary (g5466) is no longer
+measured or reported.
 """
 import importlib.util
 from pathlib import Path

@@ -218,7 +218,6 @@ class Companion:
         self.device_stats={}
         self.available=set();self.unavailable=set();self.map_support={};self.map_masked={}
         self.rollbacks=0;self.restorations=0;self.steps=dict(ppo=0,ppg=0);self.gradient_norms=[]
-        self.phase_norms=dict(ppo=[],ppg=[])  # g5466: the heads' own pre-clip norms per phase, device scalars
         self.fitting_steps=0;self.fitting_used=set()
 
     def begin(self,phase,*,reset=False,rate_factor=1.,learning_rate=None):
@@ -331,7 +330,7 @@ class Companion:
         if self.active and self.pending:
             norm=torch.nn.utils.clip_grad_norm_(self.heads.parameters(),HEAD_GRAD_CLIP,error_if_nonfinite=True)
             start=time.perf_counter();self.optimizers[phase].step();self.stats['optimizer_seconds']+=time.perf_counter()-start
-            detached=norm.detach().double();self.phase_norms[phase].append(detached)
+            detached=norm.detach().double()  # g5685: no per-phase norm list (g5466's measurement is off)
             self.device_stats['gradient_norm_max']=torch.maximum(self.device_stats.get('gradient_norm_max',torch.zeros_like(detached)),detached)
             self.steps[phase]+=1;self.retained_steps[phase]+=1
             self.retained.update(self.batch_used)
@@ -420,19 +419,10 @@ class Companion:
             companion_lr={p:o.param_groups[0]['lr'] for p,o in self.optimizers.items()},
             companion_lr_source=('ppo-rate (PPG: fixed per phase; PPO: per step)' if self.fixed_ppg_rate else
                                  'main-network-step-rate' if self.linked_rates else 'configured'),
-            gradient_norm_max=gradient_norm,gradient_norms=self.norm_report(),
+            gradient_norm_max=gradient_norm,
             rollbacks=self.rollbacks,state_restorations=self.restorations,
             training=dict(self.stats,**totals),training_scope='Detached device totals transferred together at reporting; attempted presentations/loss totals include rejected intervals. Retained counts follow joint checkpoint selection.',
             target=targets.identity(),audit_discrepancies=0,scope='Critic-train rows only; official held-out loss and exact policy KL remain the acceptance criteria. Invalid scoring audits fail admission.')
-
-    def norm_report(self):
-        """g5466: the heads' own pre-clip total gradient norm (what their clip sees), per phase, over every attempted
-        head step (steps the ownership stop later restored included): mean, median, P98, max and the steps above the
-        clip. Device scalars, moved to the host once here."""
-        from .value_phase import clipping_report
-        return {phase:clipping_report(norms,HEAD_GRAD_CLIP,scope=f'Era heads, {phase.upper()} phase: every attempted head '
-                    "step, restored ones included; the norm of the heads' own parameters before their clip. Logging only.")
-                for phase,norms in self.phase_norms.items()}
 
     def inventory(self,dataset,ids):
         ids=list(ids)

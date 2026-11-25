@@ -258,28 +258,6 @@ class RailEnd(unittest.TestCase):
 
 
 class Norms(unittest.TestCase):
-    def test_the_era_heads_report_their_own_norms_per_phase_with_p98(self):
-        from brass_ai.recovery import local_scoring_auxiliary as auxiliary
-        from brass_ai.recovery import local_scoring_v3 as v3
-        from test_gae_value_phase import fixture
-        companion = auxiliary.Companion(fixture(games=1)[0], v3.default(1), raw=dict(model_id='m'), generation=1)
-        parameters = list(companion.heads.parameters()); torch.manual_seed(5)
-        def step(phase, scale):
-            companion.begin(phase); companion.pending = True
-            for p in parameters: p.grad = torch.randn_like(p) * scale
-            expected = float(torch.linalg.vector_norm(torch.stack([torch.linalg.vector_norm(p.grad) for p in parameters])))
-            companion.step(phase); return expected
-        ppo = [step('ppo', 1e-3) for _ in range(5)]; ppg = [step('ppg', 1e-1) for _ in range(3)]
-        report = companion.report()['gradient_norms']
-        for phase, values in (('ppo', ppo), ('ppg', ppg)):
-            r = report[phase]
-            self.assertEqual((r['steps'], r['max_norm']), (len(values), 1.))
-            self.assertAlmostEqual(r['pre_clip_norm']['p98'], float(np.quantile(values, .98)), places=5)
-            self.assertAlmostEqual(r['pre_clip_norm']['max'], max(values), places=5)
-            self.assertEqual(r['clipped_steps'], sum(v > 1. for v in values))
-        self.assertGreater(report['ppg']['clipped_steps'], 0)  # these PPG norms are above the heads' 1.0
-        self.assertNotIn('p95', report['ppo']['pre_clip_norm'])
-
     def test_ppo_reports_p98_of_its_gradient_norms(self):
         from brass_ai.recovery.review_metrics import distribution
         values = list(range(1, 101))

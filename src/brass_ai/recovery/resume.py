@@ -19,11 +19,15 @@ def apply_optimizer_config(optimizer, config, generation=None):
     Keep every moment, step, parameter and other optimizer option intact.
     g5402: at its adoption generation the persisted warm-up base and controller
     multiplier are rebased to the cut rate first (training_revision_g5402.rebase_ppo).
+    g5685: at its adoption generation the moments are rescaled to the 6.5 clip
+    (training_revision_g5685.rescale_ppo).
     """
     require(len(optimizer.param_groups)==1,'Step 5 expects a single AdamW group')
     before=[dict(lr=g['lr'],weight_decay=g['weight_decay']) for g in optimizer.param_groups]
     from .training_revision_g5402 import rebase_ppo
     rebased=rebase_ppo(optimizer,config,generation)
+    from .training_revision_g5685 import rescale_ppo
+    rescaled=rescale_ppo(optimizer,config,generation)
     for group in optimizer.param_groups:
         group['lr']=config['learning_rate']
         group['weight_decay']=config['weight_decay']
@@ -36,7 +40,8 @@ def apply_optimizer_config(optimizer, config, generation=None):
         configure(optimizer,config['ppo_lr_controller'])
     return dict(before=before,after=[dict(lr=g['lr'],weight_decay=g['weight_decay']) for g in optimizer.param_groups],
                 preserved='Adam moments, steps, other group options and RNG',
-                **({'optimizer_revision':rebased} if rebased is not None else {}))
+                **({'optimizer_revision':rebased} if rebased is not None else {}),
+                **({'clip_revision':rescaled} if rescaled is not None else {}))
 
 
 def check_signature(state, signature, reviewed=False):

@@ -309,6 +309,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         print(f'g5402 optimizer revision: PPO rate {change["before"]["rate"]:.3g} -> {change["after"]["rate"]:.3g} '
               f'(base at multiplier 1); KL window restarted, cooldown {change["after"]["cooldown"]}; Adam exp_avg '
               f'x{scale["first_moment"]:.3f}, exp_avg_sq x{scale["second_moment"]:.2f} on {scale["parameters"]} tensors',flush=True)
+    if optimizer_resume.get('clip_revision'):
+        scale=optimizer_resume['clip_revision']
+        print(f'g5685 clip revision: PPO clip {scale["old_clip"]:g} -> {scale["new_clip"]:g}; PPO Adam exp_avg '
+              f'x{scale["first_moment"]:.4f}, exp_avg_sq x{scale["second_moment"]:.4f} on {scale["parameters"]} tensors '
+              f'(from {scale["steps"]} logged steps; fit clip rate {scale["predicted_clipped_percent"]:.1f}% vs '
+              f'logged {scale["logged_clipped_percent"]:.1f}%)',flush=True)
     from . import exploration
     exploration_state=exploration.restore(config,state,raw['training'].get('exploration'))
     pool_migration=resumed_pool=None
@@ -383,7 +389,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         phases.diversity=diversity
         scale=getattr(phases,'ppg_adam_rescale',None)
         if scale is not None:
-            print(f'g5466 auxiliary revision: PPG clip {scale["old_clip"]:g} -> {scale["new_clip"]:g}; PPG Adam exp_avg '
+            # g5466's receipt has no phase; g5685's says 'ppg'.
+            print(f'{"g5685 clip" if scale.get("phase") else "g5466 auxiliary"} revision: PPG clip {scale["old_clip"]:g} -> {scale["new_clip"]:g}; PPG Adam exp_avg '
                   f'x{scale["first_moment"]:.3f}, exp_avg_sq x{scale["second_moment"]:.3f} on {scale["parameters"]} tensors '
                   f'(from {scale["steps"]} logged steps; fit clip rate {scale["predicted_clipped_percent"]:.1f}% vs '
                   f'logged {scale["logged_clipped_percent"]:.1f}%)',flush=True)

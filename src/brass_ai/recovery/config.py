@@ -725,7 +725,10 @@ def validate_config(config):
     if OPTIMIZER_REVISION in config:
         # g5402: the recipe holds the adopted PPO clip, base LR and floor multiplier the block records.
         block=validate_optimizer_revision(config[OPTIMIZER_REVISION])
-        require('ppo_lr_controller' in config and config['update']['grad_clip']==block['ppo_grad_clip'] and
+        from .training_revision_g5685 import KEY as CLIP_REVISION
+        # g5685: the clip revision moves the PPO clip on from g5402's 5.83 (its block is validated below).
+        ppo_clip=config[CLIP_REVISION]['ppo_grad_clip'] if CLIP_REVISION in config else block['ppo_grad_clip']
+        require('ppo_lr_controller' in config and config['update']['grad_clip']==ppo_clip and
                 config['learning_rate']==block['after']['learning_rate'] and
                 config['ppo_lr_controller']['min_multiplier']==block['after']['min_multiplier'],
                 'The g5402 optimizer revision differs from the PPO clip/LR it adopted')
@@ -736,6 +739,13 @@ def validate_config(config):
         require(OPTIMIZER_REVISION in config and ERA_HEAD_REVISION in config,
                 'The g5466 auxiliary revision needs the g4770 era-head and g5402 optimizer revisions')
         fields.add(AUXILIARY_REVISION);validate_auxiliary_revision(config[AUXILIARY_REVISION])
+    from .training_revision_g5685 import KEY as CLIP_REVISION,validate as validate_clip_revision
+    if CLIP_REVISION in config:
+        # g5685: PPO clip 6.5 and PPG clip 2.4, each with a one-time Adam rescale.
+        block=validate_clip_revision(config[CLIP_REVISION])
+        require(AUXILIARY_REVISION in config and config['update']['grad_clip']==block['ppo_grad_clip'],
+                'The g5685 clip revision needs the g5466 auxiliary revision and holds the PPO clip it adopted')
+        fields.add(CLIP_REVISION)
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

@@ -197,6 +197,8 @@ def main():
                         help='Adopt the g5402 optimizer revision at this committed generation (set once, then kept)')
     parser.add_argument('--auxiliary-revision', action='store_true',
                         help='Adopt the g5466 auxiliary revision at this committed generation (set once, then kept)')
+    parser.add_argument('--clip-revision', action='store_true',
+                        help='Adopt the g5685 clip revision at this committed generation (set once, then kept)')
     args = parser.parse_args()
 
     run = ROOT / RUN
@@ -213,6 +215,7 @@ def main():
         '--rail-end-weight', '0.25', '--soft-policy-weight', '8',
         *(['--optimizer-revision'] if args.optimizer_revision else []),
         *(['--auxiliary-revision'] if args.auxiliary_revision else []),
+        *(['--clip-revision'] if args.clip_revision else []),
     ], cwd=ROOT)
 
 

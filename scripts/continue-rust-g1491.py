@@ -189,6 +189,11 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'committed PPG phases; the era heads step at the PPO rate in PPG too, fixed for the phase (no warm-up '
              'or decay). The era heads and the soft head keep their own clips at 1.0. Trainer-only; set once '
              '(training_revision_g5466).')
+    parser.add_argument('--clip-revision', action='store_true',
+        help='Adopt the g5685 clip revision at this committed generation (after --auxiliary-revision): PPO clips '
+             'at 6.5 (was 5.83) and PPG at 2.4 (was 2.2); both Adams are rescaled once to the new clips from the '
+             'logged norms of the last 30 committed iterations. Rates, schedules and the era and soft head clips '
+             '(1.0) are unchanged. Trainer-only; set once (training_revision_g5685).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -264,6 +269,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.rail_end_weight = None
         recovery.optimizer_revision = False
         recovery.auxiliary_revision = False
+        recovery.clip_revision = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)
