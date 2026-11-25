@@ -368,6 +368,10 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         local_scoring=Companion(model,config['local_scoring_auxiliary'],raw=raw,generation=state['iteration'],adopting=local_adopting)
         from .training_revision_g5402 import era_heads_follow
         local_scoring.linked_rates=era_heads_follow(config)  # g5402: PPG's step rate in PPG, PPO's in PPO
+        from . import training_revision_g5466 as g5466
+        # g5466: Rail-end frozen and preserved in PPO like Canal/Rail; in PPG the heads take the fixed PPO rate.
+        local_scoring.fixed_ppg_rate=g5466.fixed_head_rate(config)
+        if g5466.rail_end_in_ppo(config):local_scoring.rail_end_ppo=True
     if 'advantage' in config:
         from .actor_value import TrainingPhases
         phases=TrainingPhases(model,config,raw=phase_raw,generation=state['iteration'],root=root,run=run)
@@ -377,6 +381,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                   f'minimum={change["lambda_floor"]:.2f}; training progress and mixed-table evidence preserved',flush=True)
         phases.local_scoring=local_scoring
         phases.diversity=diversity
+        scale=getattr(phases,'ppg_adam_rescale',None)
+        if scale is not None:
+            print(f'g5466 auxiliary revision: PPG clip {scale["old_clip"]:g} -> {scale["new_clip"]:g}; PPG Adam exp_avg '
+                  f'x{scale["first_moment"]:.3f}, exp_avg_sq x{scale["second_moment"]:.3f} on {scale["parameters"]} tensors '
+                  f'(from {scale["steps"]} logged steps; fit clip rate {scale["predicted_clipped_percent"]:.1f}% vs '
+                  f'logged {scale["logged_clipped_percent"]:.1f}%)',flush=True)
         if raw is not None and state['iteration']>0:
             from .snapshot_r2_hotfix import restore as restore_snapshot_r2
             restore_snapshot_r2(state,raw,phases)
@@ -906,10 +916,11 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 writing=time.monotonic()
                 write_json(state_path,state,compact=True)
                 commit['state_write_seconds']=time.monotonic()-writing
-                cleaning=time.monotonic()
+                cleaning=time.monotonic();owner_seconds={}
                 commit_cleanups(state_path,state,iteration+1,search_values=search_values,
-                                owners=(teacher_phase,local_scoring,phases,diversity))
+                                owners=(teacher_phase,local_scoring,phases,diversity),timings=owner_seconds)
                 commit_ended=time.monotonic();commit['owner_cleanup_seconds']=commit_ended-cleaning
+                commit['owner_cleanup_parts']=owner_seconds
                 if revised:
                     evaluation_began=time.monotonic()
                     from .champion import schedule as schedule_champion
@@ -1154,7 +1165,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 summary_scope='latest two iterations; bounded compact older metrics in retention-history.json')
 
 
-def commit_cleanups(state_path,state,generation,*,search_values=None,owners=()):
+def commit_cleanups(state_path,state,generation,*,search_values=None,owners=(),timings=None):
     """Run the cleanups that wait for a durable commit, then save what they recorded.
 
     The cleanups delete superseded files and write what they deleted into this
@@ -1166,13 +1177,21 @@ def commit_cleanups(state_path,state,generation,*,search_values=None,owners=()):
 
     g3658: owners that check the durable commit read it from the state just written
     (``committed_state``), instead of parsing the 20 MB state.json again each.
+    g5466: `timings` (a dict) receives each owner's seconds by class name, and the state write's.
     """
-    if search_values is not None:search_values.committed(state)
+    clock=time.monotonic
+    def timed(name,began):
+        if timings is not None:timings[name]=timings.get(name,0.)+clock()-began
+    began=clock()
+    if search_values is not None:search_values.committed(state);timed(type(search_values).__name__,began)
     for owner in owners:
         if owner is None:continue
+        began=clock()
         if getattr(owner,'committed_state',False):owner.committed(generation,state=state)
         else:owner.committed(generation)
-    write_json(state_path,state,compact=True)
+        timed(type(owner).__name__,began)
+    began=clock()
+    write_json(state_path,state,compact=True);timed('state_write',began)
 
 
 def schedule_evaluations(root,run,state,device,mono,*,inference_devices=None):

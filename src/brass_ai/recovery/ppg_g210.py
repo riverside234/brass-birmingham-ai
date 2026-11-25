@@ -468,6 +468,9 @@ def initialize(phases,model,config,*,raw,generation,root,run):
     group=phases.optimizer.param_groups[0]
     require(len(phases.optimizer.param_groups)==1 and math.isfinite(group['lr']) and group['lr']>0
         and group['weight_decay']==0,'Invalid g210 value Adam')
+    # g5466: once, on the adoption generation's checkpoint, the moments move from the 1.0 clip to 2.2.
+    from .training_revision_g5466 import rescale_ppg
+    phases.ppg_adam_rescale=rescale_ppg(phases.optimizer,config,generation) if saved is not None else None
     require(type(phases.cache_origin) is int and 0<=phases.cache_origin<=generation,'Invalid g210 replay origin')
     from .utility import reward_spec,reviewed_reward_upgrade
     previous_reward=(raw or {}).get('model_config',{}).get('utility')
@@ -500,8 +503,10 @@ def fit(phases,model,preparation_pool):
     from .ppo_preparation import phase_preparation
     require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
     began=time.perf_counter();c=phases.options['value_phase'];rate=getattr(phases,'ppo_peak',None)
-    from .training_revision_g5402 import ppg_grad_clip
-    clip=ppg_grad_clip(phases.config)  # g5402: PPG keeps its own clip (1.0) while PPO clips at 5.83
+    from . import training_revision_g5466 as g5466
+    clip=g5466.ppg_grad_clip(phases.config)  # g5402: PPG's own clip (1.0) while PPO clips at 5.83; g5466: 2.2
+    # g5466: the era heads step at the PPO rate (the one PPG's peak is .65 of), fixed for the phase.
+    heads_rate=rate['ppo_lr'] if rate is not None and g5466.fixed_head_rate(phases.config) else None
     from .training_revision_g3140 import bootstrap as bootstrap_settings
     blend=bootstrap_settings(phases.config);boot=boot_report=None
     if blend is not None:
@@ -621,8 +626,9 @@ def fit(phases,model,preparation_pool):
             train_metrics=train_metrics_due(phases.config,phases.state['generation']+1),
             ownership_stop=ownership_stop(phases.config),
             search_auxiliary=getattr(phases,'search_auxiliary',None),  # g3423: set by the search-value iteration
-            gate_from_acceptance=gate_reuse,grad_clip=clip,
+            gate_from_acceptance=gate_reuse,grad_clip=clip,heads_rate=heads_rate,
             descriptor_diagnostics=critic_data.reads_descriptor_gain(phases.critic_state,phases.config.get('critic_data')))
+        if heads_rate is not None:report['era_head_rate']=dict(source='ppo-last-applied',rate=heads_rate,fixed=True)
         if blend is not None:report['bootstrap_ages']=ds.bootstrap.available()
         if getattr(phases,'diversity',None) is not None:
             phases.diversity.report['intrinsic_fit']=companion.report()
@@ -639,6 +645,9 @@ def fit(phases,model,preparation_pool):
         if pooled:report['acceptance_support']=validation_support
         if getattr(phases,'retired_tables',()):report['retired_table_checks']=list(phases.retired_tables)
     if rate is None:report['early_stop_reason']='no_applied_ppo_rate'
+    if getattr(phases,'ppg_adam_rescale',None) is not None:
+        # g5466: the one-time PPG Adam rescale for the 2.2 clip, reported with the first phase after it.
+        report['adam_rescale']=phases.ppg_adam_rescale;phases.ppg_adam_rescale=None
     report.update(buffer=cache,split=phases.split,migration=copy.deepcopy(phases.g210_migration),
         phase_interval=c['phase_interval'],buffer_iterations=2,validation_iterations=c['validation_iterations'],scheduled=True,
         epoch_cap_used=c['max_epochs'],kl_check_steps=c['kl_check_steps'],policy_guard_enabled=True,kl_control='hard-cap-and-penalty',

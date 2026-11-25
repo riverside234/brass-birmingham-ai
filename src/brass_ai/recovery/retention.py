@@ -166,17 +166,26 @@ def references(root,run):
             if attempt==2:raise
 
 
+def _under(path,base):
+    """pathlib's is_relative_to for absolute paths, as a string-prefix test (case-insensitive on Windows)."""
+    path,base=(os.path.normcase(str(path)),os.path.normcase(str(base)))
+    return path==base or path.startswith(base.rstrip(os.sep)+os.sep)
+
+
 def _references(root,run):
     """Small control files only. Historical reports do not pin every old replay."""
+    from brass_ai.learning.paths import PassResolver
     pins={};control=[];quarantined={};opaque=set()
     # Repeated manifests often name the same paths. Resolve once in this read
     # pass; never cache across cleanup passes or bypass safe() before deletion.
-    resolved_paths={}
+    # g5466: one PassResolver per pass checks the root, its relocation metadata and each directory once (the same
+    # paths and refusals as project_path; the scan spent most of its 28 s re-checking shared parents).
+    resolved_paths={};resolver=PassResolver(root)
     def resolve(path,base=None):
         # Absolute (including relocated Windows) references ignore a local base.
         # Reuse their checked resolution for both schema interpretations.
         key=(path,None if Path(path).is_absolute() or PureWindowsPath(path).is_absolute() else base)
-        if key not in resolved_paths:resolved_paths[key]=project_path(root,path,base=base)
+        if key not in resolved_paths:resolved_paths[key]=resolver.resolve(path,base=base)
         return resolved_paths[key]
     for receipt in (run/'.retention').glob('cleanup-*.json'):
         for entry in read(receipt)['entries']:
@@ -201,7 +210,7 @@ def _references(root,run):
                     item=transfer[key];path=resolve(item['path'])
                     require(path.is_relative_to(p.parent) and path.is_file() and sha(path)==item['sha256'],
                         'Machine-transfer retention evidence changed')
-                    if path.is_relative_to(run):pins[path]='machine-transfer evidence'
+                    if _under(path,run):pins[path]='machine-transfer evidence'
                     opaque.add(path)
             selected={k:d.get(k) for k in ('resume','population','origin','evaluation_anchor','pins','champion','champion_mix')}
             selected['il_kl_probe']=d.get('il_kl_limit',{}).get('probe')
@@ -243,8 +252,8 @@ def _references(root,run):
             for resolved in dict.fromkeys((resolve(value),resolve(value,base=p.parent))):
                 # Remember dependencies even while their original path is in
                 # quarantine, so a new pin can rescue it before permanent purge.
-                if resolved.is_relative_to(run): pins[resolved]=reason+' '+str(p.relative_to(root))
-                if resolved.is_relative_to(root) and resolved.suffix=='.json' and resolved not in visited:
+                if _under(resolved,run): pins[resolved]=reason+' '+str(p.relative_to(root))
+                if resolved.suffix=='.json' and resolved not in visited and _under(resolved,root):
                     source=resolved if resolved.is_file() else quarantined.get(resolved)
                     if source is not None:
                         visited.add(resolved);control.append((resolved,read(source),'referenced manifest'))

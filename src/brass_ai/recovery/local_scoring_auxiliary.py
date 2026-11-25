@@ -16,6 +16,7 @@ from . import local_scoring_targets as targets
 KEY='local_scoring_auxiliary'
 CONTRACT='local-scoring-training/1.0.0'
 ACCEPTED_CONTRACT='local-scoring-training/2.0.0'
+HEAD_GRAD_CLIP=1.  # the heads' own clip, both phases (the user kept it at 1.0 at g5466)
 DIAGNOSTICS_EVERY_ITERATIONS=5
 DIAGNOSTICS_MAX_ROWS=512
 DEFAULT=dict(contract=CONTRACT,head_contract=HEAD,target=targets.identity(),mode='apply',
@@ -139,6 +140,9 @@ class Companion:
     # g5402 (training_revision_g5402.era_heads_follow): each step takes the main network's rate for that step,
     # passed to begin(); otherwise the configured 1e-4 (x the PPG schedule factor in PPG).
     linked_rates=False
+    # g5466 (training_revision_g5466.fixed_head_rate, set by the trainer): in PPG the rate passed is PPO's, with no
+    # schedule factor; report only (the value phase passes the rate).
+    fixed_ppg_rate=False
 
     def __new__(cls,model=None,config=None,**kwargs):
         # A 3.0.0 config builds the era-head companion; every call site stays the same.
@@ -214,6 +218,7 @@ class Companion:
         self.device_stats={}
         self.available=set();self.unavailable=set();self.map_support={};self.map_masked={}
         self.rollbacks=0;self.restorations=0;self.steps=dict(ppo=0,ppg=0);self.gradient_norms=[]
+        self.phase_norms=dict(ppo=[],ppg=[])  # g5466: the heads' own pre-clip norms per phase, device scalars
         self.fitting_steps=0;self.fitting_used=set()
 
     def begin(self,phase,*,reset=False,rate_factor=1.,learning_rate=None):
@@ -324,9 +329,9 @@ class Companion:
 
     def step(self,phase):
         if self.active and self.pending:
-            norm=torch.nn.utils.clip_grad_norm_(self.heads.parameters(),1.,error_if_nonfinite=True)
+            norm=torch.nn.utils.clip_grad_norm_(self.heads.parameters(),HEAD_GRAD_CLIP,error_if_nonfinite=True)
             start=time.perf_counter();self.optimizers[phase].step();self.stats['optimizer_seconds']+=time.perf_counter()-start
-            detached=norm.detach().double()
+            detached=norm.detach().double();self.phase_norms[phase].append(detached)
             self.device_stats['gradient_norm_max']=torch.maximum(self.device_stats.get('gradient_norm_max',torch.zeros_like(detached)),detached)
             self.steps[phase]+=1;self.retained_steps[phase]+=1
             self.retained.update(self.batch_used)
@@ -413,10 +418,21 @@ class Companion:
             shared_gradient_scale=self.scale,parameter_count=sum(p.numel() for p in self.heads.parameters()),
             available=support(self.available),unavailable=support(self.unavailable),attempted=support(self.attempted),retained=support(self.retained),companion_steps=self.steps,
             companion_lr={p:o.param_groups[0]['lr'] for p,o in self.optimizers.items()},
-            companion_lr_source='main-network-step-rate' if self.linked_rates else 'configured',
-            gradient_norm_max=gradient_norm,rollbacks=self.rollbacks,state_restorations=self.restorations,
+            companion_lr_source=('ppo-rate (PPG: fixed per phase; PPO: per step)' if self.fixed_ppg_rate else
+                                 'main-network-step-rate' if self.linked_rates else 'configured'),
+            gradient_norm_max=gradient_norm,gradient_norms=self.norm_report(),
+            rollbacks=self.rollbacks,state_restorations=self.restorations,
             training=dict(self.stats,**totals),training_scope='Detached device totals transferred together at reporting; attempted presentations/loss totals include rejected intervals. Retained counts follow joint checkpoint selection.',
             target=targets.identity(),audit_discrepancies=0,scope='Critic-train rows only; official held-out loss and exact policy KL remain the acceptance criteria. Invalid scoring audits fail admission.')
+
+    def norm_report(self):
+        """g5466: the heads' own pre-clip total gradient norm (what their clip sees), per phase, over every attempted
+        head step (steps the ownership stop later restored included): mean, median, P98, max and the steps above the
+        clip. Device scalars, moved to the host once here."""
+        from .value_phase import clipping_report
+        return {phase:clipping_report(norms,HEAD_GRAD_CLIP,scope=f'Era heads, {phase.upper()} phase: every attempted head '
+                    "step, restored ones included; the norm of the heads' own parameters before their clip. Logging only.")
+                for phase,norms in self.phase_norms.items()}
 
     def inventory(self,dataset,ids):
         ids=list(ids)

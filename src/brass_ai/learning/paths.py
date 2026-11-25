@@ -159,6 +159,73 @@ def resolve_project_path(root, reference, *, base=None):
     return confined(root, (*anchor.relative_to(root).parts, *path.parts))
 
 
+class PassResolver:
+    """resolve_project_path for one read pass over many references (the retention pin scan, g5466).
+
+    The same returned paths and the same refusals, but the root, its relocation metadata and each directory's
+    link check are read once per pass instead of once per reference: a scan of tens of thousands of references
+    spent most of its time re-reading the relocation file and lstat-ing the same parents. confined()'s final
+    resolve() is redundant here: _parts() refuses '..' and every existing component is lstat-ed and refused if it
+    is a symlink or junction, so the joined path is its own resolution. Build a new resolver for every pass; never
+    keep one across passes (a directory checked in one pass may be replaced before the next)."""
+
+    def __init__(self, root):
+        self.root = Path(root).resolve()
+        _require(not self.root.exists() or self.root.is_dir(), 'Non-directory project root: ' + str(self.root))
+        data = _read_relocation(self.root)  # validated once per pass, as every resolve_project_path call does
+        self.roots = [str(self.root), *(data['source_roots'] if data else [])]
+        self._keys = [root_key(r) for r in self.roots]
+        self._root = str(self.root)
+        self._checked = {}  # component tuple -> (exists, is_dir), for this pass only
+        self._anchors = {}  # base -> its component tuple
+
+    def _component(self, parts, leaf):
+        hit = self._checked.get(parts)
+        if hit is None:
+            item = os.path.join(self._root, *parts)
+            try:
+                info = os.lstat(item)
+            except (FileNotFoundError, NotADirectoryError):
+                info = None
+            if info is not None and (stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400):
+                raise ValueError('Linked project path (symlink/junction forbidden): ' + item)
+            hit = (info is not None, info is not None and stat.S_ISDIR(info.st_mode))
+            self._checked[parts] = hit
+        if hit[0] and not leaf and not hit[1]:
+            raise ValueError('Non-directory project parent: ' + os.path.join(self._root, *parts))
+
+    def _suffix(self, reference, base):
+        """The reference's components below the root (reference_suffix, or the base-relative join)."""
+        flavor, path = _parts(reference)
+        if path.is_absolute():
+            parts = tuple(p.casefold() for p in path.parts) if flavor == 'windows' else path.parts
+            for origin_flavor, prefix in self._keys:
+                if flavor == origin_flavor and parts[:len(prefix)] == prefix:
+                    return tuple(path.parts[len(prefix):])
+            raise ValueError('Path outside project root and relocation mappings: ' + str(reference) +
+                             '. Supply this dependency inside the project before export; arbitrary external roots are unsupported.')
+        if base is None:
+            return path.parts
+        anchor = self._anchors.get(base)
+        if anchor is None:
+            anchor = self._anchors[base] = self._confine(self._suffix(base, None))
+        return (*anchor, *path.parts)
+
+    def _confine(self, suffix):
+        for part in suffix:
+            if not part or part == '..' or os.path.isabs(part):
+                raise ValueError('Path escapes project root: ' + os.path.join(self._root, *suffix))
+        for i in range(1, len(suffix) + 1):
+            self._component(suffix[:i], i == len(suffix))
+        return suffix
+
+    def confined(self, suffix):
+        return self.root.joinpath(*self._confine(tuple(suffix)))
+
+    def resolve(self, reference, *, base=None):
+        return self.root.joinpath(*self._confine(self._suffix(reference, base)))
+
+
 def bound_reference(root, actual, recorded, fields):
     """Keep the historical signed representation after checking exact identity.
 

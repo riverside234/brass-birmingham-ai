@@ -36,6 +36,8 @@ def display_points(generations, scores, max_points=DEFAULT_MAX_POINTS):
 
 
 def _interval(value, interval, label):
+    if interval is None:  # g5466: a rating slot without bootstrap refits has no intervals; draw the point alone
+        interval = (value, value)
     low, high = interval
     if not all(math.isfinite(v) for v in (value, low, high)) or low > high:
         raise ValueError('Invalid PL point estimate or interval: ' + label)
@@ -200,10 +202,16 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                     facecolor='white', edgecolor='#E0E8E7', linewidth=.7, zorder=0))
             text(.060, .888, 'LATEST PL SCORE', fontsize=7.2, weight='bold', color=muted)
             text(.060, .850, f'{score:,.1f}', fontsize=20, weight='bold', color=dark)
-            text(.060, .831, f'95% interval  {low:,.1f} to {high:,.1f}', fontsize=8, color=muted)
+            intervals = ratings[latest_name]['points_ci95'] is not None
+            text(.060, .831, f'95% interval  {low:,.1f} to {high:,.1f}' if intervals else 'No interval (bootstrap off)',
+                 fontsize=8, color=muted)
             text(.358, .888, 'CHANGE VS ' + (f'g{previous[0]}' if previous else 'PREVIOUS'),
                  fontsize=7.2, weight='bold', color=muted)
-            if change is None:
+            if change is None and previous is not None and not intervals:
+                delta = ratings[latest_name]['points'] - ratings[previous[1]]['points']
+                text(.358, .851, f'{delta:+,.1f}', fontsize=19, weight='bold', color=muted)
+                text(.358, .831, 'No paired interval (bootstrap off)', fontsize=8, color=muted)
+            elif change is None:
                 text(.358, .853, 'Not available', fontsize=17, color=muted)
                 text(.358, .831, 'First rated checkpoint' if previous is None else 'Paired interval not recorded',
                      fontsize=8, color=muted)
@@ -313,7 +321,8 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                        frameon=False, fontsize=8.4, handlelength=2.2, columnspacing=2.4, labelcolor=muted)
             text(.055, .055, ('Full history: adjacent checkpoints averaged; first/latest exact. Recent panel: exact checkpoints on a separate y-axis.'
                  if averaged else 'Both panels show exact checkpoints. Recent panel uses a separate y-axis range.'), fontsize=8.1, color=muted)
-            text(.055, .033, 'Band: original pointwise 95% intervals, not intervals for averages. Change card: paired comparison from the same fit.',
+            text(.055, .033, ('Band: original pointwise 95% intervals, not intervals for averages. Change card: paired comparison from the same fit.'
+                              if intervals else 'No bands: this fit has no bootstrap intervals. Change card: point estimates from the same fit.'),
                  fontsize=8.1, color=muted)
             text(.945, .011, f'PL points = 173.7 × θ  ·  {report.get("bootstrap_refits", 0):,} bootstrap refits',
                  fontsize=8, color=muted, ha='right')
@@ -321,7 +330,8 @@ def render(report, output, *, preview=None, agents=None, max_points=DEFAULT_MAX_
                 Description=f'Common-fit PL progression through generation {latest}: {len(shown)} displayed points from {len(points)} checkpoints (cap {max_points}). '
                     + ('Adjacent checkpoints averaged for display; first/latest remain exact. ' if averaged else 'All displayed checkpoints are exact. ')
                     + f'Recent detail covers generations {recent_start}–{latest}: all {len(recent)} points exact, with a separate y-axis. '
-                    f'Unmodified pointwise 95% setup-bootstrap intervals. Latest {score:.3f}, interval [{low:.3f}, {high:.3f}]. '
+                    + (f'Unmodified pointwise 95% setup-bootstrap intervals. Latest {score:.3f}, interval [{low:.3f}, {high:.3f}]. '
+                       if intervals else f'No intervals (setup bootstrap off). Latest {score:.3f}. ')
                     + (f'Paired change versus generation {previous[0]}: {change["delta"]:.3f}, '
                        f'95% interval [{change["low"]:.3f}, {change["high"]:.3f}]. ' if change else 'Paired change unavailable. ')
                     + '; '.join(coverage) + f'. {baseline_label} anchor 0.'

@@ -321,17 +321,19 @@ class DeferredKL:
         raise AssertionError('Missing frozen post-PPO KL-safe checkpoint')
 
 
-def clipping_report(norms,max_norm):
+def clipping_report(norms,max_norm,scope=None):
     """g5402: the pre-clip total gradient norms clip_grad_norm_ returned for every attempted PPG optimizer step,
-    steps later rolled back included. `norms` are its device scalars, moved to the host once here."""
+    steps later rolled back included. `norms` are its device scalars, moved to the host once here.
+    g5466: the high percentile is P98 (was P95); `scope` replaces the PPG wording for another optimizer's steps."""
     values=torch.stack(norms).double().cpu().numpy() if norms else np.zeros(0)
     clipped=int((values>max_norm).sum())
     return dict(max_norm=max_norm,steps=len(values),clipped_steps=clipped,
         clipped_percent=100.*clipped/len(values) if len(values) else None,
-        pre_clip_norm=dict(mean=float(values.mean()),median=float(np.median(values)),p95=float(np.quantile(values,.95)))
-            if len(values) else dict(mean=None,median=None,p95=None),
-        scope='All attempted PPG optimizer steps, including steps later rolled back (loss intervals, KL restores); '
-              'a step clips when its pre-clip norm exceeds max_norm. Logging only.')
+        pre_clip_norm=dict(mean=float(values.mean()),median=float(np.median(values)),p98=float(np.quantile(values,.98)),
+                           max=float(values.max()))
+            if len(values) else dict(mean=None,median=None,p98=None,max=None),
+        scope=scope or ('All attempted PPG optimizer steps, including steps later rolled back (loss intervals, KL restores); '
+                        'a step clips when its pre-clip norm exceeds max_norm. Logging only.'))
 
 
 def defer_train_metrics(model,config):
@@ -343,7 +345,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         value_dataset=None,value_train_ids=None,validation_dataset=None,current_count=None,dropout=None,
         companion=None,preparation=None,gate_dataset=None,gate_ids=None,post_fit=None,
         bootstrap_share=0.,loss_weights=None,train_metrics=True,ownership_stop=None,search_auxiliary=None,
-        gate_from_acceptance=False,descriptor_diagnostics=True,grad_clip=None):
+        gate_from_acceptance=False,descriptor_diagnostics=True,grad_clip=None,heads_rate=None):
     """bootstrap_share/loss_weights change the training loss only (g3140 steps 7-8); the held-out
     check always scores the four main terms on real outcomes with the original weights.
     train_metrics=False skips the two full-buffer scans (g3140 step 1); held-out evidence then
@@ -359,12 +361,18 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
     scan when no critic-data controller reads its gain.
     grad_clip (g5402): the phase's own clip; None clips at update['grad_clip'] as PPO does. Every report carries
     gradient_clipping (clipping_report) over all attempted optimizer steps. Linked era heads (companion.linked_rates)
-    step at this phase's rate of the same step."""
+    step at this phase's rate of the same step.
+    heads_rate (g5466): the era heads' rate for every step of the phase, head-only steps included, with no warm-up or
+    decay factor (the PPO rate); the main network keeps this phase's own schedule."""
     from .updates import autocast,value_losses,value_output
     began=time.perf_counter();model.eval()
     clip=update['grad_clip'] if grad_clip is None else grad_clip
     clip_norms=[]  # device scalars: no host sync per step
-    linked=dict(learning_rate=config['learning_rate']) if getattr(companion,'linked_rates',False) else {}
+    if heads_rate is not None:
+        require(companion is None or getattr(companion,'linked_rates',False),'A fixed era-head rate needs linked companion rates')
+        linked=dict(learning_rate=heads_rate)
+    else:linked=dict(learning_rate=config['learning_rate']) if getattr(companion,'linked_rates',False) else {}
+    scheduled_heads=heads_rate is None  # the heads take the phase's warm-up/decay factor
     timings={}
     def measure(name,*args,**kwargs):
         start=time.perf_counter()
@@ -495,9 +503,10 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 if companion is not None:
                     # New work-based companions retain the current phase's Adam
                     # lifecycle, but use its warmup/decay factor on their own
-                    # 1e-4 base rate, or (g5402, linked) on this phase's peak.
+                    # 1e-4 base rate, or (g5402, linked) on this phase's peak;
+                    # (g5466) at the fixed PPO rate with no factor.
                     # Main-model value LR is unchanged.
-                    if scheduled and getattr(companion,'work_warmup',False):
+                    if scheduled and scheduled_heads and getattr(companion,'work_warmup',False):
                         companion.begin('ppg',rate_factor=rate_factor(report['attempted_steps']+attempted+1,total_steps,config),**linked)
                     else:companion.begin('ppg',**linked)
                 if companion is not None and hasattr(companion,'batch'):companion.batch(value_dataset,batch)
@@ -635,8 +644,9 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         # planned batches with the trunk frozen until their own CE check stops them.
         def head_step(item,step,epoch):
             position,batch=item;local=stop.local
-            own=dict(learning_rate=config['learning_rate']) if getattr(local,'linked_rates',False) else {}
-            if scheduled and getattr(local,'work_warmup',False):
+            if heads_rate is not None:own=dict(learning_rate=heads_rate)
+            else:own=dict(learning_rate=config['learning_rate']) if getattr(local,'linked_rates',False) else {}
+            if scheduled and scheduled_heads and getattr(local,'work_warmup',False):
                 local.begin('ppg',rate_factor=rate_factor(step,total_steps,config),**own)
             else:local.begin('ppg',**own)
             model.train()

@@ -160,6 +160,10 @@ class TeacherBuffer:
         require(state['iteration'] == generation and state.get('teacher_phase', {}).get('buffer') == self.payload(),
                 'Teacher cleanup requires matching durable state commit')
         for receipt in self.retired:
+            # g5466: only ages this process still holds rows for (the ones retiring now) are checked and released.
+            # Every age retired before was checked when it retired, and nothing here deletes a file; re-hashing all
+            # of them (975 shards since g4970, pinned by this state) cost most of the 6 s commit cleanup.
+            if receipt['sha256'] not in self._rows: continue
             path, sidecar = self.paths(receipt)
             if not path.exists() and not sidecar.exists(): continue
             self.owner()

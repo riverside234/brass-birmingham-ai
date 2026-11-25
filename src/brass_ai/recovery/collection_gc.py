@@ -28,6 +28,15 @@ The iteration policy, on by default:
   pass over everything. It is timed and reports the cyclic garbage it found, so no cycle lives
   longer than one iteration.
 
+g5466: the full pass walked the whole heap, about 14M long-lived objects, for 15-16 s every iteration to free
+the ~3.7M objects of cyclic garbage the iteration had made. Two cycles held most of what the fixtures make: every
+SearchRows (its rows, era maps and device tensors) through a closure over itself, and every InputAudit with its
+per-row proofs through a weakref callback over the audit; both are broken where they are made, so refcounting
+frees them. The full pass now runs every FULL_EVERY iterations (BRASS_GC_FULL_EVERY, 1 restores every iteration),
+and every iteration again while the last pass found more than GARBAGE_PER_ITERATION cyclic objects per iteration
+since the one before. In between the heap stays frozen with young passes only, as in the tail after collection,
+and the next collection start refreezes it; cyclic garbage from those iterations waits for the next full pass.
+
 BRASS_ITERATION_GC=0 keeps the g3270 window (freeze, unfreeze at the end of collection).
 BRASS_COLLECTION_GC_FREEZE=0 keeps the timing and skips any freeze or policy.
 """
@@ -41,7 +50,10 @@ from brass_ai.learning.contracts import require
 SWITCH = 'BRASS_COLLECTION_GC_FREEZE'
 POLICY = 'BRASS_ITERATION_GC'
 CONTRACT = 'collection-gc-window/1.0.0'
-ITERATION_CONTRACT = 'iteration-gc/1.0.0'
+ITERATION_CONTRACT = 'iteration-gc/2.0.0'
+FULL_EVERY_SWITCH = 'BRASS_GC_FULL_EVERY'
+FULL_EVERY = 5  # iterations between full passes while cyclic garbage stays low
+GARBAGE_PER_ITERATION = 500_000  # cyclic objects per iteration above which the full pass runs every iteration
 # The oldest generation never reaches this many young collections inside one iteration.
 NO_FULL = 2 ** 31 - 1
 
@@ -63,6 +75,12 @@ def iteration_policy():
     return enabled() and _flag(POLICY)
 
 
+def full_every():
+    value = os.environ.get(FULL_EVERY_SWITCH, str(FULL_EVERY))
+    require(value.isdigit() and 1 <= int(value) <= 20, FULL_EVERY_SWITCH + ' must be an integer from 1 to 20')
+    return int(value)
+
+
 def settle():
     """Undo a policy an earlier iteration left in force; the next window starts clean."""
     global _outstanding
@@ -77,6 +95,7 @@ class Window:
     def __init__(self):
         self.active = False; self.report = None; self.tail = False
         self._started = None
+        self.since_full = 0; self.every_iteration = False  # g5466: full-pass cadence, per trainer process
 
     def _callback(self, phase, info):
         if phase == 'start':
@@ -131,12 +150,25 @@ class Window:
         return self.report
 
     def finish(self):
-        """Iteration end: the passes since collection, then one timed full pass over the whole heap."""
+        """Iteration end: the passes since collection, then a timed full pass over the whole heap when one is due
+        (g5466: every full_every() iterations, or every iteration while cyclic garbage is high). Otherwise the
+        policy stays in force (frozen heap, young passes only) until the next collection start settles it."""
         if not self.tail: return None
         after = dict(seconds=time.perf_counter() - self._tail_began, **self._passes())
+        every = full_every(); self.since_full += 1
+        scope = ('After collection: young passes only, over objects made since; the heap stays frozen. A full pass '
+                 f'every {every} iterations, or every iteration while the last one found more than '
+                 f'{GARBAGE_PER_ITERATION} cyclic objects per iteration; unreachable counts the cyclic garbage it freed.')
+        if not (self.every_iteration or self.since_full >= every):
+            self._detach(); self.tail = False
+            return dict(contract=ITERATION_CONTRACT, after_collection=after, scope=scope,
+                        full_collection=dict(seconds=0., ran=False, unreachable=None, iterations_since_full=self.since_full,
+                                             next_full_in=every - self.since_full))
         settle()
         began = time.perf_counter(); unreachable = gc.collect()
-        return dict(contract=ITERATION_CONTRACT, after_collection=after,
-            full_collection=dict(seconds=time.perf_counter() - began, unreachable=unreachable),
-            scope='After collection: young passes only, over objects made since; the heap stays frozen. '
-                  'One full pass at the end of the iteration; unreachable counts the cyclic garbage it freed.')
+        per_iteration = unreachable / self.since_full
+        full = dict(seconds=time.perf_counter() - began, ran=True, unreachable=unreachable, iterations=self.since_full,
+                    unreachable_per_iteration=per_iteration)
+        self.every_iteration = per_iteration > GARBAGE_PER_ITERATION; self.since_full = 0
+        full['next_full_in'] = 1 if self.every_iteration else every
+        return dict(contract=ITERATION_CONTRACT, after_collection=after, full_collection=full, scope=scope)

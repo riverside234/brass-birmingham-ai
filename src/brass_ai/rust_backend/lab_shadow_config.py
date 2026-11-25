@@ -42,11 +42,12 @@ def is_shadow(config):
     from brass_ai.recovery.training_revision_g4551 import previous as before_table_revision
     from brass_ai.recovery.training_revision_g4770 import previous as before_era_head_revision
     from brass_ai.recovery.training_revision_g5402 import previous as before_optimizer_revision
+    from brass_ai.recovery.training_revision_g5466 import previous as before_auxiliary_revision
     try:
         config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(
             before_teacher_revision(before_soft_policy(before_eighth_floor(before_teacher_search(
                 before_teacher_training(before_table_revision(before_era_head_revision(
-                    before_optimizer_revision(recipe(config)))))))))))))
+                    before_optimizer_revision(before_auxiliary_revision(recipe(config))))))))))))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -177,6 +178,11 @@ def signature_transition(before,after):
     # floor kept, the soft head and era heads on the main rates; adopted once, then kept; trainer-only.
     from brass_ai.recovery import training_revision_g5402 as g5402
     old=g5402.project(old,new)
+    if old is None:return False
+    # g5466 auxiliary revision: Rail-end preserved in PPO like Canal/Rail, PPG clip 2.2 with a one-time PPG Adam
+    # rescale, the era heads on the fixed PPO rate in PPG; adopted once, then kept; trainer-only.
+    from brass_ai.recovery import training_revision_g5466 as g5466
+    old=g5466.project(old,new)
     if old is None:return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False

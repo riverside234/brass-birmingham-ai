@@ -401,9 +401,13 @@ def build(base):
         def horizon_weight(self, horizon):
             return float(self.config['weights'][horizon])
 
+        # g5466 (training_revision_g5466.rail_end_in_ppo, set by the trainer): PPO freezes and preserves the restored
+        # Rail-end outputs like the Canal and Rail ones.
+        rail_end_ppo = False
+
         def preservation_weights(self):
-            # g4770: restored Rail-end outputs train only in PPG; PPO neither snapshots nor preserves them.
-            ppg_only = RAIL_END if rail_end_restored(self.config) else ()
+            # g4770: restored Rail-end outputs trained only in PPG; PPO neither snapshotted nor preserved them, until g5466.
+            ppg_only = RAIL_END if rail_end_restored(self.config) and not self.rail_end_ppo else ()
             return {name: (self.horizon_weight(name.rsplit('_', 1)[0]),) * 2 for name in output_names()
                     if name in self.heads.owner and name not in ppg_only}
 
@@ -707,10 +711,13 @@ def build(base):
                 from .local_scoring_warmup import report as warmup_report
                 result['rail_end_heads'].update(restored_at=self.config['rail_end_restored'], weight=self.horizon_weight('rail_end'),
                     restoration=copy.deepcopy(self.rail_end_restoration), in_stop_criterion=self.rail_end_decides_stop,
+                    in_ppo_preservation=self.rail_end_ppo,
                     warmup=dict(before=warmup_report(self.rail_end_warmup, self.config),
                                 after_commit=warmup_report(self.next_rail_end_warmup(), self.config)),
-                    scope='Restored Rail-end outputs: PPG only (same batches and steps as Canal/Rail), no PPO snapshot '
-                          'or preservation; their own warm-up (head-only on the shared features for two qualifying '
+                    scope='Restored Rail-end outputs: PPG in the same batches and steps as Canal/Rail; '
+                          + ('frozen and preserved in PPO like Canal/Rail (g5466)' if self.rail_end_ppo else
+                             'no PPO snapshot or preservation') +
+                          '; their own warm-up (head-only on the shared features for two qualifying '
                           'iterations and 32 kept steps, then a five-iteration ramp into the shared head layers and '
                           'the trunk); PPO-game Canal rows on the actual game-end map, search rows on lambda returns '
                           'after the target warm-up; in the ownership stop\'s criterion at their loss weight from .25.')

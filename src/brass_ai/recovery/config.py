@@ -730,6 +730,12 @@ def validate_config(config):
                 config['ppo_lr_controller']['min_multiplier']==block['after']['min_multiplier'],
                 'The g5402 optimizer revision differs from the PPO clip/LR it adopted')
         fields.add(OPTIMIZER_REVISION)
+    from .training_revision_g5466 import KEY as AUXILIARY_REVISION,validate as validate_auxiliary_revision
+    if AUXILIARY_REVISION in config:
+        # g5466: Rail-end preserved in PPO, PPG clip 2.2 with a one-time PPG Adam rescale, era heads on the PPO rate.
+        require(OPTIMIZER_REVISION in config and ERA_HEAD_REVISION in config,
+                'The g5466 auxiliary revision needs the g4770 era-head and g5402 optimizer revisions')
+        fields.add(AUXILIARY_REVISION);validate_auxiliary_revision(config[AUXILIARY_REVISION])
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

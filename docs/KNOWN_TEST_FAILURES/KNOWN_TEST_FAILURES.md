@@ -184,3 +184,12 @@ Found while testing the g5402 optimizer revision ([G5402_OPTIMIZER_REVISION.md](
 | `test_v11_learning_rate.V11LearningRateTests.test_new_config_scales_once_and_preserves_other_recipe_fields` | same `latest_model_config` difference | Assertion on old behaviour; not analysed further |
 | `test_ppo_lr_controller.FixedRecipe.test_completed_reviewed_v11_2_il_is_admitted_without_file_changes` | `ValueError: 16 bootstrap workers require at least 16 available reader/CPU slots` (`throughput_config.configure`) | Needs more CPU slots than the laptop has |
 | `test_table_revision_g4551.SelfPlay.test_the_vp_report_and_chart_take_a_split_with_no_cotton_tables` | `AssertionError: 'vp-recent-standard-line' not found` in the VP chart SVG | The VP chart changed after the test was written (plot commits c7d53b80, fc640bd7) |
+
+## Policy-anchor configuration failures on unmodified HEAD (found 2026-11-25, still in the tree)
+
+Found while testing the g5466 auxiliary revision ([G5466_AUXILIARY_REVISION.md](../../ai-research/G5466_AUXILIARY_REVISION.md)). Both fail the same way with HEAD `c9611800` and every g5466 edit stashed (`git stash -u`): `FAILED (failures=1, errors=1)` both ways. They have not been deleted.
+
+| Test | Message | Cause |
+|---|---|---|
+| `test_policy_anchor.Configuration.test_g270_reviewed_continuation_preserves_progress_and_rejects_other_recipe_edits` | `FileNotFoundError` for `results/joint7-v11-2-grouped-lr-critic-g0270-20261020T233304700657Z/state.json` | The g270 export is not in the local results repository |
+| `test_policy_anchor.Configuration.test_only_explicit_blocks_change_and_epsilon_behavior_identity` | `AssertionError: 0.05 != 0.02` (`latest_model_config(...)['exploration']`) | The same `latest_model_config` difference as the LR-recipe tests above; not analysed further |

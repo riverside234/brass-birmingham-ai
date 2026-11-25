@@ -91,7 +91,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
             teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None,teacher_search_revision=False,
             teacher_training_revision=False,table_revision=False,era_head_revision=False,rail_end_weight=None,
-            optimizer_revision=False):
+            optimizer_revision=False,auxiliary_revision=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -228,6 +228,13 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             config=g5402.configure(config,state['iteration'],
                 multiplier=None if adopted else g5402.committed_multiplier(state),
                 gradient_norms=None if adopted else g5402.committed_gradient_norms(state))
+        from brass_ai.recovery import training_revision_g5466 as g5466
+        if auxiliary_revision:
+            # Rail-end preserved in PPO like Canal/Rail, PPG clip 2.2 with a one-time PPG Adam rescale (from the
+            # last 30 committed PPG phases' logged norms), the era heads on the fixed PPO rate in PPG.
+            adopted=g5466.applied(config)
+            config=g5466.configure(config,state['iteration'],
+                gradient_norms=None if adopted else g5466.committed_ppg_norms(run,state))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -358,6 +365,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-'+g4770.tag(config)+'-share');stages.append(prefix)
         if g5402.applied(config):
             prefix=prefix.replace('-share', '-'+g5402.tag(config)+'-share');stages.append(prefix)
+        if g5466.applied(config):
+            prefix=prefix.replace('-share', '-'+g5466.tag(config)+'-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
@@ -367,6 +376,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         adopting_tables=g4551.applied(config) and not g4551.applied(before)
         adopting_era_heads=g4770.applied(config) and not g4770.applied(before)
         adopting_optimizer=g5402.applied(config) and not g5402.applied(before)
+        adopting_auxiliary=g5466.applied(config) and not g5466.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
@@ -374,7 +384,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                          g3528.applied(config) and not g3528.applied(before) or
                          g2880.applied(config) and not g2880.applied(before) or
                          g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor or adopting_search or
-                         adopting_training or adopting_tables or adopting_era_heads or adopting_optimizer)
+                         adopting_training or adopting_tables or adopting_era_heads or adopting_optimizer or
+                         adopting_auxiliary)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -404,6 +415,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                          'table-revision' if adopting_tables else
                          'era-head-revision' if adopting_era_heads else
                          'optimizer-revision' if adopting_optimizer else
+                         'auxiliary-revision' if adopting_auxiliary else
                          'soft-policy' if adopting_soft else
                          'value-revision' if g3140.changed(before,config) else 'ppg-beta-floor' if adopting_floor else
                          'search-lambda' if g2880.applied(config) and not g2880.applied(before) else 'cotton-sampling')
@@ -511,6 +523,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'era_head_revision',False):kwargs['era_head_revision']=True
         if getattr(args,'rail_end_weight',None) is not None:kwargs['rail_end_weight']=args.rail_end_weight
         if getattr(args,'optimizer_revision',False):kwargs['optimizer_revision']=True
+        if getattr(args,'auxiliary_revision',False):kwargs['auxiliary_revision']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -658,6 +671,16 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
                   f"{a['learning_rate']:.3g} as the base (multiplier 1, floor 4e-06); PPO Adam moments rescaled once "
                   f"(exp_avg x{s['first_moment']:.3f}, exp_avg_sq x{s['second_moment']:.2f}, from {s['steps']} committed "
                   f"steps); the soft head steps at the PPO rate and the era heads at the PPG rate (the PPO rate in PPO).",flush=True)
+        from brass_ai.recovery import training_revision_g5466 as g5466
+        if g5466.applied(options):
+            report['g5466_auxiliary_revision']=g5466.summary(options)
+            r=report['g5466_auxiliary_revision'];s=r['adam_rescale']
+            print(f"g5466 auxiliary revision (from g{r['from_generation']}): Rail-end heads frozen and preserved in PPO "
+                  f"like Canal/Rail; PPG grad clip {s['old_clip']:g} -> {r['ppg_grad_clip']:g} (PPO keeps its clip, the "
+                  f"heads keep 1.0); PPG Adam moments rescaled once (exp_avg x{s['first_moment']:.3f}, exp_avg_sq "
+                  f"x{s['second_moment']:.3f}, from {s['steps']} logged steps of {len(s['norms'])} iterations; fit clip "
+                  f"rate {s['predicted_clipped_percent']:.1f}% vs logged {s['logged_clipped_percent']:.1f}%); the era "
+                  f"heads step at the PPO rate in PPG, fixed for the phase.",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

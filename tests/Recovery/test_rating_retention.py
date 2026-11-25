@@ -43,6 +43,8 @@ class RatingRetention(unittest.TestCase):
 
     def cleanup(self):return retention.prune(self.root,self.run,self.cfg['retention'],apply=True)
 
+    # g5466: the slots fit without bootstrap by default; this test checks that compaction keeps the samples.
+    @patch.dict('os.environ', {'BRASS_RATING_BOOTSTRAP': '1'})
     def test_100_iteration_boundary_removes_full_slots_but_keeps_exact_cumulative_fit(self):
         self.through(100)
         self.assertNotIn('archive',self.state['ratings'])

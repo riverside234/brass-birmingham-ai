@@ -834,7 +834,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
         baseline_explained_variance=explained_variance,
         baseline_scope='Before PPO, after any head calibration; nonforced learner decisions, in-sample',
         legal_actions=distribution([len(ds.rows[i]['choices']) for i in actor_ids]),
-        categorical_probe=final_probe,gradient_norms=distribution(gradient_norms),
+        categorical_probe=final_probe,gradient_norms=distribution(gradient_norms,upper=98),  # g5466: p98, not p95
         input_cache=dict(probe=categorical_probe.cache_report(),scans=ds.scan_cache.report(),
                          admission=ds.input_audit.report()),
         kl_estimator=('probe_categorical_kl/categorical_kl: exact KL(old raw T1 || current raw T1), scheduled guard and LR signal; behavior_categorical_kl: independent exact behavior-policy guard at the same limit; '

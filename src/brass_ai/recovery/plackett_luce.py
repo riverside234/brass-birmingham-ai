@@ -139,7 +139,9 @@ def fit(games,agents,config):
     return dict(agents=agents,theta=theta.tolist(),seat=seat.tolist(),diagnostic=diagnostic)
 
 
-def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None,baseline=IL):
+def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None,baseline=IL,bootstrap=True):
+    """bootstrap=False (g5466, the training run's rating slots): the full fit only. No setup-bootstrap refits, so every
+    interval is None, the pairwise differences are not listed and the report says bootstrap_refits 0."""
     timings=telemetry if telemetry is not None else {};began=time.perf_counter()
     games,agents,ordered,orders=encode(games,agents);n=len(agents)
     require(baseline in agents,'Missing PL zero baseline')
@@ -147,12 +149,12 @@ def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None,bas
     theta,seat,diagnostic=fit_encoded(ordered,orders,n,config)
     timings['full_fit_seconds']=time.perf_counter()-began;began=time.perf_counter()
     # A setup gets one bootstrap multiplicity across ALL slots and rotations.
-    setups,cluster,draws=bootstrap_draws(games,config)
+    setups,cluster,draws=bootstrap_draws(games,config) if bootstrap else (sorted({g['setup_id'] for g in games}),None,[])
     samples=[];execution=None
     if compute is None:
         for counts in draws:
             draw,_,_=fit_encoded(ordered,orders,n,config,weights=counts[cluster]);samples.append(draw)
-    else:
+    elif draws:
         validate_compute(compute)
         start=np.r_[theta[1:],seat[:3]]
         inputs=(ordered,orders,n,config,cluster,start)
@@ -169,21 +171,23 @@ def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None,bas
             gradient_max=max(r[1]['gradient_max'] for r in refits),
             converged=all(r[1]['converged'] for r in refits),cold_retries=sum(r[1]['cold_retry'] for r in refits))
     timings['bootstrap_seconds']=time.perf_counter()-began;began=time.perf_counter()
-    samples=np.asarray(samples)
+    samples=np.asarray(samples) if samples else np.zeros((0,n))
     if baseline!=IL:
         # Recenter each paired draw so the interval includes the reference's uncertainty.
         zero=agents.index(baseline)
         theta=theta-theta[zero]
         samples=samples-samples[:,zero,None]
-    low,high=np.quantile(samples,[.025,.975],axis=0)
+    intervals=len(samples)>0
+    low,high=np.quantile(samples,[.025,.975],axis=0) if intervals else (None,None)
     scale=config['elo_scale'];v4=agents.index(V4);il=agents.index(IL)
     sigmoid=lambda x:float(1/(1+math.exp(-max(-700.,min(700.,float(x))))))
-    rated={a:dict(theta=float(theta[i]),points=scale*float(theta[i]),theta_ci95=[float(low[i]),float(high[i])],
-        points_ci95=[scale*float(low[i]),scale*float(high[i])],
+    rated={a:dict(theta=float(theta[i]),points=scale*float(theta[i]),
+        theta_ci95=[float(low[i]),float(high[i])] if intervals else None,
+        points_ci95=[scale*float(low[i]),scale*float(high[i])] if intervals else None,
         probability_above_IL=sigmoid(theta[i]-theta[il]),probability_above_v4=sigmoid(theta[i]-theta[v4]),
         **(dict(probability_above_baseline=sigmoid(theta[i])) if baseline!=IL else {})) for i,a in enumerate(agents)}
     differences=[]
-    for i,a in enumerate(agents):
+    for i,a in enumerate(agents if intervals else ()):
         for j in range(i+1,n):
             interval=np.quantile(samples[:,j]-samples[:,i],[.025,.975])*scale
             differences.append(dict(a=a,b=agents[j],points_delta=scale*float(theta[j]-theta[i]),
@@ -194,4 +198,6 @@ def estimate(games,agents,config,*,compute=None,parallel=True,telemetry=None,bas
         games=len(games),setups=len(setups),bootstrap_refits=len(samples),differences=differences,
         **(dict(baseline=baseline) if baseline!=IL else {}),
         **(dict(bootstrap_execution=execution) if execution is not None else {}),
-        scope=f'Held-out mixed-table PL model with Gaussian priors; {origin}; setup-cluster percentile intervals; seat-neutral outrank probabilities'),samples
+        scope=f'Held-out mixed-table PL model with Gaussian priors; {origin}; '
+              +('setup-cluster percentile intervals' if intervals else 'no intervals (setup bootstrap off)')
+              +'; seat-neutral outrank probabilities'),samples

@@ -86,7 +86,8 @@ def categorical_kl(old, current):
     return (old*(old.clamp_min(1e-30).log()-current.clamp_min(1e-30).log())).sum()
 
 
-def distribution(values):
+def distribution(values, *, upper=95):
+    """`upper` names the high percentile reported (p95; the gradient norms report p98 from g5466)."""
     if isinstance(values, torch.Tensor):
         values = values.detach().float().cpu().numpy()
     values = np.asarray(values, dtype=np.float64).reshape(-1)
@@ -94,7 +95,7 @@ def distribution(values):
         return dict(count=0)
     return dict(count=len(values), mean=float(values.mean()), std=float(values.std()),
                 min=float(values.min()), p05=float(np.quantile(values, .05)),
-                median=float(np.median(values)), p95=float(np.quantile(values, .95)),
+                median=float(np.median(values)), **{f'p{upper}': float(np.quantile(values, upper / 100))},
                 max=float(values.max()))
 
 

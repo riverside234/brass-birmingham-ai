@@ -88,8 +88,10 @@ def load_fit(root, rating, fit):
     with np.load(project_path(root,fit['bootstrap']['path']),allow_pickle=False) as data:
         samples=data['theta'].copy();names=data['agents'].tolist()
     baseline=report.get('baseline',IL)
+    # g5466: a rating slot run without bootstrap refits saves an empty sample (bootstrap_refits 0).
+    drawn=rating['config']['bootstrap'] if report.get('bootstrap_refits',rating['config']['bootstrap']) else 0
     require(baseline==spec.get('baseline',IL) and len(set(names))==len(names) and set(names)==set(report['ratings']) and baseline in names and
-        samples.shape==(rating['config']['bootstrap'],len(names)) and np.isfinite(samples).all() and
+        samples.shape==(drawn,len(names)) and np.isfinite(samples).all() and
         np.all(samples[:,names.index(baseline)]==0.) and report['ratings'][baseline]['theta']==0.,
         'Invalid shared setup-bootstrap samples or PL zero baseline')
     return report,samples,names
@@ -105,6 +107,8 @@ def select(root, state, controller):
     if controller['last_fit'] is not None:
         require(fit['generation']>controller['last_fit']['generation'],'Policy anchor rating fit went backwards or changed')
     report,samples,names=load_fit(root,rating,fit)
+    # g5466: promotion needs the paired setup-bootstrap interval; a fit without refits holds the anchor.
+    if not len(samples):return None,fit,'no_bootstrap_intervals'
     current=controller['active'];reference=current['agent'] if current else IL
     generation=current['checkpoint']['generation'] if current else 0
     candidates=sorted((a for a in names if a not in (IL,V4) and a in rating['agents'] and

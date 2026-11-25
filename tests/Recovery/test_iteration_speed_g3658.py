@@ -22,6 +22,7 @@ class IterationGc(unittest.TestCase):
     def tearDown(self):
         collection_gc.settle(); gc.unfreeze(); gc.enable(); gc.set_threshold(*self.thresholds)
 
+    @patch.dict(os.environ, {'BRASS_GC_FULL_EVERY': '1'})  # g5466: the full pass every iteration, as at g3658
     def test_the_heap_stays_frozen_through_the_iteration_and_one_full_pass_ends_it(self):
         window = collection_gc.Window(); window.start()
         self.assertFalse(gc.isenabled()); self.assertGreater(gc.get_freeze_count(), 0)
@@ -41,6 +42,7 @@ class IterationGc(unittest.TestCase):
         self.assertEqual(gc.get_freeze_count(), self.settled); self.assertEqual(gc.get_threshold(), self.thresholds)
         self.assertNotIn(window._callback, gc.callbacks); self.assertIsNone(window.finish())
 
+    @patch.dict(os.environ, {'BRASS_GC_FULL_EVERY': '1'})
     def test_an_unfinished_iteration_is_settled_by_the_next_window(self):
         first = collection_gc.Window(); first.start(); first.stop()
         second = collection_gc.Window(); second.start()

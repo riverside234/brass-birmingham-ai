@@ -6,6 +6,7 @@ layout. Hashing runs in C and avoids repeating the Python/NumPy selector walks.
 No cache or counter is checkpointed and no model output is cached.
 """
 from collections import OrderedDict
+import functools
 import hashlib
 import threading
 import weakref
@@ -28,11 +29,19 @@ def array_digest(array):
     return value.digest()
 
 
+def _forget(audit, key, dead):
+    """A proof's weakref callback. It holds the audit weakly (g5466): a closure over the audit made the audit and
+    every proof a reference cycle, freed only by a full GC pass."""
+    audit = audit()
+    if audit is not None: audit._forget(key, dead)
+
+
 class InputAudit:
     def __init__(self):
         self.proofs = {}
         self.checks = self.hits = 0
         self.lock = threading.RLock()
+        self._self = weakref.ref(self)
 
     def check(self, row):
         from .replay_binding import encoded_digest
@@ -52,7 +61,7 @@ class InputAudit:
                 check_action_selectors(row.actions)
                 key = id(row)
                 try:
-                    reference = weakref.ref(row, lambda dead: self._forget(key, dead))
+                    reference = weakref.ref(row, functools.partial(_forget, self._self, key))
                 except TypeError:
                     reference = None  # Duck-typed inputs retain full admission.
                 if reference is not None:self.proofs[key] = (reference, seal)

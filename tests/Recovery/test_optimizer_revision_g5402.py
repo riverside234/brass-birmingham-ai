@@ -222,7 +222,8 @@ class Clipping(unittest.TestCase):
         values = (.5, 1., 1.5, 3.)
         r = clipping_report([torch.tensor(v) for v in values], 1.)
         self.assertEqual((r['max_norm'], r['steps'], r['clipped_steps'], r['clipped_percent']), (1., 4, 2, 50.))
-        self.assertEqual(r['pre_clip_norm'], dict(mean=1.5, median=1.25, p95=float(np.quantile(values, .95))))
+        # g5466: the upper percentile is P98 (was P95), with the maximum beside it.
+        self.assertEqual(r['pre_clip_norm'], dict(mean=1.5, median=1.25, p98=float(np.quantile(values, .98)), max=3.))
         empty = clipping_report([], 1.)
         self.assertEqual((empty['steps'], empty['clipped_percent'], empty['pre_clip_norm']['median']), (0, None, None))
 
@@ -241,7 +242,7 @@ class Clipping(unittest.TestCase):
             r = g4770_tests.Phase.run_phase(None)
         clipping = r['gradient_clipping']
         self.assertEqual((clipping['max_norm'], clipping['steps']), (.5, r['attempted_steps']))  # rolled-back steps too
-        self.assertGreater(clipping['steps'], 0); self.assertIsNotNone(clipping['pre_clip_norm']['p95'])
+        self.assertGreater(clipping['steps'], 0); self.assertIsNotNone(clipping['pre_clip_norm']['p98'])
         self.assertAlmostEqual(clipping['clipped_percent'], 100. * clipping['clipped_steps'] / clipping['steps'])
         ppg = [s for s in seen if s[0] == 'ppg']
         self.assertTrue(ppg and all(s[2] == r['peak_learning_rate'] for s in ppg))

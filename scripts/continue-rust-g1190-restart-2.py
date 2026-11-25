@@ -233,6 +233,15 @@ then kept:
                rate of each PPG step (warm-up and decay included), and at the PPO rate in PPO.
 Code-only in the same change: every PPG value-phase report carries gradient_clipping (pre-clip
 norm mean/median/P95, clipped steps and percent over all attempted steps).
+
+--auxiliary-revision (at a committed boundary, after --optimizer-revision) adopts the g5466
+auxiliary revision (ai-research/G5466_AUXILIARY_REVISION.md); set once, then kept:
+  Rail-end     the restored Rail-end outputs are frozen and preserved in PPO like Canal/Rail.
+  PPG clip     2.2 (was 1.0); PPO keeps 5.83; the era heads' and soft head's own clips stay 1.0.
+  Adam         the PPG Adam moments are rescaled once to the new clip, from a normal fit of the last
+               30 committed PPG phases' logged pre-clip norms (mean and P95).
+  head rates   the era heads step at the PPO rate in PPG too, fixed for the phase (no warm-up or
+               decay); PPO-phase rates are unchanged.
 """
 import importlib.util
 from pathlib import Path

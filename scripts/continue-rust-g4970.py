@@ -195,6 +195,8 @@ def main():
     parser.add_argument('--workers', type=int, default=64)
     parser.add_argument('--optimizer-revision', action='store_true',
                         help='Adopt the g5402 optimizer revision at this committed generation (set once, then kept)')
+    parser.add_argument('--auxiliary-revision', action='store_true',
+                        help='Adopt the g5466 auxiliary revision at this committed generation (set once, then kept)')
     args = parser.parse_args()
 
     run = ROOT / RUN
@@ -210,6 +212,7 @@ def main():
         '--iterations', str(args.iterations), '--share-target', str(share), '--workers', str(args.workers),
         '--rail-end-weight', '0.25', '--soft-policy-weight', '8',
         *(['--optimizer-revision'] if args.optimizer_revision else []),
+        *(['--auxiliary-revision'] if args.auxiliary_revision else []),
     ], cwd=ROOT)
 
 

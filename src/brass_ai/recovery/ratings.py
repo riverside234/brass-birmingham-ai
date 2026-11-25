@@ -335,6 +335,29 @@ def panel_report(rows,candidate,health,seed,*,gates=None):
                 qualified=None,reason='Deployment requires human review; no invented panel pass thresholds')
 
 
+BOOTSTRAP_SWITCH='BRASS_RATING_BOOTSTRAP'
+REPLAY_CHECK_SWITCH='BRASS_RATING_REPLAY_CHECKS'
+
+
+def _switch(name):
+    import os
+    value=os.environ.get(name,'0')
+    require(value in ('0','1'),name+' must be 0 or 1')
+    return value=='1'
+
+
+def rating_bootstrap():
+    """g5466: the rating slots' 200 setup-bootstrap refits (43 s of a 102 s slot at g5450) are off;
+    BRASS_RATING_BOOTSTRAP=1 restores them and their intervals."""
+    return _switch(BOOTSTRAP_SWITCH)
+
+
+def rating_replay_checks():
+    """g5466: rating replays are read for their outcomes only (game identity, seats, setup, result), not
+    replay-validated in full; BRASS_RATING_REPLAY_CHECKS=1 restores the full replay checks."""
+    return _switch(REPLAY_CHECK_SWITCH)
+
+
 def alerts(report,state,panels,previous_panels):
     checkpoints=[a for a in report['ratings'] if a not in (IL,V4,SEED)]
     latest=max(checkpoints,key=lambda a:state['agents'][a]['checkpoint']['generation'])
@@ -343,10 +366,13 @@ def alerts(report,state,panels,previous_panels):
     series=[p['panels']['v4-panel']['learner_win_share'] for p in previous_panels+[panels]
         if p['panels']['v4-panel']['learner_win_share'] is not None]
     slipping=panels['panels']['v4-panel']['learner_win_share'] is not None and len(series)>=3 and series[-3]>series[-2]>series[-1]
-    return dict(regression=bool(current['points_ci95'][1]<best_rating-50),candidate=latest,best=best,
+    # g5466: without bootstrap intervals the regression alert reads the point estimate, and there is no lower bound.
+    upper=current['points_ci95'][1] if current['points_ci95'] is not None else current['points']
+    return dict(regression=bool(upper<best_rating-50),candidate=latest,best=best,
         regression_threshold_points=50,v4_watch=slipping,v4_recent_win_shares=series[-3:],
         v4_watch_action='Review three-slot decline; no automatic increase or rollback of the ordinary v4 share',
-        highest_lower_bound=max(checkpoints,key=lambda a:report['ratings'][a]['points_ci95'][0]),
+        highest_lower_bound=(max(checkpoints,key=lambda a:report['ratings'][a]['points_ci95'][0])
+                             if current['points_ci95'] is not None else None),
         deployment_choice=None,deployment_status='Pending separate panel review; no automatic publication')
 
 
@@ -427,7 +453,7 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         timing['history_read_seconds']=time.perf_counter()-phase
         compute=config.get('rating_compute')
         fitted,samples=estimate([r for r in all_rows if r['kind']=='rating'],working['agents'],c,
-            telemetry=timing,baseline=spec.get('baseline',IL),
+            telemetry=timing,baseline=spec.get('baseline',IL),bootstrap=rating_bootstrap(),
             **(dict(compute=compute) if compute is not None else {}))
         phase=time.perf_counter()
         recent=state.get('recent_training',[])
@@ -472,7 +498,7 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         units='PL points vs g1290' if spec.get('baseline')==SEED else 'PL points'
         print(f'Rating generation {generation}: {c["setups"]*4} main + {sum(p["games"] for p in panels["panels"].values())} panel games; '
               f'{fitted["ratings"][spec["candidate"]]["points"]:.1f} {units}; '
-              f'{c["bootstrap"]} bootstrap refits; {timing["slot_seconds"]:.1f}s '
+              f'{fitted["bootstrap_refits"]} bootstrap refits; {timing["slot_seconds"]:.1f}s '
               f'(games+validate={timing["games_and_validation_seconds"]:.1f}s '
               f'fit={timing["full_fit_seconds"]:.1f}s bootstrap={timing["bootstrap_seconds"]:.1f}s)',flush=True)
         last_report=fitted

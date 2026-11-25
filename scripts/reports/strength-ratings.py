@@ -26,7 +26,8 @@ def main():
     saved=ratings.validate_state(ROOT,state['ratings'],config['rating'])
     require(saved['slots'],'No completed rating slot yet; the default first slot is generation 10')
     games=[g for g in ratings.read_games(ROOT,saved) if g['kind']=='rating']
-    report,_=estimate(games,saved['agents'],saved['config'],baseline=zero_agent(config))
+    # g5466: the same bootstrap switch as the run's rating slots (BRASS_RATING_BOOTSTRAP, off by default).
+    report,_=estimate(games,saved['agents'],saved['config'],baseline=zero_agent(config),bootstrap=ratings.rating_bootstrap())
     latest=saved['slots'][-1];panels=read(project_path(ROOT,latest['panels']['path']))
     previous=ratings.panel_history(ROOT,saved)[:-1]
     report.update(generation=latest['generation'],alerts=ratings.alerts(report,saved,panels,previous),

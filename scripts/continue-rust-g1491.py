@@ -182,6 +182,13 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'are rescaled once to the new clip; the soft policy head '
              'steps at the PPO rate and the era heads at the PPG rate (the PPO rate in PPO). Trainer-only; set once '
              '(training_revision_g5402).')
+    parser.add_argument('--auxiliary-revision', action='store_true',
+        help='Adopt the g5466 auxiliary revision at this committed generation (after --optimizer-revision): the '
+             'Rail-end heads are frozen and preserved in PPO like the Canal/Rail heads; PPG clips at 2.2 (was 1.0) '
+             'and the PPG Adam moments are rescaled once to the new clip from the logged norms of the last 30 '
+             'committed PPG phases; the era heads step at the PPO rate in PPG too, fixed for the phase (no warm-up '
+             'or decay). The era heads and the soft head keep their own clips at 1.0. Trainer-only; set once '
+             '(training_revision_g5466).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -256,6 +263,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.era_head_revision = False
         recovery.rail_end_weight = None
         recovery.optimizer_revision = False
+        recovery.auxiliary_revision = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

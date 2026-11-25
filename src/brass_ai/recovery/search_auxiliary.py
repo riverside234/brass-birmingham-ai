@@ -206,7 +206,9 @@ class SearchRows:
                            {j: ends[offset + j] for j in roots if offset + j in ends})); offset += len(rows)
         corrections = search_corrections(tables, lam, rail_end=rail_end)
         self.corrections = torch.as_tensor(corrections, device=self.device)
-        self.local_bootstrap = Corrections(lambda ix: self.corrections[ix], settings['auxiliary']['search_share'], self.device)
+        # g5466: the tensor's own indexing, not a closure over self: a self-reference made every SearchRows (its rows,
+        # era maps and device tensors) cyclic garbage that waited for the iteration's full GC pass.
+        self.local_bootstrap = Corrections(self.corrections.__getitem__, settings['auxiliary']['search_share'], self.device)
         report = dict(roots=len(positions), rows=self.rows, lam=lam, share=settings['auxiliary']['search_share'],
                       mean_owner_l1=float(np.abs(corrections[..., :5]).sum(-1).mean()),
                       mean_vp_l1=float(np.abs(corrections[..., 5:WIDTH]).sum(-1).mean() * 5), seconds=time.perf_counter() - began)
