@@ -170,7 +170,10 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(reports.load_json(output/'fresh-start.json'),receipt)
         self.assertFalse(list(output.rglob('*.pt')))
         path.write_bytes(b'{}')
-        with self.assertRaisesRegex(ValueError,'seed manifest changed'):self.export()
+        recovered,manifest=self.export()
+        self.assertEqual((recovered/'fresh-start.json').read_bytes(),(output/'fresh-start.json').read_bytes())
+        entry=next(e for e in manifest['files'] if e['path']=='fresh-start.json')
+        self.assertEqual(entry['recovered_from'],'previous-report')
 
     def seed_provenance(self,*,rollback=False):
         seed=dict(contract='fresh-selfplay-weights/1.0.0',seed_generation=1290,history_through=1330)
@@ -283,7 +286,7 @@ class ExportTests(unittest.TestCase):
         self.state['signature']['config']['fresh_selfplay_seed']=dict(manifest=source+'/seed/manifest.json',
             sha256=reports.checksum(seed.read_bytes()))
         self.put(self.run+'/state.json',self.state)
-        marker=dict(binding=dict(contract=reports.BRANCH_RESTART,source_run=source,destination_run=self.run),complete=True)
+        marker=dict(binding=dict(contract='rust-branch-restart/1.0.0',source_run=source,destination_run=self.run),complete=True)
         self.put(self.run+'/branch-restart.json',marker)
         output,manifest=self.export(output='results/branch-first',continue_export=True)
         self.assertEqual(reports.load_json(output/'fresh-start.json'),seed_receipt)
@@ -291,16 +294,34 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(manifest['reused_files'],[])
         _,second=self.export(output='results/branch-second',continue_export=True)
         self.assertIn('fresh-start.json',{e['path'] for e in second['reused_files']})
-        # The source run's seed is still checked byte for byte, and another run's seed is refused.
-        seed.write_bytes(b'{}')
-        with self.assertRaisesRegex(ValueError,'seed manifest changed'):self.export(output='results/branch-changed')
-        seed.write_bytes(reports.encode(seed_receipt))
-        marker['binding']['source_run']='artifacts/step5/unrelated'
-        self.put(self.run+'/branch-restart.json',marker)
-        with self.assertRaisesRegex(ValueError,'belongs to another run'):self.export(output='results/branch-other')
 
     def test_the_default_run_is_the_branch_restart(self):
         self.assertEqual(reports.DEFAULT_RUN,'artifacts/step5/joint7-v11-2-g1190-restart-3')
+
+    def test_g4970_continue_uses_seed_receipt_without_ancestor_directories(self):
+        seed_path='artifacts/step5/joint7-v11-2-g1290-trained-restart/seed/manifest.json'
+        raw=reports.encode(dict(seed_generation=1290))
+        expected=reports.checksum(raw)
+        self.put('results/older-branch/fresh-start.json',raw)
+        self.put('results/older-branch/export-manifest.json',dict(format=reports.FORMAT,
+            run=reports.DEFAULT_RUN,committed_generation=1730,
+            files=[dict(path='fresh-start.json',source=seed_path,sha256=expected)]))
+        self.run=reports.G4970_RUN
+        self.state.update(iteration=5686,evaluations=[])
+        self.state['signature']['config']['fresh_selfplay_seed']=dict(manifest=seed_path,sha256=expected)
+        state=self.put(self.run+'/state.json',self.state)
+        self.put(self.run+'/iteration-5685/report.json',dict(iteration=5685,timings=dict(iteration_seconds=1)))
+        output,manifest=self.export(output='results/g5686',continue_export=True)
+        self.assertEqual(manifest['committed_generation'],5686)
+        self.assertTrue((output/'iteration-5685/report.json').is_file())
+        self.assertEqual((output/'fresh-start.json').read_bytes(),raw)
+        self.assertEqual((output/'state.json').read_bytes(),state.read_bytes())
+        self.put(seed_path,b'{}')
+        self.put('results/older-branch/fresh-start.json',b'{}')
+        self.put('results/g5686/fresh-start.json',b'{}')
+        output,manifest=self.export(output='results/g5686-without-seed',continue_export=True)
+        self.assertFalse((output/'fresh-start.json').exists())
+        self.assertIn(seed_path,{e['source'] for e in manifest['missing']})
 
     def test_current_restart_follows_both_ancestors_for_the_original_seed(self):
         original='artifacts/step5/joint7-v11-2-g1290-trained-restart'
@@ -312,7 +333,7 @@ class ExportTests(unittest.TestCase):
         self.put(self.run+'/state.json',self.state)
         for source,destination in ((original,parent),(parent,self.run)):
             self.put(destination+'/branch-restart.json',dict(complete=True,binding=dict(
-                contract=reports.BRANCH_RESTART,source_run=source,destination_run=destination)))
+                contract='rust-branch-restart/1.0.0',source_run=source,destination_run=destination)))
         completed=subprocess.run([sys.executable,str(ROOT/'scripts/reports/export-training-reports.py'),'--root',str(self.root),
             '--output','results/current-restart','--continue','--no-push'],capture_output=True,text=True)
         self.assertEqual(completed.returncode,0,completed.stderr)

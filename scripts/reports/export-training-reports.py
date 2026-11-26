@@ -25,8 +25,9 @@ The latest VP chart is redrawn from valid cumulative VP history using the curren
 Teacher VP history and progress_teacher_vp.svg are included when present.
 With --continue, the g4970 beta restart is the default when its state exists.
 Otherwise the default is the g1190 restart. Use --run to choose a run explicitly.
-A branch-restart run reports the fresh-start seed recorded by its source run (checked by SHA-256), and its first --continue
-export copies everything because earlier exports belong to the source run.
+Fresh-start provenance comes from the seed receipt in committed state. A
+previous report can supply the exact SHA-256-matched seed manifest when the
+original file is unavailable. Incremental reuse of reports is scoped to this run.
 The CLI publishes to the independent ai-training-results repository by default.
 Fetch/push use the configured results URL directly, independently of origin.
 Git URL rewrites must preserve that repository's identity. Authentication may
@@ -56,8 +57,6 @@ import results_git
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUN = 'artifacts/step5/joint7-v11-2-g1190-restart-3'
 G4970_RUN = 'artifacts/step5/joint7-v11-2-g4970-rail025-soft8-beta0.02'
-G4970_SOURCE = DEFAULT_RUN
-BRANCH_RESTART = 'rust-branch-restart/1.0.0'
 FORMAT = 'selfplay-report-export/1.4.0'
 PREVIOUS_FORMATS = {'selfplay-report-export/1.0.0', 'selfplay-report-export/1.1.0',
                     'selfplay-report-export/1.2.0', 'selfplay-report-export/1.3.0', FORMAT}
@@ -382,8 +381,8 @@ def publish(stage, output):
                 raise
 
 
-def previous_files(root, run, generation, warnings):
-    """Index physical files in older same-run exports, including legacy bundles.
+def previous_files(root, run, generation, warnings, *, filename=None):
+    """Index physical files in older exports, including legacy bundles.
 
     Reused entries are deliberately not followed: indexing their original
     physical bundle keeps references flat and avoids trusting reference chains.
@@ -398,7 +397,7 @@ def previous_files(root, run, generation, warnings):
             manifest = load_json(path)
             if not isinstance(manifest, dict) or manifest.get('format') not in PREVIOUS_FORMATS:
                 continue
-            if manifest.get('run') != run.relative_to(root).as_posix():
+            if run is not None and manifest.get('run') != run.relative_to(root).as_posix():
                 continue
             committed = manifest.get('committed_generation')
             if type(committed) is not int or not 0 <= committed <= generation:
@@ -406,6 +405,8 @@ def previous_files(root, run, generation, warnings):
             for entry in manifest.get('files', []):
                 if not isinstance(entry, dict) or not all(isinstance(entry.get(k), str)
                                                         for k in ('source', 'path', 'sha256')):
+                    continue
+                if filename is not None and entry['path'] != filename:
                     continue
                 # Match exported bytes, not source_sha256: compact history
                 # may be identical even if the source's formatting changed.
@@ -437,39 +438,16 @@ def incremental_files(root,run,generation,files,warnings,*,index=None):
     return copied, reused, dependencies
 
 
-def branch_source(root,run):
-    """The run a branch restart was prepared from (its signed config keeps that run's paths), else this run."""
-    receipt=below(root,run/'branch-restart.json')
-    if not receipt.is_file():
-        # The g4970 launcher inherits the source recipe without a branch-restart receipt.
-        return below(root, G4970_SOURCE) if run == root / G4970_RUN else run
-    binding=load_json(receipt).get('binding')
-    require(isinstance(binding,dict) and binding.get('contract')==BRANCH_RESTART and
-            binding.get('destination_run')==run.relative_to(root).as_posix() and isinstance(binding.get('source_run'),str),
-            'Branch restart receipt changed or belongs to another run')
-    source=below(root,binding['source_run'])
-    require(source.is_relative_to(root/'artifacts') and source!=run,'Branch restart source must be another run under artifacts/')
-    return source
-
-
-def seed_report_source(root,run,state,seed,previous,warnings,bindings):
+def seed_report_source(root,run,state,seed,warnings,bindings):
     """Resolve only exact original seed JSON, never seed weights or replays.
 
-    Compact transfers can omit this generation-zero-only document. A committed
-    run can still be reported; recover immutable bytes when available, otherwise
-    let the normal missing-evidence manifest describe the absent provenance.
+    The committed receipt identifies the document after a branch restart or
+    compact transfer, including when the old run directories are gone.
     """
     path=below(root,seed['manifest']);expected=seed['sha256']
-    origins=[run]
-    while True:
-        origin=branch_source(root,origins[-1])
-        if origin==origins[-1]:break
-        require(origin not in origins,'Circular branch restart provenance')
-        origins.append(origin)
-    require(path in (origin/'seed/manifest.json' for origin in origins),
-        'Fresh-start seed manifest changed or belongs to another run')
-    if path.is_file():
-        require(checksum(path.read_bytes())==expected,'Fresh-start seed manifest changed or belongs to another run')
+    require(path.is_relative_to(root/'artifacts') and path.parts[-2:]==('seed','manifest.json'),
+        'Fresh-start seed receipt must name seed/manifest.json under artifacts/')
+    if path.is_file() and checksum(path.read_bytes())==expected:
         return path,None
     transfer=state.get('machine_transfer') or {};rollback=below(root,'.training-rollback')
     if transfer.get('archive_id') and rollback.is_dir():
@@ -494,17 +472,11 @@ def seed_report_source(root,run,state,seed,previous,warnings,bindings):
                 require(checksum(candidate.read_bytes())==expected,'Rollback seed manifest changed')
                 bindings.extend([(journal,raw),(source_state,saved_raw)])
                 return candidate,'rollback-backup'
-    # Only physical reports from verified same-run export manifests are eligible.
-    # The state-pinned seed SHA, not file naming/age or a synthesized summary,
-    # establishes the identity. Stable ordering keeps incremental reuse flat.
-    candidates=set()
-    indexes=[previous()]
-    # Successive restarts can retain the original ancestor's seed receipt.
-    indexes.extend(previous_files(root,origin,state['iteration'],warnings) for origin in origins[1:])
-    for index in indexes:
-        for (_,name,h),directories in index.items():
-            if name=='fresh-start.json' and h==expected:
-                candidates.update(directory/name for directory in directories)
+    # Related runs can export the same seed. Its committed SHA identifies it
+    # across runs, and the index only points to physical copies.
+    index=previous_files(root,None,state['iteration'],warnings,filename='fresh-start.json')
+    candidates={directory/name for (_,name,h),directories in index.items() if h==expected
+                for directory in directories}
     for candidate in sorted(candidates):
         candidate=below(root,candidate)
         if candidate.is_file() and checksum(candidate.read_bytes())==expected:return candidate,'previous-report'
@@ -610,10 +582,10 @@ def export(root, run, output=None, *, latest=2, extras=(), continue_export=False
     require(files['state.json'][1] == state_bytes, 'Run advanced during export; retry')
     seed=state.get('signature',{}).get('config',{}).get('fresh_selfplay_seed')
     if seed is not None:
-        path,recovered=seed_report_source(root,run,state,seed,previous,warnings,provenance_bindings)
+        path,recovered=seed_report_source(root,run,state,seed,warnings,provenance_bindings)
         if path is None:
-            add(seed['manifest'],'fresh-start.json','Original seed provenance omitted/pruned; its exact receipt remains in state.json',expected=True)
-            warnings.append('Original seed manifest is absent; no seed document or tensors were reconstructed. See state.json fresh_selfplay_seed receipt.')
+            missing[seed['manifest']]='No seed manifest matches the committed SHA-256 in state.json'
+            warnings.append('Original seed manifest is absent or differs from the fresh_selfplay_seed receipt in state.json.')
         else:
             add(path,'fresh-start.json','Weights-only source and imported history cutoff; no model tensors',expected=True)
             require(files['fresh-start.json'][0]['sha256']==seed['sha256'],'Fresh-start seed changed during report selection')
