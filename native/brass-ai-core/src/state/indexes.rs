@@ -90,13 +90,13 @@ impl Indexes {
             owned_slots: std::array::from_fn(|i| {
                 self.owned_slots[i]
                     .ones()
-                    .map(|id| CATALOG.slots[id].id.clone())
+                    .map(|id| CATALOG.slots[id].id.to_string())
                     .collect()
             }),
             owned_links: std::array::from_fn(|i| {
                 self.owned_links[i]
                     .ones()
-                    .map(|id| CATALOG.links[id].id.clone())
+                    .map(|id| CATALOG.links[id].id.to_string())
                     .collect()
             }),
             network_regions: std::array::from_fn(|i| {
@@ -107,15 +107,15 @@ impl Indexes {
             }),
             coal_slots: self.resources[0]
                 .ones()
-                .map(|id| CATALOG.slots[id].id.clone())
+                .map(|id| CATALOG.slots[id].id.to_string())
                 .collect(),
             iron_slots: self.resources[1]
                 .ones()
-                .map(|id| CATALOG.slots[id].id.clone())
+                .map(|id| CATALOG.slots[id].id.to_string())
                 .collect(),
             beer_slots: self.resources[2]
                 .ones()
-                .map(|id| CATALOG.slots[id].id.clone())
+                .map(|id| CATALOG.slots[id].id.to_string())
                 .collect(),
         }
     }

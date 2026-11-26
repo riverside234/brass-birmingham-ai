@@ -26,7 +26,7 @@ impl NativeState {
                 outcomes: counts
                     .into_iter()
                     .map(|(id, n)| Outcome {
-                        card: CATALOG.card_names[id.0].clone(),
+                        card: CATALOG.card_names[id.0].to_string(),
                         probability: n as f64 / c.pool.len() as f64,
                     })
                     .collect(),

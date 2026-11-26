@@ -81,7 +81,7 @@ impl NativeState {
             .position(|c| *c == card)
             .ok_or_else(|| CoreError::Invalid("card missing".into()))?;
         self.cards.hands[s].remove(index);
-        match CATALOG.card_names[card.0].as_str() {
+        match &*CATALOG.card_names[card.0] {
             "wild:industry" => self.cards.wild_industry.push(card),
             "wild:location" => self.cards.wild_location.push(card),
             _ => self.cards.discards[s].push(card),

@@ -175,7 +175,7 @@ fn develop_cotton(c: &Choice) -> bool {
 }
 fn targeted(c: &Choice, develop: bool, build: bool, networks: &[String]) -> bool {
     build && cotton(c) || develop && develop_cotton(c) ||
-        c.kind == Kind::Network && c.target.as_ref().is_some_and(|t| networks.contains(t))
+        c.kind == Kind::Network && c.target.as_ref().is_some_and(|t| networks.iter().any(|n| *n == **t))
 }
 
 fn network_targets(view: &Observation, choices: &[Choice]) -> Vec<String> {
@@ -183,8 +183,8 @@ fn network_targets(view: &Observation, choices: &[Choice]) -> Vec<String> {
     let cities: std::collections::HashSet<&str> = view.slots.iter()
         .filter(|s| s.tile.is_none() && s.types.contains(&Industry::CottonMill))
         .map(|s| s.id.split(':').next().unwrap()).collect();
-    view.links.iter().filter(|l| l.regions.iter().any(|r| cities.contains(r.as_str())))
-        .map(|l| l.id.clone()).collect()
+    view.links.iter().filter(|l| l.regions.iter().any(|r| cities.contains(&**r)))
+        .map(|l| l.id.to_string()).collect()
 }
 fn is_zero(n: &u64) -> bool {
     *n == 0
@@ -631,7 +631,7 @@ mod tests {
                 id: i.to_string(),
                 kind: Kind::Build,
                 card: None,
-                target: Some(i.to_string()),
+                target: Some(i.to_string().into()),
                 industry: Some(if i == 0 {
                     Industry::CoalMine
                 } else {
@@ -855,7 +855,7 @@ mod tests {
         choices[1].kind = Kind::Network;
         choices[1].industry = None;
         let target = network_targets(&v, &choices).first().unwrap().clone();
-        choices[1].target = Some(target.clone());
+        choices[1].target = Some(target.clone().into());
         choices[2].kind = Kind::Develop;
         let mut state = State { mode: Mode::Network, seats: Some(1 << seat), ..State::default() };
         state.used[0][seat] = CAP;
@@ -897,7 +897,7 @@ mod tests {
         choices[1].kind = Kind::Network;
         choices[1].industry = None;
         let target = network_targets(&v, &choices).first().unwrap().clone();
-        choices[1].target = Some(target);
+        choices[1].target = Some(target.into());
         choices[2].kind = Kind::Develop;
         let mut build = choices[2].clone();
         build.id = "3".into();

@@ -262,7 +262,7 @@ fn prepare(c: &Choice) -> Result<Candidate, CoreError> {
         check(n < 4, "too many candidate cards")?;
         cards[n] = *LAYOUT
             .cards
-            .get(card.as_str())
+            .get(&**card)
             .ok_or_else(|| invalid("unknown candidate card"))?;
         n += 1;
     }
@@ -276,7 +276,7 @@ fn prepare(c: &Choice) -> Result<Candidate, CoreError> {
             .map(|m| {
                 LAYOUT
                     .merchants
-                    .get(m.as_str())
+                    .get(&**m)
                     .copied()
                     .ok_or_else(|| invalid("unknown candidate merchant"))
             })
@@ -433,12 +433,12 @@ impl FeatureEncoder {
 fn one(out: &mut Vec<f32>, index: Option<usize>, width: usize) {
     out.extend((0..width).map(|i| if index == Some(i) { 1. } else { 0. }));
 }
-fn cards(out: &mut Vec<f32>, items: &[String], scale: f64) -> Result<(), CoreError> {
+fn cards(out: &mut Vec<f32>, items: &[crate::state::dto::Name], scale: f64) -> Result<(), CoreError> {
     let mut counts = [0u32; 27];
     for card in items {
         counts[*LAYOUT
             .cards
-            .get(card.as_str())
+            .get(&**card)
             .ok_or_else(|| invalid("unknown card count"))?] += 1;
     }
     out.extend(counts.map(|n| (f64::from(n) / scale) as f32));
@@ -498,7 +498,7 @@ fn base_state(b: &Board<'_>, out: &mut Vec<f32>) -> Result<(), CoreError> {
         );
         cards(out, &p.discards, 8.)?;
         for name in ["wild:industry", "wild:location"] {
-            out.push(p.known_wild.iter().filter(|c| c.as_str() == name).count() as f32);
+            out.push(p.known_wild.iter().filter(|c| **c == name).count() as f32);
         }
         check(
             p.known_wild
@@ -563,7 +563,7 @@ fn base_state(b: &Board<'_>, out: &mut Vec<f32>) -> Result<(), CoreError> {
             Some(
                 *LAYOUT
                     .merchants
-                    .get(p.merchant.as_str())
+                    .get(&*p.merchant)
                     .ok_or_else(|| invalid("unknown pending merchant"))?,
             )
         },

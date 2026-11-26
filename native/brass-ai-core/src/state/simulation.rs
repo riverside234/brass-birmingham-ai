@@ -46,7 +46,7 @@ impl Setup {
             _ => {
                 for (c, n) in CATALOG.card_names.iter().zip(&CATALOG.card_counts) {
                     if !c.starts_with("wild:") {
-                        pool.insert(c.clone(), *n as usize);
+                        pool.insert(c.to_string(), *n as usize);
                     }
                 }
             }

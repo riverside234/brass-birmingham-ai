@@ -275,12 +275,15 @@ class Companion:
             inverse.append(unique[token])
         return tuple(np.stack([v[j] for v in values])[inverse] for j in range(3))
 
-    def forward(self,model,inputs,ds,ix,*,dropout=None,detach=False,capture_encoded=None):
+    # value_phase.host_ids: forward/head_loss take the batch's host row list as `ids`.
+    host_ids=True
+
+    def forward(self,model,inputs,ds,ix,*,dropout=None,detach=False,capture_encoded=None,ids=None):
         from .updates import value_output
-        ids=ix.detach().cpu().tolist() if isinstance(ix,torch.Tensor) else list(ix)
-        if not self.active:return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach,capture_encoded=capture_encoded),None
+        ids=list(ids) if ids is not None else ix.detach().cpu().tolist() if isinstance(ix,torch.Tensor) else list(ix)
+        if not self.active:return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach,capture_encoded=capture_encoded,ids=ids),None
         metadata=self.metadata(ds,ids)
-        if not any(x[0] is not None for x in metadata):return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach,capture_encoded=capture_encoded),None
+        if not any(x[0] is not None for x in metadata):return value_output(model,inputs,ds,ix,dropout=dropout,detach=detach,capture_encoded=capture_encoded,ids=ids),None
         if self.work_warmup:
             require(self.phase=='ppg','Fresh auxiliary target fitting is restricted to PPG')
         from brass_ai.learning.seat_descriptors import critic_inputs
@@ -289,7 +292,7 @@ class Companion:
         if detach:
             from .ppg_phasic import stop_value_gradient
             encoded=stop_value_gradient(encoded)
-        embeddings=model.descriptor_embeddings(encoded,critic_inputs(ds,ids,dropout=dropout))
+        embeddings=model.descriptor_embeddings(encoded,critic_inputs(ds,ids,dropout=dropout,index=ix if isinstance(ix,torch.Tensor) else None))
         if capture_encoded is not None:capture_encoded(encoded)
         heads=model.official_heads(encoded,inputs[3],embeddings)
         out=(inputs[1].new_zeros(inputs[1].shape[:2]),*heads)
@@ -309,7 +312,8 @@ class Companion:
             self.accumulate(kind+'_ce_sum',(ce.detach()*m).sum())
             self.accumulate(kind+'_none',((cls==0)&m).sum())
             self.accumulate(kind+'_vp_abs_sum',((vp.detach().float()-truth).abs().sum(-1)*m).sum()*self.config['vp_scale'])
-        critic_weights=ds.critic_weights[ix].detach().cpu().tolist() if self.work_warmup else [1.]*len(ids)
+        from .local_scoring_v3 import host_weights
+        critic_weights=host_weights(ds,ids) if self.work_warmup else [1.]*len(ids)
         for (target,_,token,_),weight in zip(metadata,critic_weights):
             if target is not None:
                 game=token[0]

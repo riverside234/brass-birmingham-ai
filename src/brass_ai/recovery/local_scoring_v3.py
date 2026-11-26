@@ -290,6 +290,158 @@ def end_map(envelope):
     return next((e for e in envelope['receipt']['eras'] if e['era'] == 'RailEra'), None)
 
 
+def upload(values, device):
+    """`torch.as_tensor(values, device=device)` without the stream wait of a pageable upload: on CUDA through a pinned
+    staging copy and a non-blocking transfer (the caching host allocator keeps the staging block until it completes)."""
+    host = torch.as_tensor(values)
+    if torch.device(device).type != 'cuda': return host.to(device)
+    return host.pin_memory().to(device, non_blocking=True)
+
+
+def device_index(ix):
+    """A batch's own index tensor, when it has one, for device-resident gathers (seat_descriptors.critic_inputs)."""
+    return ix if isinstance(ix, torch.Tensor) else None
+
+
+def host_weight_array(ds):
+    """A host copy of `ds.critic_weights`, made once per weights tensor instead of a device read-back per batch. The
+    weights are replaced, never changed in place, so the copy is keyed by the tensor."""
+    weights = ds.critic_weights
+    cached = getattr(ds, '_host_critic_weights', None)
+    if cached is None or cached[0] is not weights:
+        cached = ds._host_critic_weights = (weights, weights.detach().cpu().numpy())
+    return cached[1]
+
+
+def host_weights(ds, ids):
+    """`ds.critic_weights[ids]` as host floats."""
+    return host_weight_array(ds)[np.asarray(ids, dtype=np.int64)].tolist()
+
+
+def as_device(values, device):
+    """A target array on the device: a table gather already is one; host arrays upload (`upload`)."""
+    return values if isinstance(values, torch.Tensor) else upload(values, device)
+
+
+COUNTS = (('slots', 49), ('links', 69))
+NO_REVISION = -(1 << 62)
+
+
+def target_value(target, kind, count, mapping):
+    """One map's `kind` targets for one seat mapping, as `target_arrays` computes them once per key: owner classes
+    (0 none, else relative seat + 1), local VP per relative seat (scaled) and the valid-entity mask."""
+    stable = np.array([r['owner'] - 1 for r in target[kind]])
+    relative = mapping[stable.clip(0)]; present = stable >= 0
+    cls = np.where(present, relative + 1, 0); vp = np.zeros((count, 4), np.float32)
+    vp[np.arange(count)[present], relative[present]] = np.array([r['vp'] for r in target[kind]])[present] / VP_SCALE
+    return (cls, vp, np.array([r['valid'] for r in target[kind]], np.bool_))
+
+
+def _critic_rows(ds):
+    """The PPG critic replay's rows as scoring keys: `scoring_metadata` for every row at once, from the sealed game,
+    context, seat and mapping columns. None if a column breaks the key packing (the per-batch path then stays)."""
+    from .local_scoring_targets import map_for
+    n = len(ds.data); keys, index, maps, map_index = [], {}, [], {}
+    key_of_row = np.full(n, -1, np.int64); map_of_row = np.full(n, -1, np.int64)
+    game_code = np.zeros(n, np.int64); era_code = np.zeros(n, np.int64)
+    revision = np.full(n, NO_REVISION, np.int64); seat = np.zeros(n, np.int64)
+    names = ds.game_names(); eras, era_index = [], {}; offset = 0
+    for p, part in enumerate(ds.data.parts):
+        a = part.array; size = len(part); receipt = part.receipt; contexts = receipt['contexts']
+        for c in contexts:
+            if c['era'] not in era_index: era_index[c['era']] = len(eras); eras.append(c['era'])
+        if not size: continue
+        games = np.asarray(a['game'], np.int64); context = np.asarray(a['context'], np.int64)
+        seats = np.asarray(a['seat'], np.int64); mapping = np.asarray(a['mapping'])
+        if (mapping.ndim != 2 or mapping.shape[1] != 4 or ((mapping < 0) | (mapping > 3)).any()
+                or ((seats < 0) | (seats > 7)).any() or len(eras) > 64 or (games < 0).any()):
+            return None
+        ctx_era = np.array([era_index[c['era']] for c in contexts], np.int64)
+        ctx_revision = np.array([c['revision'] if 'revision' in c else NO_REVISION for c in contexts], np.int64)
+        rows = slice(offset, offset + size); offset += size
+        game_code[rows] = games + ds.game_offsets[p]; era_code[rows] = ctx_era[context]
+        revision[rows] = ctx_revision[context]; seat[rows] = seats
+        code = ((games * 64 + ctx_era[context]) * 8 + seats) * 256 + mapping.astype(np.int64) @ np.array([64, 16, 4, 1], np.int64)
+        _, first, inverse = np.unique(code, return_index=True, return_inverse=True)
+        local_key = np.full(len(first), -1, np.int64); local_map = np.full(len(first), -1, np.int64)
+        for j, r in enumerate(first.tolist()):
+            game = receipt['game_ids'][games[r]]; envelope = part.local.get(game)
+            if not envelope: continue
+            era = contexts[context[r]]['era']
+            key = (envelope['sha256'], era, int(seats[r]), tuple(mapping[r]))
+            k = index.get(key)
+            if k is None:
+                k = index[key] = len(keys)
+                keys.append((map_for({'_local_scoring': dict(envelope=envelope, era=era)}), key, mapping[r], envelope))
+            local_key[j] = k
+            m = map_index.get((game, era))
+            if m is None: m = map_index[(game, era)] = len(maps); maps.append(((game, era), keys[k][0]))
+            local_map[j] = m
+        inverse = inverse.reshape(-1)
+        key_of_row[rows] = local_key[inverse]; map_of_row[rows] = local_map[inverse]
+
+    def tokens(selected):
+        """The rows' tokens, (game, era, revision, seat) as `scoring_metadata` makes them."""
+        require(not (revision[selected] == NO_REVISION).any(), 'A scoring row has no context revision')
+        return [(names[g], eras[e], r, s) for g, e, r, s in zip(game_code[selected].tolist(), era_code[selected].tolist(),
+                                                                 revision[selected].tolist(), seat[selected].tolist())]
+    return keys, key_of_row, maps, map_of_row, tokens
+
+
+def _meta_rows(ds):
+    """A search_auxiliary.SearchRows's rows as scoring keys, from the metadata it keeps per row."""
+    meta = ds.meta; keys, index, maps, map_index = [], {}, [], {}
+    key_of_row = np.full(len(meta), -1, np.int64); map_of_row = np.full(len(meta), -1, np.int64)
+    for i, (target, key, token, mapping) in enumerate(meta):
+        if target is None: continue
+        k = index.get(key)
+        if k is None: k = index[key] = len(keys); keys.append((target, key, mapping, ds.envelopes[i]))
+        key_of_row[i] = k
+        m = map_index.get((token[0], target['era']))
+        if m is None: m = map_index[(token[0], target['era'])] = len(maps); maps.append(((token[0], target['era']), target))
+        map_of_row[i] = m
+    return keys, key_of_row, maps, map_of_row, lambda selected: [meta[i][2] for i in selected.tolist()]
+
+
+class EraTargets:
+    """g5781: the era-head targets of every row of one dataset, built once per phase and kept on the device, so a
+    batch gathers them by row (`_auxiliary`) instead of rebuilding them per row in Python and uploading them. Entry 0
+    of each table is a row without a map (no entities). The values are exactly `target_arrays`' and `end_metadata`'s."""
+    def __init__(self, rows, device, rail_end):
+        began = time.perf_counter()
+        keys, key_of_row, maps, map_of_row, tokens = rows
+        entries = [None] + [(target, key, mapping) for target, key, mapping, _ in keys]
+        index = {key: j for j, (_, key, _) in enumerate(entries[1:], 1)}
+        canal = [False] + [target['era'] == 'CanalEra' for target, _, _, _ in keys]
+        fit = [False] + [any(any(r['valid'] for r in target[k]) for k in ('slots', 'links')) for target, _, _, _ in keys]
+        end_of = [0] * len(entries)
+        if rail_end:
+            for j, (target, key, mapping, envelope) in enumerate(keys, 1):
+                end = end_map(envelope) if envelope is not None and target['era'] == 'CanalEra' else None
+                if end is None: continue
+                end_key = (key[0], 'RailEra', key[2], key[3]); e = index.get(end_key)
+                if e is None: e = index[end_key] = len(entries); entries.append((end, end_key, mapping))
+                end_of[j] = e
+        extra = len(entries) - len(canal)
+        canal += [False] * extra; fit += [False] * extra; end_of += [0] * extra
+        self.keys = [None] + [entry[1] for entry in entries[1:]]
+        self.host, self.device = {}, {}
+        for kind, count in COUNTS:
+            values = [(np.zeros(count, np.int64), np.zeros((count, 4), np.float32), np.zeros(count, np.bool_))]
+            values += [target_value(target, kind, count, mapping) for target, _, mapping in entries[1:]]
+            self.host[kind] = tuple(np.stack([v[j] for v in values]) for j in range(3))
+            self.device[kind] = tuple(torch.as_tensor(x, device=device) for x in self.host[kind])
+        self.tid = key_of_row + 1; self.eid = np.asarray(end_of, np.int64)[self.tid]
+        self.canal = np.asarray(canal, np.bool_)[self.tid]; self.present = self.tid > 0
+        self.fit = np.asarray(fit, np.bool_)[self.tid]; self.end_rows = self.eid > 0
+        self.on_device = {name: torch.as_tensor(getattr(self, name), device=device)
+                          for name in ('tid', 'eid', 'canal', 'present', 'end_rows')}
+        self.map_of_row, self.tokens, self.rail_end = map_of_row, tokens, rail_end
+        self.maps = [(key, (sum(int(r['valid']) for k in ('slots', 'links') for r in target[k]),
+                            sum(int(not r['valid']) for k in ('slots', 'links') for r in target[k]))) for key, target in maps]
+        self.entries = len(entries); self.seconds = time.perf_counter() - began
+
+
 def envelopes(ds, ids):
     if hasattr(ds, 'scoring_envelopes'): return ds.scoring_envelopes(ids)
     result = []
@@ -456,11 +608,7 @@ def build(base):
                     else:
                         value = self.target_cache.get(token)
                         if value is None:
-                            stable = np.array([r['owner'] - 1 for r in target[kind]])
-                            relative = mapping[stable.clip(0)]; present = stable >= 0
-                            cls = np.where(present, relative + 1, 0); vp = np.zeros((count, 4), np.float32)
-                            vp[np.arange(count)[present], relative[present]] = np.array([r['vp'] for r in target[kind]])[present] / VP_SCALE
-                            value = (cls, vp, np.array([r['valid'] for r in target[kind]], np.bool_))
+                            value = target_value(target, kind, count, mapping)
                             self.target_cache[token] = value; self.stats['target_cache_misses'] += 1
                             if len(self.target_cache) > 65536: self.target_cache.popitem(last=False)
                         else: self.stats['target_cache_hits'] += 1
@@ -468,6 +616,34 @@ def build(base):
                     values.append(value)
                 inverse.append(unique[token])
             return tuple(np.stack([v[j] for v in values])[inverse] for j in range(3))
+
+        def targets_for(self, ds):
+            """The dataset's era-head target tables (EraTargets), built on first use; None for a dataset without them
+            (its batches build their targets as before)."""
+            rail_end = self.horizon_weight('rail_end') > 0
+            table = getattr(ds, '_era_targets', None)
+            if table is not None and table.rail_end == rail_end: return table
+            from .ppg_replay import CriticDataset
+            from .search_auxiliary import SearchRows
+            rows = _critic_rows(ds) if isinstance(ds, CriticDataset) else _meta_rows(ds) if isinstance(ds, SearchRows) else None
+            if rows is None: return None
+            ds._era_targets = table = EraTargets(rows, ds.device, rail_end)
+            self.stats['target_table_seconds'] += table.seconds
+            return table
+
+        def _count_targets(self, table, entries, kind):
+            """The target cache's hits, misses and order as `target_arrays` leaves them for these rows' entries."""
+            entries = entries[entries > 0]
+            if not len(entries): return
+            unique, first = np.unique(entries, return_index=True)
+            cls, vp, valid = table.host[kind]
+            for e in unique[np.argsort(first, kind='stable')].tolist():
+                token = (table.keys[e], kind); value = self.target_cache.get(token)
+                if value is None:
+                    self.target_cache[token] = (cls[e], vp[e], valid[e]); self.stats['target_cache_misses'] += 1
+                    if len(self.target_cache) > 65536: self.target_cache.popitem(last=False)
+                else: self.stats['target_cache_hits'] += 1
+                self.target_cache.move_to_end(token)
 
         def end_metadata(self, ds, ids, metadata):
             result = []
@@ -480,8 +656,8 @@ def build(base):
             """`correction` (g3471 search-rows): [B, n, 9] share-scaled lambda-return corrections of the owner
             probabilities and local VP; the loss then uses the blended target, while the returned CE and VP error
             (the by-era report) stay those against the actual map."""
-            m = torch.as_tensor(mask, device=device); cls = torch.as_tensor(classes, device=device)
-            truth = torch.as_tensor(values, device=device)
+            m = as_device(mask, device); cls = as_device(classes, device)
+            truth = as_device(values, device)
             ce = F.cross_entropy(owner.float().transpose(1, 2), cls, reduction='none')
             error = F.smooth_l1_loss(vp.float(), truth, reduction='none').sum(-1)
             den = m.sum(-1).clamp_min(1)
@@ -493,15 +669,19 @@ def build(base):
             soft_error = F.smooth_l1_loss(vp.float(), truth + correction[..., 5:], reduction='none').sum(-1)
             return m, cls, truth, ce, error, ((soft + soft_error) * m).sum(-1) / den
 
-        def forward(self, model, inputs, ds, ix, *, dropout=None, detach=False, capture_encoded=None):
+        def forward(self, model, inputs, ds, ix, *, dropout=None, detach=False, capture_encoded=None, ids=None):
+            """ids: the batch's host row list (the rows of `ix`), so the rows are never read back from the device."""
             from .updates import value_output
-            ids = ix.detach().cpu().tolist() if isinstance(ix, torch.Tensor) else list(ix)
+            ids = list(ids) if ids is not None else ix.detach().cpu().tolist() if isinstance(ix, torch.Tensor) else list(ix)
             # A stopped ownership head (training_revision_g3140 ownership-stop) adds no loss for the rest of the phase.
             if not self.active or self.stopped:
-                return value_output(model, inputs, ds, ix, dropout=dropout, detach=detach, capture_encoded=capture_encoded), None
-            metadata = self.metadata(ds, ids)
-            if not any(x[0] is not None for x in metadata):
-                return value_output(model, inputs, ds, ix, dropout=dropout, detach=detach, capture_encoded=capture_encoded), None
+                return value_output(model, inputs, ds, ix, dropout=dropout, detach=detach, capture_encoded=capture_encoded,
+                                    ids=ids), None
+            table = self.targets_for(ds); metadata = None if table is not None else self.metadata(ds, ids)
+            if not (table.present[np.asarray(ids, dtype=np.int64)].any() if table is not None else
+                    any(x[0] is not None for x in metadata)):
+                return value_output(model, inputs, ds, ix, dropout=dropout, detach=detach, capture_encoded=capture_encoded,
+                                    ids=ids), None
             require(self.phase == 'ppg', 'Fresh auxiliary target fitting is restricted to PPG')
             from brass_ai.learning.seat_descriptors import critic_inputs
             start = time.perf_counter()
@@ -509,29 +689,30 @@ def build(base):
             if detach:
                 from .ppg_phasic import stop_value_gradient
                 encoded = stop_value_gradient(encoded)
-            embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids, dropout=dropout))
+            embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids, dropout=dropout, index=device_index(ix)))
             if capture_encoded is not None: capture_encoded(encoded)
             heads = model.official_heads(encoded, inputs[3], embeddings)
             out = (inputs[1].new_zeros(inputs[1].shape[:2]), *heads)
             if hasattr(model, 'predict_utility'):
                 out += (model.predict_utility(encoded.context, inputs[3], heads, None if ds.remaining is None else ds.remaining[ix], embeddings),)
-            loss = self._auxiliary(encoded, embeddings, inputs, ds, ix, ids, metadata)
+            loss = self._auxiliary(encoded, embeddings, inputs, ds, ix, ids, metadata, table)
             self.stats['forward_seconds'] += time.perf_counter() - start
             return out, loss
 
-        def head_loss(self, model, inputs, ds, ix, *, dropout=None):
+        def head_loss(self, model, inputs, ds, ix, *, dropout=None, ids=None):
             """The same auxiliary loss with the trunk frozen: only the heads get gradients (ownership-stop)."""
-            ids = ix.detach().cpu().tolist() if isinstance(ix, torch.Tensor) else list(ix)
+            ids = list(ids) if ids is not None else ix.detach().cpu().tolist() if isinstance(ix, torch.Tensor) else list(ix)
             if not self.active or self.stopped: return None
-            metadata = self.metadata(ds, ids)
-            if not any(x[0] is not None for x in metadata): return None
+            table = self.targets_for(ds); metadata = None if table is not None else self.metadata(ds, ids)
+            if not (table.present[np.asarray(ids, dtype=np.int64)].any() if table is not None else
+                    any(x[0] is not None for x in metadata)): return None
             require(self.phase == 'ppg', 'Fresh auxiliary target fitting is restricted to PPG')
             from brass_ai.learning.seat_descriptors import critic_inputs
             start = time.perf_counter()
             with torch.no_grad():
                 encoded = model.encode_state(inputs[0])
-                embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids, dropout=dropout))
-            loss = self._auxiliary(encoded, embeddings, inputs, ds, ix, ids, metadata)
+                embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids, dropout=dropout, index=device_index(ix)))
+            loss = self._auxiliary(encoded, embeddings, inputs, ds, ix, ids, metadata, table)
             self.stats['head_only_seconds'] += time.perf_counter() - start
             return loss
 
@@ -547,7 +728,8 @@ def build(base):
             require(self.phase == 'ppg', 'Fresh auxiliary target fitting is restricted to PPG')
             from brass_ai.learning.seat_descriptors import critic_inputs
             start = time.perf_counter()
-            index = torch.as_tensor(ids, device=ds.device); states = ds.states[index]
+            index = upload(np.asarray(ids, dtype=np.int64), ds.device); states = ds.states[index]
+            table = self.targets_for(ds)
             with torch.set_grad_enabled(torch.is_grad_enabled() and not frozen):
                 encoded = model.encode_state(states)
                 embeddings = model.descriptor_embeddings(encoded, critic_inputs(ds, ids))  # no descriptors: unknown seats
@@ -556,7 +738,8 @@ def build(base):
             self.era_stats, self.batch_fitting, self.batch_used = self.search_stats, set(), set()
             self.attempted, self.map_support, self.map_masked = set(), {}, {}
             try:
-                loss = self._auxiliary(encoded, embeddings, (states,), ds, index, ids, ds.scoring_metadata(ids))
+                loss = self._auxiliary(encoded, embeddings, (states,), ds, index, ids,
+                                       None if table is not None else ds.scoring_metadata(ids), table)
                 used = bool(self.batch_used)
             finally:
                 self.search_stats = self.era_stats
@@ -580,16 +763,24 @@ def build(base):
                     vp_abs_error_per_entity=vp / count if count else None)
             return by_era
 
-        def _auxiliary(self, encoded, embeddings, inputs, ds, ix, ids, metadata):
+        def _auxiliary(self, encoded, embeddings, inputs, ds, ix, ids, metadata, table=None):
+            """`table` (g5781, EraTargets): the rows' targets gathered on the device; else built from `metadata`."""
             predictions = self.heads(encoded, embeddings, self.scale)
             device = inputs[0].device
-            canal = torch.tensor([t is not None and t['era'] == 'CanalEra' for t, _, _, _ in metadata], device=device)
-            present = torch.tensor([t is not None for t, _, _, _ in metadata], device=device)
+            if table is not None:
+                batch = np.asarray(ids, dtype=np.int64); owned = table.tid[batch]; ended = table.eid[batch]
+                index = ix if isinstance(ix, torch.Tensor) else upload(batch, device)
+                gathered = {name: value[index] for name, value in table.on_device.items()}
+                canal, present = gathered['canal'], gathered['present']
+            else:
+                canal = upload([t is not None and t['era'] == 'CanalEra' for t, _, _, _ in metadata], device)
+                present = upload([t is not None for t, _, _, _ in metadata], device)
             board = self.board.board(inputs[0])
             loss = torch.zeros(len(ids), device=device, dtype=torch.float32)
             wc, wr, we = (self.horizon_weight(h) for h in ('canal', 'rail', 'rail_end'))
             weight = torch.where(canal, torch.full_like(loss, wc), torch.full_like(loss, wr)) * present
-            end_meta = self.end_metadata(ds, ids, metadata) if we > 0 else None
+            end_meta = self.end_metadata(ds, ids, metadata) if we > 0 and table is None else None
+            ending = we > 0
             # g3471 search-rows: lambda-return corrections of the own-era targets (ordinary rows .5, search rows 1);
             # g3528: channels 9..17, when present, the Canal rows' Rail-end corrections.
             source = getattr(ds, 'local_bootstrap', None)
@@ -599,7 +790,11 @@ def build(base):
             for kind in ('slots', 'links'):
                 (co, cv), (ro, rv) = predictions['canal_' + kind], predictions['rail_' + kind]
                 owner = torch.where(canal[:, None, None], co, ro); vp = torch.where(canal[:, None, None], cv, rv)
-                classes, values, mask = self.target_arrays(metadata, kind, owner.shape[1])
+                if table is not None:
+                    require(table.host[kind][0].shape[1] == owner.shape[1], 'Era-head target table width differs')
+                    self._count_targets(table, owned, kind)
+                    classes, values, mask = (x[gathered['tid']] for x in table.device[kind])
+                else: classes, values, mask = self.target_arrays(metadata, kind, owner.shape[1])
                 entities = slice(0, 49) if kind == 'slots' else slice(49, None)
                 part = None if corrections is None else corrections[:, entities]
                 m, cls, truth, ce, error, term = self._terms(owner, vp, classes, values, mask, device, part)
@@ -611,17 +806,34 @@ def build(base):
                         s = m & rows & selected
                         self.era_accumulate((era, kind, state), (s.sum(), (ce.detach() * s).sum(), ((cls == 0) & s).sum(),
                             ((vp.detach().float() - truth).abs().sum(-1) * s).sum() * VP_SCALE))
-                if end_meta is not None:
+                if ending:
                     eo, ev = predictions['rail_end_' + kind]
-                    classes, values, mask = self.target_arrays(end_meta, kind, eo.shape[1])
-                    rows = torch.tensor([t is not None for t, _, _, _ in end_meta], device=device)
+                    if table is not None:
+                        self._count_targets(table, ended, kind)
+                        classes, values, mask = (x[gathered['eid']] for x in table.device[kind])
+                        rows = gathered['end_rows']
+                    else:
+                        classes, values, mask = self.target_arrays(end_meta, kind, eo.shape[1])
+                        rows = upload([t is not None for t, _, _, _ in end_meta], device)
                     m, cls, truth, ce, error, term = self._terms(eo, ev, classes, values, mask, device,
                                                                  None if ends is None else ends[:, entities])
                     loss = loss + we * rows * term
                     s = m & rows[:, None]
                     self.era_accumulate(('CanalEra->RailEnd', kind, 'all'), (s.sum(), (ce.detach() * s).sum(), ((cls == 0) & s).sum(),
                         ((ev.detach().float() - truth).abs().sum(-1) * s).sum() * VP_SCALE))
-            for (target, _, token, _), w in zip(metadata, ds.critic_weights[ix].detach().cpu().tolist()):
+            if table is not None:
+                # The same sets and map support as the per-row loop below, from the table's per-row facts.
+                mapped = batch[owned > 0]
+                if len(mapped):
+                    valid = mapped[table.fit[mapped] & (host_weight_array(ds)[mapped] > 0)]
+                    tokens = table.tokens(valid) if len(valid) else []
+                    self.batch_fitting.update(tokens); self.batch_used.update(tokens); self.attempted.update(tokens)
+                    for m in np.unique(table.map_of_row[mapped]).tolist():
+                        key, (support, masked) = table.maps[m]
+                        if key not in self.map_support: self.map_support[key] = support; self.map_masked[key] = masked
+                self.pending = bool(self.batch_used)
+                return loss
+            for (target, _, token, _), w in zip(metadata, host_weights(ds, ids)):
                 if target is None: continue
                 game = token[0]
                 valid = any(any(r['valid'] for r in target[k]) for k in ('slots', 'links')) and w > 0

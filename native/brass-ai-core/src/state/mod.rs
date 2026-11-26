@@ -30,6 +30,17 @@ fn require(valid: bool, message: &str) -> Result<(), CoreError> {
 fn seat(s: Seat) -> usize {
     u8::from(s) as usize
 }
+/// `format!("{industry:?}")` per `Industry::index`, the industry field of a semantic choice ID.
+static INDUSTRY_NAMES: std::sync::LazyLock<[String; 6]> =
+    std::sync::LazyLock::new(|| Industry::ALL.map(|i| format!("{i:?}")));
+/// `merchant:<id>` per merchant, the target name of a merchant beer choice, made `'static` once per process.
+static MERCHANT_TARGETS: std::sync::LazyLock<Vec<Name>> = std::sync::LazyLock::new(|| {
+    CATALOG
+        .merchants
+        .iter()
+        .map(|m| -> Name { std::borrow::Cow::Borrowed(Box::leak(format!("merchant:{}", m.id).into_boxed_str())) })
+        .collect()
+});
 
 #[derive(Debug, Clone, Copy, Default)]
 struct TileState {
@@ -73,11 +84,12 @@ impl Target {
         }
         CATALOG.link(s).map(Self::Link)
     }
-    fn name(self) -> String {
+    /// The target's catalog name; borrowed, so exporting a choice or a view copies no text.
+    fn name(self) -> Name {
         match self {
             Self::Slot(id) => CATALOG.slots[id.0].id.clone(),
             Self::Link(id) => CATALOG.links[id.0].id.clone(),
-            Self::Merchant(id) => format!("merchant:{}", CATALOG.merchants[id.0].id),
+            Self::Merchant(id) => MERCHANT_TARGETS[id.0].clone(),
             Self::Market => "market".into(),
         }
     }
@@ -131,21 +143,47 @@ impl HistoryState {
         }
     }
     fn export_choice(&self) -> Choice {
-        let mut choice = Choice {
-            id: String::new(),
+        let target = self.target.map(Target::name);
+        let card = self.card.map(|id| CATALOG.card_names[id.0].clone());
+        let merchant = self.merchant.map(|id| CATALOG.merchants[id.0].id.clone());
+        let cards: Option<Vec<Name>> = self.cards.as_ref().map(|v| {
+            v.iter()
+                .map(|id| CATALOG.card_names[id.0].clone())
+                .collect()
+        });
+        // `Choice::semantic_id`, written once into an exactly sized string.
+        let parts = [
+            self.kind.name(),
+            target.as_deref().unwrap_or(""),
+            self.industry.map_or("", |i| INDUSTRY_NAMES[i.index()].as_str()),
+            card.as_deref().unwrap_or(""),
+            merchant.as_deref().unwrap_or(""),
+        ];
+        let joined = cards.as_ref().map_or(0, |v| {
+            v.iter().map(|c| c.len()).sum::<usize>() + v.len().saturating_sub(1)
+        });
+        let mut id = String::with_capacity(parts.iter().map(|p| p.len()).sum::<usize>() + 5 + joined);
+        for part in parts {
+            id.push_str(part);
+            id.push('|');
+        }
+        if let Some(v) = &cards {
+            for (i, c) in v.iter().enumerate() {
+                if i > 0 {
+                    id.push(',');
+                }
+                id.push_str(c);
+            }
+        }
+        Choice {
+            id,
             kind: self.kind,
-            target: self.target.map(Target::name),
-            card: self.card.map(|id| CATALOG.card_names[id.0].clone()),
+            target,
+            card,
             industry: self.industry,
-            merchant: self.merchant.map(|id| CATALOG.merchants[id.0].id.clone()),
-            cards: self.cards.as_ref().map(|v| {
-                v.iter()
-                    .map(|id| CATALOG.card_names[id.0].clone())
-                    .collect()
-            }),
-        };
-        choice.id = choice.semantic_id();
-        choice
+            merchant,
+            cards,
+        }
     }
 }
 #[derive(Debug, Clone, Copy)]
@@ -160,7 +198,7 @@ struct PendingState {
 }
 impl PendingState {
     fn import(p: &Pending) -> Result<Self, CoreError> {
-        let kind = match p.kind.as_str() {
+        let kind = match &*p.kind {
             "" => None,
             "build" => Some(Kind::Build),
             "network" => Some(Kind::Network),
@@ -875,14 +913,14 @@ impl NativeState {
             removed: self
                 .removed
                 .iter()
-                .map(|id| CATALOG.tiles[id.0].id.clone())
+                .map(|id| CATALOG.tiles[id.0].id.to_string())
                 .collect(),
             retired: self
                 .retired
                 .iter()
-                .map(|id| CATALOG.tiles[id.0].id.clone())
+                .map(|id| CATALOG.tiles[id.0].id.to_string())
                 .collect(),
-            cards: map_cards(&self.cards, |id| Ok(CATALOG.card_names[id.0].clone()))
+            cards: map_cards(&self.cards, |id| Ok(CATALOG.card_names[id.0].to_string()))
                 .expect("infallible export"),
             coal_market: self.coal_market,
             iron_market: self.iron_market,
@@ -894,12 +932,12 @@ impl NativeState {
                 pool: ch
                     .pool
                     .iter()
-                    .map(|id| CATALOG.card_names[id.0].clone())
+                    .map(|id| CATALOG.card_names[id.0].to_string())
                     .collect(),
                 picked: ch
                     .picked
                     .iter()
-                    .map(|id| CATALOG.card_names[id.0].clone())
+                    .map(|id| CATALOG.card_names[id.0].to_string())
                     .collect(),
             }),
             result: self.result(),

@@ -88,7 +88,7 @@ impl PreparedRoot {
             require(
                 p.known_wild
                     .iter()
-                    .all(|c| matches!(c.as_str(), "wild:industry" | "wild:location")),
+                    .all(|c| matches!(&**c, "wild:industry" | "wild:location")),
                 "known_wild contains a normal card",
             )?;
             cards.hands[s] = if s == own {
@@ -139,12 +139,12 @@ impl PreparedRoot {
             .flat_map(|p| p.mat.iter())
             .flat_map(|m| m.tiles.iter())
             .chain(view.slots.iter().filter_map(|s| s.tile.as_ref()))
-            .map(|t| t.id.as_str())
+            .map(|t| &*t.id)
             .collect();
         let mut removed: Vec<_> = CATALOG
             .tiles
             .iter()
-            .filter(|t| !used.contains(t.id.as_str()))
+            .filter(|t| !used.contains(&*t.id))
             .map(|t| t.id.clone())
             .collect();
         removed.sort();
@@ -168,9 +168,9 @@ impl PreparedRoot {
             slots: view.slots.clone(),
             links: view.links.clone(),
             merchants: view.merchants.clone(),
-            removed,
+            removed: removed.into_iter().map(|n| n.into_owned()).collect(),
             retired: vec![],
-            cards: map_cards(&cards, |c| Ok(CATALOG.card_names[c.0].clone()))?,
+            cards: map_cards(&cards, |c| Ok(CATALOG.card_names[c.0].to_string()))?,
             coal_market: view.coal_market,
             iron_market: view.iron_market,
             pending: view.pending.clone(),

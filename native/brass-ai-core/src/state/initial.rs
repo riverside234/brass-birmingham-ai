@@ -84,9 +84,9 @@ impl NativeState {
             coal_market: 13,
             iron_market: 8,
             pending: Pending {
-                kind: String::new(),
-                target: String::new(),
-                merchant: String::new(),
+                kind: "".into(),
+                target: "".into(),
+                merchant: "".into(),
                 parts: 0,
                 coal: 0,
                 iron: 0,

@@ -18,7 +18,7 @@ pub struct MerchantId(pub(super) usize);
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct MerchantDef {
-    pub id: String,
+    pub id: Name,
     pub bonus: Bonus,
 }
 #[derive(Debug, Deserialize)]
@@ -37,7 +37,7 @@ pub(crate) struct Catalog {
     pub slots: Vec<Slot>,
     pub links: Vec<Link>,
     pub merchants: Vec<MerchantDef>,
-    pub card_names: Vec<String>,
+    pub card_names: Vec<Name>,
     pub card_counts: Vec<u8>,
     pub merchant_types: Vec<Vec<Industry>>,
     tile_ids: BTreeMap<String, TileId>,
@@ -47,15 +47,44 @@ pub(crate) struct Catalog {
     pub link_regions: Vec<Vec<usize>>,
     pub incomes: [i8; 101],
 }
+/// A parsed name made `'static` once per process, so every copy borrows it.
+fn leak(name: &mut Name) {
+    if let std::borrow::Cow::Owned(s) = name {
+        *name = std::borrow::Cow::Borrowed(Box::leak(std::mem::take(s).into_boxed_str()));
+    }
+}
+fn leak_slice<T: Clone>(values: &mut std::borrow::Cow<'static, [T]>) {
+    if let std::borrow::Cow::Owned(v) = values {
+        *values = std::borrow::Cow::Borrowed(Box::leak(std::mem::take(v).into_boxed_slice()));
+    }
+}
 pub(crate) static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
     // Embedded, generated definitions are immutable and shared; no session state is shared.
-    let d: Definitions = serde_json::from_str(include_str!("../../data/state-catalog.json"))
+    let mut d: Definitions = serde_json::from_str(include_str!("../../data/state-catalog.json"))
         .expect("embedded state catalog");
+    // Names live as long as the process: views and choices copy them without allocating.
+    for t in &mut d.tiles {
+        leak(&mut t.id);
+    }
+    for s in &mut d.slots {
+        leak(&mut s.id);
+        leak_slice(&mut s.types);
+    }
+    for l in &mut d.links {
+        leak(&mut l.id);
+        if let std::borrow::Cow::Owned(regions) = &mut l.regions {
+            regions.iter_mut().for_each(leak);
+        }
+        leak_slice(&mut l.regions);
+    }
+    for m in &mut d.merchants {
+        leak(&mut m.id);
+    }
     assert_eq!(d.source_initial_sha256.len(), 64);
     let mut regions: Vec<_> = d
         .links
         .iter()
-        .flat_map(|l| l.regions.iter().cloned())
+        .flat_map(|l| l.regions.iter().map(|r| r.to_string()))
         .chain(
             d.slots
                 .iter()
@@ -79,7 +108,7 @@ pub(crate) static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
         .map(|l| {
             l.regions
                 .iter()
-                .map(|r| regions.binary_search(r).unwrap())
+                .map(|r| regions.binary_search_by(|x| x.as_str().cmp(r)).unwrap())
                 .collect()
         })
         .collect();
@@ -89,7 +118,7 @@ pub(crate) static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
             .tiles
             .iter()
             .enumerate()
-            .map(|(i, t)| (t.id.clone(), TileId(i)))
+            .map(|(i, t)| (t.id.to_string(), TileId(i)))
             .collect(),
         card_ids: d
             .cards
@@ -97,7 +126,11 @@ pub(crate) static CATALOG: LazyLock<Catalog> = LazyLock::new(|| {
             .enumerate()
             .map(|(i, c)| (c.clone(), CardId(i)))
             .collect(),
-        card_names: d.cards.keys().cloned().collect(),
+        card_names: d
+            .cards
+            .keys()
+            .map(|c| -> Name { std::borrow::Cow::Borrowed(Box::leak(c.clone().into_boxed_str())) })
+            .collect(),
         card_counts: d.cards.values().copied().collect(),
         tiles: d.tiles,
         slots: d.slots,

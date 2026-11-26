@@ -50,9 +50,9 @@ pub struct ViewPlayer {
     pub link_tiles: u8,
     pub hand_count: u8,
     pub spent: i32,
-    pub discards: Vec<String>,
+    pub discards: Vec<Name>,
     pub hidden_discards: u8,
-    pub known_wild: Vec<String>,
+    pub known_wild: Vec<Name>,
     pub mat: [Mat; 6],
     pub debt: i32,
 }
@@ -80,7 +80,7 @@ pub struct Observation {
     pub rules: String,
     pub seat: Seat,
     pub context: ViewContext,
-    pub own_hand: Vec<String>,
+    pub own_hand: Vec<Name>,
     pub players: [ViewPlayer; 4],
     pub order: [Seat; 4],
     pub slots: Vec<Slot>,
@@ -99,7 +99,7 @@ pub struct Observation {
 #[serde(deny_unknown_fields)]
 pub struct RecallEntry {
     pub revision: u32,
-    pub hand: Vec<String>,
+    pub hand: Vec<Name>,
 }
 pub type Recall = Vec<RecallEntry>;
 
@@ -251,7 +251,7 @@ fn put_target(out: &mut Vec<u8>, t: Option<Target>) {
 #[derive(Debug, Clone, Default)]
 pub struct ObservationMemory {
     public: Option<Arc<Observation>>,
-    hands: [Vec<String>; 4],
+    hands: [Vec<Name>; 4],
     pub(super) recall: [Recall; 4],
     chance: Option<ChanceKind>,
 }
@@ -313,7 +313,7 @@ impl ObservationMemory {
         Ok(result)
     }
     pub(super) fn with_public(state: &NativeState, public: Arc<Observation>) -> Self {
-        let hands: [Vec<String>; 4] = std::array::from_fn(|s| state.sorted_hand(s));
+        let hands: [Vec<Name>; 4] = std::array::from_fn(|s| state.sorted_hand(s));
         let recall = std::array::from_fn(|s| {
             vec![RecallEntry {
                 revision: state.context.revision,
@@ -598,7 +598,7 @@ impl NativeState {
         }
         out.push(self.chance.is_some() as u8);
     }
-    fn sorted_hand(&self, s: usize) -> Vec<String> {
+    fn sorted_hand(&self, s: usize) -> Vec<Name> {
         let mut hand: Vec<_> = self.cards.hands[s]
             .iter()
             .map(|c| CATALOG.card_names[c.0].clone())
@@ -613,7 +613,7 @@ impl NativeState {
             self.chance.is_none(),
             "temporary chance state has no new policy observation",
         )?;
-        let mut known: [Vec<String>; 4] = std::array::from_fn(|_| vec![]);
+        let mut known: [Vec<Name>; 4] = std::array::from_fn(|_| vec![]);
         for h in &self.history {
             crate::work::checkpoint(crate::work::Stage::Observation)?;
             if h.era != self.context.era {

@@ -75,20 +75,56 @@ def relative(stable,mapping):
 
 
 def drop_game(game_id,generation,epoch,fraction,phase):
+    """The dropout rule: one decision per game for a (generation, epoch, phase). Trainers apply it through
+    `dropout_mask`, which evaluates it once per game, never per row."""
     key=f'{CONTRACT}:dropout:{phase}:{generation}:{epoch}:{game_id}'
     return int.from_bytes(hashlib.sha256(key.encode()).digest()[:8],'big')<int(fraction*2**64)
 
 
-def critic_inputs(dataset,indices,*,dropout=None,unknown=False):
-    """Return true relative descriptors unless explicitly fitting critic loss."""
-    ix=torch.as_tensor(indices,device=dataset.device)
+def dropout_mask(dataset,indices,dropout):
+    """`drop_game` of each row's game, as a boolean array. Rows of one game share the decision, so it is made once
+    per game and dropout setting and kept on the dataset. A dataset that numbers its games (`game_codes`, `game_names`:
+    the sealed PPG critic replay) maps rows to games with one vectorized gather; any other reads each row's game id."""
+    generation,epoch,fraction,phase=dropout
+    if isinstance(indices,torch.Tensor):indices=indices.detach().cpu().tolist()
+    decided=getattr(dataset,'_descriptor_dropout',None)
+    if decided is None:decided=dataset._descriptor_dropout={}
+    key=(generation,epoch,fraction,phase)
+    codes=getattr(dataset,'game_codes',None)
+    if codes is not None:
+        table=decided.get(key)
+        if table is None:
+            names=dataset.game_names()
+            table=decided[key]=np.fromiter((drop_game(g,generation,epoch,fraction,phase) for g in names),dtype=bool,count=len(names))
+        return table[codes(indices)]
+    games=decided.setdefault(key,{});result=np.empty(len(indices),dtype=bool)
+    for j,i in enumerate(indices):
+        g=dataset.data[i][2][0];value=games.get(g)
+        if value is None:value=games[g]=drop_game(g,generation,epoch,fraction,phase)
+        result[j]=value
+    return result
+
+
+def critic_inputs(dataset,indices,*,dropout=None,unknown=False,index=None):
+    """Return true relative descriptors unless explicitly fitting critic loss.
+
+    A column that gathers by host row lists (`host_indices`: the PPG critic replay, whose batches carry their prepared
+    columns) is read with the list itself, so no index tensor makes a device round trip. `index`: the same rows as a
+    tensor on the dataset's device (a batch's own index), used by device-resident descriptors instead of a new upload."""
     if not hasattr(dataset,'descriptors'):
         return unknown_tensor(torch.empty((len(indices),),device=dataset.device))
-    descriptors=dataset.descriptors[ix]
+    if getattr(dataset.descriptors,'host_indices',False) and not isinstance(indices,torch.Tensor):
+        descriptors=dataset.descriptors[list(indices)]
+    else:
+        descriptors=dataset.descriptors[index if index is not None else torch.as_tensor(indices,device=dataset.device)]
     if unknown:return unknown_tensor(descriptors)
     if dropout is not None:
-        generation,epoch,fraction,phase=dropout
-        mask=[drop_game(dataset.data[i][2][0],generation,epoch,fraction,phase) for i in indices]
-        if any(mask):
-            descriptors=descriptors.clone();descriptors[torch.tensor(mask,device=dataset.device)]=unknown_tensor(descriptors)[0]
+        mask=dropout_mask(dataset,indices,dropout)
+        if mask.any():
+            rows=torch.from_numpy(mask)
+            # A pinned non-blocking upload: no stream wait behind the batch's queued kernels.
+            rows=rows.pin_memory().to(dataset.device,non_blocking=True) if torch.device(dataset.device).type=='cuda' else rows.to(dataset.device)
+            # The same values as assigning the unknown descriptors to the dropped rows, without a boolean-mask index
+            # (which reads the selected count back from the device).
+            descriptors=torch.where(rows[:,None,None],unknown_tensor(descriptors),descriptors)
     return descriptors

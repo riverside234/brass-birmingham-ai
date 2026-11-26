@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "d73df28c746fd7bbd38a623563a3d12608dcbcd9916b5947769d12458178d545",
+  "execution_implementation": "6a725b6237c2fe3bc9930b912205587ea0f75856f70ba5d513f78edfd4240496",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -134,7 +134,7 @@
     },
     "src/brass_ai/recovery/ppg_replay.py": {
       "before": "d0de1159db478c3a86275910717c7b0471597d8852eb5576916e5f99acb55efc",
-      "after": "3c7e17f68448477f2607c2203fae8b145c3d6ca4047317aa001b4d044636d21d"
+      "after": "d9d867d484c0efdcf5e6afe0e9978434b9a5aded7a7127db7c756716e7b06e22"
     },
     "src/brass_ai/recovery/replay.py": {
       "before": "28e7ea9e2bb92f064717c6c7d7cd258a38026c03ae95fe00ba2b6178921f7f7c",
@@ -214,7 +214,7 @@
     },
     "src/brass_ai/recovery/updates.py": {
       "before": "74c4a7c3a92a2b8a7cb0de2eef5ebd8f58feb1d0c6798f1f86a281c4f6872628",
-      "after": "ddaa6c42d8c3202fd0c20233b5521fd247e96a8c94358fcb322194f8560f308e"
+      "after": "242113355b6abfd7baa4a1b639cfab20d5b1ecd04bb637e5796f062dc7517358"
     },
     "src/brass_ai/recovery/utility.py": {
       "before": "27a29ef4cf15ddadf03bf393c88c37f941f81bae926d35bed72acb50a67e257c",
@@ -226,7 +226,7 @@
     },
     "src/brass_ai/recovery/value_phase.py": {
       "before": "66844598c56ff0175af8b0997b5ae869de4ae69331b11f5082c07162f4647fae",
-      "after": "ca9424f897b1801d84b7b67819f85b19929d5bb4f0f3ee3c7746201a7d7ea991"
+      "after": "0029d941ed75db82a2b4e838349e8a9122bd6c9c1ce8a432c98b71f0aae6bc2d"
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
@@ -350,7 +350,7 @@
     },
     "src/brass_ai/rust_backend/lab_cpu_overlay.py": {
       "before": "e7fa0229a185321c91a6dfbb9c513ae50800ac201544e9e0c12812fff204ef21",
-      "after": "8611b51b02978fdeb5b4de73257931d9a5c98609fcef1f99247a7724a529e356"
+      "after": "5ed42dde04d91200679aeae337b5067f38807f5b30253919816e73da67683547"
     },
     "src/brass_ai/rust_backend/lab_cpu_runtime.py": {
       "before": "71895897093679de776ad5a98a245f6dfca69a8ea7a0035ec7a310f0adb343c4",
@@ -478,7 +478,7 @@
     },
     "src/brass_ai/learning/seat_descriptors.py": {
       "before": "b539ba6ac414cb662c5fc3ac9d436e468cfd3118fcaf8d53f2525cea2ce54c07",
-      "after": "5d5f108313d970302d7dec8859f72b484f4d23582ae3582810d51d2d2db1d488"
+      "after": "a4a7d92e98e49cf911506db63d4ac1303968088a08f57795a3f7c6dbbd0fa6a6"
     },
     "src/brass_ai/recovery/history.py": {
       "before": "45417634aee97fa6a5759a50e773163ca0a36967a76ab80d830ec3b1011714c2",
@@ -614,7 +614,7 @@
     },
     "src/brass_ai/recovery/local_scoring_v3.py": {
       "before": "4d47c9100516c3269b1bd04ca9c7596b3d012f7d9762db30031a313a11bcc27c",
-      "after": "aea0ac2f30bac6a4545faeb8fa5cda5cbe6cb3f6c4b7a3d768e616705d94b2bf"
+      "after": "c7e333597a37d649fe95066bbdce0390de6302b78353df719f9f17a5eeb1c68a"
     },
     "tests/Recovery/test_ownership_stop_g3318.py": {
       "before": null,
@@ -758,7 +758,7 @@
     },
     "src/brass_ai/recovery/local_scoring_auxiliary.py": {
       "before": "46f36429e4b5a2b0f9854d4ec52efbd93e19b9d07ed14a4acb44a3ca16ee2641",
-      "after": "6c07b641a3118c471cb71ee298c4198adcf3ef0c20f110ca74e09e27771f16f0"
+      "after": "ac9feedbc1c12321e034491ea74c22973a6f49cc7f4ae3df9fadf54368480273"
     },
     "src/brass_ai/recovery/training_revision_g5402.py": {
       "before": null,
@@ -1186,6 +1186,11 @@
       "implementation": "991862cad5dbbcf7084b5d8d786c20f36d67500939bfde942ac45a8f2652faf3",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "a71285249269880bebd9530b4698d39572c2ee027b9e28ae68d2ad26b04e4f45"
+    },
+    {
+      "implementation": "d73df28c746fd7bbd38a623563a3d12608dcbcd9916b5947769d12458178d545",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "5f83eca98f694341783ba9f5e15c1250842c08ffed18d5390b556fa626518028"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1619,6 +1624,10 @@
   },
   "g5685_il_replay_unlinked": {
     "scope": "Code-only, no training change: a resumed run no longer reads the IL replay dataset (artifacts/il-replay, deleted on the lab). league.imitation_handoff binds the run's committed state.signature.imitation_source instead of walking the completed IL lineage (completed_imitation: BC runs and their dataset manifest), which only a new run still does; a committed IL-KL probe is checked against that origin by il_kl_probe.committed_source instead of re-reading the dataset manifest (load, and lab_continuation's dependency listing and diagnostic-fork restore_probe); the continuation dependency listing no longer names the IL dataset manifest. Rehearsal from the dataset stays off (rehearsal_weight 0).",
+    "qualified_implementation_unchanged": true
+  },
+  "g5781_leaf_and_value_speed": {
+    "scope": "Code-only, no training change. (1) Engine, in the CPU teacher core files (state/choices.rs, state/mod.rs, copied by lab_cpu_overlay.TEACHER_CORE_FILES, so the overlay fingerprint rebuilds the teacher): an Action decision's card-independent build and sale rules are evaluated once per decision instead of once per card (card permissions and merchant regions from static tables), and each choice ID is written once into an exactly sized string; legal sets, IDs and every search are identical. (2) Value phase: descriptor dropout is decided once per game per epoch (seat_descriptors.dropout_mask, the same drop_game rule) instead of a SHA-256 and a replay-row read per row; the PPG critic replay maps rows to games with its game column (game_codes, branch_games); branch-family counts read that column; the era heads take the batch's host rows and a host copy of the critic weights instead of device read-backs, and upload targets with pinned non-blocking copies. Every tensor operation is unchanged (tests/Recovery/test_value_phase_speed_g5781.py: the PPG phase is bit-identical with the replaced paths restored). (3) Follow-up: the era heads gather every row's targets from per-phase device tables (local_scoring_v3.EraTargets; the target cache counters replayed exactly), and catalog names are borrowed, not copied, in every view and choice (dto.rs Name = Cow<'static, str>; TEACHER_CORE_FILES now copies the 16 changed core files; type-neutral edits in lab-native-cpu cpu_autoplay.rs, cpu_cotton.rs and core-overlay/cotton.rs). Real teacher tables are identical.",
     "qualified_implementation_unchanged": true
   }
 }

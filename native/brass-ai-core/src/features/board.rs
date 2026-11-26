@@ -90,7 +90,7 @@ impl<'a> Board<'a> {
         for (i, s) in view.slots.iter().enumerate() {
             let n = *LAYOUT
                 .slots
-                .get(s.id.as_str())
+                .get(&*s.id)
                 .ok_or_else(|| invalid("unknown feature slot"))?;
             check(
                 b.slots[n] == usize::MAX && s.types == CATALOG.slots[LAYOUT.slot_catalog[n]].types,
@@ -104,7 +104,7 @@ impl<'a> Board<'a> {
         for (i, l) in view.links.iter().enumerate() {
             let n = *LAYOUT
                 .links
-                .get(l.id.as_str())
+                .get(&*l.id)
                 .ok_or_else(|| invalid("unknown feature link"))?;
             let def = &CATALOG.links[LAYOUT.link_catalog[n]];
             check(
@@ -131,7 +131,7 @@ impl<'a> Board<'a> {
         for (i, m) in view.merchants.iter().enumerate() {
             let n = *LAYOUT
                 .merchants
-                .get(m.id.as_str())
+                .get(&*m.id)
                 .ok_or_else(|| invalid("unknown feature merchant"))?;
             check(
                 b.merchants[n] == usize::MAX

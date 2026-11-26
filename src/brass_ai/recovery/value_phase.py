@@ -252,6 +252,34 @@ class RawPolicyReference:
         return max(0.,result)
 
 
+class StepProfile:
+    """g5781: host seconds of each part of the attempted joint PPG steps. The gradient clip reads the norm back
+    (error_if_nonfinite), so its part also holds the wait for the step's queued device work: a large share there
+    means the device sets the step, a large share elsewhere the host."""
+    def __init__(self):self.seconds=defaultdict(float);self.steps=0
+    def lap(self,name,mark):
+        now=time.perf_counter();self.seconds[name]+=now-mark;return now
+    def report(self):
+        return dict(steps=self.steps,seconds=dict(self.seconds),
+            per_step_ms={k:1e3*v/self.steps for k,v in self.seconds.items()} if self.steps else {},
+            scope='Host seconds per part of the attempted joint steps (head-only steps excluded); clip_and_device_wait '
+                  'includes the one device sync of each step')
+
+
+def branch_rows(dataset,rows):
+    """How many of `rows` are rows of branch families' games ('/branch/' in the game id). A dataset that numbers its
+    games (`branch_games`, `game_codes`: the PPG critic replay) answers with one vectorized gather."""
+    branch=getattr(dataset,'branch_games',None)
+    if branch is None:return sum('/branch/' in dataset.data[i][2][0] for i in rows)
+    if not len(rows):return 0
+    return int(branch()[dataset.game_codes(np.fromiter(rows,dtype=np.int64,count=len(rows)))].sum())
+
+
+def host_ids(companion,part):
+    """The batch's host row list for a companion that takes it, so it never reads its indices back from the device."""
+    return dict(ids=part) if getattr(companion,'host_ids',False) else {}
+
+
 def clone_indices(dataset,actor_ids,limit):
     # Bounded, reproducible subset independent of minibatch/PPO RNG. Include a
     # row's ordinal within its seat chain, not its shard's completion order.
@@ -481,7 +509,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         timings['ownership_stop_setup_seconds']=time.perf_counter()-started
     elif search_auxiliary is not None:
         report['search_auxiliary']=dict(ready=False,reason='needs_active_era_heads_and_ownership_stop')
-    training_began=time.perf_counter();batches=[];consumed=0;epoch=0
+    training_began=time.perf_counter();batches=[];consumed=0;epoch=0;profile=StepProfile()
     for epoch in range(config['max_epochs']):
         order=[value_train_ids[j] for j in torch.randperm(len(value_train_ids)).tolist()]
         batches=[order[start:start+config['batch_size']] for start in range(0,len(order),config['batch_size'])]
@@ -510,11 +538,12 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                         companion.begin('ppg',rate_factor=rate_factor(report['attempted_steps']+attempted+1,total_steps,config),**linked)
                     else:companion.begin('ppg',**linked)
                 if companion is not None and hasattr(companion,'batch'):companion.batch(value_dataset,batch)
+                mark=time.perf_counter()
                 for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
                     drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
                     with autocast(update,value_dataset.device):
-                        if companion is not None:out,local_loss=companion.forward(model,inputs,value_dataset,ix,dropout=drop)
-                        else:out,local_loss=value_output(model,inputs,value_dataset,ix,dropout=drop,heads_only=True),None
+                        if companion is not None:out,local_loss=companion.forward(model,inputs,value_dataset,ix,dropout=drop,**host_ids(companion,part))
+                        else:out,local_loss=value_output(model,inputs,value_dataset,ix,dropout=drop,heads_only=True,ids=part),None
                     targets=tuple(t[ix] for t in value_dataset.targets);utility_target=value_dataset.utility[ix]
                     if bootstrap_share:
                         boot=value_dataset.bootstrap[ix]
@@ -526,21 +555,26 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                         loss=loss+local_loss
                         companion.account_loss(local_loss,value_dataset.critic_weights[ix],len(batch),'ppg')
                     ((loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
+                mark=profile.lap('value_rows',mark)
                 if search is not None and stop.running:
                     # g3423: this batch's share of the search rows adds only era-head losses; its ordinary rows are unchanged.
                     search.add(model,stop.local,len(batch),update,report['attempted_steps']+attempted+1,epoch,segment+offset)
+                    mark=profile.lap('search_rows',mark)
                 sample=[clones[j] for j in torch.randint(len(clones),(config['clone_batch_size'],)).tolist()]
                 for part in reference.microbatches(sample):
                     inputs=reference.inputs(part)
                     with autocast(update,dataset.device):loss=reference.loss(part,inputs,model)
                     (beta*loss.sum()/len(sample)).backward()
+                mark=profile.lap('clone_rows',mark)
                 clip_norms.append(torch.nn.utils.clip_grad_norm_(model.parameters(),clip,error_if_nonfinite=True))
+                mark=profile.lap('clip_and_device_wait',mark)
                 if scheduled:
                     rate=config['learning_rate']*rate_factor(report['attempted_steps']+attempted+1,total_steps,config)
                     for group in optimizer.param_groups:group['lr']=rate
                     report['attempted_learning_rates'].append(rate)
                 optimizer.step();attempted+=1
                 if companion is not None:companion.step('ppg')
+                profile.lap('optimizer',mark);profile.steps+=1
                 report['attempted_value_presentations']+=len(batch);report['attempted_clone_presentations']+=len(sample)
                 step=report['attempted_steps']+attempted
                 tail=segment+offset+1==len(batches)
@@ -588,7 +622,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 current=last_attempt;accepted_kl=safe_kl;report['optimizer_steps']+=safe_steps
                 used.update(segment_used);presentations+=len(segment_used);clone_presentations+=segment_clones
                 previous_presentations+=sum(i>=current_count for i in segment_used)
-                branch_presentations+=sum('/branch/' in value_dataset.data[i][2][0] for i in segment_used)
+                branch_presentations+=branch_rows(value_dataset,segment_used)
                 for i in segment_used:role_presentations[value_dataset.roles[i]]+=1
                 if deferred:
                     retained.append(dict(report_index=len(report['interval_reports'])-1,heldout=current,
@@ -629,7 +663,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         for entry in retained:
             used.update(entry['rows']);presentations+=len(entry['rows']);clone_presentations+=entry['clones']
             previous_presentations+=sum(i>=current_count for i in entry['rows'])
-            branch_presentations+=sum('/branch/' in value_dataset.data[i][2][0] for i in entry['rows'])
+            branch_presentations+=branch_rows(value_dataset,entry['rows'])
             for i in entry['rows']:role_presentations[value_dataset.roles[i]]+=1
         report.update(optimizer_steps=sum(e['steps'] for e in retained),accepted_intervals=len(retained),
             rejected_intervals=len(report['interval_reports'])-len(retained),epochs=0,completed_epochs=0,partial_epochs=0)
@@ -652,7 +686,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
             model.train()
             for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
                 drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
-                with autocast(update,value_dataset.device):local_loss=local.head_loss(model,inputs,value_dataset,ix,dropout=drop)
+                with autocast(update,value_dataset.device):local_loss=local.head_loss(model,inputs,value_dataset,ix,dropout=drop,**host_ids(local,part))
                 if local_loss is not None:
                     local.account_loss(local_loss,value_dataset.critic_weights[ix],len(batch),'ppg')
                     ((local_loss*value_dataset.critic_weights[ix]).sum()/len(batch)).backward()
@@ -672,6 +706,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         report['ownership_stop']=stop.finish()
         if search is not None:report['search_auxiliary']=search.finish(stop.local,report['ownership_stop'],report)
     timings['training_and_retention_seconds']=time.perf_counter()-training_began
+    report['step_profile']=profile.report()
     report['gradient_clipping']=clipping_report(clip_norms,clip)
     optimizer.zero_grad(set_to_none=True);model.eval()
     # One fresh receipt for the final accepted weights. No head refit on the
@@ -718,7 +753,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
         maximum_attempted_probe_kl=max_kl if attempted_kl_checks else None,attempted_probe_kl_checks=attempted_kl_checks,
         attempted_probe_kl_scope='Only measured attempted states, including retention checks. Null means no attempted state was checked; restored post-PPO KL can still be exactly zero.',
         distinct_value_rows_used=len(used),value_presentations=presentations,clone_presentations=clone_presentations,
-        branch_distinct_rows_used=sum('/branch/' in value_dataset.data[i][2][0] for i in used),
+        branch_distinct_rows_used=branch_rows(value_dataset,used),
         branch_presentations=branch_presentations,
         distinct_current_rows_used=sum(i<current_count for i in used),
         distinct_previous_rows_used=sum(i>=current_count for i in used),

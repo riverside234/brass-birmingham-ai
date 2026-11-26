@@ -485,7 +485,7 @@ pub(super) fn action(b: &Board<'_>, c: Candidate) -> Result<[M; 52], CoreError> 
         Some(
             *LAYOUT
                 .merchants
-                .get(pending.merchant.as_str())
+                .get(&*pending.merchant)
                 .ok_or_else(|| invalid("pending sale merchant"))?,
         )
     } else {

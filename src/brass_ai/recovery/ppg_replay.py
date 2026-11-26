@@ -158,6 +158,7 @@ class LocalBootstrapColumn:
 
 class Column:
     """Gather only a minibatch of small metadata onto the training device."""
+    host_indices=True  # a host row list reads the batch's prepared column directly (seat_descriptors.critic_inputs)
     def __init__(self,data,name,device,head=None):self.data,self.name,self.device,self.head=data,name,device,head
     def __getitem__(self,indices):
         tail=None
@@ -189,6 +190,24 @@ class CriticDataset(Dataset):
         self.bootstrap=BootstrapColumn(self.data,device)
         self.roles=[('learner','snapshot')[int(x)] for p in rows for x in p.array['role']]
         self.tables=[('selfplay','historical','legacy')[int(x)] for p in rows for x in p.array['table']]
+        # Game codes: each age's receipt game indices, offset by the games of the ages before it.
+        self.game_offsets=np.cumsum([0]+[len(p.receipt['game_ids']) for p in rows[:-1]]).astype(np.int64)
+
+    def game_names(self):
+        """Every game id of the replay; `game_codes` indexes this list."""
+        return [g for p in self.data.parts for g in p.receipt['game_ids']]
+
+    def game_codes(self,indices):
+        """Each row's index in `game_names`, with one vectorized gather of the sealed game column."""
+        indices=np.asarray(indices,dtype=np.int64)
+        owners=np.searchsorted(self.data.ends,indices,side='right')
+        return self.data.column(indices,'game').astype(np.int64)+self.game_offsets[owners]
+
+    def branch_games(self):
+        """Per game code: whether it is a branch family's game (its id names '/branch/')."""
+        cached=getattr(self,'_branch_games',None)
+        if cached is None:cached=self._branch_games=np.array(['/branch/' in g for g in self.game_names()],dtype=bool)
+        return cached
 
     def preparation_source(self):
         # Packed historical recipes retain their existing reader. New v13

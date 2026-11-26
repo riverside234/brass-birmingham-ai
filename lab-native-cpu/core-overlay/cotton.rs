@@ -14,7 +14,7 @@ pub struct Coverage {
 }
 
 fn cotton(choice: &Choice, develop: bool, build: bool, networks: &[String]) -> bool {
-    choice.kind == Kind::Network && choice.target.as_ref().is_some_and(|t| networks.contains(t)) ||
+    choice.kind == Kind::Network && choice.target.as_ref().is_some_and(|t| networks.iter().any(|n| *n == **t)) ||
     choice.industry == Some(Industry::CottonMill)
         && (build && choice.kind == Kind::Build || develop && choice.kind == Kind::Develop)
 }
@@ -119,7 +119,7 @@ mod tests {
             id: id.into(),
             kind: Kind::Build,
             card: None,
-            target: Some(target.into()),
+            target: Some(target.to_string().into()),
             industry: Some(if cotton_ {
                 Industry::CottonMill
             } else {

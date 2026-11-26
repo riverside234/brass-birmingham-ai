@@ -15,9 +15,14 @@ OVERLAY_DIR = 'lab-native-cpu'
 ORT = 'ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic"] }'
 # observation.rs/reward.rs/brass.rs: exact search decision reuse (no per-step
 # views, legal sets or full key hashes); see ai-research/ENGINE_SEARCH_SPEED.md.
+# g5781: card-independent legal generation (choices.rs, mod.rs), and catalog names borrowed instead of copied in
+# every view and choice (dto.rs Name and its readers); see ai-research/G5781_LEAF_AND_VALUE_SPEED.md.
 TEACHER_CORE_FILES = tuple('brass-ai-core/src/' + name for name in
                            ('state/mod.rs', 'state/choices.rs', 'state/observation.rs',
-                            'search/brass.rs', 'search/reward.rs'))
+                            'search/brass.rs', 'search/reward.rs',
+                            'state/dto.rs', 'state/catalog.rs', 'state/belief.rs', 'state/chance.rs',
+                            'state/initial.rs', 'state/phases.rs', 'state/simulation.rs', 'state/indexes.rs',
+                            'features/mod.rs', 'features/board.rs', 'features/derived.rs'))
 REWARD_FILE = 'brass-ai-core/src/search/reward.rs'
 
 PATCHES = {

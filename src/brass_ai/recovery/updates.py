@@ -302,13 +302,16 @@ def state_value_model(model):
     return type(model) in (FourSeatNet,UtilityNet)
 
 
-def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detach=False,capture_encoded=None,heads_only=False):
+def value_output(model,inputs,dataset,indices,*,dropout=None,unknown=False,detach=False,capture_encoded=None,heads_only=False,ids=None):
+    """ids: the batch's host row list when the caller has it (the same rows as `indices`), so no device read-back."""
     from brass_ai.learning.model import ARCHITECTURE
     from brass_ai.learning.seat_descriptors import critic_inputs
     extra={}
     if getattr(model.config,'architecture',None)==ARCHITECTURE:
-        ids=indices.detach().cpu().tolist() if dropout is not None and isinstance(indices,torch.Tensor) else indices
-        extra['descriptors']=critic_inputs(dataset,ids,dropout=dropout,unknown=unknown)
+        if ids is None:
+            ids=indices.detach().cpu().tolist() if dropout is not None and isinstance(indices,torch.Tensor) else indices
+        extra['descriptors']=critic_inputs(dataset,ids,dropout=dropout,unknown=unknown,
+                                           index=indices if isinstance(indices,torch.Tensor) else None)
     if dataset.remaining is not None:extra['remaining']=dataset.remaining[indices]
     # PPO likelihood verification also uses this helper and needs real logits.
     # Omit them only at an explicit value-only call site.
@@ -718,8 +721,9 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                         else:
                             with autocast(config,device):
                                 drop=phases.dropout(epoch,'ppo') if phases is not None else None
-                                if companion is not None:out,local_loss=companion.forward(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic)
-                                else:out,local_loss=value_output(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic),None
+                                from .value_phase import host_ids
+                                if companion is not None:out,local_loss=companion.forward(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic,**host_ids(companion,part))
+                                else:out,local_loss=value_output(model,inputs,critic_ds,ix,dropout=drop,detach=detach_critic,ids=part),None
                             values=value_losses(out,tuple(t[ix] for t in critic_ds.targets))
                             loss=values[0]
                             if critic_ds.utility is not None:

@@ -327,8 +327,8 @@ fn network_targets(view: &Observation) -> Vec<&str> {
         .collect();
     view.links
         .iter()
-        .filter(|l| l.regions.iter().any(|r| cities.contains(&r.as_str())))
-        .map(|l| l.id.as_str())
+        .filter(|l| l.regions.iter().any(|r| cities.contains(&&**r)))
+        .map(|l| &*l.id)
         .collect()
 }
 
@@ -744,7 +744,7 @@ mod tests {
         while mat.tiles.first().is_some_and(|t| t.level < 3) { mat.tiles.remove(0); }
         let link = network_targets(&view)[0].to_string();
         let mut network = choice("n", Kind::Network, None);
-        network.target = Some(link);
+        network.target = Some(link.into());
         let choices = [choice("b", Kind::Build, Some(Industry::CottonMill)), choice("d", Kind::Develop, Some(Industry::CottonMill)),
                        network, choice("p", Kind::Pass, None)];
         let parse = |contract: &str| Cotton::parse(&json!({"contract": contract, "seats": [seat], "probability": 0.2})).unwrap().unwrap();

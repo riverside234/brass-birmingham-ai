@@ -1,8 +1,13 @@
 //! Versioned, trusted simulation-state boundary. Never a policy observation.
 use crate::types::{Era, Phase, Seat};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 pub const STATE_FORMAT: &str = "brass-native-state/1.0.0";
+/// A catalog name (tile, slot, link, region, merchant, card or pending field): borrowed from the embedded catalog in
+/// everything the rules build, so copying a view copies no text; owned only when parsed from input. Serialized as a
+/// plain string either way.
+pub type Name = Cow<'static, str>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Industry {
@@ -95,7 +100,7 @@ pub struct Context {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tile {
-    pub id: String,
+    pub id: Name,
     pub seat: Seat,
     #[serde(rename = "type")]
     pub industry: Industry,
@@ -137,16 +142,16 @@ pub struct Player {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Slot {
-    pub id: String,
-    pub types: Vec<Industry>,
+    pub id: Name,
+    pub types: Cow<'static, [Industry]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tile: Option<Tile>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Link {
-    pub id: String,
-    pub regions: Vec<String>,
+    pub id: Name,
+    pub regions: Cow<'static, [Name]>,
     pub era: LinkEra,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub owner: Option<Seat>,
@@ -154,7 +159,7 @@ pub struct Link {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Merchant {
-    pub id: String,
+    pub id: Name,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -184,9 +189,9 @@ pub struct Cards<C> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Pending {
-    pub kind: String,
-    pub target: String,
-    pub merchant: String,
+    pub kind: Name,
+    pub target: Name,
+    pub merchant: Name,
     pub parts: u8,
     pub coal: u8,
     pub iron: u8,
@@ -212,15 +217,15 @@ pub struct Choice {
     pub id: String,
     pub kind: Kind,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub card: Option<String>,
+    pub card: Option<Name>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub target: Option<String>,
+    pub target: Option<Name>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub industry: Option<Industry>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub merchant: Option<String>,
+    pub merchant: Option<Name>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cards: Option<Vec<String>>,
+    pub cards: Option<Vec<Name>>,
 }
 impl Choice {
     pub fn semantic_id(&self) -> String {
