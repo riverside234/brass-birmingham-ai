@@ -19,38 +19,49 @@ impl NativeState {
         self.after_admitted(revision, choice)
     }
     /// Private hot path: Brass selected this exact choice from this revision's legal set.
-    pub(crate) fn after_legal_choice(
-        &self,
+    /// The search step applies it to its world's own state: the same successor as
+    /// `after_choice`, with no copy of the state and no old state to drop. On an
+    /// error the state is partly updated, so the caller drops it (a search world
+    /// never outlives a failed step).
+    pub(crate) fn apply_legal_in_place(
+        &mut self,
         revision: u32,
         choice: &Choice,
-    ) -> Result<Self, CoreError> {
+    ) -> Result<(), CoreError> {
         require(revision == self.context.revision, "stale revision")?;
-        self.after_admitted(
-            revision,
-            HistoryState::import(&History {
-                seat: Seat::try_from(self.context.actor as u8)
-                    .map_err(|_| CoreError::Invalid("actor".into()))?,
-                era: self.context.era,
-                choice: choice.clone(),
-            })?,
-        )
+        let choice = HistoryState::import(&History {
+            seat: Seat::try_from(self.context.actor as u8)
+                .map_err(|_| CoreError::Invalid("actor".into()))?,
+            era: self.context.era,
+            choice: choice.clone(),
+        })?;
+        self.admit_transition(revision)?;
+        self.commit_transition(choice)
     }
     fn after_admitted(&self, revision: u32, choice: HistoryState) -> Result<Self, CoreError> {
-        crate::work::checkpoint(crate::work::Stage::Application)?;
-        require(
-            self.history.len() < 8192 && revision < u32::MAX,
-            "state history/revision limit",
-        )?;
+        self.admit_transition(revision)?;
         // One owned transactional fork; errors and arithmetic limits leave the original intact.
         let copy_started = std::time::Instant::now();
         let mut next = self.clone();
         crate::work::state_copied(copy_started);
-        next.execute(&choice)?;
-        next.history.push(choice);
-        next.context.revision += 1;
-        next.rebuild_indexes();
-        crate::work::checkpoint(crate::work::Stage::Application)?;
+        next.commit_transition(choice)?;
         Ok(next)
+    }
+    /// The checks before a transition: a cancellation point and the history/revision limits.
+    fn admit_transition(&self, revision: u32) -> Result<(), CoreError> {
+        crate::work::checkpoint(crate::work::Stage::Application)?;
+        require(
+            self.history.len() < 8192 && revision < u32::MAX,
+            "state history/revision limit",
+        )
+    }
+    /// The transition itself, on the state it updates.
+    fn commit_transition(&mut self, choice: HistoryState) -> Result<(), CoreError> {
+        self.execute(&choice)?;
+        self.history.push(choice);
+        self.context.revision += 1;
+        self.rebuild_indexes();
+        crate::work::checkpoint(crate::work::Stage::Application)
     }
     fn add(value: &mut i32, amount: i32) -> Result<(), CoreError> {
         *value = value
@@ -550,5 +561,84 @@ impl NativeState {
         self.current_player = self.order[0];
         self.start_turn();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod in_place_tests {
+    //! g6120: the search step's in-place transitions against the transactional ones on every state of played
+    //! games, and the reusing index rebuild against a fresh build.
+    use super::super::indexes::Indexes;
+    use super::*;
+
+    fn mix(text: &str, salt: u64) -> u64 {
+        text.bytes().fold(0xcbf2_9ce4_8422_2325 ^ salt, |h, b| {
+            (h ^ u64::from(b)).wrapping_mul(0x100_0000_01b3)
+        })
+    }
+
+    #[test]
+    fn in_place_transitions_equal_the_transactional_ones() {
+        let dto: StateDto =
+            serde_json::from_str(include_str!("../../tests/data/initial-state.json")).unwrap();
+        let (mut choices, mut chances, mut states) = (0, 0, 0);
+        for game in 0..4u64 {
+            let mut state = NativeState::import(&dto).unwrap();
+            let mut step = 0u64;
+            while !state.context().terminal {
+                step += 1;
+                let revision = state.context().revision;
+                // Every refilled index equals one built from nothing.
+                assert_eq!(state.indexes(), Indexes::build(&state).export(), "game {game} step {step}");
+                if let Some(chance) = state.chance_outcomes() {
+                    let pick = (mix("chance", step ^ (game << 32)) % chance.outcomes.len() as u64) as usize;
+                    let card = &chance.outcomes[pick].card;
+                    let next = state.after_chance(revision, card).unwrap();
+                    let mut in_place = state.clone();
+                    in_place.resolve_chance_in_place(revision, card).unwrap();
+                    assert_eq!(in_place.export(), next.export(), "game {game} step {step}");
+                    assert_eq!(in_place.indexes(), next.indexes());
+                    chances += 1;
+                    state = next;
+                    continue;
+                }
+                states += 1;
+                let legal = state.legal_choices().unwrap();
+                // Every legal choice of every third state; the played one always.
+                let rank = |k: Kind| match k {
+                    Kind::Build => 6,
+                    Kind::Network => 5,
+                    Kind::Sell => 4,
+                    Kind::Develop => 3,
+                    Kind::Loan => 2,
+                    Kind::Pass => 0,
+                    _ => 1,
+                };
+                let pick = if mix("explore", step ^ (game << 40)) % 4 == 0 {
+                    legal[(mix("any", step ^ game) % legal.len() as u64) as usize].clone()
+                } else {
+                    legal
+                        .iter()
+                        .max_by_key(|c| (rank(c.kind), mix(&c.id, step ^ (game << 16))))
+                        .unwrap()
+                        .clone()
+                };
+                for choice in legal.iter().filter(|c| step % 3 == 0 || c.id == pick.id) {
+                    let next = state.after_choice(revision, &choice.id).unwrap();
+                    let mut in_place = state.clone();
+                    in_place.apply_legal_in_place(revision, choice).unwrap();
+                    assert_eq!(in_place.export(), next.export(), "game {game} step {step} {}", choice.id);
+                    assert_eq!(in_place.indexes(), next.indexes());
+                    choices += 1;
+                }
+                // A stale revision is refused before anything changes.
+                let mut stale = state.clone();
+                assert!(stale.apply_legal_in_place(revision + 1, &pick).is_err());
+                assert_eq!(stale.export(), state.export());
+                state = state.after_choice(revision, &pick.id).unwrap();
+            }
+        }
+        println!("states {states} choices {choices} chances {chances}");
+        assert!(states > 600 && choices > 5000 && chances > 50, "{states} {choices} {chances}");
     }
 }

@@ -1,4 +1,4 @@
-use super::{catalog::CATALOG, dto::Industry, seat, NativeState};
+use super::{catalog::CATALOG, dto::Industry, seat, Seat, TileId, TileState};
 use brass_upstream_rules::utils::dsu::DisjointSetUnion;
 use fixedbitset::FixedBitSet;
 use serde::Serialize;
@@ -41,24 +41,45 @@ impl Indexes {
             resources: std::array::from_fn(|_| FixedBitSet::with_capacity(CATALOG.slots.len())),
         }
     }
-    pub fn build(s: &NativeState) -> Self {
+    /// Fresh indexes for `s`: the reference that `refill` is tested against.
+    #[cfg(test)]
+    pub fn build(s: &super::NativeState) -> Self {
         let mut indexes = Self::empty();
-        for (i, owner) in s.links.iter().enumerate() {
+        indexes.fill(&s.links, &s.slots, &s.tiles);
+        indexes
+    }
+    /// `build` for this board, reusing these indexes' storage. A reset union-find
+    /// and cleared sets are exactly `empty()`, so the result equals `build`.
+    pub fn refill(&mut self, links: &[Option<Seat>], slots: &[Option<TileId>], tiles: &[TileState]) {
+        self.connectivity.reset();
+        for set in self
+            .owned_slots
+            .iter_mut()
+            .chain(self.owned_links.iter_mut())
+            .chain(self.network_regions.iter_mut())
+            .chain(self.resources.iter_mut())
+        {
+            set.clear();
+        }
+        self.fill(links, slots, tiles);
+    }
+    fn fill(&mut self, links: &[Option<Seat>], slots: &[Option<TileId>], tiles: &[TileState]) {
+        for (i, owner) in links.iter().enumerate() {
             if let Some(owner) = owner {
-                indexes.owned_links[seat(*owner)].insert(i);
+                self.owned_links[seat(*owner)].insert(i);
                 let regions = &CATALOG.link_regions[i];
                 for r in regions {
-                    indexes.connectivity.union_sets(regions[0], *r);
-                    indexes.network_regions[seat(*owner)].insert(*r);
+                    self.connectivity.union_sets(regions[0], *r);
+                    self.network_regions[seat(*owner)].insert(*r);
                 }
             }
         }
-        for (i, tile) in s.slots.iter().enumerate() {
+        for (i, tile) in slots.iter().enumerate() {
             if let Some(id) = tile {
                 let def = &CATALOG.tiles[id.0];
-                indexes.owned_slots[seat(def.seat)].insert(i);
-                indexes.network_regions[seat(def.seat)].insert(CATALOG.slot_regions[i]);
-                if s.tiles[id.0].resource > 0 {
+                self.owned_slots[seat(def.seat)].insert(i);
+                self.network_regions[seat(def.seat)].insert(CATALOG.slot_regions[i]);
+                if tiles[id.0].resource > 0 {
                     let resource = match def.industry {
                         Industry::CoalMine => Some(0),
                         Industry::IronWorks => Some(1),
@@ -66,12 +87,11 @@ impl Indexes {
                         _ => None,
                     };
                     if let Some(resource) = resource {
-                        indexes.resources[resource].insert(i);
+                        self.resources[resource].insert(i);
                     }
                 }
             }
         }
-        indexes
     }
     pub fn export(&self) -> IndexSnapshot {
         let mut connected_regions = Vec::new();

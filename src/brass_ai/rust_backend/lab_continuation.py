@@ -95,7 +95,8 @@ def inventory(root, run, state, raw):
             require(read(metadata) == receipt, 'PPG committed receipt differs')
             for ext, item in receipt['files'].items():
                 require('/' not in ext and '\\' not in ext and '..' not in ext, 'Unsafe PPG extension')
-                path = directory / (stem + '.' + ext); add(path, item['sha256'])
+                # g6120: newer receipts record sizes only (the inventory still hashes every file it copies).
+                path = directory / (stem + '.' + ext); add(path, item.get('sha256'))
                 require(path.stat().st_size == item['bytes'], 'PPG committed size differs')
     # Legacy one-age cache has its own sealed, source-bound rebuild contract.
     if phase.get('buffer') is not None:

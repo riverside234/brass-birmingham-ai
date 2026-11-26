@@ -219,7 +219,12 @@ class Buffer(Base):
         self.assertEqual(len(previous.rows(10)), 1)
         rebuilt = TeacherBuffer(SOURCE_ROOT, run, C.buffer_identity(c), receipts=payload['receipts'], retired=payload['retired'])
         self.assertEqual([r.identity for _, r in b.rows(14)], [r.identity for _, r in rebuilt.rows(14)])
+        # g6120: shards are not hashed; a damaged one fails its gzip check when its rows are read, and a missing one
+        # (or a changed receipt) is still refused when the buffer opens.
         (run / payload['receipts'][0]['path']).write_bytes(b'tampered')
+        with self.assertRaises(OSError):
+            TeacherBuffer(SOURCE_ROOT, run, C.buffer_identity(c), receipts=payload['receipts']).rows(14)
+        (run / payload['receipts'][0]['path']).unlink()
         with self.assertRaisesRegex(ValueError, 'missing/changed'):
             TeacherBuffer(SOURCE_ROOT, run, C.buffer_identity(c), receipts=payload['receipts'])
 

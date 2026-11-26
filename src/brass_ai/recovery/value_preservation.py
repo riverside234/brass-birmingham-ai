@@ -12,9 +12,9 @@ CONTRACT='dcpg-value-preservation/1.0.0'
 
 def outputs(model,inputs,ds,ix,companion=None,diversity=None):
     from brass_ai.learning.seat_descriptors import critic_inputs
-    ids=ix.detach().cpu().tolist()
     encoded=model.encode_state(inputs[0])
-    embeddings=model.descriptor_embeddings(encoded,critic_inputs(ds,ids))
+    # g6120: the batch's own device index reads the descriptors, with no read-back of the rows and no new upload.
+    embeddings=model.descriptor_embeddings(encoded,critic_inputs(ds,ix,index=ix))
     heads=model.official_heads(encoded,inputs[3],embeddings)
     utility=model.predict_utility(encoded.context,inputs[3],heads,ds.remaining[ix],embeddings)
     result=dict(win=heads[0].float(),rank=heads[1].float(),vp=heads[2].float(),utility=utility.float())
@@ -57,20 +57,24 @@ class FrozenValues:
         self.diversity=diversity
         started=time.perf_counter();was_training=model.training;model.eval()
         self.rows=len(ds.data)
+        # g6120: the frozen outputs stay on the training device (float32, about 1.6 GB at g6118), so freezing copies
+        # nothing back per batch and every PPO critic batch gathers its rows there; the finite check is one read-back.
+        finite=torch.ones((),dtype=torch.bool,device=ds.device)
         try:
             with torch.no_grad():
                 for part,ix,inputs in ds.value_batches(value_parts(ds,range(self.rows),update,model),model,executor):
                     with autocast(update,ds.device):out=outputs(model,inputs,ds,ix,companion,diversity)
                     for k,v in out.items():
-                        require(bool(torch.isfinite(v).all()),'Nonfinite frozen critic output')
-                        if k not in self.values:self.values[k]=torch.empty((self.rows,*v.shape[1:]),dtype=torch.float32,device='cpu')
-                        self.values[k][part]=v.detach().cpu()
+                        finite&=torch.isfinite(v).all()
+                        if k not in self.values:self.values[k]=torch.empty((self.rows,*v.shape[1:]),dtype=torch.float32,device=ds.device)
+                        self.values[k][ix]=v.detach()
+            require(bool(finite),'Nonfinite frozen critic output')
         finally:model.train(was_training)
         self.seconds=time.perf_counter()-started
 
     def selected(self,indices,device):
-        ids=indices.detach().cpu() if isinstance(indices,torch.Tensor) else indices
-        return {k:v[ids].to(device) for k,v in self.values.items()}
+        if not isinstance(indices,torch.Tensor):indices=torch.as_tensor(indices,device=self.ds.device)
+        return {k:v[indices.to(v.device)].to(device) for k,v in self.values.items()}
 
     def losses(self,model,inputs,ix):
         out=outputs(model,inputs,self.ds,ix,self.companion,self.diversity)
@@ -100,7 +104,7 @@ class FrozenValues:
             drift=torch.zeros((),device=self.ds.device)
             for part,ix,inputs in self.ds.value_batches(value_parts(self.ds,probe_ids,self.update,model),model,executor):
                 with autocast(self.update,self.ds.device):out=outputs(model,inputs,self.ds,ix)
-                drift+=(out['utility']-self.values['utility'][part].to(inputs[0].device)).square().sum()
+                drift+=(out['utility']-self.values['utility'][ix].to(inputs[0].device)).square().sum()
         means=dict(zip((*keys,'weighted_objective'),(totals/max(1,len(train_ids))).cpu().tolist()))
         if self.diversity is not None:
             self.diversity.report['preservation']=dict(rows=intrinsic_rows,mean_loss=intrinsic_sum/max(1,intrinsic_rows),
@@ -109,7 +113,7 @@ class FrozenValues:
             frozen_rows=self.rows,train_rows=len(train_ids),frozen_by_role=dict(Counter(self.ds.roles)),
             frozen_bytes=sum(v.numel()*v.element_size() for v in self.values.values()),
             floats_per_row=sum(v[0].numel() for v in self.values.values()) if self.rows else 0,
-            storage='CPU float32, iteration-local; never reused by PPO or replay',snapshot_seconds=self.seconds,
+            storage='Training-device float32, iteration-local; never reused by PPO or replay',snapshot_seconds=self.seconds,
             end_loss=means,end_weighted_objective=float(weighted[-1])/max(1,len(train_ids)),
             probe_rows=len(probe_ids),utility_probe_rms=float((drift/max(1,4*len(probe_ids))).sqrt()),
             gradients=self.gradients,

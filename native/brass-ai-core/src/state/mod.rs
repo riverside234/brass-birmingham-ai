@@ -944,7 +944,15 @@ impl NativeState {
         }
     }
     fn rebuild_indexes(&mut self) {
-        self.indexes = Indexes::build(self);
+        // In place: the same indexes as `Indexes::build`, without new storage.
+        let NativeState {
+            indexes,
+            links,
+            slots,
+            tiles,
+            ..
+        } = self;
+        indexes.refill(links, slots, tiles);
     }
     pub fn indexes(&self) -> IndexSnapshot {
         self.indexes.export()

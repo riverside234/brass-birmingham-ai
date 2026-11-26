@@ -47,7 +47,8 @@ class R4(unittest.TestCase):
         family,_,_=family_fixture();part=family['parent'];part['game']=check_game(part['game'])
         out=self.temporary();handle=P.part_write(out,part)
         data=Path(handle['path'])
-        raw=data.read_bytes();data.write_bytes(raw[:-1]+bytes([raw[-1]^1]))
+        # g6120: a transient part carries no content hash (its parent owns it); a change of size is still refused.
+        raw=data.read_bytes();data.write_bytes(raw[:-1])
         with self.assertRaisesRegex(ValueError,'changed'):P.part_read(out,handle)
         data.write_bytes(raw)
         path=out/'cache';receipt=F.write(path,[part['game']],'a'*64)

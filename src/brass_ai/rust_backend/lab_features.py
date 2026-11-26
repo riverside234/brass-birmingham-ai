@@ -57,7 +57,8 @@ def read_bytes(path):
     return data
 
 
-def pack(games, replay_sha256, *, compressed=True, _owned=False):
+def pack(games, replay_sha256, *, compressed=True, _owned=False, hashed=True):
+    """``hashed=False`` (g6120): a transient part archive, read once by its own publisher, carries no data hash."""
     from brass_ai.recovery.replay_binding import GameBinding,checked_encoded,count
     arrays=[];keys=[];sealed=True
     for game in games:
@@ -109,7 +110,8 @@ def pack(games, replay_sha256, *, compressed=True, _owned=False):
         offsets=np.cumsum([0]+[len(e.choice_ids) for e in arrays]),
         seats=seats)
     raw=out.getvalue();require(len(raw)<=LIMIT,'Feature archive exceeds bound')
-    meta=dict(format='derived-features/4.0.0',replay_sha256=replay_sha256,data_sha256=hashlib.sha256(raw).hexdigest(),
+    meta=dict(format='derived-features/4.0.0',replay_sha256=replay_sha256,
+        data_sha256=hashlib.sha256(raw).hexdigest() if hashed else None,
         compatibility=compatibility(),encoder=version(),rows=keys)
     return raw,meta
 

@@ -44,12 +44,13 @@ class InputAudit:
         self._self = weakref.ref(self)
 
     def check(self, row):
-        from .replay_binding import encoded_digest
+        from .replay_binding import checked_encoded
         check_encoded(row)
-        admitted=encoded_digest(row,'actions')
-        if admitted is not None:
+        if checked_encoded(row):
+            # g6120: a sealed row was admitted when it was sealed and is immutable since; its proof is the object
+            # itself (alive while any batch of it is cached), with no SHA-256 of its actions.
             with self.lock:self.hits+=1
-            return admitted
+            return b'sealed:%d' % id(row)
         seal = array_digest(row.actions)
         # A weak reference prevents object-ID reuse from becoming an admission
         # proof, without retaining temporary state-only candidate slices.
@@ -76,11 +77,10 @@ class InputAudit:
     def seal(self, rows, distributions=()):
         value = hashlib.sha256()
         for row in rows:
-            value.update(self.check(row))
-            from .replay_binding import encoded_digest
+            token=self.check(row);value.update(token)
+            if token.startswith(b'sealed:'):continue  # g6120: the immutable sealed object covers its state and mapping
             for field in ('state','stable_to_relative'):
-                admitted=encoded_digest(row,field)
-                value.update(array_digest(getattr(row,field)) if admitted is None else admitted)
+                value.update(array_digest(getattr(row,field)))
         for q in distributions:
             value.update(array_digest(q))
         return value.digest()

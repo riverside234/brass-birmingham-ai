@@ -346,7 +346,7 @@ impl ObservationMemory {
         }
         self.public = None;
         for s in 0..4 {
-            self.hands[s] = state.sorted_hand(s);
+            state.sorted_hand_into(s, &mut self.hands[s]);
             if self.recall[s]
                 .last()
                 .is_none_or(|r| r.hand != self.hands[s])
@@ -599,12 +599,19 @@ impl NativeState {
         out.push(self.chance.is_some() as u8);
     }
     fn sorted_hand(&self, s: usize) -> Vec<Name> {
-        let mut hand: Vec<_> = self.cards.hands[s]
-            .iter()
-            .map(|c| CATALOG.card_names[c.0].clone())
-            .collect();
-        hand.sort();
+        let mut hand = Vec::with_capacity(self.cards.hands[s].len());
+        self.sorted_hand_into(s, &mut hand);
         hand
+    }
+    /// `sorted_hand`, written into `hand`'s storage (the search step's recall refresh).
+    fn sorted_hand_into(&self, s: usize, hand: &mut Vec<Name>) {
+        hand.clear();
+        hand.extend(
+            self.cards.hands[s]
+                .iter()
+                .map(|c| CATALOG.card_names[c.0].clone()),
+        );
+        hand.sort();
     }
     /// This raw projection is available only at a reveal boundary. At chance,
     /// callers use ObservationMemory's previous permitted observation instead.

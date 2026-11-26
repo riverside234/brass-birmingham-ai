@@ -3,6 +3,7 @@ from contextlib import nullcontext
 from collections import deque,Counter
 from concurrent.futures import ThreadPoolExecutor
 import math
+import time
 import numpy as np
 import torch
 from .learning_rate import step as scheduled_step,report as learning_rate_report
@@ -140,7 +141,163 @@ class ExplorationMixture:
         return value
 
 
+class DeviceRows:
+    """g6120: a Dataset's collated inputs on its CUDA device once, so every pass gathers its batches there.
+
+    PPO's passes (the behavior check, the frozen values, each step's actor and critic batches, the
+    preservation report) otherwise collate every batch on the CPU workers and copy it over, about 28 GB
+    per iteration at g6118, with the main thread pinning and uploading each batch. A gathered batch equals
+    the collated one exactly: the same states and mapping, the actions zero, the mask False and the mixture
+    zero past each row's legal width, and a value-only batch keeps the first candidate. Rows are admitted
+    once, as on their first collation (a sealed row was admitted when it was sealed). Over LIMIT_BYTES, with
+    mixed array types, or when the device has no room, the dataset keeps the original path. The store
+    holds no reference to its dataset, so it never waits for a full garbage collection to be freed.
+    """
+    LIMIT_BYTES = 12 * 1024 ** 3
+    CHUNK_BYTES = 256 * 1024 ** 2
+
+    def __init__(self, dataset):
+        self.device = torch.device(dataset.device)
+        self.widths = [len(e.choice_ids) for e in dataset.encoded]
+        self.states = self.mapping = self.actions = self.offsets = self.lengths = self.first = None
+        self.mixtures = {}; self.failed = None
+        self.metrics = dict(bytes=0, seconds=0., batches=0, policy_rows=0, value_rows=0)
+
+    def _types(self, dataset):
+        states = {e.state.dtype.str for e in dataset.encoded}
+        mappings = {np.asarray(e.stable_to_relative).dtype.str for e in dataset.encoded}
+        return (next(iter(states)), next(iter(mappings))) if len(states) == len(mappings) == 1 else None
+
+    def _fill(self, pieces, rows, tail, dtype, lead=0):
+        """One device tensor of `pieces` (arrays [k, *tail]) concatenated in order after `lead` zero rows."""
+        out = torch.zeros((lead + rows, *tail), dtype=dtype, device=self.device)
+        cursor = lead; chunk = []; size = 0
+        def flush():
+            nonlocal cursor, chunk, size
+            if chunk:
+                host = torch.from_numpy(np.ascontiguousarray(np.concatenate(chunk)))
+                out[cursor:cursor + len(host)].copy_(host); cursor += len(host); chunk = []; size = 0
+        for piece in pieces:
+            chunk.append(piece); size += piece.nbytes
+            if size >= self.CHUNK_BYTES: flush()
+        flush()
+        require(cursor == lead + rows, 'Device rows count differs')
+        return out
+
+    def _common(self, dataset):
+        if self.states is not None: return
+        types = self._types(dataset)
+        if types is None: raise _Unstaged('mixed state or mapping array types')
+        encoded = dataset.encoded; n = len(encoded)
+        state_dtype = torch.from_numpy(np.empty(0, dtype=types[0])).dtype
+        mapping_dtype = torch.from_numpy(np.empty(0, dtype=types[1])).dtype
+        self.states = self._fill((e.state[None] for e in encoded), n, encoded[0].state.shape, state_dtype)
+        self.mapping = self._fill((np.asarray(e.stable_to_relative)[None] for e in encoded), n,
+                                  np.asarray(encoded[0].stable_to_relative).shape, mapping_dtype)
+
+    def _estimate(self, dataset, policy):
+        e = dataset.encoded[0]; n = len(dataset.encoded)
+        total = 0 if self.states is not None else n * (e.state.nbytes + np.asarray(e.stable_to_relative).nbytes)
+        if policy and self.actions is None:
+            total += (1 + sum(self.widths)) * e.actions.shape[-1] * 4 + (1 + sum(self.widths)) * 4 * 2
+        elif not policy and self.first is None and self.actions is None:
+            total += n * e.actions.shape[-1] * 4
+        return total
+
+    def ready(self, dataset, value_only):
+        """Stage what a policy (or value-only) pass reads; False keeps the dataset's original path."""
+        if self.failed is not None: return False
+        if (self.actions is not None) or (value_only and self.first is not None): return True
+        if not dataset.encoded: self.failed = 'empty'; return False
+        if self.metrics['bytes'] + self._estimate(dataset, not value_only) > self.LIMIT_BYTES:
+            self.failed = 'over_limit'; return False
+        began = time.perf_counter()
+        from brass_ai.learning.features import check_encoded
+        from brass_ai.learning.local_entities import check_action_selectors
+        from .replay_binding import checked_encoded
+        encoded = dataset.encoded
+        try:
+            self._common(dataset)
+            width = encoded[0].actions.shape[-1]
+            if value_only:
+                for e in encoded:
+                    check_encoded(e)
+                    # The same admission as collating the one-candidate row: its first candidate's selectors.
+                    if not checked_encoded(e): check_action_selectors(e.actions[:1])
+                self.first = self._fill((np.asarray(e.actions[:1], dtype=np.float32) for e in encoded),
+                                        len(encoded), (width,), torch.float32)
+                self.metrics['value_rows'] = len(encoded)
+            else:
+                for e in encoded:
+                    if not checked_encoded(e): dataset.input_audit.check(e)
+                total = sum(self.widths)
+                self.actions = self._fill((np.asarray(e.actions, dtype=np.float32) for e in encoded), total,
+                                          (width,), torch.float32, lead=1)
+                self.offsets = torch.as_tensor(np.cumsum([1] + self.widths[:-1]), dtype=torch.int64, device=self.device)
+                self.lengths = torch.as_tensor(self.widths, dtype=torch.int64, device=self.device)
+                self.metrics['policy_rows'] = len(encoded)
+        except _Unstaged as reason:
+            self._release(); self.failed = str(reason); return False
+        except torch.cuda.OutOfMemoryError:
+            self._release(); self.failed = 'device_memory'
+            torch.cuda.empty_cache(); return False
+        self.metrics['bytes'] = self._bytes(); self.metrics['seconds'] += time.perf_counter() - began
+        return True
+
+    def _release(self):
+        self.states = self.mapping = self.actions = self.offsets = self.lengths = self.first = None
+        self.mixtures = {}
+
+    def _bytes(self):
+        tensors = [self.states, self.mapping, self.actions, self.offsets, self.lengths, self.first, *self.mixtures.values()]
+        return sum(t.numel() * t.element_size() for t in tensors if t is not None)
+
+    def mixture(self, dataset, exploration):
+        """Each row's exploration mixture where a collated batch would carry it (zero elsewhere), concatenated."""
+        key = bool(exploration)
+        if key not in self.mixtures:
+            cotton = getattr(dataset, 'cotton_rows', ())
+            def piece(i, w):
+                value = np.zeros(w, dtype=np.float32)
+                if key or i in cotton:
+                    distribution = dataset.q[i]; value[:len(distribution)] = distribution
+                return value
+            self.mixtures[key] = self._fill((piece(i, w) for i, w in enumerate(self.widths)), sum(self.widths), (),
+                                            torch.float32, lead=1)
+            self.metrics['bytes'] = self._bytes()
+        return self.mixtures[key]
+
+    def batch(self, dataset, indices, exploration, value_only):
+        n = len(indices); self.metrics['batches'] += 1
+        selected = torch.as_tensor(np.asarray(indices, dtype=np.int64)).to(self.device)
+        states, mapping = self.states[selected], self.mapping[selected]
+        if value_only:
+            first = self.first[selected] if self.first is not None else self.actions[self.offsets[selected]]
+            return selected, (states, first[:, None, :], torch.ones((n, 1), dtype=torch.bool, device=self.device),
+                              mapping), torch.zeros((n, 1), dtype=torch.float32, device=self.device)
+        width = max(self.widths[i] for i in indices)
+        position = torch.arange(width, device=self.device)
+        mask = position[None, :] < self.lengths[selected][:, None]
+        index = torch.where(mask, self.offsets[selected][:, None] + position[None, :], torch.zeros_like(position)[None, :])
+        return selected, (states, self.actions[index], mask, mapping), self.mixture(dataset, exploration)[index]
+
+    def report(self):
+        return dict(self.metrics, failed=self.failed)
+
+
+class _Unstaged(Exception):
+    pass
+
+
+def device_rows_report(dataset):
+    store = getattr(dataset, '_device_rows', None)
+    return store.report() if store is not None else None
+
+
 class Dataset:
+    # g6120: DeviceRows on CUDA; tests compare it with the collated path on the CPU.
+    device_rows_on_cpu = False
+
     def __init__(self, data, device, policy=True, progress=None):
         self.data, self.device = data, device
         self.rows=[d[0] for d in data]
@@ -263,7 +420,21 @@ class Dataset:
         for part,ix,inputs,_ in self.policy_batches(parts,executor=executor,value_only=state_value_model(model)):
             yield part,ix,inputs
 
+    def device_rows(self, value_only):
+        """This dataset's DeviceRows when it serves the pass, else None (the original path)."""
+        if type(self) is not Dataset:return None  # replay datasets keep their own sealed readers
+        if torch.device(self.device).type!='cuda' and not Dataset.device_rows_on_cpu:return None
+        store=getattr(self,'_device_rows',None)
+        if store is None:store=self._device_rows=DeviceRows(self)
+        return store if store.ready(self,value_only) else None
+
     def policy_batches(self, parts, exploration=0, executor=None, *, value_only=False, cache=False):
+        store=self.device_rows(value_only)
+        if store is not None:
+            for part in parts:
+                ix,inputs,q=store.batch(self,part,exploration,value_only)
+                yield part,ix,inputs,q
+            return
         if hasattr(executor,'batches'):
             yield from executor.batches(self,parts,exploration,value_only=value_only,cache=cache)
             return
@@ -391,13 +562,25 @@ def entropy_term(logits, mixed, dataset, indices, behavior, config):
     if not getattr(behavior,'raw_entropy',False):
         entropy=-(mixed*mixed.clamp_min(1e-30).log()).sum(-1)
         return entropy,config['entropy_weight']*entropy
-    from .exploration import group
     raw=F.softmax(logits.float(),-1)
     entropy=-(raw*raw.clamp_min(1e-30).log()).sum(-1)
-    ids=indices.detach().cpu().tolist() if isinstance(indices,torch.Tensor) else indices
-    weights=torch.tensor([behavior.entropy_alphas[group(dataset.rows[i]['view']['context'])] for i in ids],
-                         device=logits.device)
+    # g6120: each row's entropy group is found once per dataset; a batch gathers its rows' weights on the device.
+    names,codes=entropy_groups(dataset,logits.device)
+    index=indices if isinstance(indices,torch.Tensor) else torch.as_tensor(indices,dtype=torch.int64)
+    alphas=torch.tensor([behavior.entropy_alphas[name] for name in names],device=logits.device)
+    weights=alphas[codes[index.to(codes.device)]]
     return entropy,weights*entropy
+
+
+def entropy_groups(dataset,device):
+    """(group names, per-row group codes on `device`): exploration.group of every row's context, cached."""
+    cached=getattr(dataset,'_entropy_groups',None)
+    if cached is None or cached[1].device!=torch.device(device):
+        from .exploration import group
+        found=[group(row['view']['context']) for row in dataset.rows];names=tuple(sorted(set(found)))
+        code={name:j for j,name in enumerate(names)}
+        cached=dataset._entropy_groups=(names,torch.tensor([code[g] for g in found],dtype=torch.int64,device=device))
+    return cached
 
 
 def autocast(config, device):
@@ -828,6 +1011,8 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
             learner_distinct_used=sum(critic_ds.roles[i]=='learner' for i in critic_used),
             snapshot_distinct_used=sum(critic_ds.roles[i]=='snapshot' for i in critic_used),
             snapshot_weight=phases.critic_state['snapshot_weight'] if phases is not None and phases.critic_state else None),
+        # g6120: the actor and critic datasets' device-resident batches (None: collated on the original path).
+        device_rows=dict(actor=device_rows_report(ds),critic=device_rows_report(critic_ds) if critic_ds is not ds else 'actor'),
         insolvency=insolvency_report,
         reward=reward_report,utility_calibration=calibration,
         learner_decisions=count,meaningful_decisions=len(actor_ids),forced_decisions=int(ds.forced.sum()),

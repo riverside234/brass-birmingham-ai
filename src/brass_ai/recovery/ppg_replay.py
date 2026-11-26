@@ -35,7 +35,8 @@ class Rows(DiskRows):
                 from .domino_config import CONTRACT as DOMINO_CONTRACT
                 from .domino_sampling import validate_assignment
                 sidecar=path.with_name(path.name.replace('critic.npy','domino.json'))
-                require(sha(sidecar)==receipt['files']['domino.json']['sha256'],'DOMiNO cache changed')
+                # g6120: checked by size; the contents are validated below.
+                require(sidecar.stat().st_size==receipt['files']['domino.json']['bytes'],'DOMiNO cache changed')
                 value=read(sidecar)
                 require(value['contract']==DOMINO_CONTRACT and value['source']==digest(receipt['source']) and value['generation']==receipt['generation'] and
                     value['rows']==receipt['rows'],'DOMiNO cached provenance differs')
@@ -48,13 +49,16 @@ class Rows(DiskRows):
             if 'local-scoring.json' in receipt['files']:
                 from .local_scoring_targets import CONTRACT,seal,unpack
                 sidecar=path.with_name(path.name.replace('critic.npy','local-scoring.json'))
-                require(sha(sidecar)==receipt['files']['local-scoring.json']['sha256'],'Local scoring sidecar changed')
+                # g6120: checked by size; the contents are validated below.
+                require(sidecar.stat().st_size==receipt['files']['local-scoring.json']['bytes'],'Local scoring sidecar changed')
                 value=read(sidecar)
                 require(value['contract']==CONTRACT and value['generation']==receipt['generation'] and
                     value['source']==digest(receipt['source']) and value['holdout']==digest(receipt['holdout_selection']) and
                     set(value['games'])<=set(receipt['game_ids']),'Local scoring sidecar input/holdout binding differs')
                 self.local={g:unpack(e) for g,e in value['games'].items()}
-                require(all(g==e['game_id'] and e['sha256']==seal(e) for g,e in self.local.items()),'Invalid cached local scoring envelope')
+                # g6120: an envelope's stored sha256 stays its identity (the targets' cache key); it is not recomputed.
+                require(all(g==e['game_id'] and isinstance(e.get('sha256'),str) for g,e in self.local.items()),
+                        'Invalid cached local scoring envelope')
             if 'bootstrap.npy' in receipt['files']:
                 self.bootstrap=np.load(path.with_name(path.name.replace('critic.npy','bootstrap.npy')),mmap_mode='r',allow_pickle=False)
                 require(self.bootstrap.dtype==np.dtype('<f4') and self.bootstrap.shape==(receipt['rows'],2,4),'Invalid bootstrap target layout')
@@ -344,7 +348,8 @@ class Buffer:
             require(r['packing']['games']==len(r['game_ids']),'Packed PPG game table differs')
         for ext,f in r['files'].items():
             p=self.path(r['generation'],ext)
-            require(p.is_file() and p.stat().st_size==f['bytes'] and sha(p)==f['sha256'],
+            # g6120: checked by size; a SHA-256 an older receipt carries is no longer recomputed.
+            require(p.is_file() and p.stat().st_size==f['bytes'],
                 'Missing/corrupt committed eight-age PPG cache; restore its matching cache backup: '+str(p))
         require(read(self.path(r['generation'],'json'))==r,'PPG cache metadata differs from checkpoint')
         if self.config.get('local_scoring_auxiliary',{}).get('mode','off')!='off':
@@ -386,18 +391,10 @@ class Buffer:
         disk_peak=sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file())
         part=self.path(generation,'critic.npy.partial')
         a=np.lib.format.open_memmap(part,mode='w+',dtype=row_dtype(),shape=(len(ids),))
-        critic_checksum=None;critic_hash_seconds=0.
         try:
-            from .ppg_cache_writer import write_critic
-            games,context_values,serialization=write_critic(a,dataset,ids,source,self.reward_id,selection,generation)
-            flush_began=time.perf_counter()
-            a.flush()
-            serialization['critic_flush_seconds']=time.perf_counter()-flush_began
-            if self.window!=16 and len(a._mmap)==a.offset+a.nbytes:
-                # The mapping covers the full file, including the NPY header.
-                hash_began=time.perf_counter()
-                critic_checksum=hashlib.sha256(a._mmap).hexdigest()
-                critic_hash_seconds=time.perf_counter()-hash_began
+            # g6120: the rows' own arrays go to the file in one gather write per block (the same bytes), then synced.
+            from .ppg_cache_writer import write_critic_file
+            games,context_values,serialization=write_critic_file(a,dataset,ids,source,self.reward_id,selection,generation)
         finally:a._mmap.close()
         disk_peak=max(disk_peak,sum(p.stat().st_size for p in self.directory.iterdir() if p.is_file()))
         part.replace(self.path(generation,'critic.npy'))
@@ -433,13 +430,11 @@ class Buffer:
             # Every older checkpoint-owned cache remains until committed().
             for ext in extensions:self.path(generation,ext).unlink()
             extensions=EXTENSIONS
-        hash_began=time.perf_counter()
-        files={}
-        for ext in extensions:
-            path=self.path(generation,ext)
-            checksum=critic_checksum if ext=='critic.npy' and critic_checksum is not None else sha(path)
-            files[ext]=dict(bytes=path.stat().st_size,sha256=checksum)
-        serialization['data_hash_seconds']=critic_hash_seconds+(time.perf_counter()-hash_began)
+        # g6120: no content hash of the cache files. They are this trainer's own, synced before the receipt, and read
+        # back within the window; a receipt records each file's size, which every reopening checks with its JSON
+        # receipt (the sidecars also check their own contents). An older receipt's SHA-256 is kept, not recomputed.
+        files={ext:dict(bytes=self.path(generation,ext).stat().st_size) for ext in extensions}
+        serialization['file_checksums']='sizes and receipts (g6120)'
         if bootstrap is not None:
             # g3140 step 7: lambda-return targets in cache row order; older ages keep their own.
             values=np.ascontiguousarray(np.asarray(bootstrap,dtype='<f4')[ids])
@@ -447,7 +442,7 @@ class Buffer:
             part=self.path(generation,'bootstrap.npy.partial')
             with open(part,'wb') as stream:np.save(stream,values,allow_pickle=False)
             part.replace(self.path(generation,'bootstrap.npy'))
-            p=self.path(generation,'bootstrap.npy');files['bootstrap.npy']=dict(bytes=p.stat().st_size,sha256=sha(p))
+            files['bootstrap.npy']=dict(bytes=self.path(generation,'bootstrap.npy').stat().st_size)
         if local_bootstrap is not None:
             # g3471: the era heads' lambda-return corrections in cache row order; older ages keep the actual maps.
             from .search_rows import ENTITIES,PAIRED,WIDTH
@@ -457,7 +452,7 @@ class Buffer:
             part=self.path(generation,'local-bootstrap.npy.partial')
             with open(part,'wb') as stream:np.save(stream,values,allow_pickle=False)
             part.replace(self.path(generation,'local-bootstrap.npy'))
-            p=self.path(generation,'local-bootstrap.npy');files['local-bootstrap.npy']=dict(bytes=p.stat().st_size,sha256=sha(p))
+            files['local-bootstrap.npy']=dict(bytes=self.path(generation,'local-bootstrap.npy').stat().st_size)
         from .domino_config import enabled,CONTRACT as DOMINO_CONTRACT
         if enabled(self.config):
             from .domino_sampling import validate_assignment,learner_row
@@ -474,10 +469,10 @@ class Buffer:
             write_json(self.path(generation,'domino.json'),dict(contract=DOMINO_CONTRACT,generation=generation,
                 source=digest(source),rows=len(ids),seats=seats,intrinsic=intrinsic,
                 scope='Recorded frozen-statistic MC intrinsic targets for audit; fitting only current ordinary learner train rows'))
-            p=self.path(generation,'domino.json');files['domino.json']=dict(bytes=p.stat().st_size,sha256=sha(p))
+            files['domino.json']=dict(bytes=self.path(generation,'domino.json').stat().st_size)
         if 'local_scoring_auxiliary' in self.config:
-            from .local_scoring_targets import CONTRACT as TARGET_CONTRACT,seal,pack
-            local={};checked=set()
+            from .local_scoring_targets import CONTRACT as TARGET_CONTRACT,pack
+            local={}
             for i in ids:
                 row=dataset.rows[i];label=row.get('_local_scoring');game=dataset.data[i][2][0]
                 if label is None:
@@ -485,15 +480,13 @@ class Buffer:
                     continue
                 envelope=label['envelope']
                 require(envelope['game_id']==game,'PPG auxiliary game binding differs')
-                token=(game,id(envelope))
-                if token not in checked:
-                    require(envelope['sha256']==seal(envelope),'PPG auxiliary label binding differs');checked.add(token)
+                # g6120: the envelope's seal was checked when its labels were admitted; it is not recomputed here.
                 if game in local:require(local[game]['sha256']==envelope['sha256'],'Mixed era-map sources')
                 else:local[game]=envelope
             sidecar=dict(contract=TARGET_CONTRACT,generation=generation,source=digest(source),holdout=digest(selection),games={g:pack(e) for g,e in local.items()})
             self.path(generation,'local-scoring.json.tmp')
             write_json(self.path(generation,'local-scoring.json'),sidecar)
-            files['local-scoring.json']=dict(bytes=self.path(generation,'local-scoring.json').stat().st_size,sha256=sha(self.path(generation,'local-scoring.json')))
+            files['local-scoring.json']=dict(bytes=self.path(generation,'local-scoring.json').stat().st_size)
         r=dict(contract=CONTRACT,generation=generation,compatibility=digest(compatibility()),reward_id=self.reward_id,
             rows=len(ids),game_ids=list(games),contexts=context_values,holdout_selection=copy.deepcopy(selection),
             source=copy.deepcopy(source),policy_entries=entries,policy_population=counts,files=files,

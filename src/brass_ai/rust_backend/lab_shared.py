@@ -8,10 +8,15 @@ The parent issues each ordinary game's lease with the job (reserve), sized from 
 largest export so far. The lane then writes its export inside the CPU ticket it played
 the game under: no allocation round trip to the parent and no second ticket wait. The
 parent shrinks the lease to the written chunks when the result arrives (settle). An
-export that does not fit takes the original exact allocation path. Each chunk is hashed
-once; the part's seal binds the ordered chunk sizes and hashes.
+export that does not fit takes the original exact allocation path.
+
+g6120 (format 3): the segments are the parent's own, written by its lane and read by its
+publisher on the same host, so no content hash travels with them. The lane no longer hashes
+each chunk while copying it, the publisher no longer re-hashes each chunk it detaches, and
+decode no longer re-hashes every row against the lane's record seals: three SHA-256 passes
+over each game's export (about 33 MB at g6118). Sizes, page bindings and row counts are
+still checked.
 """
-import hashlib
 import json
 from multiprocessing import shared_memory
 import threading
@@ -20,7 +25,7 @@ import uuid
 
 from brass_ai.learning.contracts import require
 
-FORMAT = 'brass-ordinary-shared-part/2'
+FORMAT = 'brass-ordinary-shared-part/3'
 SHARED_ROWS = 'BRASS_SHARED_ROWS'          # '0': publishers parse every row in full (json.loads)
 PREISSUED = 'BRASS_PREISSUED_LEASES'       # '0': every export asks the parent for an exact lease
 
@@ -35,12 +40,6 @@ LIMIT = 512 * 1024**2
 BUDGET = 6 * 1024**3
 OFFER = 64 * 1024**2      # first pre-issued lease; then 1.25 x the largest export so far
 _TIMING_KEYS = ('capacity_wait_seconds', 'mapping_setup_seconds')
-
-
-def seal(chunks, hashes):
-    """One digest over the ordered chunk sizes and SHA-256 hashes, each chunk hashed once."""
-    return hashlib.sha256(json.dumps([[c['size'], h] for c, h in zip(chunks, hashes, strict=True)],
-                                     separators=(',', ':')).encode()).hexdigest()
 
 
 class Registry:
@@ -200,7 +199,7 @@ def write(part, allocate=None, *, admit=None, cancel=None, lease=None):
         context = admit() if admit else nullcontext()
     capacity_wait=handle.pop('capacity_wait_seconds',None)
     mapping_setup=handle.pop('mapping_setup_seconds',None)
-    sources = iter(values); source = memoryview(next(sources)); hashes = []; chunks = []; remaining = size
+    sources = iter(values); source = memoryview(next(sources)); chunks = []; remaining = size
     with context:
         for chunk in handle['chunks']:
             if not remaining:break
@@ -208,19 +207,17 @@ def write(part, allocate=None, *, admit=None, cancel=None, lease=None):
             count_chunk = min(chunk['size'], remaining)
             shm = shared_memory.SharedMemory(name=chunk['name'])
             try:
-                offset = 0; hashed = hashlib.sha256()
+                offset = 0
                 while offset < count_chunk:
                     if not len(source):source = memoryview(next(sources))
                     count = min(len(source), count_chunk-offset)
                     shm.buf[offset:offset+count] = source[:count]
-                    hashed.update(source[:count])
                     offset += count; source = source[count:]
-                hashes.append(hashed.hexdigest())
             finally:shm.close()
             chunks.append(dict(name=chunk['name'], size=count_chunk)); remaining -= count_chunk
     require(not remaining and not len(source) and next(sources, None) is None, 'Shared export length differs')
-    return dict(format=FORMAT, lease=handle['lease'], size=size, chunks=chunks, sha256=seal(chunks, hashes),
-                chunk_hashes=hashes, branch_expected=part.metadata['branch_expected'],
+    return dict(format=FORMAT, lease=handle['lease'], size=size, chunks=chunks,
+                branch_expected=part.metadata['branch_expected'],
                 transfer_timings=dict(shared_write_seconds=time.perf_counter()-began,
                                       shared_allocate_wait_seconds=allocated-queued,
                                       shared_capacity_wait_seconds=capacity_wait,
@@ -230,21 +227,18 @@ def write(part, allocate=None, *, admit=None, cancel=None, lease=None):
 
 
 def read(handle):
-    """Verify exact bytes once, detach, then release all OS mappings promptly."""
+    """Detach the exact bytes once, then release all OS mappings promptly."""
     import struct
-    require(handle.get('format') == FORMAT and 0 < handle['size'] <= LIMIT and
-            len(handle['chunks']) == len(handle['chunk_hashes']) and
-            sum(x['size'] for x in handle['chunks']) == handle['size'] and
-            seal(handle['chunks'], handle['chunk_hashes']) == handle['sha256'], 'Invalid shared descriptor')
+    require(handle.get('format') == FORMAT and 0 < handle['size'] <= LIMIT and handle['chunks'] and
+            sum(x['size'] for x in handle['chunks']) == handle['size'], 'Invalid shared descriptor')
     buffers = []
-    for chunk, fingerprint in zip(handle['chunks'], handle['chunk_hashes'], strict=True):
+    for chunk in handle['chunks']:
         require(0 < chunk['size'] <= CHUNK, 'Invalid shared chunk size')
         shm = shared_memory.SharedMemory(name=chunk['name'])
         try:
             require(shm.size >= chunk['size'], 'Shared chunk truncated')
             raw = bytes(shm.buf[:chunk['size']])
         finally:shm.close()
-        require(hashlib.sha256(raw).hexdigest() == fingerprint, 'Shared chunk changed')
         buffers.append(memoryview(raw))
     index = offset = consumed = 0
     def take(size):
@@ -276,17 +270,11 @@ def decode(part):
     value = dict(part.metadata); receipt = value['native_receipt']
     decoder = Decoder(); shared = SharedRows() if switch(SHARED_ROWS) else None
     records = []; evidence = []; start = 0
-    hashes = [hashlib.sha256(b'['),hashlib.sha256(b'[')]
     for meta, raw in part.records:
         require(meta['token']==receipt['token'] and meta['rows']==receipt['rows'] and meta['start']==start
                 and start < meta['end'] <= min(start+64,receipt['rows']) and
                 len(meta['lengths'])==meta['end']-start, 'Shared record page binding differs')
         for prefix, history, suffix, base, proof in decoder.split_records(meta,raw):
-            if start:
-                for hashed in hashes:hashed.update(b',')
-            # The seal covers the row's exact bytes; hash them in place, without joining.
-            for piece in ((prefix,) if history is None else (prefix,history,suffix)):hashes[0].update(piece)
-            hashes[1].update(proof)
             # Unchanged history events, board fields, players and choices are parsed once and shared.
             records.append(json.loads(bytes(prefix)) if history is None else
                            json.loads(b''.join((prefix,history,suffix))) if shared is None else
@@ -294,10 +282,8 @@ def decode(part):
             evidence.append(json.loads(bytes(proof)))
             start += 1
         require(start==meta['end'],'Shared page row count differs')
-    for hashed in hashes:hashed.update(b']')
-    require(start==receipt['rows']==len(part.features) and
-            [h.hexdigest() for h in hashes]==[receipt['records_sha256'],receipt['evidence_sha256']],
-            'Native completion data seal differs')
+    # g6120: the lane's record seals are not recomputed here; the parent-owned bytes are trusted.
+    require(start==receipt['rows']==len(part.features),'Native completion row count differs')
     arrays = []
     for row, raw in zip(records,part.features,strict=True):
         e = decode_arrays(raw,row['choices'])

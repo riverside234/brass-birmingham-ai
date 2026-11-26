@@ -39,6 +39,24 @@ impl NativeState {
     }
     /// Prepare an owned successor so callers can finish fallible work before commit.
     pub fn after_chance(&self, revision: u32, card: &str) -> Result<Self, CoreError> {
+        let (index, id) = self.chance_pick(revision, card)?;
+        let mut next = self.clone();
+        next.commit_chance(index, id)?;
+        Ok(next)
+    }
+    /// The search step's hot path: `after_chance` applied to this state itself, with
+    /// no copy of it. On an error the state is partly updated, so the caller drops
+    /// it (a search world never outlives a failed step).
+    pub(crate) fn resolve_chance_in_place(
+        &mut self,
+        revision: u32,
+        card: &str,
+    ) -> Result<(), CoreError> {
+        let (index, id) = self.chance_pick(revision, card)?;
+        self.commit_chance(index, id)
+    }
+    /// The checks before a chance outcome: its pool position and card.
+    fn chance_pick(&self, revision: u32, card: &str) -> Result<(usize, CardId), CoreError> {
         require(
             revision == self.context.revision && revision < u32::MAX,
             "stale revision or revision limit",
@@ -53,33 +71,36 @@ impl NativeState {
             .iter()
             .position(|x| *x == id)
             .ok_or_else(|| CoreError::Invalid("illegal chance".into()))?;
-        let mut next = self.clone();
-        let c = next.chance.as_mut().unwrap();
+        Ok((index, id))
+    }
+    /// The chance outcome itself, on the state it updates.
+    fn commit_chance(&mut self, index: usize, id: CardId) -> Result<(), CoreError> {
+        let c = self.chance.as_mut().unwrap();
         c.pool.remove(index);
         c.picked.push(id);
         if c.picked.len() == usize::from(c.needed) {
-            let c = next.chance.take().unwrap();
+            let c = self.chance.take().unwrap();
             match c.kind {
                 ChanceKind::Draw => {
-                    next.cards.deck = c.picked.into_iter().chain(c.pool).collect();
-                    next.end_turn()?;
-                    next.advance()?;
+                    self.cards.deck = c.picked.into_iter().chain(c.pool).collect();
+                    self.end_turn()?;
+                    self.advance()?;
                 }
                 ChanceKind::RailShuffle => {
-                    next.end_round()?;
-                    next.cards.discard_starts =
-                        std::array::from_fn(|s| next.cards.discards[s].len());
-                    for (i, s) in next.order.iter().enumerate() {
-                        next.cards.hands[seat(*s)] = c.picked[i * 8..(i + 1) * 8].to_vec();
+                    self.end_round()?;
+                    self.cards.discard_starts =
+                        std::array::from_fn(|s| self.cards.discards[s].len());
+                    for (i, s) in self.order.iter().enumerate() {
+                        self.cards.hands[seat(*s)] = c.picked[i * 8..(i + 1) * 8].to_vec();
                     }
-                    next.cards.deck = c.picked[32..].to_vec();
-                    next.advance()?;
+                    self.cards.deck = c.picked[32..].to_vec();
+                    self.advance()?;
                 }
             }
         }
-        next.context.revision += 1;
-        next.refresh_context();
-        next.rebuild_indexes();
-        Ok(next)
+        self.context.revision += 1;
+        self.refresh_context();
+        self.rebuild_indexes();
+        Ok(())
     }
 }

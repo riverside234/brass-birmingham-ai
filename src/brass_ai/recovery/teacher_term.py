@@ -115,7 +115,11 @@ class StagedRows:
     LIMIT_BYTES = 2 * 1024 ** 3
 
     def __init__(self, rows, device, audit, values=None):
-        for r in rows: audit.check(r.encoded)
+        from .replay_binding import checked_encoded
+        # g6120: a buffer row was admitted when it entered the buffer (teacher_buffer.admitted: sealed and
+        # immutable), so only other inputs take the audit, without a per-iteration content hash.
+        for r in rows:
+            if not checked_encoded(r.encoded): audit.check(r.encoded)
         self.widths = [len(r.encoded.choice_ids) for r in rows]
         offsets = np.cumsum([1] + self.widths[:-1])
         actions = np.concatenate([np.zeros((1, rows[0].encoded.actions.shape[-1]), np.float32)] + [r.encoded.actions for r in rows])

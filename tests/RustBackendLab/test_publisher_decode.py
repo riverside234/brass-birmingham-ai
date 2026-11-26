@@ -183,9 +183,10 @@ class PreissuedLeases(unittest.TestCase):
             for change in ({'size': handle['size']+1}, {'chunks': handle['chunks'][:-1]},
                            {'chunks': [dict(c, size=c['size']-1) for c in handle['chunks']]}):
                 with self.assertRaisesRegex(ValueError, 'identity|exceeds'):self.registry.verify(dict(handle, **change))
-            with self.assertRaisesRegex(ValueError, 'descriptor'):S.read(dict(handle, sha256='0'*64))
-            swapped = dict(handle, chunk_hashes=list(reversed(handle['chunk_hashes'])))
-            with self.assertRaisesRegex(ValueError, 'descriptor|changed'):S.read(swapped)
+            # g6120 (format 3): the parent-owned segments carry no content hash; a descriptor's sizes still bind.
+            self.assertNotIn('sha256', handle); self.assertNotIn('chunk_hashes', handle)
+            with self.assertRaisesRegex(ValueError, 'descriptor'):S.read(dict(handle, size=handle['size']+1))
+            with self.assertRaisesRegex(ValueError, 'descriptor'):S.read(dict(handle, format='brass-ordinary-shared-part/2'))
         self.registry.release(handle)
 
     def test_unused_offer_for_a_file_part_is_released(self):

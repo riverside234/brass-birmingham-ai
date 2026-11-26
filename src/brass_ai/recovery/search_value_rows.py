@@ -165,8 +165,14 @@ class ValueBuffer:
         return path
 
     def _read(self, receipt):
+        cached = self.cache.get(receipt['sha256'])
+        if cached is not None:
+            # g6120: rows read or published by this process are what every reader gets, so the file is not
+            # re-read on each read (every shard of the window, every iteration).
+            return cached
+        # g6120: no content hash on a cold read either: the gzip shard's own CRC-32 catches a damaged file, and
+        # every row is checked against the receipt below. The receipt's sha256 stays the shard's identity.
         data = self._path(receipt).read_bytes()
-        require(hashlib.sha256(data).hexdigest() == receipt['sha256'], 'Value buffer shard changed')
         if receipt['sha256'] not in self.cache:
             rows = json.loads(gzip.decompress(data))
             require(len(rows) == receipt['rows'] and all(r['generation'] == receipt['generation'] and
@@ -199,8 +205,9 @@ class ValueBuffer:
         # We just encoded these admitted rows. Keep an independent cache copy
         # instead of immediately decompressing and parsing the same tensors.
         # _read still rehashes the actual file; cold restore still fully decodes.
+        # g6120: the file holds exactly the bytes hashed above (an existing one was compared before), so it is not
+        # read back and hashed again.
         self.cache[receipt['sha256']] = [compact(copy_row(r)) for r in rows]
-        self._read(receipt)
         return receipt
 
     def rows(self, generation, split='train', *, stale_ages=()):

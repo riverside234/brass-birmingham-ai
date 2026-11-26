@@ -87,7 +87,8 @@ def prepare(root,run,state,raw,config,*,reviewed=False):
                 'Old PPG metadata differs from committed checkpoint')
             for ext,f in r['files'].items():
                 path=f'.ppg-eight-cache/generation-{r["generation"]:06d}.{ext}'
-                require(path in available and all(available[path][k]==f[k] for k in ('bytes','sha256')),'Committed old PPG cache changed')
+                require(path in available and all(available[path][k]==f[k] for k in ('bytes','sha256') if k in f),
+                        'Committed old PPG cache changed')  # g6120: newer receipts record sizes only
         receipt=dict(contract=CONTRACT,origin=copy.deepcopy(origin),config_sha256=digest(c),
             checkpoint=copy.deepcopy(entry),old_schedule=copy.deepcopy(old['schedule']),
             old_epoch_control=copy.deepcopy(old['epoch_control']),old_cache_receipts_sha256=digest(old['rolling_buffer']),

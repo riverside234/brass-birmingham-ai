@@ -27,6 +27,18 @@ def slim(row, *, detach=False):
     return LabelRow(dict(teacher=row.label), row.encoded)
 
 
+def admitted(row, *, detach=False):
+    """``slim(row)`` with its encoded inputs admitted once for this process (g6120).
+
+    replay_binding.seal_encoded runs the checks collate's audit runs (layout, finite arrays, one-hot
+    selectors) and keeps immutable bytes-backed copies of the arrays (detached from the caller's).
+    A buffer row stays for eight iterations; each iteration's StagedRows then reuses this admission
+    instead of hashing and re-checking every staged row (most of 3.7 s of teacher staging at g6118).
+    """
+    from .replay_binding import seal_encoded
+    return LabelRow(dict(teacher=copy.deepcopy(row.label) if detach else row.label), seal_encoded(row.encoded))
+
+
 class TeacherBuffer:
     def __init__(self, root, run, identity, *, receipts=(), retired=(), c_scale=.1, cotton_c_scale=None, iterations=4,
                  heldout_lag=None):
@@ -58,9 +70,11 @@ class TeacherBuffer:
         return safe(self.run, self.run / receipt['path']), safe(self.run, self.directory / (name + '.receipt.json'))
 
     def verify(self, receipt):
+        """The receipt, its sidecar and the shard's presence. g6120: no content hash. A cached row was checked when
+        it entered the cache, and a cold read decompresses the gzip shard (whose own CRC-32 catches a damaged
+        file) and re-validates every row against the receipt. The receipt's sha256 stays the shard's identity."""
         self.owner(); path, sidecar = self.paths(receipt)
-        require(receipt.get('contract') == CONTRACT and path.is_file() and sidecar.is_file()
-                and sha(path) == receipt['sha256'] and read(sidecar) == receipt,
+        require(receipt.get('contract') == CONTRACT and path.is_file() and sidecar.is_file() and read(sidecar) == receipt,
                 'Committed teacher shard missing/changed')
 
     def publish(self, generation, split, rows, *, model_id, reward_id):
@@ -93,7 +107,7 @@ class TeacherBuffer:
             partial.replace(path)
         if not sidecar.exists(): write_json(sidecar, receipt)
         # Detached copies of the label and arrays only; the caller's rows (with views) are released.
-        self.verify(receipt); self._rows[receipt['sha256']] = tuple(slim(r, detach=True) for r in rows)
+        self.verify(receipt); self._rows[receipt['sha256']] = tuple(admitted(r, detach=True) for r in rows)
         self.pending = [r for r in self.pending if r['path'] != receipt['path']] + [receipt]
         return receipt
 
@@ -143,7 +157,7 @@ class TeacherBuffer:
                     require(label['generation'] == receipt['generation'] and label['model_id'] == receipt['model_id']
                             and label['reward_id'] == receipt['reward_id'], 'Teacher shard row identity differs')
                     require(validate_improved_policy(label, row['choices'], view=row['view']) is not None, 'Unadmitted sealed teacher row')
-                    values.append(slim(LabelRow(row, encoder.encode(row['view'], row['choices'], [0.] * 4, [0.] * 8))))
+                    values.append(admitted(LabelRow(row, encoder.encode(row['view'], row['choices'], [0.] * 4, [0.] * 8))))
                 require(len({r.identity for r in values}) == len(values), 'Duplicate sealed teacher row')
                 self._rows[receipt['sha256']] = tuple(values)
             age = self.age(receipt, generation) if split == 'train' else generation - receipt['generation']
@@ -167,7 +181,7 @@ class TeacherBuffer:
             path, sidecar = self.paths(receipt)
             if not path.exists() and not sidecar.exists(): continue
             self.owner()
-            require(not path.exists() or sha(path) == receipt['sha256'], 'Refusing changed retired teacher shard')
+            # g6120: no content hash of a retiring shard either; nothing here deletes it.
             require(not sidecar.exists() or read(sidecar) == receipt, 'Refusing changed retired teacher receipt')
             # A prior full checkpoint may still reference this age. Retain its
             # immutable files until dependency-aware retention qualifies deletion.

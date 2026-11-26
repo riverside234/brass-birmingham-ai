@@ -459,10 +459,13 @@ impl Game for Brass {
         w.decision = Some(info.key.clone());
         Ok(Position::Decision(info))
     }
+    /// The world's own state moves to the successor in place: no copy of the state
+    /// and no old state to drop. A failed step leaves the world partly updated;
+    /// every caller (traversal, projection, plan replay) then drops it.
     fn step(&self, w: &mut World, action: &String) -> Result<()> {
         let revision = w.state.context().revision;
-        let next = if let Some(card) = action.strip_prefix("chance:card:") {
-            w.state.after_chance(revision, card)?
+        if let Some(card) = action.strip_prefix("chance:card:") {
+            w.state.resolve_chance_in_place(revision, card)?;
         } else {
             let decision = w
                 .decision
@@ -479,12 +482,10 @@ impl Game for Brass {
                 .iter()
                 .find(|c| &c.id == action)
                 .ok_or_else(|| invalid("selected action outside legal set"))?;
-            let next = w.state.after_legal_choice(revision, choice)?;
+            w.state.apply_legal_in_place(revision, choice)?;
             w.ledger.chosen(view, choice);
-            next
-        };
-        w.memory.refresh_recall(&next)?;
-        w.state = next;
+        }
+        w.memory.refresh_recall(&w.state)?;
         Ok(())
     }
     fn spent(&self, w: &World) -> [f64; 4] {

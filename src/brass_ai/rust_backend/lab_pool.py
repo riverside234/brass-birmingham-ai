@@ -49,7 +49,8 @@ def part_write(directory, part):
     if checked:
         from . import lab_features
         path=path.with_name(path.name.replace('.json.gz','.npz'))
-        features,meta=lab_features.pack([part['game']],hashlib.sha256(packed).hexdigest(),compressed=False)
+        # g6120: a transient part names no replay hash and hashes no archive; the parent owns the file.
+        features,meta=lab_features.pack([part['game']],None,compressed=False,hashed=False)
         # One transient file/receipt, using the existing NPZ arrays. The actor
         # has validated its bindings; the publisher independently validates
         # behavior. No dense feature lists or board histories cross the learner.
@@ -61,9 +62,9 @@ def part_write(directory, part):
         require(len(packed)<=admission.LIMIT,'Native part exceeds bound')
         timings['feature_handoff_seconds']=time.perf_counter()-began;began=time.perf_counter()
     with path.open('xb') as raw:raw.write(packed)
-    fingerprint=hashlib.sha256(packed).hexdigest()
     timings['write_hash_seconds']=time.perf_counter()-began
-    handle=dict(path=str(path),sha256=fingerprint,branch_expected=part['branch_expected'],transfer_timings=timings)
+    # g6120: no content hash; this parent-owned temporary file is read back once by its own publisher.
+    handle=dict(path=str(path),size=len(packed),branch_expected=part['branch_expected'],transfer_timings=timings)
     if checked:
         handle['feature_archive']='derived-features/4.0.0'
         # This proof travels over the actor's private IPC, never in the part JSON.
@@ -80,8 +81,8 @@ def part_read(directory, handle):
         size=os.fstat(stream.fileno()).st_size
         require(0<size<=admission.LIMIT,'Native part exceeds bound')
         packed=stream.read(size+1)
-    require(len(packed)==size,'Native part size changed')
-    require(len(packed)<=admission.LIMIT and hashlib.sha256(packed).hexdigest()==handle['sha256'],'Native part changed')
+    require(len(packed)==size and size==handle['size'],'Native part size changed')
+    require(len(packed)<=admission.LIMIT,'Native part exceeds bound')
     combined=handle.get('feature_archive');meta=None;record=packed
     if combined:
         require(combined=='derived-features/4.0.0','Unknown part feature archive')
@@ -89,7 +90,6 @@ def part_read(directory, handle):
             require(len(archive.infolist())==6 and sum(x.file_size for x in archive.infolist())<=admission.LIMIT,
                     'Part archive exceeds bound')
             record=archive.read('record.json.gz');meta=json.loads(archive.read('features.json'))
-        require(meta['replay_sha256']==hashlib.sha256(record).hexdigest(),'Part feature binding changed')
     with gzip.GzipFile(fileobj=io.BytesIO(record),mode='rb') as stream:data=stream.read(admission.LIMIT+1)
     require(len(data)<=admission.LIMIT,'Native part exceeds bound')
     value=json.loads(data)
