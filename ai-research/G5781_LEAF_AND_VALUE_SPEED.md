@@ -238,6 +238,24 @@ datasets keep the per-batch path.
   and auxiliary revisions, the new speed test) pass. The two `test_ppg_g210.Restored` g660 tests fail at HEAD too: their
   export is missing (`docs/KNOWN_TEST_FAILURES`).
 
+### Lab fix: architecture source equivalence (2026-11-25)
+
+The first lab continuation stopped in `ensure_cpu`: the focused regression
+`test_training_revision_g1491.Recipe.test_new_labels_retire_the_old_labels_and_beta` failed (evidence
+`results/rust-lab-qualification/20261126T025946701442Z-cpu-inference-…`). `seat_descriptors.py` is one of the six
+files `contracts.architecture_fingerprint` hashes, so the dropout edit moved the source digest from `f9f5cbb8…` to
+`a0c2124a…`, which no equivalence receipt mapped. That changed `compatibility()['architecture_sha256']`, and with it
+every checkpoint signature check and the teacher buffer identity. On the g5781 export, the committed signature
+no longer matched, and the teacher buffer (`0bdd3bb6…`) would have been retired together with its beta.
+
+`configs/learning/reward-source-equivalence.json` now names `a0c2124a…` as the exact equivalent source. This is the
+same receipt every earlier exact model-source edit updated, and the descriptor tensors are identical (the speed test
+above). The architecture identity stays `05368f93…`. On the g5781 export, the signature compatibility and the
+teacher buffer identity match again, and the teacher weight is kept. The focused regression list the lab runs passes
+locally (the `NativeWorkers` cases need the built binaries; they passed on the lab). The one other failure in the set
+run, `test_table_revision_g4551…vp_report_and_chart…`, is a listed known failure and fails the same way at the
+previous commit.
+
 ## Cost
 
 None: no extra CPU, games or held-out data. Memory: a few hundred booleans per dropout setting, one host copy of the
@@ -246,8 +264,9 @@ catalog's names leaked once per process (kilobytes). The next continuation rebui
 
 ## Execution identity
 
-`6a725b6237c2fe3bc9930b912205587ea0f75856f70ba5d513f78edfd4240496`, with predecessor `d73df28c…`. The entry is
-`g5781_leaf_and_value_speed` in `configs/learning/b07-replay-location-review.json`.
+`cb7721f75684bec7119e95cb9229c75f626e460285b13b9b552efcf87910d0d3`, with predecessor `d73df28c…` (the committed
+g5781 checkpoint's). It replaces `6a725b62…`, which never trained. The entry is `g5781_leaf_and_value_speed` in
+`configs/learning/b07-replay-location-review.json`.
 
 ## Command
 

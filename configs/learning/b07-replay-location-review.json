@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "6a725b6237c2fe3bc9930b912205587ea0f75856f70ba5d513f78edfd4240496",
+  "execution_implementation": "cb7721f75684bec7119e95cb9229c75f626e460285b13b9b552efcf87910d0d3",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -418,7 +418,7 @@
     },
     "configs/learning/reward-source-equivalence.json": {
       "before": "0f57ec742a69b11d5a0ec998fb19a54f1e1ccb80287fa4011b4fc3e6c9289a9f",
-      "after": "2bce6c03b2cabbf9c784120e23ccb3fd2b7dab2f16b5665c5cef9012c033801f"
+      "after": "89a2af44e9fa2832740a12dd8ef716d104492eb8b3611d0394c5a7a5eb8c6d6c"
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
@@ -1627,7 +1627,7 @@
     "qualified_implementation_unchanged": true
   },
   "g5781_leaf_and_value_speed": {
-    "scope": "Code-only, no training change. (1) Engine, in the CPU teacher core files (state/choices.rs, state/mod.rs, copied by lab_cpu_overlay.TEACHER_CORE_FILES, so the overlay fingerprint rebuilds the teacher): an Action decision's card-independent build and sale rules are evaluated once per decision instead of once per card (card permissions and merchant regions from static tables), and each choice ID is written once into an exactly sized string; legal sets, IDs and every search are identical. (2) Value phase: descriptor dropout is decided once per game per epoch (seat_descriptors.dropout_mask, the same drop_game rule) instead of a SHA-256 and a replay-row read per row; the PPG critic replay maps rows to games with its game column (game_codes, branch_games); branch-family counts read that column; the era heads take the batch's host rows and a host copy of the critic weights instead of device read-backs, and upload targets with pinned non-blocking copies. Every tensor operation is unchanged (tests/Recovery/test_value_phase_speed_g5781.py: the PPG phase is bit-identical with the replaced paths restored). (3) Follow-up: the era heads gather every row's targets from per-phase device tables (local_scoring_v3.EraTargets; the target cache counters replayed exactly), and catalog names are borrowed, not copied, in every view and choice (dto.rs Name = Cow<'static, str>; TEACHER_CORE_FILES now copies the 16 changed core files; type-neutral edits in lab-native-cpu cpu_autoplay.rs, cpu_cotton.rs and core-overlay/cotton.rs). Real teacher tables are identical.",
+    "scope": "Code-only, no training change. (1) Engine, in the CPU teacher core files (state/choices.rs, state/mod.rs, copied by lab_cpu_overlay.TEACHER_CORE_FILES, so the overlay fingerprint rebuilds the teacher): an Action decision's card-independent build and sale rules are evaluated once per decision instead of once per card (card permissions and merchant regions from static tables), and each choice ID is written once into an exactly sized string; legal sets, IDs and every search are identical. (2) Value phase: descriptor dropout is decided once per game per epoch (seat_descriptors.dropout_mask, the same drop_game rule) instead of a SHA-256 and a replay-row read per row; the PPG critic replay maps rows to games with its game column (game_codes, branch_games); branch-family counts read that column; the era heads take the batch's host rows and a host copy of the critic weights instead of device read-backs, and upload targets with pinned non-blocking copies. Every tensor operation is unchanged (tests/Recovery/test_value_phase_speed_g5781.py: the PPG phase is bit-identical with the replaced paths restored). (3) Follow-up: the era heads gather every row's targets from per-phase device tables (local_scoring_v3.EraTargets; the target cache counters replayed exactly), and catalog names are borrowed, not copied, in every view and choice (dto.rs Name = Cow<'static, str>; TEACHER_CORE_FILES now copies the 16 changed core files; type-neutral edits in lab-native-cpu cpu_autoplay.rs, cpu_cotton.rs and core-overlay/cotton.rs). Real teacher tables are identical. (4) The seat_descriptors.py edit is architecture source, so reward-source-equivalence.json now names its exact digest and the architecture compatibility identity stays 05368f93 (the committed teacher buffer identity and beta are kept).",
     "qualified_implementation_unchanged": true
   }
 }
