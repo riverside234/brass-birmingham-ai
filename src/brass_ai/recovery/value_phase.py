@@ -135,6 +135,55 @@ def value_parts(dataset,ids,config,model):
     return dataset.microbatches(ids,config['microbatch_size'],config['max_candidate_cells'],config['bucket'])
 
 
+# g6547: state-only value rows run as one device batch per this many rows (a PPG step's 4,096 rows: one forward and
+# one backward instead of eight). The per-microbatch host cost (kernel launches, Python per op) set the step, not the
+# rows. The parts are still prepared as before (the CPU workers' 512-row parts, in parallel) and only joined on the
+# device: the same rows in the same order, the same loss sums and normalization; float rounding differs. 0 = off.
+JOINED_ROWS=4096
+
+
+def joined_config(config,model):
+    """`config` with state-only value parts of JOINED_ROWS rows, for callers that build their own parts without CPU
+    workers (the ownership stop's held-out rows); otherwise `config` itself."""
+    from .updates import state_value_model
+    if not JOINED_ROWS or not state_value_model(model) or config['microbatch_size']>=JOINED_ROWS:return config
+    return dict(config,microbatch_size=JOINED_ROWS)
+
+
+def joined_value_batches(dataset,parts,model,*,executor=None,rows=None):
+    """dataset.value_batches, with consecutive parts joined into batches of at least `rows` rows (JOINED_ROWS when
+    None). Only state-only models (every input has one candidate); others pass through. A critic replay's prepared
+    columns (ppo_preparation: targets, utility, descriptors, ...) are joined too and attached for the joined batch."""
+    from .updates import state_value_model
+    rows=JOINED_ROWS if rows is None else rows
+    source=dataset.value_batches(parts,model,executor=executor)
+    if not rows or not state_value_model(model):
+        yield from source;return
+    data=getattr(dataset,'data',None);pending=[];count=0
+    def joined():
+        prepared=[p[3] for p in pending]
+        require(all(c is None for c in prepared) or all(c is not None for c in prepared),'Mixed prepared critic columns')
+        if len(pending)==1:part,ix,inputs,columns=pending[0]
+        else:
+            part=[i for p in pending for i in p[0]];ix=torch.cat([p[1] for p in pending])
+            inputs=tuple(torch.cat([p[2][j] for p in pending]) for j in range(len(pending[0][2])))
+            columns=None if prepared[0] is None else {k:torch.cat([c[k] for c in prepared]) for k in prepared[0]}
+        if columns is None:
+            yield part,ix,inputs;return
+        data.prepared=(ix,part,columns)
+        try:yield part,ix,inputs
+        finally:data.prepared=None
+    for part,ix,inputs in source:
+        prepared=getattr(data,'prepared',None)
+        columns=prepared[2] if prepared is not None and prepared[0] is ix else None
+        if pending and any(t.shape[1:]!=u.shape[1:] for t,u in zip(inputs,pending[0][2])):
+            yield from joined();pending=[];count=0  # a different input width: never joined
+        pending.append((list(part),ix,inputs,columns));count+=len(part)
+        if count>=rows:
+            yield from joined();pending=[];count=0
+    if pending:yield from joined()
+
+
 def metric_groups(dataset,order):
     from .teacher_schedule import phase_for
     metadata=getattr(dataset,'metric_metadata',None)
@@ -163,7 +212,7 @@ def metrics(model,dataset,ids,config,*,unknown=False,evidence=False,preparation=
     if not ids:return dict(rows=0,games=0,loss=None,explained_variance=None,utility_mse=None)
     arrays=[];pending=[];order=[];model.eval()
     with torch.no_grad():
-        for part,ix,inputs in dataset.value_batches(value_parts(dataset,ids,config,model),model,executor=preparation):
+        for part,ix,inputs in joined_value_batches(dataset,value_parts(dataset,ids,config,model),model,executor=preparation):
             out=value_output(model,inputs,dataset,ix,unknown=unknown,heads_only=True)
             value=value_losses(out,tuple(t[ix] for t in dataset.targets))[0]
             error=out[4].float()-dataset.utility[ix]
@@ -539,7 +588,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                     else:companion.begin('ppg',**linked)
                 if companion is not None and hasattr(companion,'batch'):companion.batch(value_dataset,batch)
                 mark=time.perf_counter()
-                for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
+                for part,ix,inputs in joined_value_batches(value_dataset,value_parts(value_dataset,batch,update,model),model,executor=preparation):
                     drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
                     with autocast(update,value_dataset.device):
                         if companion is not None:out,local_loss=companion.forward(model,inputs,value_dataset,ix,dropout=drop,**host_ids(companion,part))
@@ -684,7 +733,7 @@ def fit(model,optimizer,dataset,train_ids,heldout_ids,actor_ids,probe_ids,config
                 local.begin('ppg',rate_factor=rate_factor(step,total_steps,config),**own)
             else:local.begin('ppg',**own)
             model.train()
-            for part,ix,inputs in value_dataset.value_batches(value_parts(value_dataset,batch,update,model),model,executor=preparation):
+            for part,ix,inputs in joined_value_batches(value_dataset,value_parts(value_dataset,batch,update,model),model,executor=preparation):
                 drop=None if dropout is None else (dropout[0],epoch,dropout[1],'value')
                 with autocast(update,value_dataset.device):local_loss=local.head_loss(model,inputs,value_dataset,ix,dropout=drop,**host_ids(local,part))
                 if local_loss is not None:

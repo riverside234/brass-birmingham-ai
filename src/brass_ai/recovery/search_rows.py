@@ -356,7 +356,110 @@ def search_corrections(tables, lam, *, rail_end=False):
     its era, else it is at its horizon (C = 0). Frames meet in the stable seats.
     g3528 `rail_end`: [rows, 118, 18]; `ends[j]` is Canal root j's Rail-end prediction, and channels 9..17 of a
     Canal row are its Rail-end correction: the Canal roots' chain on those predictions, whose last root
-    bootstraps at the first Rail root (its Rail prediction and Rail-era return). An extra row takes its root's."""
+    bootstraps at the first Rail root (its Rail prediction and Rail-era return). An extra row takes its root's.
+
+    g6547: each table's roots and rows as arrays (a table's few hundred KB stay in cache): seat frames are channel
+    gathers per mapping, a chain step is one array operation per root, and the rows are written per mapping. Each
+    element sees the operations and dtypes of the per-row form (`_search_corrections_rows`): bitwise the same."""
+    require(0 < lam <= 1, 'Invalid auxiliary lambda')
+    total = sum(len(entry[0]) for entry in tables)
+    out = np.empty((total, ENTITIES, PAIRED if rail_end else WIDTH), dtype=np.float32)  # every table writes its rows
+    offset = 0
+    for entry in tables:
+        rows, maps, frozen = entry[:3]; ends = entry[3] if len(entry) > 3 else None
+        block = np.zeros((len(rows),) + out.shape[1:], dtype=np.float32)  # the table's rows, written to `out` at once
+        at = {r['index']: j for j, r in enumerate(rows) if kind(r) == 'turn'}
+        stable = {era: map_arrays(target, [0, 1, 2, 3])[0] for era, target in maps.items()}
+        era_of = lambda t: rows[at[t]]['turn_key'][0]
+        # Per era: its roots in turn order, C (chain) and W = (1-lam)(stable(f) - z) + lam C (the value a row
+        # bootstrapping at that root takes). The era's last root has C = 0.
+        place, chains, values = {}, [], []
+        for era in maps:
+            turns = sorted(t for t in at if era_of(t) == era)
+            if not turns: continue
+            f = _stable_frame(np.stack([frozen[at[t]] for t in turns]), [rows[at[t]]['mapping'] for t in turns])
+            d = (1 - lam) * (f - stable[era])
+            c = np.zeros((len(turns), ENTITIES, WIDTH)); w = np.empty_like(c)
+            w[-1] = d[-1] + lam * c[-1]
+            for k in range(len(turns) - 2, -1, -1):
+                c[k] = w[k + 1]; w[k] = d[k] + lam * c[k]
+            base = sum(map(len, chains))
+            place.update((t, base + k) for k, t in enumerate(turns)); chains.append(c); values.append(w)
+        end = None
+        if rail_end and ends is not None and 'RailEra' in maps:
+            canal = sorted(t for t in at if era_of(t) == 'CanalEra')
+            if canal:
+                e = np.zeros((len(canal), ENTITIES, WIDTH))
+                last = canal[-1]
+                if last + 1 in at and era_of(last + 1) == 'RailEra': e[-1] = np.concatenate(values)[place[last + 1]]
+                if len(canal) > 1:
+                    following = canal[1:]
+                    g = _stable_frame(np.stack([ends[at[t]] for t in following]), [rows[at[t]]['mapping'] for t in following])
+                    de = (1 - lam) * (g - stable['RailEra'])
+                    for k in range(len(canal) - 2, -1, -1): e[k] = de[k] + lam * e[k + 1]
+                end = ({t: k for k, t in enumerate(canal)}, e)
+        if chains:
+            chain = np.concatenate(chains).astype(np.float32); value = np.concatenate(values).astype(np.float32)
+            source = np.concatenate((chain, value)); n = len(chain)
+            where, pick, mapping = [], [], []
+            for j, r in enumerate(rows):
+                era = r['turn_key'][0]
+                if era not in maps: continue
+                if kind(r) == 'turn': k = place[r['index']]
+                else:
+                    t = r['index'] + 1
+                    if not (t in at and era_of(t) == era): continue
+                    k = n + place[t]
+                where.append(j); pick.append(k); mapping.append(r['mapping'])
+            if where:
+                _put_relative(block, slice(0, WIDTH), np.asarray(where, dtype=np.int64), source,
+                              np.asarray(pick, dtype=np.int64), mapping)
+        if end is not None:
+            index, e = end; where, pick, mapping = [], [], []
+            for j, r in enumerate(rows):
+                if r['index'] in index and r['turn_key'][0] == 'CanalEra' and 'CanalEra' in maps:
+                    where.append(j); pick.append(index[r['index']]); mapping.append(r['mapping'])
+            if where:
+                _put_relative(block, slice(WIDTH, PAIRED), np.asarray(where, dtype=np.int64), e.astype(np.float32),
+                              np.asarray(pick, dtype=np.int64), mapping)
+        out[offset:offset + len(rows)] = block; offset += len(rows)
+    require(np.isfinite(out).all(), 'Nonfinite search-row corrections')
+    return out
+
+
+def _groups(mappings, inverse):
+    """(rows, [9] channel gather) per distinct mapping: gathering with it is to_stable (inverse=False) or to_relative
+    (True) of those rows. A search row's mapping is a rotation of the seats, so there are at most four groups."""
+    keys = {}
+    for k, mapping in enumerate(mappings): keys.setdefault(tuple(int(s) for s in mapping), []).append(k)
+    for key, rows in keys.items():
+        gather = _GATHERS.get((key, inverse))
+        if gather is None:
+            require(sorted(key) == [0, 1, 2, 3], 'Search-row seat mapping is not a permutation')
+            p = np.asarray(key, dtype=np.int64)
+            if inverse: p = np.argsort(p)  # to_relative writes channel 1+m[s] from 1+s: a gather by the inverse
+            gather = _GATHERS[key, inverse] = np.concatenate(([0], 1 + p, 5 + p))
+        yield np.asarray(rows, dtype=np.int64), gather
+
+
+_GATHERS = {}  # (mapping, inverse) -> channel gather
+
+
+def _stable_frame(a, mappings):
+    """to_stable of every row of `a` [n, 118, 9] with its own mapping (the values are only moved)."""
+    result = np.empty_like(a)
+    for rows, channels in _groups(mappings, False): result[rows] = a[rows][:, :, channels]
+    return result
+
+
+def _put_relative(out, channels, where, source, roots, mappings):
+    """out[where[k], :, channels] = to_relative(source[roots[k]], mappings[k]) for every k."""
+    for rows, gather in _groups(mappings, True):
+        out[where[rows], :, channels] = source[roots[rows]][:, :, gather]
+
+
+def _search_corrections_rows(tables, lam, *, rail_end=False):
+    """The per-row form of `search_corrections` (before g6547), kept as its exact reference."""
     require(0 < lam <= 1, 'Invalid auxiliary lambda')
     total = sum(len(entry[0]) for entry in tables)
     out = np.zeros((total, ENTITIES, PAIRED if rail_end else WIDTH), dtype=np.float32)

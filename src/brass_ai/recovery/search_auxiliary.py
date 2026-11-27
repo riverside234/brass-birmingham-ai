@@ -43,7 +43,13 @@ FIELD = 'local_scoring'
 SOURCE = 'search-teacher-table'
 ERAS = ('CanalEra', 'RailEra')
 CHUNK = 512
-SEED = 3423  # the search permutation's own generator: (SEED, generation, epoch)
+SEED = 3423
+
+
+def chunk_rows():
+    """g6547: rows per search-row forward, value_phase.JOINED_ROWS (a step's whole share in one); CHUNK when off."""
+    from .value_phase import JOINED_ROWS
+    return JOINED_ROWS or CHUNK  # the search permutation's own generator: (SEED, generation, epoch)
 POOL_STREAM = 4770  # g4770: the pool sample's own generator: (SEED, POOL_STREAM, generation)
 
 
@@ -178,10 +184,11 @@ class SearchRows:
         frozen, ends = {}, {}
         was, heads_were = model.training, local.heads.training
         model.eval(); local.heads.eval()
+        size = chunk_rows()
         try:
             with torch.no_grad():
-                for start in range(0, len(positions), CHUNK):
-                    part = positions[start:start + CHUNK]; index = torch.as_tensor(part, device=self.device)
+                for start in range(0, len(positions), size):
+                    part = positions[start:start + size]; index = torch.as_tensor(part, device=self.device)
                     encoded = model.encode_state(self.states[index])
                     output = local.heads(encoded, model.descriptor_embeddings(encoded, critic_inputs(self, part)), 0.)
                     canal = torch.tensor([self.meta[j][0]['era'] == 'CanalEra' for j in part], device=self.device)
@@ -264,10 +271,10 @@ class SearchAuxiliary:
         `frozen`: a heads-only step (the trunk gets no gradient, as for its ordinary rows)."""
         if not self.ready: return
         from .updates import autocast
-        began = time.perf_counter(); ids = self.share(epoch, position); total = None
-        for start in range(0, len(ids), CHUNK):
+        began = time.perf_counter(); ids = self.share(epoch, position); total = None; size = chunk_rows()
+        for start in range(0, len(ids), size):
             with autocast(update, self.train.device):
-                loss = local.search_loss(model, self.train, ids[start:start + CHUNK], frozen=frozen)
+                loss = local.search_loss(model, self.train, ids[start:start + size], frozen=frozen)
             if loss is None: break  # the heads are stopped
             value = loss.sum() / denominator
             value.backward()

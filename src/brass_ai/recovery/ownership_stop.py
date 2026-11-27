@@ -47,7 +47,7 @@ class OwnershipStop:
         """``search`` (g3423 search-aux): a search_auxiliary.SearchRows of the search-value validation tables
         with maps. Their roots are pooled with the ordinary validation rows into one criterion, each root
         weighted as one ordinary row (critic weight 1); ``before``/``after`` stay the ordinary rows' CE."""
-        from .value_phase import value_parts
+        from .value_phase import JOINED_ROWS, joined_config, value_parts
         require(settings is not None and settings.get('contract') == CONTRACT, 'Unknown ownership stop settings')
         self.local = era_companion(companion); self.settings = dict(settings)
         self.interval = settings['interval_steps']; self.model = model; self.dataset = dataset
@@ -60,11 +60,13 @@ class OwnershipStop:
             part = ids[start:start + 4096]
             found.update((i, m) for i, m in zip(part, local.metadata(dataset, part)) if m[0] is not None)
         chosen = [i for i in ids if i in found]
-        self.parts = [list(p) for p in value_parts(dataset, chosen, update, model)]
+        # g6547: JOINED_ROWS-row parts (state-only models): fewer, larger forwards per measure, the same rows in order.
+        self.parts = [list(p) for p in value_parts(dataset, chosen, joined_config(update, model), model)]
         games = {m[2][0] for m in found.values()}
         self.cache = [self._entry(dataset, part, [found[i] for i in part]) for part in self.parts]
         self.search = search if search is not None and search.rows else None
-        self.search_cache = ([self._entry(search, part, search.scoring_metadata(part)) for part in search.parts()]
+        self.search_cache = ([self._entry(search, part, search.scoring_metadata(part))
+                              for part in (search.parts(JOINED_ROWS) if JOINED_ROWS else search.parts())]
                              if self.search is not None else [])
         # The pooled criterion's weights: the ordinary rows' critic weights and one per search root.
         self.weight = (float(sum(dataset.critic_weights[e['index']].double().sum() for e in self.cache))

@@ -9,10 +9,11 @@ Soft output  the soft head's output is masked the same way: its log-softmax runs
 Weight 0     a row with at most one visited legal action (a forced move, a one-candidate search) has soft loss
              weight 0 and its loss is not computed. The step's soft loss stays the sum of the other rows' KL over
              the step's rows, so the other rows keep their weight; a step without any is skipped by the head.
-Held-out     the soft head's held-out KL is measured once per iteration, after PPO and before PPG, against targets
-             built the same way for each validation-table long label (rows with at most one visited action left
-             out). The checks before PPO and after PPG are dropped: over the 128 iterations in the g6230 export's
-             history PPG moved it by a median 0.00016 (0 in 49), against 0.0013 for PPO.
+Held-out     the soft head's held-out KL is measured before PPO and after PPO (before PPG), against targets built
+             the same way for each validation-table long label (rows with at most one visited action left out).
+             The check after PPG is dropped: over the 128 iterations in the g6230 export's history PPG moved it by a
+             median 0.00016 (0 in 49), against 0.0013 for PPO. (g6230 to g6546 ran the after-PPO check only; the
+             check before PPO is back from g6547, the user's fix of 2026-11-27.)
 Soft rate    the soft head's own Adam steps at a fixed 1e-4 for the first 100 iterations from adoption, then at the
              PPO step rate again (g5402's link).
 PPG clip     the PPG value phase clips at 2.5 (was 2.4 from g5685), with its Adam moments rescaled once on the
@@ -44,7 +45,7 @@ SETTINGS = dict(
                      normalized='over the support'),
     soft_output='log-softmax over the same support',
     soft_min_visited=MIN_VISITED,
-    soft_heldout='after-ppo-only, targets built the same way',
+    soft_heldout='after-ppo-only, targets built the same way',  # the stamp of g6230; before PPO too from g6547 (reporting only)
     soft_learning_rate=dict(rate=SOFT_RATE, iterations=SOFT_RATE_ITERATIONS, then='ppo-step-rate'),
     ppg_grad_clip=PPG_GRAD_CLIP,
     window_iterations=WINDOW,

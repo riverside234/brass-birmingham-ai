@@ -11,7 +11,12 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
 
 def run_training(argv,log):
     """Tee the real child traceback to exported evidence; retain Ctrl-C cleanup."""
-    import os,signal
+    import os,signal,threading
+    # g6547: a SIGTERM to this wrapper stops the trainer like Ctrl-C (it used to kill only the wrapper, leaving the
+    # trainer running on the GPU); during the stop below, further Ctrl-C/SIGTERM cannot cut the cleanup short.
+    def stop(signum,frame):raise KeyboardInterrupt
+    main=threading.current_thread() is threading.main_thread()
+    previous=signal.signal(signal.SIGTERM,stop) if main else None
     with Path(log).open('w',encoding='utf-8') as stream:
         process=subprocess.Popen(argv,cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
             text=True,encoding='utf-8',errors='replace',bufsize=1,
@@ -24,20 +29,28 @@ def run_training(argv,log):
         except BaseException:
             if process.poll() is None:
                 import psutil
-                try:children=psutil.Process(process.pid).children(recursive=True)
-                except psutil.NoSuchProcess:children=[]
+                held=[(s,signal.signal(s,signal.SIG_IGN)) for s in (signal.SIGINT,signal.SIGTERM)] if main else []
                 try:
-                    if os.name=='posix':process.send_signal(signal.SIGINT)
-                    else:process.terminate()
-                    process.wait(timeout=15)
-                except (OSError,subprocess.TimeoutExpired):
-                    for child in reversed(children):
-                        try:child.kill()
+                    try:children=psutil.Process(process.pid).children(recursive=True)
+                    except psutil.NoSuchProcess:children=[]
+                    try:
+                        if os.name=='posix':process.send_signal(signal.SIGINT)
+                        else:process.terminate()
+                        process.wait(timeout=15)
+                    except (OSError,subprocess.TimeoutExpired):
+                        try:children=psutil.Process(process.pid).children(recursive=True)+children
                         except psutil.NoSuchProcess:pass
-                    if process.poll() is None:process.kill()
-                    process.wait()
+                        for child in reversed(children):
+                            try:child.kill()
+                            except psutil.NoSuchProcess:pass
+                        if process.poll() is None:process.kill()
+                        process.wait()
+                finally:
+                    for s,handler in held:signal.signal(s,handler)
             raise
-        finally:process.stdout.close()
+        finally:
+            process.stdout.close()
+            if main:signal.signal(signal.SIGTERM,previous)
 
 
 NAME_LIMIT=255  # bytes per path component (Linux); names that fit keep their old form

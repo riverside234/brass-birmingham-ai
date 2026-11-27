@@ -4,6 +4,7 @@ from collections import deque,Counter
 from concurrent.futures import ThreadPoolExecutor
 import math
 import time
+import weakref
 import numpy as np
 import torch
 from .learning_rate import step as scheduled_step,report as learning_rate_report
@@ -153,10 +154,12 @@ class DeviceRows:
     mixed array types, or when the device has no room, the dataset keeps the original path. The store
     holds no reference to its dataset, so it never waits for a full garbage collection to be freed.
     """
-    LIMIT_BYTES = 12 * 1024 ** 3
+    LIMIT_BYTES = 12 * 1024 ** 3  # g6547: for all live stores together (`live`), not per store
     CHUNK_BYTES = 256 * 1024 ** 2
+    live = weakref.WeakSet()
 
     def __init__(self, dataset):
+        DeviceRows.live.add(self)
         self.device = torch.device(dataset.device)
         self.widths = [len(e.choice_ids) for e in dataset.encoded]
         self.states = self.mapping = self.actions = self.offsets = self.lengths = self.first = None
@@ -209,7 +212,8 @@ class DeviceRows:
         if self.failed is not None: return False
         if (self.actions is not None) or (value_only and self.first is not None): return True
         if not dataset.encoded: self.failed = 'empty'; return False
-        if self.metrics['bytes'] + self._estimate(dataset, not value_only) > self.LIMIT_BYTES:
+        held = sum(store._bytes() for store in list(DeviceRows.live))
+        if held + self._estimate(dataset, not value_only) > self.LIMIT_BYTES:
             self.failed = 'over_limit'; return False
         began = time.perf_counter()
         from brass_ai.learning.features import check_encoded
@@ -247,6 +251,11 @@ class DeviceRows:
     def _release(self):
         self.states = self.mapping = self.actions = self.offsets = self.lengths = self.first = None
         self.mixtures = {}
+
+    def release(self):
+        """Free the device tensors for good: a later pass on this dataset takes the original path."""
+        self._release()
+        if self.failed is None: self.failed = 'released'
 
     def _bytes(self):
         tensors = [self.states, self.mapping, self.actions, self.offsets, self.lengths, self.first, *self.mixtures.values()]
@@ -289,6 +298,11 @@ class _Unstaged(Exception):
     pass
 
 
+def release_device_rows():
+    """g6547: free every live DeviceRows store (end of PPO); their datasets fall back to the original path."""
+    for store in list(DeviceRows.live): store.release()
+
+
 def device_rows_report(dataset):
     store = getattr(dataset, '_device_rows', None)
     return store.report() if store is not None else None
@@ -297,6 +311,9 @@ def device_rows_report(dataset):
 class Dataset:
     # g6120: DeviceRows on CUDA; tests compare it with the collated path on the CPU.
     device_rows_on_cpu = False
+    # g6547: only PPO's actor and critic datasets stage device rows (set by _ppo_nonforced, released when it returns);
+    # every other dataset (probes, drift checks, calibration, rehearsal) collates as before.
+    device_rows_allowed = False
 
     def __init__(self, data, device, policy=True, progress=None):
         self.data, self.device = data, device
@@ -423,6 +440,7 @@ class Dataset:
     def device_rows(self, value_only):
         """This dataset's DeviceRows when it serves the pass, else None (the original path)."""
         if type(self) is not Dataset:return None  # replay datasets keep their own sealed readers
+        if not self.device_rows_allowed:return None
         if torch.device(self.device).type!='cuda' and not Dataset.device_rows_on_cpu:return None
         store=getattr(self,'_device_rows',None)
         if store is None:store=self._device_rows=DeviceRows(self)
@@ -739,8 +757,12 @@ def ppo_nonforced(model,optimizer,games,behavior,config,*,profile=None,profile_s
             require(pool.workers==workers,'PPO preparation pool/config differ')
             executor=stack.enter_context(Preparation(pool))
         else:executor=stack.enter_context(ThreadPoolExecutor(max_workers=2)) if cuda else None
-        result=_ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
-                              rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,teacher_term=teacher_term)
+        try:
+            result=_ppo_nonforced(model,optimizer,games,behavior,config,profile=profile,profile_steps=profile_steps,
+                                  rehearsal=rehearsal,rehearsal_weight=rehearsal_weight,learner_data=learner_data,executor=executor,insolvency=insolvency,reward=reward,sample_groups=sample_groups,anchor_model=anchor_model,phases=phases,teacher_term=teacher_term)
+        finally:
+            # g6547: the device rows (8.2 GB at g6546) serve PPO only; nothing after PPO keeps them on the GPU.
+            release_device_rows()
         if workers:result['cpu_preparation']=(executor.report() if useful else
             dict(workers=0,requested_workers=workers,reason='Fewer than 2048 rows; inline/thread preparation avoids process overhead'))
         return result
@@ -773,7 +795,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
                             and d[0].get('_critic_role','learner')=='learner' for d in data),
                 'External or stale actions in PPO')
         require(all(d[0].get('teacher') is None for d in data),'Teacher labels cannot enter ordinary actor/critic data')
-        ds=Dataset(data,device);verify_behavior_metadata(ds,behavior)
+        ds=Dataset(data,device);ds.device_rows_allowed=True;verify_behavior_metadata(ds,behavior)
         if 'opening_objective' in config:
             from .opening_objective import Reference
             ds.opening_reference=Reference(ds,behavior,config['opening_objective'])
@@ -784,6 +806,7 @@ def _ppo_nonforced(model,optimizer,games,behavior,config,*,profile,profile_steps
     with timings.phase('ppo.critic_prepare'):
         critic_ids=phases.prepare(ds) if phases is not None else list(range(count))
     critic_ds=phases.critic_dataset if phases is not None else ds
+    if type(critic_ds) is Dataset:critic_ds.device_rows_allowed=True
     critic_count=len(critic_ids)
     planned_steps=config['epochs']*math.ceil(len(actor_ids)/config['effective_batch_size'] if actor_ids else critic_count/config['critic_batch_size'])
     # g3270: the teacher term fixes its no-repeat label batches for exactly these steps.

@@ -28,8 +28,33 @@ _MARK = '\x00canonical-history\x00'
 SMALL = 8  # shorter histories take the plain formula
 
 
-def dumps(value):
+def _plain_dumps(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+
+
+def _encoder():
+    """g6547: the C encoder json.dumps builds on every call with these options, built once (the publisher encodes
+    about 220 values per row). The same encoder gives the same bytes; without the C accelerator, or if a probe
+    differs, the plain formula is used."""
+    from json import encoder as E
+    if E.c_make_encoder is None: return None
+    try:
+        made = E.c_make_encoder(None, json.JSONEncoder().default, E.c_encode_basestring_ascii, None, ':', ',',
+                                True, False, False)
+        fast = lambda value: ''.join(made(value, 0)).encode()
+        probes = ({'b': [1, 2.5, -0.0, 1e-07, 1e22, True, None], 'a': 'café ☃ "q" \\ \n', 'c': {'z': {}, 'y': []}},
+                  [0.1, 3, 'x'], 'text', 7, 1.0, None, False)
+        if any(fast(p) != _plain_dumps(p) for p in probes): return None
+        return fast
+    except Exception:
+        return None
+
+
+_FAST = _encoder()
+
+
+def dumps(value):
+    return _plain_dumps(value) if _FAST is None else _FAST(value)
 
 
 _ENCODED_MARK = dumps(_MARK)

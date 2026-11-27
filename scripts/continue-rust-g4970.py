@@ -201,6 +201,9 @@ def main():
                         help='Adopt the g5685 clip revision at this committed generation (set once, then kept)')
     parser.add_argument('--soft-head-revision', action='store_true',
                         help='Adopt the g6230 soft-head revision at this committed generation (set once, then kept)')
+    parser.add_argument('--soft-policy-weight', type=float, choices=(2., 4., 6., 8., 10., 12., 16.),
+                        help="The soft head's weight x beta from this committed generation (8 -> 4 at g6547); defaults "
+                             'to the weight in force in this run')
     args = parser.parse_args()
 
     run = ROOT / RUN
@@ -210,11 +213,15 @@ def main():
     else:
         state = repair_panel_progress(run, read(state_path))
     share = args.share_target if args.share_target is not None else state['signature']['config']['teacher_phase']['term']['share_target']
-    return subprocess.call([
+    weight = (args.soft_policy_weight if args.soft_policy_weight is not None
+              else state['signature']['config']['soft_policy']['weight'])
+    # g6547: not subprocess.call, which SIGKILLs the child a quarter second after Ctrl-C and orphans its trainer.
+    from brass_ai.step5.exit_guard import call
+    return call([
         sys.executable, str(ROOT / 'scripts' / 'continue-rust-g1190-restart-2.py'),
         '--run', RUN.as_posix(), '--expected-generation', str(args.expected_generation),
         '--iterations', str(args.iterations), '--share-target', str(share), '--workers', str(args.workers),
-        '--rail-end-weight', '0.25', '--soft-policy-weight', '8',
+        '--rail-end-weight', '0.25', '--soft-policy-weight', f'{weight:g}',
         *(['--optimizer-revision'] if args.optimizer_revision else []),
         *(['--auxiliary-revision'] if args.auxiliary_revision else []),
         *(['--clip-revision'] if args.clip_revision else []),

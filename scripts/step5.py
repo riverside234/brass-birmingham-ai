@@ -36,7 +36,10 @@ def main():
     sys.path.insert(0, str(root.resolve() / 'src'))
     _limit_default_gpu(sys.argv[1:])
     from brass_ai.step5.cli import main as run
-    run()
+    # g6547: SIGTERM/SIGHUP stop like Ctrl-C, and a stopped or finished trainer that does not exit within a minute
+    # (a blocked worker join) writes its thread stacks and is ended, so it never keeps its GPU memory.
+    from brass_ai.step5.exit_guard import guarded
+    guarded(run)
 
 
 if __name__ == '__main__':

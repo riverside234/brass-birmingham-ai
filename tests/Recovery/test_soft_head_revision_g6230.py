@@ -239,7 +239,7 @@ class Term(unittest.TestCase):
 
 
 class Phase(unittest.TestCase):
-    """The teacher phase: the soft rate window and the one soft held-out check, after PPO."""
+    """The teacher phase: the soft rate window and the soft held-out checks, before and after PPO."""
 
     @classmethod
     def setUpClass(cls):
@@ -259,7 +259,7 @@ class Phase(unittest.TestCase):
         p.receipt, p.reward_id, p.admission_seconds, p.soft_state = None, 'r', 0., None
         return p
 
-    def test_one_soft_check_after_ppo_on_targets_built_the_same_way(self):
+    def test_soft_checks_before_and_after_ppo_on_targets_built_the_same_way(self):
         from test_soft_policy_g3423 import soft_settings
         from brass_ai.recovery.teacher_term import policy_logits
         from brass_ai.recovery.value_preservation import TrunkGradients
@@ -279,11 +279,14 @@ class Phase(unittest.TestCase):
                 term.apply(self.model, TrunkGradients(self.model), step); self.model.zero_grad(set_to_none=True)
             p.after_ppo(self.model)
             report = p.finish(self.model, {})
-        self.assertEqual(calls, ['masked'])  # once, after PPO
+        self.assertEqual(calls, ['masked', 'masked'])  # before PPO (prepare) and after PPO, not after PPG
         soft = report['heldout']['soft']
-        self.assertEqual(set(soft) - {'scope'}, {'after_ppo', 'after_ppo_seconds'})
-        self.assertEqual((soft['after_ppo']['rows'], soft['after_ppo']['skipped_rows']), (4, 2))
-        self.assertIsNotNone(soft['after_ppo']['dropped_unvisited_mass']['median'])
+        self.assertEqual(set(soft) - {'scope'}, {'before', 'after_ppo', 'ppo_delta', 'after_ppo_seconds'})
+        for check in ('before', 'after_ppo'):
+            self.assertEqual((soft[check]['rows'], soft[check]['skipped_rows']), (4, 2))
+            self.assertIsNotNone(soft[check]['dropped_unvisited_mass']['median'])
+        self.assertAlmostEqual(soft['ppo_delta'], soft['after_ppo']['kl'] - soft['before']['kl'])
+        self.assertNotEqual(soft['ppo_delta'], 0.)  # the head trained between the two checks
         self.assertIn('after_ppo', report['heldout']); self.assertIn('ppo_delta', report['heldout'])
         rate = report['term']['soft']['learning_rate']
         self.assertEqual((rate['source'], rate['last']), ('g6230-fixed-0.0001-until-g3370', 1e-4))

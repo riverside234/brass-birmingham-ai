@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "4aaa5fba8c3631ee5f0d3e4fd9301fe24fc535a7cf8b0bc6012e68ec85059df2",
+  "execution_implementation": "6e2152b136a7f94bb4aa75c68e66970f6513c6031df0321bd75360fe4f058006",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -54,7 +54,7 @@
     },
     "src/brass_ai/recovery/admitted_inputs.py": {
       "before": "47aec3397f698def017fec3653d15c757fc317279227470f30d1e5077afad750",
-      "after": "013a93fe30ded2d2e8d8914e439c406427a1bf7c3351b1c240e2acd177b27f74"
+      "after": "5e18bcdc4bcbb506418b6284c2dd59f081ceb443679dce04d8b1c876b27b562d"
     },
     "src/brass_ai/recovery/automatic_training.py": {
       "before": "38046abd8f653f6b12f87f2f4747899b0cc565fbc4ae0ac4edb8cd15fee37df3",
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "771115914180981c29999dbc95a78c08b67f20a1e8e889e03ae50e022e78f401"
+      "after": "6abfbef07c494c4779d21911d2ee64efb6bf45c32a03b191f4fbe2302c4de994"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -190,7 +190,7 @@
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
-      "after": "43ae8c2600d35a75cc770e3a14f641e6d925ab6566081b86cb6059dd3cdbe017"
+      "after": "e7a4d099551bd86147f900cfe3f44f8ccb3d2beb2ab3ab7a52fea0423642e481"
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
@@ -214,7 +214,7 @@
     },
     "src/brass_ai/recovery/updates.py": {
       "before": "74c4a7c3a92a2b8a7cb0de2eef5ebd8f58feb1d0c6798f1f86a281c4f6872628",
-      "after": "39a74baff6a7ddc4fe69ebcc6244260e793bca21a31c2d8724d69093f86ea9b2"
+      "after": "be5d463bfeac7cc441c582ee2f7f15a0c17bf6e96e91639b9187957363aabe6c"
     },
     "src/brass_ai/recovery/utility.py": {
       "before": "27a29ef4cf15ddadf03bf393c88c37f941f81bae926d35bed72acb50a67e257c",
@@ -226,7 +226,7 @@
     },
     "src/brass_ai/recovery/value_phase.py": {
       "before": "66844598c56ff0175af8b0997b5ae869de4ae69331b11f5082c07162f4647fae",
-      "after": "0029d941ed75db82a2b4e838349e8a9122bd6c9c1ce8a432c98b71f0aae6bc2d"
+      "after": "a3936a372c345efd7e618be6adb638da68e44a6f6510854094b7b77804a1714f"
     },
     "src/brass_ai/rust_backend/lab_admission.py": {
       "before": "6d616c754ab1337005b2e65e7e766b6810b775f24f979e13c40e3c16b32e85f9",
@@ -606,7 +606,7 @@
     },
     "src/brass_ai/recovery/ownership_stop.py": {
       "before": null,
-      "after": "ea5632ad3f47e2b93d990bff9ff72f9fbbffe7a882fc13a557c742c0aedc62da"
+      "after": "c1ec06ecb68a111394dc99901e44a14fee668e920d3453fce4d36325e1c7dd84"
     },
     "src/brass_ai/recovery/training_revision_g3140.py": {
       "before": "ee5e47d2b5d9c85c0b7a1e3a7265a27a98367d5ec46b5e999be99784c54085ba",
@@ -626,7 +626,7 @@
     },
     "src/brass_ai/recovery/search_auxiliary.py": {
       "before": null,
-      "after": "19bb085e0bcb532d39a15bdedfeac2f1dd1c3d66572b74d8f08d726ff48af193"
+      "after": "7c5486b70294689964c598b27067c320d1688782263978b620807c245fdee368"
     },
     "src/brass_ai/recovery/soft_policy.py": {
       "before": null,
@@ -646,7 +646,7 @@
     },
     "src/brass_ai/recovery/search_rows.py": {
       "before": null,
-      "after": "670ebdc300633b6624b09f91c16df1c73356770694ba8c89a394f0c88294dba2"
+      "after": "2e324720d3bb377f800ba14bdeaeddd9989a096f14219c11227fc0c66bf958fd"
     },
     "src/brass_ai/recovery/training_revision_g2654.py": {
       "before": "c8693c1a60cf6417afdf86c9f5f4d9cfc510967c450c39979147cb6b668cfb88",
@@ -742,7 +742,7 @@
     },
     "scripts/continue-rust-g4970.py": {
       "before": null,
-      "after": "61a9b0302cdf1418b277eb18a0e84b5713a783f2c0bb224f7b0b3eef82dc691f"
+      "after": "b45da268a05fbb850b8a5dcbdf23e5ea3a1e1c94d385949cacc282cb232bdd66"
     },
     "scripts/reports/export-training-reports.py": {
       "before": "abd0c78e87cce84d01659b590d5664e8062418b4e790ff2a735263ac35abdcc6",
@@ -818,11 +818,27 @@
     },
     "src/brass_ai/recovery/training_revision_g6230.py": {
       "before": null,
-      "after": "1ae7b6af2ee63f9013215cbbb3ccff5d75968199b0d72e93e8809a58d5b05e26"
+      "after": "6f7153df4016a1e077c0139cce817808c030c48e897341192b9e205416829844"
     },
     "tests/Recovery/test_soft_head_revision_g6230.py": {
       "before": null,
-      "after": "4123c4ff47a868cb30ce7677b14ee8820511e201a4ea1fb1fe34c4c56bd49b28"
+      "after": "1d4151f5a4f08eff4e2af385ee3f5615ae2136efadc6e72de1aa90c199f4c7eb"
+    },
+    "src/brass_ai/recovery/gpu_memory.py": {
+      "before": null,
+      "after": "d2b9860054d3837c48621fcbe86b27ba6c1bf1bcb8f2792f5c0885af67379f05"
+    },
+    "src/brass_ai/recovery/canonical_inputs.py": {
+      "before": "75575fe275cc8e2178f8b574bf43384d6863cfbee0862b9444f11aea43b8531f",
+      "after": "10d1741b7b6a71a8dd04762165f3dc48645d34e6164dc954559e053312688051"
+    },
+    "src/brass_ai/step5/exit_guard.py": {
+      "before": null,
+      "after": "e223d1d6ec0292a56db257c18604692486d971904cc3c3827e14cc206aa99118"
+    },
+    "tests/Recovery/test_soft_weight_g6547.py": {
+      "before": null,
+      "after": "d82a641c24f1ac9bc16602025c892f6e4a5c257b4db5bf9343479eaefa97eb2b"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -1218,6 +1234,16 @@
       "implementation": "9876fe7cdd82cd9c7658d880574b203953b3b640febbfe0f1e93802a22c79a75",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "3e3551bef252075aca5dc3c1bd8073730f1876dd73d73fc894a53b713ef8d83e"
+    },
+    {
+      "implementation": "4aaa5fba8c3631ee5f0d3e4fd9301fe24fc535a7cf8b0bc6012e68ec85059df2",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "60520417494a99ea7d8fb69312ec83f9a5dd8217865e70c9a67d9d2776cce9bf"
+    },
+    {
+      "implementation": "310796d78385ea572902734ed5dbbf9fbdcf8394a9bed79318ad7b6731348f60",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "4a895afc903581ae4a88d028dc0d39ffa2f6ad54a5a1fd671b81c72c0b9583f1"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1663,6 +1689,14 @@
   },
   "g6230_soft_head_revision": {
     "scope": "--soft-head-revision (training_revision_g6230) at a committed boundary, after g5685: the soft policy head's target stays softmax((current logits + teacher-term search bonus) / T), held fixed for the gradient, but over the legal actions with visits > 0 only, renormalized there, with its log-softmax over the same actions (soft_policy.masked_loss; the visited mask staged beside the bonus in teacher_term.StagedRows); rows with at most one visited action have weight 0 and no loss, and a step without any skips the head; its held-out KL is measured once, after PPO, on targets built the same way (heldout_masked; the checks before PPO and after PPG are dropped); the head's own Adam steps at 1e-4 for 100 iterations from adoption, then at the PPO step rate; the PPG value phase clips at 2.5 (was 2.4) with a one-time PPG Adam rescale from g5466's mean/P98 fit of the last 30 committed PPG phases (ppg_g210.initialize -> rescale_ppg, receipt in the group). The 95dd6394 version's fixed targets from the collection logits were rolled back before any lab use.",
+    "qualified_implementation_unchanged": true
+  },
+  "g6547_value_memory_and_exit": {
+    "scope": "Code-only; no recipe or config change. (1) Value phase: state-only value rows run as one device batch per step (value_phase.JOINED_ROWS 4096: the CPU workers' 512-row parts joined on the device with their prepared critic columns), so a joint or head-only step is one forward and one backward instead of eight; held-out scans join the same way, the ownership stop measures 4096-row parts and the search rows run as one chunk. The same rows, order, losses and normalization; float rounding differs (fixture phase: every reported number within 1e-4 relative). (2) Ownership-stop setup: the search rows' lambda targets are computed per table with array operations (search_rows.search_corrections), bitwise equal to the per-row form. (3) GPU memory: device rows only for PPO's actor and critic datasets, one 12 GiB budget for all live stores, freed when PPO returns; each iteration phase records its own GPU peak and returns the allocator's free blocks to the driver (gpu_memory.Phases, report gpu_memory). (4) Exit: scripts/step5.py runs under step5.exit_guard (SIGTERM/SIGHUP stop like Ctrl-C; a stopped or finished trainer still running after 60 s writes its thread stacks and is ended), the launcher waits for its child instead of SIGKILLing it after a quarter second, and run_training's cleanup cannot be cut short. (5) Publication decode: frozen trees are built with a C copy per dict and canonical JSON reuses one C encoder; the same objects, types, bytes and digests.",
+    "qualified_implementation_unchanged": true
+  },
+  "g6547_soft_weight_and_heldout": {
+    "scope": "The soft policy head's weight 8 -> 4 x beta from g6547 through g3423's reviewed weight change (--soft-policy-weight 4, recorded as weight_change {generation 6547, before 8}; the head, its Adam and warm-up carry over, the committed head re-stamped at the change); scripts/continue-rust-g4970.py takes --soft-policy-weight and otherwise passes the weight in force in the run instead of a fixed 8. The g6230 visited-only soft held-out check runs before PPO as well as after it (teacher_phase.prepare -> heldout_masked; report heldout.soft.before and ppo_delta; reporting only, nothing that trains changes).",
     "qualified_implementation_unchanged": true
   }
 }

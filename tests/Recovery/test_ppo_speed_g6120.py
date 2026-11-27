@@ -124,7 +124,7 @@ class DeviceRowsTest(unittest.TestCase):
                 with self.subTest(exploration=exploration, value_only=value_only):
                     collated = list(U.Dataset(data, 'cpu').policy_batches(parts, exploration, None, value_only=value_only))
                     with mock.patch.object(U.Dataset, 'device_rows_on_cpu', True):
-                        ds = U.Dataset(data, 'cpu')
+                        ds = U.Dataset(data, 'cpu'); ds.device_rows_allowed = True  # g6547: PPO's datasets opt in
                         gathered = list(ds.policy_batches(parts, exploration, None, value_only=value_only))
                     self.assertIsNotNone(ds._device_rows.actions if not value_only else ds._device_rows.first)
                     self.assertEqual(len(collated), len(gathered))

@@ -520,6 +520,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                 with torch.random.fork_rng(devices=[]):schedule_champion(root,run,state,service,ordinary)
             from .collection_gc import Window as CollectionWindow
             collection_window=CollectionWindow()
+            from .gpu_memory import Phases as GpuPhases
+            gpu_phases=GpuPhases(device)  # g6547: GPU peaks per phase; free cached blocks released after each
             for _ in range(iterations):
                 iteration=state['iteration'];began=time.monotonic();directory=run/f'iteration-{iteration:04d}'
                 from . import v4_share
@@ -649,6 +651,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     ppo_began=time.monotonic();rehearsal_seconds=ppo_began-sampling_finished
                     # The value phase opens last iteration's replay age; read it ahead while PPO runs.
                     if phases is not None and hasattr(phases,'prefetch'):phases.prefetch()
+                    gpu_phases.mark('collection_and_sampling')
                     update=ppo_update(model,optimizer,all_games,behavior,config['update'],
                         profile=directory/'profile-ppo' if config['profile_steps'] else None,
                         profile_steps=config['profile_steps'],
@@ -683,6 +686,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     economic_health=limit_report['health'] if observations_off else None)
                 # g4475: the soft held-out check once more, after PPO and before PPG (measurement only).
                 if teacher_phase is not None:teacher_phase.after_ppo(model)
+                gpu_phases.mark('ppo')
                 ppo_finished=time.monotonic()
                 search_values = teacher_phase.search_value if teacher_phase is not None else None
                 if search_values is not None:
@@ -692,6 +696,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         annealing=annealing(config,state))
                 value_report=phases.fit(model,preparation_pool=preparation_pool) if phases is not None else None
                 search_value_report=search_values.finish_ppg() if search_values is not None else None
+                gpu_phases.mark('value_phase')
                 updated=time.monotonic();done=state['games_done']+len(games)
                 ordinary_inference=service.report()
                 if rehearsal_schedule(config,done,iteration+1)['weight']==0:rehearsal=None
@@ -989,6 +994,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                     trim_seconds=commit.get('trim_seconds',0.),
                     gc_full_collection_seconds=iteration_gc['full_collection']['seconds'] if iteration_gc else 0.)
                 report['timings']['iteration_seconds']=time.monotonic()-began
+                gpu_phases.mark('teaching_commit_and_evaluation')
+                gpu=gpu_phases.take()
+                if gpu is not None:report['gpu_memory']=gpu
                 write_json(directory/'report.json',report,compact=True)
                 from .context_evaluation import record_iteration_time
                 record_iteration_time(root,run,state,report)
@@ -1134,8 +1142,9 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         g4=lambda v:'None' if v is None else f'{v:.4g}'
                         teacher_line+=(f' soft={sp["stage"]}:{sp["multiplier"]:.1f} soft_kl={g4(sp["kl"]["first"])}->{g4(sp["kl"]["last"])}'
                             f' soft_share={g4(sp["share"]["median"])} soft_moved={g4(sp["head_change"])}'
-                            + (f' soft_heldout_after_ppo={g4((sh.get("after_ppo") or {}).get("kl"))}'  # g6230: one check
-                               f' soft_rate={g4(sp["learning_rate"]["last"])}' if 'before' not in sh else
+                            + (f' soft_heldout={g4((sh.get("before") or {}).get("kl"))}->'  # g6230: before and after PPO
+                               f'{g4((sh.get("after_ppo") or {}).get("kl"))}(ppo)'
+                               f' soft_rate={g4(sp["learning_rate"]["last"])}' if 'after' not in sh else
                                f' soft_heldout={g4((sh.get("before") or {}).get("kl"))}->'
                                # g4475: the after-PPO check between them, when measured.
                                + (f'{g4(sh["after_ppo"].get("kl"))}(ppo)->' if sh.get('after_ppo') else '')

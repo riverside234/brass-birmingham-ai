@@ -332,6 +332,9 @@ class TeacherPhase:
         if self.soft is not None and not self.soft.masked:
             # The same logits as policy_logits, plus the soft head's KL from the same forwards.
             self.pre_logits, self.pre_soft = self.soft.heldout(model, self.heldout)
+        elif self.soft is not None:
+            # g6230 (fix of 2026-11-27): the visited-only soft check before PPO as well, from the same forwards.
+            self.pre_logits, self.pre_soft = self.soft.heldout_masked(model, self.heldout, settings['label_scale'])
         else:
             self.pre_logits = policy_logits(model, self.heldout) if settings is not None else None
         self.pre = heldout_measure(model, self.heldout, logits=self.pre_logits)
@@ -351,7 +354,8 @@ class TeacherPhase:
         return self.term if self.term.active else None
 
     def after_ppo(self, model):
-        """g4475: the soft head's held-out check once more, after the PPO update and before PPG.
+        """g4475: the soft head's held-out check once more, after the PPO update and before PPG (g6230: the second
+        of its two checks, after the one in `prepare`).
 
         The same validation-table rows and the same forwards as `prepare` and `finish` (no gradients, RNG forked,
         train mode restored), so it changes nothing that trains. The policy's teacher KL comes from the same
@@ -410,14 +414,17 @@ class TeacherPhase:
                 heldout['after_ppo'] = policy
                 heldout['ppo_delta'] = {p: change(policy[p]['kl'], before[p]['kl']) for p in before}
         elif self.soft is not None:
-            # g6230: one measurement, after PPO, against visited-only targets from the current logits.
+            # g6230: measured before and after PPO (not after PPG), against visited-only targets from the current logits.
             measured = getattr(self, 'post_ppo', None)
-            heldout['soft'] = dict(after_ppo=measured['soft'] if measured else None,
+            change = lambda a, b: a - b if a is not None and b is not None else None
+            mid = measured['soft'] if measured else None
+            heldout['soft'] = dict(before=self.pre_soft, after_ppo=mid,
+                ppo_delta=change((mid or {}).get('kl'), (self.pre_soft or {}).get('kl')),
                 after_ppo_seconds=measured['seconds'] if measured else None,
                 scope="KL(softmax((current logits + bonus) / T) over visited legal actions || soft head over the same "
-                      "actions) on the validation tables' long labels with at least 2 visited actions, after PPO only")
+                      "actions) on the validation tables' long labels with at least 2 visited actions, before and "
+                      "after PPO")
             if measured is not None:
-                change = lambda a, b: a - b if a is not None and b is not None else None
                 heldout['after_ppo'] = measured['policy']
                 heldout['ppo_delta'] = {p: change(measured['policy'][p]['kl'], before[p]['kl']) for p in before}
         return dict(contract=CONTRACT, mode=self.options['mode'], ready=self.ready, collection=self.metrics,

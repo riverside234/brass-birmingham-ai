@@ -96,14 +96,26 @@ _SCALARS=frozenset((str,int,float,bool,type(None)))
 _FROZEN=frozenset((FrozenDict,FrozenList,OwnedDict,OwnedList))
 
 
+_dict_new,_dict_update,_dict_set=dict.__new__,dict.update,dict.__setitem__
+_list_new,_list_extend=list.__new__,list.extend
+
+
 def _freeze(value):
     # Scalar leaves and all-scalar lists (logits, counts, vectors) are copied
     # without a call per element; the frozen result is the same structure.
+    # g6547: a dict is copied whole in C, then only its container values are replaced in place (same keys, order and
+    # values; no generator per item); containers are built without their Python __new__/__init__.
     kind=type(value)
-    if kind is dict:return FrozenDict((k,v if type(v) in _SCALARS else _freeze(v)) for k,v in value.items())
+    if kind is dict:
+        result=_dict_new(FrozenDict);_dict_update(result,value)
+        for k,v in value.items():
+            if type(v) not in _SCALARS:_dict_set(result,k,_freeze(v))
+        return result
     if kind is list:
-        if set(map(type,value))<=_SCALARS:return FrozenList(value)
-        return FrozenList(v if type(v) in _SCALARS else _freeze(v) for v in value)
+        result=_list_new(FrozenList)
+        if set(map(type,value))<=_SCALARS:_list_extend(result,value)
+        else:_list_extend(result,[v if type(v) in _SCALARS else _freeze(v) for v in value])
+        return result
     if kind in _FROZEN or kind in _SCALARS:return value
     # Called only after wire admission; never normalize custom wire types.
     raise TypeError('Only admitted JSON containers can be frozen')
