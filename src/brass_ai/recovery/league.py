@@ -408,8 +408,8 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         phases.diversity=diversity
         scale=getattr(phases,'ppg_adam_rescale',None)
         if scale is not None:
-            # g5466's receipt has no phase; g5685's says 'ppg'.
-            print(f'{"g5685 clip" if scale.get("phase") else "g5466 auxiliary"} revision: PPG clip {scale["old_clip"]:g} -> {scale["new_clip"]:g}; PPG Adam exp_avg '
+            # The receipt's contract names its revision (g5466, g5685 or g6230).
+            print(f'{scale["contract"].split("/")[0]}: PPG clip {scale["old_clip"]:g} -> {scale["new_clip"]:g}; PPG Adam exp_avg '
                   f'x{scale["first_moment"]:.3f}, exp_avg_sq x{scale["second_moment"]:.3f} on {scale["parameters"]} tensors '
                   f'(from {scale["steps"]} logged steps; fit clip rate {scale["predicted_clipped_percent"]:.1f}% vs '
                   f'logged {scale["logged_clipped_percent"]:.1f}%)',flush=True)
@@ -1134,10 +1134,12 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                         g4=lambda v:'None' if v is None else f'{v:.4g}'
                         teacher_line+=(f' soft={sp["stage"]}:{sp["multiplier"]:.1f} soft_kl={g4(sp["kl"]["first"])}->{g4(sp["kl"]["last"])}'
                             f' soft_share={g4(sp["share"]["median"])} soft_moved={g4(sp["head_change"])}'
-                            f' soft_heldout={g4((sh.get("before") or {}).get("kl"))}->'
-                            # g4475: the after-PPO check between them, when measured.
-                            + (f'{g4(sh["after_ppo"].get("kl"))}(ppo)->' if sh.get('after_ppo') else '')
-                            + f'{g4((sh.get("after") or {}).get("kl"))}')
+                            + (f' soft_heldout_after_ppo={g4((sh.get("after_ppo") or {}).get("kl"))}'  # g6230: one check
+                               f' soft_rate={g4(sp["learning_rate"]["last"])}' if 'before' not in sh else
+                               f' soft_heldout={g4((sh.get("before") or {}).get("kl"))}->'
+                               # g4475: the after-PPO check between them, when measured.
+                               + (f'{g4(sh["after_ppo"].get("kl"))}(ppo)->' if sh.get('after_ppo') else '')
+                               + f'{g4((sh.get("after") or {}).get("kl"))}'))
                     qualification=tt.get('gradient_qualification') or {}
                     if qualification:
                         teacher_line+=(f' grad_qualification={"passed" if qualification["passed"] else "pending"}'

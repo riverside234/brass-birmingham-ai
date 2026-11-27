@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "0fb8d4ce3be2c9c781f1ef22fb7c5d79930dc82c610382be0d19a5d6ef17a05f",
+  "execution_implementation": "9876fe7cdd82cd9c7658d880574b203953b3b640febbfe0f1e93802a22c79a75",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -74,7 +74,7 @@
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
-      "after": "ec9e59a9239ac216e4496f4c2f74e066600763f144ddd897bca22b11076560b2"
+      "after": "2818e203c84bef345955c910a8d7761e8e3a2bf71258aed8932afc72fd064b9b"
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "3ce1931e56526177359de15672a75e85f67c4a51db73eee5420b46b78f98d5bc"
+      "after": "771115914180981c29999dbc95a78c08b67f20a1e8e889e03ae50e022e78f401"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -126,7 +126,7 @@
     },
     "src/brass_ai/recovery/ppg_g210.py": {
       "before": "7b7a8d391a56f56ea36d2b97c79af8b5c45fc3c1bfb7494b93886280674e5940",
-      "after": "d908b24e5a8ea449de7a194dc40ba650020043a09092d2ca333e3e01c266f5cc"
+      "after": "36ca7273c2ca7c2755c0c731b35cc98d4d3937aa4e4dd932260366d732c68624"
     },
     "src/brass_ai/recovery/ppg_policy_cache.py": {
       "before": "1724b71a097795cd34961dd81fd99cf25f4c94cf1860b1269b7327203f0684b4",
@@ -190,7 +190,7 @@
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
-      "after": "cb4c6770753eb1ddd7f5bf5b70de28ad99081056ca60457f6b9f5a42f569ff6b"
+      "after": "aec6ff74aad40c11376ea6807875c3f13e2f26bbc9812d2405e317b2c20766dc"
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
@@ -198,7 +198,7 @@
     },
     "src/brass_ai/recovery/teacher_term.py": {
       "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
-      "after": "6a1623a4f3a248b5b2cb60b8bde32c9b8d8d349f25ff5c4adee10d2034ac78fb"
+      "after": "177bfdd5b36c088f93e5aaad7705de86152564ab2f5e0bab3b24387f50771930"
     },
     "src/brass_ai/recovery/teacher_value.py": {
       "before": "b77180209a7f14bc3df6e49e119f524a7b339f8212558c572fb04dd3bf6aadff",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "34fa9dd2401464bb7b532e49a72ecaf5b296a9177de93ceea2e19be626c3ab12"
+      "after": "f9db223b449d7bdeaa01c567877fc7f17caefbcc6a5b0445145875f2b866a59d"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "60ea3ac349d6a499dd9883de9549ff9208ffd71d7748f0c334396fa58bad40d8"
+      "after": "c130d8284bb515b39a8d0a0611d20fd8491b32e5cd150916e5c5d2bc2bd2aeaa"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -382,7 +382,7 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "69c1007ceb6ec012281dd169bcc17a4d0c21561e7b1a6aa77b16c683d97dc870"
+      "after": "81e3795222cfd88497e0460d3362a3b6c5a50f37bceb774f56115ff7c5d37637"
     },
     "tests/RustBackendLab/test_collection_overlap.py": {
       "before": null,
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "6ce923546a2ab63d791f77e2842b19041cdb3b8a77ea3d0bc2ce71dcd408e69e"
+      "after": "b2682629b50fde564e589ba6b716073f08fe3011379468d75d3226dbd106643c"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -630,7 +630,7 @@
     },
     "src/brass_ai/recovery/soft_policy.py": {
       "before": null,
-      "after": "56803e2e1d6adee1c3289d47df0588cffa3fe69e1f1380f7efb57204a4df4efa"
+      "after": "66daedc1bcdd1756b54b92d7864bdcce84e56609aa02adfaf526fd45ba7174f0"
     },
     "src/brass_ai/recovery/training_revision_g3423.py": {
       "before": null,
@@ -742,7 +742,7 @@
     },
     "scripts/continue-rust-g4970.py": {
       "before": null,
-      "after": "8c179fb3b3388126edeb362056087ab913d758cfe88febe7facb6f2057f81607"
+      "after": "61a9b0302cdf1418b277eb18a0e84b5713a783f2c0bb224f7b0b3eef82dc691f"
     },
     "scripts/reports/export-training-reports.py": {
       "before": "abd0c78e87cce84d01659b590d5664e8062418b4e790ff2a735263ac35abdcc6",
@@ -798,7 +798,7 @@
     },
     "src/brass_ai/recovery/training_revision_g5685.py": {
       "before": null,
-      "after": "68fe8758ec5a4ab348a5c2bb6aa30271620a524e643aac001c178b329f47a577"
+      "after": "dd2d680d506a0a45ba3564ea15bbfee16228f989b0189de924145cf6c65418f7"
     },
     "tests/Recovery/test_clip_revision_g5685.py": {
       "before": null,
@@ -815,6 +815,14 @@
     "src/brass_ai/recovery/local_scoring_adoption.py": {
       "before": null,
       "after": "2edbdd58dd285e631d08adef3c7cfd5d3de91846f3aaf82882e21f72de75bc95"
+    },
+    "src/brass_ai/recovery/training_revision_g6230.py": {
+      "before": null,
+      "after": "5d9b78751df3110b362b400dcd50b46a985615d39d9b0c1290a51ac279efe529"
+    },
+    "tests/Recovery/test_soft_head_revision_g6230.py": {
+      "before": null,
+      "after": "a0adaf26d1f51aacb835b7e670dc3f0181745a09418ae39109b41119017eef7c"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -1200,6 +1208,11 @@
       "implementation": "cb7721f75684bec7119e95cb9229c75f626e460285b13b9b552efcf87910d0d3",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "99b03cbb8c6d96630c75c9171da8805cc01e6782b2a7f9370aa7c67da6cfe05e"
+    },
+    {
+      "implementation": "0fb8d4ce3be2c9c781f1ef22fb7c5d79930dc82c610382be0d19a5d6ef17a05f",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "4edb3c6e1ca67193e4c3abb42be2cd096e92887c0ea91b209b95fb4a68b9585f"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1641,6 +1654,10 @@
   },
   "g6120_step_and_ppo_speed": {
     "scope": "Code-only, no training change. (1) Engine, in the CPU teacher core files (state/phases.rs, chance.rs, indexes.rs, mod.rs, observation.rs, search/brass.rs; lab_cpu_overlay.TEACHER_CORE_FILES, so the overlay fingerprint rebuilds the teacher): a search step moves its world's own state to the successor in place (no state copy or drop; a failed step's world is always dropped), indexes are refilled in their storage (the same sets as a fresh build), and the recall hands are sorted into their buffers; every search is identical. (2) PPO: a plain Dataset on CUDA keeps its collated inputs on the device (updates.DeviceRows, gathers equal to collate; over 12 GiB or out of memory the original path), the frozen preservation values stay on the device (PPG gets host copies), the preservation outputs read descriptors with the batch's device index, the entropy groups are found once per dataset, and teacher rows are admitted once when they enter the buffer (teacher_buffer.admitted), so staging neither hashes nor re-checks them; the PPO update is bit-identical on the fixtures (tests/Recovery/test_ppo_speed_g6120.py). (3) Buffers and data: the PPG cache is written from the rows' own arrays in one gather write per block (the same bytes; contexts keyed by their exact typed items, not a SHA-256), and no buffer file is hashed: PPG receipts record sizes, teacher and search-value shards are not re-hashed on reads (their gzip CRC and row checks remain), the shared lane-to-publisher parts and transient file parts carry no content hash, and decode does not re-hash rows against the lane seals. Replay and feature-cache identities are unchanged.",
+    "qualified_implementation_unchanged": true
+  },
+  "g6230_soft_head_revision": {
+    "scope": "--soft-head-revision (training_revision_g6230) at a committed boundary, after g5685: the soft policy head trains on fixed per-row targets, softmax((collection logits + teacher-term search bonus) / T) over the legal actions with visits > 0, renormalized there (soft_policy.fixed_target, staged beside the bonus in teacher_term.StagedRows), with its log-softmax over the same actions (fixed_loss); rows with at most one visited action have weight 0 and no loss, and a step without any skips the head; its held-out KL is measured once, after PPO, on targets built the same way (heldout_fixed; the checks before PPO and after PPG are dropped); the head's own Adam steps at 1e-4 for 100 iterations from adoption, then at the PPO step rate; the PPG value phase clips at 2.5 (was 2.4) with a one-time PPG Adam rescale from g5466's mean/P98 fit of the last 30 committed PPG phases (ppg_g210.initialize -> rescale_ppg, receipt in the group). g5685's row reader and Adam rescale helper are shared (committed_rows, _rescale), unchanged in behaviour.",
     "qualified_implementation_unchanged": true
   }
 }

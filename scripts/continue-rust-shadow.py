@@ -91,7 +91,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
             teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None,teacher_search_revision=False,
             teacher_training_revision=False,table_revision=False,era_head_revision=False,rail_end_weight=None,
-            optimizer_revision=False,auxiliary_revision=False,clip_revision=False):
+            optimizer_revision=False,auxiliary_revision=False,clip_revision=False,soft_head_revision=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -242,6 +242,13 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             adopted=g5685.applied(config)
             config=g5685.configure(config,state['iteration'],
                 gradient_norms=None if adopted else g5685.committed_norms(run,state))
+        from brass_ai.recovery import training_revision_g6230 as g6230
+        if soft_head_revision:
+            # Fixed visited-only soft targets, the soft check after PPO only, the soft head at 1e-4 for 100
+            # iterations, PPG clip 2.5 with a one-time Adam rescale from the last 30 committed PPG phases.
+            adopted=g6230.applied(config)
+            config=g6230.configure(config,state['iteration'],
+                gradient_norms=None if adopted else g6230.committed_ppg_norms(run,state))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -376,6 +383,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-'+g5466.tag(config)+'-share');stages.append(prefix)
         if g5685.applied(config):
             prefix=prefix.replace('-share', '-'+g5685.tag(config)+'-share');stages.append(prefix)
+        if g6230.applied(config):
+            prefix=prefix.replace('-share', '-'+g6230.tag(config)+'-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
@@ -387,6 +396,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         adopting_optimizer=g5402.applied(config) and not g5402.applied(before)
         adopting_auxiliary=g5466.applied(config) and not g5466.applied(before)
         adopting_clips=g5685.applied(config) and not g5685.applied(before)
+        adopting_soft_head=g6230.applied(config) and not g6230.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
@@ -395,7 +405,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                          g2880.applied(config) and not g2880.applied(before) or
                          g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor or adopting_search or
                          adopting_training or adopting_tables or adopting_era_heads or adopting_optimizer or
-                         adopting_auxiliary or adopting_clips)
+                         adopting_auxiliary or adopting_clips or adopting_soft_head)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -535,6 +545,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'optimizer_revision',False):kwargs['optimizer_revision']=True
         if getattr(args,'auxiliary_revision',False):kwargs['auxiliary_revision']=True
         if getattr(args,'clip_revision',False):kwargs['clip_revision']=True
+        if getattr(args,'soft_head_revision',False):kwargs['soft_head_revision']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -703,6 +714,18 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
                       f"exp_avg_sq x{s['second_moment']:.4f}, from {s['steps']} logged steps of {len(s['norms'])} "
                       f"iterations; fit clip rate {s['predicted_clipped_percent']:.1f}% vs logged "
                       f"{s['logged_clipped_percent']:.1f}%).",flush=True)
+        from brass_ai.recovery import training_revision_g6230 as g6230
+        if g6230.applied(options):
+            report['g6230_soft_head_revision']=g6230.summary(options)
+            r=report['g6230_soft_head_revision'];s=r['ppg_adam_rescale'];rate=r['soft_learning_rate']
+            print(f"g6230 soft-head revision (from g{r['from_generation']}): soft targets fixed, softmax((collection "
+                  f"logits + bonus) / T) over the visited legal actions, the head's output masked the same way, rows with "
+                  f"fewer than {r['soft_min_visited']} visited actions at weight 0; the soft held-out KL once, after PPO; "
+                  f"the soft head at {rate['rate']:g} until g{r['from_generation']+rate['iterations']}, then the PPO step "
+                  f"rate; PPG grad clip {s['old_clip']:g} -> {s['new_clip']:g}, PPG Adam moments rescaled once (exp_avg "
+                  f"x{s['first_moment']:.4f}, exp_avg_sq x{s['second_moment']:.4f}, from {s['steps']} logged steps of "
+                  f"{len(s['norms'])} iterations; fit clip rate {s['predicted_clipped_percent']:.1f}% vs logged "
+                  f"{s['logged_clipped_percent']:.1f}%).",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

@@ -318,12 +318,18 @@ class TeacherPhase:
             from .soft_policy import SoftPolicy
             require(settings is not None, 'The soft policy head needs the g3270 teacher revision')
             self.soft = SoftPolicy(model, soft_settings, self.soft_state, generation=self.generation)
+            from . import training_revision_g6230 as g6230
             from .training_revision_g5402 import soft_follows_ppo
-            if soft_follows_ppo(self.config):
+            # g6230: fixed visited-only targets, and 1e-4 for its first 100 iterations before the PPO link returns.
+            self.soft.fixed = g6230.fixed_soft_targets(self.config)
+            rate = g6230.soft_rate(self.config, self.generation)
+            if rate is not None:
+                self.soft.use_rate(rate, f'g6230-fixed-{rate:g}-until-g{g6230.soft_rate_until(self.config)}')
+            elif soft_follows_ppo(self.config):
                 require(ppo_optimizer is not None, 'A linked soft head needs the PPO optimizer')
                 self.soft.follow(ppo_optimizer)
         # g3270: keep the validation rows' pre-update logits for the policy's movement on them.
-        if self.soft is not None:
+        if self.soft is not None and not self.soft.fixed:
             # The same logits as policy_logits, plus the soft head's KL from the same forwards.
             self.pre_logits, self.pre_soft = self.soft.heldout(model, self.heldout)
         else:
@@ -351,18 +357,27 @@ class TeacherPhase:
         train mode restored), so it changes nothing that trains. The policy's teacher KL comes from the same
         logits at no extra cost. Splits the iteration's soft change into its PPO and PPG parts."""
         self.post_ppo = None
-        if getattr(self, 'soft', None) is None or getattr(self, 'pre_soft', None) is None: return
+        if getattr(self, 'soft', None) is None: return
         began = time.perf_counter()
-        logits, soft = self.soft.heldout(model, self.heldout)
+        if self.soft.fixed:
+            # g6230: the one soft held-out check of the iteration, on targets built like the training ones.
+            from . import training_revision_g3270 as g3270
+            logits, soft = self.soft.heldout_fixed(model, self.heldout, g3270.term_settings(self.config)['label_scale'])
+        elif getattr(self, 'pre_soft', None) is None: return
+        else: logits, soft = self.soft.heldout(model, self.heldout)
         self.post_ppo = dict(soft=soft, policy=heldout_measure(model, self.heldout, logits=logits),
                              seconds=time.perf_counter() - began)
 
     def finish(self, model, update):
         if self.term is not None: self.weight = self.term.finish()
         post_soft = None
-        if self.soft is not None:
+        if self.soft is not None and not self.soft.fixed:
             self.soft_state = self.soft.finish()
             post_logits, post_soft = self.soft.heldout(model, self.heldout)
+        elif self.soft is not None:
+            # g6230: the soft head was measured after PPO only; the policy's own logits as without a soft head.
+            self.soft_state = self.soft.finish()
+            post_logits = policy_logits(model, self.heldout) if self.pre_logits is not None else None
         else:
             post_logits = policy_logits(model, self.heldout) if self.pre_logits is not None else None
         self.post = heldout_measure(model, self.heldout, logits=post_logits)
@@ -394,6 +409,17 @@ class TeacherPhase:
                 policy = measured['policy']
                 heldout['after_ppo'] = policy
                 heldout['ppo_delta'] = {p: change(policy[p]['kl'], before[p]['kl']) for p in before}
+        elif self.soft is not None:
+            # g6230: one measurement, after PPO, against the fixed visited-only targets.
+            measured = getattr(self, 'post_ppo', None)
+            heldout['soft'] = dict(after_ppo=measured['soft'] if measured else None,
+                after_ppo_seconds=measured['seconds'] if measured else None,
+                scope="KL(softmax((collection logits + bonus) / T) over visited legal actions || soft head over the same "
+                      "actions) on the validation tables' long labels with at least 2 visited actions, after PPO only")
+            if measured is not None:
+                change = lambda a, b: a - b if a is not None and b is not None else None
+                heldout['after_ppo'] = measured['policy']
+                heldout['ppo_delta'] = {p: change(measured['policy'][p]['kl'], before[p]['kl']) for p in before}
         return dict(contract=CONTRACT, mode=self.options['mode'], ready=self.ready, collection=self.metrics,
             term=self.term.report() if self.term else {}, heldout=heldout,
             admission_encoding_seconds=self.admission_seconds, buffer=self.buffer.payload(),

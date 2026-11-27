@@ -250,6 +250,15 @@ revision (ai-research/G5685_CLIP_REVISION.md); set once, then kept:
                30 committed iterations' logged pre-clip norms (PPO mean and std, PPG mean and P98).
 Code-only in the same change: the era heads' own per-phase norm summary (g5466) is no longer
 measured or reported.
+
+--soft-head-revision (at a committed boundary, after --clip-revision) adopts the g6230 soft-head
+revision (ai-research/G6230_SOFT_HEAD_REVISION.md); set once, then kept:
+  soft target  fixed per row: softmax((collection logits + search bonus) / T) over the legal actions
+               with visits > 0, renormalized there; the soft head's output masked the same way.
+  weight 0     rows with at most one visited action have no soft loss.
+  held-out     the soft KL once per iteration, after PPO, on targets built the same way.
+  soft rate    1e-4 for 100 iterations from adoption, then the PPO step rate again.
+  PPG clip     2.5 (was 2.4), with the PPG Adam moments rescaled once (mean and P98 fit).
 """
 import importlib.util
 from pathlib import Path

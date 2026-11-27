@@ -199,6 +199,8 @@ def main():
                         help='Adopt the g5466 auxiliary revision at this committed generation (set once, then kept)')
     parser.add_argument('--clip-revision', action='store_true',
                         help='Adopt the g5685 clip revision at this committed generation (set once, then kept)')
+    parser.add_argument('--soft-head-revision', action='store_true',
+                        help='Adopt the g6230 soft-head revision at this committed generation (set once, then kept)')
     args = parser.parse_args()
 
     run = ROOT / RUN
@@ -216,6 +218,7 @@ def main():
         *(['--optimizer-revision'] if args.optimizer_revision else []),
         *(['--auxiliary-revision'] if args.auxiliary_revision else []),
         *(['--clip-revision'] if args.clip_revision else []),
+        *(['--soft-head-revision'] if args.soft_head_revision else []),
     ], cwd=ROOT)
 
 

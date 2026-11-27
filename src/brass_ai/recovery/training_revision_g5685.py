@@ -52,14 +52,13 @@ def _ppo_record(iteration, actor):
                 mean=norms['mean'], std=norms['std'])
 
 
-def committed_norms(run, state, window=WINDOW):
-    """The PPO and PPG pre-clip norm summaries of the latest `window` committed iterations with steps (each among the
-    latest SEARCH), from state.recent_training, the run's uncompacted iteration reports and its compact history
-    (retention-history.json). Every PPG one must have clipped at 2.2; configure() checks that the PPO ones trained
-    after the g5402 adoption (5.83)."""
+def committed_rows(run, state, search=SEARCH):
+    """{iteration: training summary} of the latest `search` committed iterations, from state.recent_training, the
+    run's uncompacted iteration reports and its compact history (retention-history.json), in that order of
+    precedence. g6230 reads its PPG norms from the same rows."""
     rows = {}
     def add(iteration, row):
-        if type(iteration) is not int or iteration >= state['iteration'] or iteration < state['iteration'] - SEARCH:
+        if type(iteration) is not int or iteration >= state['iteration'] or iteration < state['iteration'] - search:
             return
         if iteration not in rows: rows[iteration] = row
     for row in state.get('recent_training') or []: add(row.get('iteration'), row)
@@ -67,7 +66,7 @@ def committed_norms(run, state, window=WINDOW):
     for path in sorted(run.glob('iteration-*/report.json')):
         try: number = int(path.parent.name.split('-', 1)[1])
         except ValueError: continue
-        if number in rows or number >= state['iteration'] or number < state['iteration'] - SEARCH: continue
+        if number in rows or number >= state['iteration'] or number < state['iteration'] - search: continue
         report = json.loads(path.read_text())
         add(report.get('iteration'), report)
     history = run / 'retention-history.json'
@@ -75,8 +74,15 @@ def committed_norms(run, state, window=WINDOW):
         for value in json.loads(history.read_text()).values():
             summary = (value or {}).get('summary') or {}
             add(summary.get('iteration'), summary)
+    return rows
+
+
+def committed_norms(run, state, window=WINDOW):
+    """The PPO and PPG pre-clip norm summaries of the latest `window` committed iterations with steps (each among the
+    latest SEARCH; committed_rows). Every PPG one must have clipped at 2.2; configure() checks that the PPO ones
+    trained after the g5402 adoption (5.83)."""
     ppo, ppg = {}, {}
-    for iteration, row in rows.items():
+    for iteration, row in committed_rows(run, state).items():
         record = _ppo_record(iteration, row.get('actor'))
         if record is not None: ppo[iteration] = record
         found = g5466._record(iteration, (row.get('value_phase') or {}).get('gradient_clipping'))
@@ -201,23 +207,24 @@ def ppg_grad_clip(config):
     return g5466.ppg_grad_clip(config)
 
 
-def _rescale(optimizer, config, generation, *, name, group_key, rescale_key):
-    if not applied(config): return None
-    require(len(optimizer.param_groups) == 1, f'The g5685 {name} Adam rescale expects one {name} Adam group')
-    group = optimizer.param_groups[0]; block = config[KEY]
+def _rescale(optimizer, block, generation, *, name, group_key, rescale_key, contract=CONTRACT, revision='g5685'):
+    """Multiply one Adam's moments once by `block[rescale_key]`'s factors, at `block['from_generation']`, with the
+    receipt in the group under `group_key`; g6230 reuses it for its own PPG clip."""
+    require(len(optimizer.param_groups) == 1, f'The {revision} {name} Adam rescale expects one {name} Adam group')
+    group = optimizer.param_groups[0]
     if group_key in group:
         require(group[group_key]['generation'] == block['from_generation'],
                 f'The {name} Adam was rescaled by another adoption')
         return None
     require(generation == block['from_generation'],
-            f'The g5685 {name} Adam rescale runs once, on the checkpoint of its adoption generation')
+            f'The {revision} {name} Adam rescale runs once, on the checkpoint of its adoption generation')
     rescale = block[rescale_key]; first, second = rescale['first_moment'], rescale['second_moment']
     states = [optimizer.state[p] for p in group['params'] if p in optimizer.state]
     require(states and all('exp_avg' in s and 'exp_avg_sq' in s and 'max_exp_avg_sq' not in s for s in states),
-            f'The g5685 {name} Adam rescale needs the trained {name} Adam moments')
+            f'The {revision} {name} Adam rescale needs the trained {name} Adam moments')
     for s in states:
         s['exp_avg'].mul_(first); s['exp_avg_sq'].mul_(second)
-    receipt = dict(contract=CONTRACT, phase=name.lower(), generation=generation, old_clip=rescale['old_clip'],
+    receipt = dict(contract=contract, phase=name.lower(), generation=generation, old_clip=rescale['old_clip'],
                    new_clip=rescale['new_clip'], first_moment=first, second_moment=second, parameters=len(states),
                    steps=rescale['steps'], norm_mean=rescale['norm_mean'],
                    predicted_clipped_percent=rescale['predicted_clipped_percent'],
@@ -231,12 +238,14 @@ def rescale_ppo(optimizer, config, generation):
     """Once, on the committed checkpoint of the adoption generation: every PPO Adam exp_avg and exp_avg_sq multiplied
     by the recorded factors, the receipt kept in the Adam group. A crashed attempt at that generation reloads the same
     checkpoint and rescales it the same way. Returns the receipt, or None."""
-    return _rescale(optimizer, config, generation, name='PPO', group_key=PPO_GROUP_KEY, rescale_key='ppo_adam_rescale')
+    if not applied(config): return None
+    return _rescale(optimizer, config[KEY], generation, name='PPO', group_key=PPO_GROUP_KEY, rescale_key='ppo_adam_rescale')
 
 
 def rescale_ppg(optimizer, config, generation):
     """rescale_ppo for the PPG value phase's Adam."""
-    return _rescale(optimizer, config, generation, name='PPG', group_key=PPG_GROUP_KEY, rescale_key='ppg_adam_rescale')
+    if not applied(config): return None
+    return _rescale(optimizer, config[KEY], generation, name='PPG', group_key=PPG_GROUP_KEY, rescale_key='ppg_adam_rescale')
 
 
 def tag(config):

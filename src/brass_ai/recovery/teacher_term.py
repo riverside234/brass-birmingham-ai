@@ -114,7 +114,7 @@ class StagedRows:
     """
     LIMIT_BYTES = 2 * 1024 ** 3
 
-    def __init__(self, rows, device, audit, values=None):
+    def __init__(self, rows, device, audit, values=None, extras=None):
         from .replay_binding import checked_encoded
         # g6120: a buffer row was admitted when it entered the buffer (teacher_buffer.admitted: sealed and
         # immutable), so only other inputs take the audit, without a per-iteration content hash.
@@ -128,27 +128,40 @@ class StagedRows:
         self.states = torch.as_tensor(np.stack([r.encoded.state for r in rows]), device=device)
         self.actions = torch.as_tensor(np.ascontiguousarray(actions, dtype=np.float32), device=device)
         self.targets = torch.as_tensor(targets, device=device)
+        # g6230: further per-action vectors (the soft head's fixed targets and visited actions), staged the same way.
+        self.extras = {name: torch.as_tensor(np.concatenate([np.zeros(1, np.float32)] + [np.asarray(v, np.float32) for v in vectors]),
+                                             device=device) for name, vectors in (extras or {}).items()}
         self.offsets = torch.as_tensor(offsets, dtype=torch.int64, device=device)
         self.lengths = torch.as_tensor(self.widths, dtype=torch.int64, device=device)
-        self.bytes = sum(t.numel() * t.element_size() for t in (self.states, self.actions, self.targets))
+        self.bytes = sum(t.numel() * t.element_size() for t in (self.states, self.actions, self.targets, *self.extras.values()))
 
     @classmethod
-    def build(cls, rows, device, audit, values=None):
+    def build(cls, rows, device, audit, values=None, extras=None):
         # Duck-typed inputs, and any label narrower or wider than its encoded choices, keep the host collate path.
         if not rows or any(not isinstance(getattr(r.encoded, 'state', None), np.ndarray)
                            or not isinstance(getattr(r.encoded, 'actions', None), np.ndarray)
                            or len(r.encoded.choice_ids) != len(r.label['target']) for r in rows): return None
         if values is not None and any(len(v) != len(r.label['target']) for r, v in zip(rows, values, strict=True)): return None
+        if any(len(v) != len(r.label['target']) for vectors in (extras or {}).values() for r, v in zip(rows, vectors, strict=True)):
+            return None
         size = sum(len(r.encoded.choice_ids) for r in rows) * rows[0].encoded.actions.shape[-1] * 4
-        return cls(rows, device, audit, values) if size <= cls.LIMIT_BYTES else None
+        return cls(rows, device, audit, values, extras) if size <= cls.LIMIT_BYTES else None
 
-    def batch(self, indices):
+    def _index(self, indices):
         width = max(self.widths[i] for i in indices)
         selected = torch.as_tensor(indices, dtype=torch.int64, device=self.states.device)
         position = torch.arange(width, device=selected.device)
         mask = position[None, :] < self.lengths[selected][:, None]
         index = torch.where(mask, self.offsets[selected][:, None] + position[None, :], torch.zeros_like(position)[None, :])
+        return selected, mask, index
+
+    def batch(self, indices):
+        selected, mask, index = self._index(indices)
         return self.states[selected], self.actions[index], mask, self.targets[index]
+
+    def extra(self, name, indices):
+        """g6230: the staged vectors `name` of these rows, padded like batch() (zero past each row's width)."""
+        return self.extras[name][self._index(indices)[2]]
 
 
 def kl(p, q):
@@ -241,6 +254,7 @@ class TeacherTerm:
         self.config = config; self.mode = config['mode']; self.seed = seed; self.generation = generation
         self.revision = copy.deepcopy(revision); self.soft = soft
         self.batches = None; self.plan_report = None; self.bonus = None; self.position = None
+        self.soft_fixed = {}  # g6230: row index -> (fixed soft target, visited, info), built for the rows the plan draws
         self.state = copy.deepcopy(state or {})
         self.beta = self.state.get('beta', 1.); self.calibrated = self.state.get('calibrated', False)
         from .teacher_gradient_qualification import restore
@@ -335,6 +349,22 @@ class TeacherTerm:
         require(self.long_weight is not None or all(p == 'full' for p in self.profiles),
                 'Short-search teacher labels need the g1491 recipe')
 
+    def soft_vectors(self, i):
+        """g6230: row i's fixed soft target and visited actions (soft_policy.fixed_target with this row's bonus)."""
+        if i not in self.soft_fixed:
+            from .soft_policy import fixed_target
+            from .training_revision_g6230 import MIN_VISITED
+            target, support, info = fixed_target(self.rows[i].label, self.bonus[i], self.soft.temperature, MIN_VISITED)
+            self.soft_fixed[i] = (target.astype(np.float32), support.astype(np.float32), info)
+            self.soft.targets.append(info)
+        return self.soft_fixed[i]
+
+    def soft_extras(self, soft, indices):
+        """g6230: the staged extras of these rows for a fixed-target soft head, else None."""
+        if soft is None or not soft.fixed: return None
+        vectors = [self.soft_vectors(i) for i in indices]
+        return dict(soft_target=[v[0] for v in vectors], visited=[v[1] for v in vectors])
+
     def stratified(self, step):
         """Age-weighted draws from each pool; per-row weights give each pool its share of the loss."""
         n = self.config['term']['rows_per_step']; weights = self.config['buffer']['age_weights']
@@ -418,10 +448,11 @@ class TeacherTerm:
                         used = sorted({i for b in self.batches for i in b})
                         self.position = {i: k for k, i in enumerate(used)}
                         self.staged = StagedRows.build([self.rows[i] for i in used], next(model.parameters()).device,
-                                                       self.input_audit, values=[self.bonus[i] for i in used])
+                                                       self.input_audit, values=[self.bonus[i] for i in used],
+                                                       extras=self.soft_extras(soft, used))
                     else:
                         self.staged = StagedRows.build(self.rows, next(model.parameters()).device, self.input_audit,
-                                                       values=self.bonus)
+                                                       values=self.bonus, extras=self.soft_extras(soft, range(len(self.rows))))
                     self.staging = dict(staged=self.staged is not None, fallback=self.staged is None,
                         bytes=self.staged.bytes if self.staged else 0, seconds=time.perf_counter() - staged_at)
                 # The soft head reads the scorer's hidden layer from this same forward (a hook, no extra pass).
@@ -443,8 +474,23 @@ class TeacherTerm:
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
                 if soft is not None:
                     soft_began = time.perf_counter()
-                    soft_loss = soft.loss(logits, bonus, single(hidden))
+                    if soft.fixed:
+                        # g6230: the fixed visited-only targets; rows with at most one visited action have weight 0.
+                        if self.staged is not None:
+                            soft_target = self.staged.extra('soft_target', positions)
+                            visited = self.staged.extra('visited', positions)
+                        else:
+                            vectors = [self.soft_vectors(i) for i in indices]
+                            soft_target = target_tensor(rows, logits, [v[0] for v in vectors])
+                            visited = target_tensor(rows, logits, [v[1] for v in vectors])
+                        keep = [k for k, i in enumerate(indices) if self.soft_vectors(i)[2]['eligible']]
+                        soft_loss = soft.fixed_loss(single(hidden), soft_target, visited, keep)
+                    else:
+                        soft_loss = soft.loss(logits, bonus, single(hidden))
                     soft_seconds += time.perf_counter() - soft_began
+                    if soft_loss is None:
+                        # g6230: no row of this step has a soft loss; the head and the trunk take no soft step.
+                        soft.skipped_steps += 1; soft.seconds += soft_seconds; soft = None
                 # The teacher's own call, unchanged; it keeps the graph only for a soft loss that reaches the trunk.
                 gradients = torch.autograd.grad(loss, parameters, allow_unused=True,
                                                 retain_graph=soft is not None and soft.trunk)

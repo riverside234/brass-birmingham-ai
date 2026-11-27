@@ -194,6 +194,13 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'at 6.5 (was 5.83) and PPG at 2.4 (was 2.2); both Adams are rescaled once to the new clips from the '
              'logged norms of the last 30 committed iterations. Rates, schedules and the era and soft head clips '
              '(1.0) are unchanged. Trainer-only; set once (training_revision_g5685).')
+    parser.add_argument('--soft-head-revision', action='store_true',
+        help='Adopt the g6230 soft-head revision at this committed generation (after --clip-revision): the soft '
+             'policy head trains on fixed targets, softmax((collection logits + search bonus) / T) over the legal '
+             'actions with visits > 0, with its output masked the same way; rows with at most one visited action '
+             'have weight 0; its held-out KL is measured once, after PPO, on targets built the same way; it steps at '
+             '1e-4 for 100 iterations, then at the PPO rate again; PPG clips at 2.5 (was 2.4) with its Adam rescaled '
+             'once. Trainer-only; set once (training_revision_g6230).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -270,6 +277,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.optimizer_revision = False
         recovery.auxiliary_revision = False
         recovery.clip_revision = False
+        recovery.soft_head_revision = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

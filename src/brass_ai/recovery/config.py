@@ -746,6 +746,12 @@ def validate_config(config):
         require(AUXILIARY_REVISION in config and config['update']['grad_clip']==block['ppo_grad_clip'],
                 'The g5685 clip revision needs the g5466 auxiliary revision and holds the PPO clip it adopted')
         fields.add(CLIP_REVISION)
+    from .training_revision_g6230 import KEY as SOFT_HEAD_REVISION,validate as validate_soft_head_revision
+    if SOFT_HEAD_REVISION in config:
+        # g6230: fixed visited-only soft targets, after-PPO soft check, soft rate 1e-4 x 100, PPG clip 2.5.
+        require(CLIP_REVISION in config and 'soft_policy' in config,
+                'The g6230 soft-head revision needs the g5685 clip revision and the g3423 soft policy head')
+        fields.add(SOFT_HEAD_REVISION);validate_soft_head_revision(config[SOFT_HEAD_REVISION])
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)
