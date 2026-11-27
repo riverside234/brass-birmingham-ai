@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "9876fe7cdd82cd9c7658d880574b203953b3b640febbfe0f1e93802a22c79a75",
+  "execution_implementation": "4aaa5fba8c3631ee5f0d3e4fd9301fe24fc535a7cf8b0bc6012e68ec85059df2",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -74,7 +74,7 @@
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
-      "after": "2818e203c84bef345955c910a8d7761e8e3a2bf71258aed8932afc72fd064b9b"
+      "after": "6f27c7ea4887049ad3f0c2dcb1152adff4970d4676260b6152155f50ee3eed35"
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
@@ -190,7 +190,7 @@
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
-      "after": "aec6ff74aad40c11376ea6807875c3f13e2f26bbc9812d2405e317b2c20766dc"
+      "after": "43ae8c2600d35a75cc770e3a14f641e6d925ab6566081b86cb6059dd3cdbe017"
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
@@ -198,7 +198,7 @@
     },
     "src/brass_ai/recovery/teacher_term.py": {
       "before": "750f69097b19f230db5ee7f68de342ce96919953e288ace145eb57e8e8de8da8",
-      "after": "177bfdd5b36c088f93e5aaad7705de86152564ab2f5e0bab3b24387f50771930"
+      "after": "b65c220736c342c45b3c63b98aacc0da46072a684722560376196833c8b1d9c7"
     },
     "src/brass_ai/recovery/teacher_value.py": {
       "before": "b77180209a7f14bc3df6e49e119f524a7b339f8212558c572fb04dd3bf6aadff",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "f9db223b449d7bdeaa01c567877fc7f17caefbcc6a5b0445145875f2b866a59d"
+      "after": "12917e3651f2c42a4faba0a2e1476b7ee9dc28cae4363d5a7118fccdf99b10d3"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "c130d8284bb515b39a8d0a0611d20fd8491b32e5cd150916e5c5d2bc2bd2aeaa"
+      "after": "8ebaee5625e348364f1f4454e5f0f8ccb255a2cd2839097ddca12710f846a7e2"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -382,7 +382,7 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "81e3795222cfd88497e0460d3362a3b6c5a50f37bceb774f56115ff7c5d37637"
+      "after": "9538ff15c1347b9719eda8e32ae463603431d3539a105540098fafb138cc6458"
     },
     "tests/RustBackendLab/test_collection_overlap.py": {
       "before": null,
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "b2682629b50fde564e589ba6b716073f08fe3011379468d75d3226dbd106643c"
+      "after": "1b167397a4fd828b898e1b0ae5102fa4506cd8981bbdb8e0091b59530cfc471e"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -630,7 +630,7 @@
     },
     "src/brass_ai/recovery/soft_policy.py": {
       "before": null,
-      "after": "66daedc1bcdd1756b54b92d7864bdcce84e56609aa02adfaf526fd45ba7174f0"
+      "after": "f3b0e1922f7b993721699b3eed1143cf9e341d3a072b6d7e1b64e5fe715cdccc"
     },
     "src/brass_ai/recovery/training_revision_g3423.py": {
       "before": null,
@@ -818,11 +818,11 @@
     },
     "src/brass_ai/recovery/training_revision_g6230.py": {
       "before": null,
-      "after": "5d9b78751df3110b362b400dcd50b46a985615d39d9b0c1290a51ac279efe529"
+      "after": "1ae7b6af2ee63f9013215cbbb3ccff5d75968199b0d72e93e8809a58d5b05e26"
     },
     "tests/Recovery/test_soft_head_revision_g6230.py": {
       "before": null,
-      "after": "a0adaf26d1f51aacb835b7e670dc3f0181745a09418ae39109b41119017eef7c"
+      "after": "4123c4ff47a868cb30ce7677b14ee8820511e201a4ea1fb1fe34c4c56bd49b28"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -1213,6 +1213,11 @@
       "implementation": "0fb8d4ce3be2c9c781f1ef22fb7c5d79930dc82c610382be0d19a5d6ef17a05f",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "4edb3c6e1ca67193e4c3abb42be2cd096e92887c0ea91b209b95fb4a68b9585f"
+    },
+    {
+      "implementation": "9876fe7cdd82cd9c7658d880574b203953b3b640febbfe0f1e93802a22c79a75",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "3e3551bef252075aca5dc3c1bd8073730f1876dd73d73fc894a53b713ef8d83e"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1657,7 +1662,7 @@
     "qualified_implementation_unchanged": true
   },
   "g6230_soft_head_revision": {
-    "scope": "--soft-head-revision (training_revision_g6230) at a committed boundary, after g5685: the soft policy head trains on fixed per-row targets, softmax((collection logits + teacher-term search bonus) / T) over the legal actions with visits > 0, renormalized there (soft_policy.fixed_target, staged beside the bonus in teacher_term.StagedRows), with its log-softmax over the same actions (fixed_loss); rows with at most one visited action have weight 0 and no loss, and a step without any skips the head; its held-out KL is measured once, after PPO, on targets built the same way (heldout_fixed; the checks before PPO and after PPG are dropped); the head's own Adam steps at 1e-4 for 100 iterations from adoption, then at the PPO step rate; the PPG value phase clips at 2.5 (was 2.4) with a one-time PPG Adam rescale from g5466's mean/P98 fit of the last 30 committed PPG phases (ppg_g210.initialize -> rescale_ppg, receipt in the group). g5685's row reader and Adam rescale helper are shared (committed_rows, _rescale), unchanged in behaviour.",
+    "scope": "--soft-head-revision (training_revision_g6230) at a committed boundary, after g5685: the soft policy head's target stays softmax((current logits + teacher-term search bonus) / T), held fixed for the gradient, but over the legal actions with visits > 0 only, renormalized there, with its log-softmax over the same actions (soft_policy.masked_loss; the visited mask staged beside the bonus in teacher_term.StagedRows); rows with at most one visited action have weight 0 and no loss, and a step without any skips the head; its held-out KL is measured once, after PPO, on targets built the same way (heldout_masked; the checks before PPO and after PPG are dropped); the head's own Adam steps at 1e-4 for 100 iterations from adoption, then at the PPO step rate; the PPG value phase clips at 2.5 (was 2.4) with a one-time PPG Adam rescale from g5466's mean/P98 fit of the last 30 committed PPG phases (ppg_g210.initialize -> rescale_ppg, receipt in the group). The 95dd6394 version's fixed targets from the collection logits were rolled back before any lab use.",
     "qualified_implementation_unchanged": true
   }
 }

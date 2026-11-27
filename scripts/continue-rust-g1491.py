@@ -196,7 +196,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              '(1.0) are unchanged. Trainer-only; set once (training_revision_g5685).')
     parser.add_argument('--soft-head-revision', action='store_true',
         help='Adopt the g6230 soft-head revision at this committed generation (after --clip-revision): the soft '
-             'policy head trains on fixed targets, softmax((collection logits + search bonus) / T) over the legal '
+             'policy head trains on softmax((current logits + search bonus) / T) over only the legal '
              'actions with visits > 0, with its output masked the same way; rows with at most one visited action '
              'have weight 0; its held-out KL is measured once, after PPO, on targets built the same way; it steps at '
              '1e-4 for 100 iterations, then at the PPO rate again; PPG clips at 2.5 (was 2.4) with its Adam rescaled '

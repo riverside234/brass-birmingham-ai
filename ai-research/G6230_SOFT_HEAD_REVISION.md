@@ -5,15 +5,15 @@ Run `joint7-v11-2-g4970-rail025-soft8-beta0.02`, committed at g6230 in the newes
 `--soft-head-revision` at a committed boundary, then kept (`src/brass_ai/recovery/training_revision_g6230.py`,
 block `soft_head_revision`).
 
-## Request (2026-11-26)
+## Request (2026-11-26, revised 2026-11-27)
 
 1. Mask the soft head's target and output, and normalize each over only the legal actions with `visits > 0`.
 2. A sample with at most one such action (a forced move, an anomalous step) gets soft loss weight 0, and its loss is
    not computed.
 3. The soft head's LR is 1e-4 for 100 iterations from the continuation, then back to the current PPO-linked setting.
-4. The soft head trains on fixed targets built from each sample's collection-time logits (`old_logits`) and its search
-   bonus.
-5. The soft held-out KL compares the soft head with fixed targets built the same way for each held-out sample. It is
+4. ~~The soft head trains on fixed targets from each sample's collection-time logits (`old_logits`) and its search
+   bonus.~~ Rolled back on 2026-11-27, before any lab use: the soft head still uses the current logits.
+5. The soft held-out KL compares the soft head with targets built the same way for each held-out sample. It is
    computed only once, after PPO.
 6. PPG `grad_clip` 2.5, with the Adam state rescaled.
 
@@ -21,53 +21,52 @@ block `soft_head_revision`).
 
 | | before (g3423 to g5685) | after |
 | --- | --- | --- |
-| Soft target | `softmax((current logits + bonus) / 4)` over all legal actions, rebuilt every step | fixed per row: `softmax((label logits + bonus) / 4)` over the legal actions with visits > 0, zero elsewhere |
+| Soft target | `softmax((current logits + bonus) / 4)` over all legal actions | `softmax((current logits + bonus) / 4)` over the legal actions with visits > 0, renormalized there, zero elsewhere |
 | Soft head output | log-softmax over all legal actions | log-softmax over the same visited actions |
 | Rows with at most 1 visited action | trained like the others | weight 0, no loss computed; a step with none left skips the head |
-| Soft held-out KL | 3 checks (before PPO, after PPO, after PPG) against `stored target ** (1/4)` | 1 check, after PPO, against the fixed targets |
+| Soft held-out KL | 3 checks (before PPO, after PPO, after PPG) against `stored target ** (1/4)` | 1 check, after PPO, against targets built like the training ones |
 | Soft head rate | the PPO step rate (6e-6) | 1e-4 for g6230-g6329, then the PPO step rate again from g6330 |
 | PPG clip | 2.4 (g5685) | 2.5, with a one-time PPG Adam rescale |
 
 The following do not change:
 - the soft head's temperature (4), weight (8 x beta), clip (1.0) and warm-up (finished);
 - its committed head and Adam state (the g3423 block and its settings stamp are untouched);
-- the main policy's teacher targets, which are still rebuilt from the current policy;
+- the main policy's teacher targets;
 - the label rows, buffers and beta;
 - PPO's clip (6.5) and rates.
 
 ### Soft target and masking
 
-The label logits are the policy logits the collector stored with each label (`label['logits']`), so they are the
-collection-time `old_logits`. The bonus is the teacher term's own: `teacher_term.search_bonus` at the g3270 label
-scale (.2), the same vector the main teacher target uses. For each row (`soft_policy.fixed_target`):
-- the target is `softmax((logits + bonus) / T)` taken over the visited legal actions, renormalized there and zero
-  elsewhere;
-- the head's logits get the same visited mask before their log-softmax (`SoftPolicy.fixed_loss`).
+As before, the target is rebuilt at each step from the current policy's logits and held fixed for the gradient. The
+bonus is the teacher term's own: `teacher_term.search_bonus` at the g3270 label scale (.2), the same vector the main
+teacher target uses. What changes is the support (`SoftPolicy.masked_loss`):
+- the target is `softmax((current logits + bonus) / T)` taken over the visited legal actions, renormalized there and
+  zero elsewhere;
+- the head's logits get the same visited mask before their log-softmax.
 
-The target depends only on the stored label, so it does not move with the policy. The teacher term builds it once per
-drawn row per iteration and stages it on the GPU beside the bonus (`StagedRows` extras `soft_target` and
-`visited`). The host path builds the same tensors.
+Each drawn row's visited mask is built once per iteration from its label counts (`soft_policy.visited_support`). It
+is staged on the GPU beside the bonus (`StagedRows` extra `visited`), and the host path builds the same tensor.
 
 A row needs at least 2 visited actions (`MIN_VISITED`). With one visited action, the masked softmax is 1 on both
 sides and the KL is exactly 0. With none, it is undefined. A step's soft loss is the sum of the eligible rows' KL,
-divided by all of the step's rows: the other rows have weight 0 and no forward work is spent on their soft loss,
-while the eligible rows keep the weight they had. A step whose rows are all weight 0 takes no soft head step and
-sends no soft gradient to the trunk (`skipped_steps`).
+divided by all of the step's rows. The other rows have weight 0 and no soft-loss work is spent on them, while the
+eligible rows keep the weight they had. A step whose rows are all weight 0 takes no soft head step and sends no soft
+gradient to the trunk (`skipped_steps`).
 
 With Gumbel root search, the visited actions are the considered set: `effective_k` is at most 16, and often far
 below the legal width. So the soft head now learns only the order among the actions the search looked at. It is not
-exported and never chooses a move. Its gradient still reaches the shared scorer and trunk at 8 x beta, now toward the
-collection-time improved policy restricted to the visited actions.
+exported and never chooses a move. Its gradient still reaches the shared scorer and trunk at 8 x beta.
 
 ### Held-out KL, once after PPO
 
-`TeacherPhase.after_ppo` calls `SoftPolicy.heldout_fixed` on the validation-table long labels. For each row with at
-least 2 visited actions it computes KL(fixed target || head softmax over the visited actions); the other rows are
-counted in `skipped_rows`. The checks before PPO and after PPG are dropped. The policy's own held-out measures before
-and after the iteration stay; their logits come from `policy_logits`, as they do without a soft head.
+`TeacherPhase.after_ppo` calls `SoftPolicy.heldout_masked` on the validation-table long labels. The target is built
+from the policy's logits in the same forward, plus the bonus, over the visited actions. For each row with at least 2
+visited actions, it computes KL(target || head softmax over the visited actions); the other rows are counted in
+`skipped_rows`. It also reports `dropped_unvisited_mass`, the share of the unmasked target that the mask removes.
 
-In the 128 iterations of this export's history, PPG moved the soft held-out KL by a median 0.00016 (0 in 49 of
-them), against 0.0013 for PPO.
+The checks before PPO and after PPG are dropped. The policy's own held-out measures before and after the iteration
+stay; their logits come from `policy_logits`, as they do without a soft head. In the 128 iterations of this export's
+history, PPG moved the soft held-out KL by a median 0.00016 (0 in 49 of them), against 0.0013 for PPO.
 
 This KL is a different measure from the old `heldout.soft.after.kl` (about 0.046), which used the softened stored
 target over all legal actions. The two numbers are not comparable.
@@ -99,13 +98,10 @@ small because 2.5 moves the clip only within the top 6-8% of norms.
 
 ## Cost
 
-- Compute: small. One host softmax per drawn row per iteration builds the fixed targets, beside the existing bonus
-  computation. That is a few thousand of the 13,355 pooled rows, estimated under 0.3 s. Staging the two extra
-  vectors takes a few MB of GPU memory. The soft loss now covers only the visited columns of eligible rows. Dropping
-  two of the three soft held-out checks saves under 0.1 s per iteration; the whole after-PPO check took a median
-  0.03 s.
-- Training signal: the soft target no longer tracks the current policy. Labels up to 8 iterations old keep their
-  collection-time targets.
+- Compute: negligible. Building one visited mask per drawn row takes a host pass over its counts, and staging it takes
+  about a megabyte of GPU memory. The soft loss covers only eligible rows. Dropping two of the three soft held-out
+  checks saves under 0.1 s per iteration; the whole after-PPO check took a median 0.03 s.
+- Training signal: the soft head and its 8 x beta trunk gradient no longer see the unvisited actions.
 - The 16x larger soft head steps last 100 iterations.
 - PPG steps on the 6-8% of batches above 2.4 get up to 4% larger.
 
@@ -115,10 +111,10 @@ small because 2.5 moves the clip only within the top 6-8% of norms.
   1.0140), and per iteration `soft_heldout_after_ppo=` with `soft_rate=0.0001`.
 - `teacher_phase.term.soft.learning_rate.source` is `g6230-fixed-0.0001-until-g6330`, and `last` is 1e-4. From g6330
   they are `ppo-step-rate` and the PPO rate.
-- `teacher_phase.term.soft.fixed_targets` shows the rows built, `eligible_rows`, `weight_zero_rows` (expected rare),
-  `skipped_steps` (expected 0), `visited_actions` (the support size) and `dropped_unvisited_mass` (the share of the
-  unmasked target on unvisited actions).
-- `teacher_phase.heldout.soft` has only `after_ppo` (`rows`, `skipped_rows`, `kl`, `by_phase`) and its seconds.
+- `teacher_phase.term.soft.masked_targets` shows the rows drawn, `eligible_rows`, `weight_zero_rows` (expected
+  rare), `skipped_steps` (expected 0) and `visited_actions` (the support size).
+- `teacher_phase.heldout.soft` has only `after_ppo` (`rows`, `skipped_rows`, `kl`, `by_phase`,
+  `dropped_unvisited_mass`) and its seconds.
 - `value_phase.gradient_clipping.max_norm` is 2.5 with `clipped_percent` near 6%.
 
 ## Tests
@@ -128,24 +124,24 @@ small because 2.5 moves the clip only within the top 6-8% of norms.
 - forward-only transitions;
 - the PPG fit and its norm reader;
 - the PPG Adam rescaled once after the earlier receipts;
-- the fixed target's math;
-- `TeacherTerm.apply` with fixed targets: the loss matches a hand computation, weight-0 rows, a step of only weight-0
-  rows skipped, the host path equal to the staged one, and an unrevised head unchanged;
+- the visited support and masked target math;
+- `TeacherTerm.apply`:
+  - with the policy moved after the rows were drawn, the loss matches a hand computation from the current logits,
+    not from the collection logits;
+  - weight-0 rows, and a step of only weight-0 rows skipped;
+  - the host path equal to the staged one;
+  - an unrevised head unchanged;
 - the teacher phase: one soft check after PPO, the 1e-4 rate, and the held-out KL against a hand computation.
 
-The related suites were run together: 20 modules, 221 tests, covering g5685, g5466, g5402, g3423 soft, g4475
-after-PPO, g3270, g4770, g3140, PPG g210, the shadow runtime and resume, g4551, g4138, g3471, g3528, g6120, local
-scoring PPG, the GAE value phase and the teacher-phase revision. 9 fail, all already in
-`docs/KNOWN_TEST_FAILURES/KNOWN_TEST_FAILURES.md` with the same messages:
-- `test_ppg_g210.Restored` ×2
-- `test_gae_value_phase` ×3
-- `test_teacher_phase_revision.DistinctUsageTests` ×3
-- `test_table_revision_g4551.SelfPlay` ×1
+After the rollback, 10 focused modules were run: this file, g5685, g3423 soft, g4475 after-PPO, g3270, g3140, the
+shadow runtime, g6120, g4138 and g3471. All 116 tests pass. The first version had also run 20 related modules (221
+tests); its only failures were the 9 already listed in `docs/KNOWN_TEST_FAILURES/KNOWN_TEST_FAILURES.md`.
 
 ## Execution identity
 
-`9876fe7cdd82cd9c7658d880574b203953b3b640febbfe0f1e93802a22c79a75`, with predecessor `0fb8d4ce...`. The entry is
-`g6230_soft_head_revision` in `configs/learning/b07-replay-location-review.json`.
+`4aaa5fba8c3631ee5f0d3e4fd9301fe24fc535a7cf8b0bc6012e68ec85059df2`, with predecessor `9876fe7c...` (the 95dd6394
+version with the collection-logit targets, never run). The entry is `g6230_soft_head_revision` in
+`configs/learning/b07-replay-location-review.json`.
 
 ## Command
 

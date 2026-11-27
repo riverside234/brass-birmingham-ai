@@ -1,5 +1,5 @@
-"""g6230 soft-head revision: fixed visited-only soft targets from the collection logits and search bonus, weight 0 for
-rows with at most one visited action, the soft held-out KL once after PPO on the same targets, the soft head at 1e-4
+"""g6230 soft-head revision: soft targets from the current logits and search bonus over the visited legal actions only,
+weight 0 for rows with at most one visited action, the soft held-out KL once after PPO on the same targets, the soft head at 1e-4
 for 100 iterations, and PPG clip 2.5 with a one-time Adam rescale."""
 import copy
 import json
@@ -63,8 +63,8 @@ class Recipe(unittest.TestCase):
         self.assertEqual(changed, ['soft_head_revision'])
         self.assertEqual(R.previous(after), before)
         self.assertEqual(R.configure(after, 6231, gradient_norms=None), after)  # adopted once
-        self.assertTrue(is_on(after)); self.assertEqual(R.tag(after), 'softfixed-lr1e4x100-ppgclip25')
-        self.assertTrue(R.fixed_soft_targets(after)); self.assertFalse(R.fixed_soft_targets(before))
+        self.assertTrue(is_on(after)); self.assertEqual(R.tag(after), 'softvisited-lr1e4x100-ppgclip25')
+        self.assertTrue(R.masked_soft_targets(after)); self.assertFalse(R.masked_soft_targets(before))
         self.assertEqual([R.soft_rate(after, g) for g in (6230, 6329, 6330)], [1e-4, 1e-4, None])
         self.assertIsNone(R.soft_rate(before, 6230)); self.assertEqual(R.soft_rate_until(after), 6330)
         with self.assertRaisesRegex(ValueError, 'follows the g5685 clip revision'):
@@ -134,24 +134,24 @@ class PpgClip(unittest.TestCase):
 
 
 class Targets(unittest.TestCase):
-    def test_the_target_is_a_softmax_over_the_visited_actions_only(self):
-        from brass_ai.recovery.soft_policy import fixed_target
-        label = dict(logits=[1., 2., -1., .5], counts=[3, 0, 1, 2])
-        bonus = np.array([.2, 5., -.1, .3])
-        target, support, info = fixed_target(label, bonus, 4.)
-        z = (np.array(label['logits']) + bonus) / 4.; visited = np.array([True, False, True, True])
+    def test_the_support_and_the_target_cover_the_visited_actions_only(self):
+        from brass_ai.recovery.soft_policy import masked_target, visited_support
+        label = dict(legal_ids=['a', 'b', 'c', 'd'], counts=[3, 0, 1, 2])
+        support, info = visited_support(label)
+        self.assertEqual(support.tolist(), [1., 0., 1., 1.]); self.assertEqual((info['visited'], info['eligible']), (3, True))
+        logits, bonus = np.array([1., 2., -1., .5]), np.array([.2, 5., -.1, .3])
+        target, dropped = masked_target(logits, bonus, support, 4.)
+        z = (logits + bonus) / 4.; visited = support > 0
         expected = np.zeros(4); expected[visited] = np.exp(z[visited]) / np.exp(z[visited]).sum()
-        np.testing.assert_allclose(target, expected, rtol=1e-12)
-        self.assertEqual(support.tolist(), [1., 0., 1., 1.]); self.assertEqual(target[1], 0.)
-        self.assertEqual((info['visited'], info['eligible']), (3, True))
-        self.assertAlmostEqual(info['dropped'], np.exp(z[1]) / np.exp(z).sum())  # the masked-out mass
+        np.testing.assert_allclose(target, expected, rtol=1e-12); self.assertEqual(target[1], 0.)
+        self.assertAlmostEqual(dropped, np.exp(z[1]) / np.exp(z).sum())  # the masked-out mass
         for counts in ([5, 0, 0, 0], [0, 0, 0, 0]):
-            target, support, info = fixed_target(dict(label, counts=counts), bonus, 4.)
+            _, info = visited_support(dict(label, counts=counts))
             self.assertFalse(info['eligible']); self.assertEqual(info['visited'], sum(c > 0 for c in counts))
 
 
 class Term(unittest.TestCase):
-    """Through TeacherTerm.apply (the g3423 soft-head fixture) with the head on fixed targets."""
+    """Through TeacherTerm.apply (the g3423 soft-head fixture) with the head on visited-only targets."""
 
     @classmethod
     def setUpClass(cls):
@@ -162,9 +162,9 @@ class Term(unittest.TestCase):
         cls.rows = list(cls.rows) + [(i % 8, label_row(cls.model, seat=i % 4, round=2 + i % 6, width=3, counts=(4, 0, 0),
                                                        means=(.5, 0., 0.))) for i in range(4)]
 
-    def soft(self, fixed=True):
+    def soft(self, masked=True):
         from test_soft_policy_g3423 import at_multiplier
-        soft = at_multiplier(self.model, 6); soft.fixed = fixed
+        soft = at_multiplier(self.model, 6); soft.masked = masked
         return soft
 
     def term(self, soft, batches=None):
@@ -175,36 +175,41 @@ class Term(unittest.TestCase):
         if batches is not None: term.batches = batches
         return term
 
-    def expected(self, term, indices):
-        """The step's soft loss by hand: per eligible row, KL(fixed target || head softmax over visited) / rows."""
+    def expected(self, term, indices, *, stored=False):
+        """The step's soft loss by hand: per eligible row, KL(softmax((logits + bonus) / T) over the visited actions ||
+        head softmax over them) / rows, from the current logits (or, `stored`, the label's collection logits)."""
         from brass_ai.recovery import teacher_term as M
         from brass_ai.recovery.soft_policy import capture_hidden, single
         rows = [term.rows[i] for i in indices]; total = 0.
         with M.policy_context(self.model), capture_hidden(self.model) as hidden, torch.no_grad():
-            M.forward_policy(self.model, rows)
+            logits = M.forward_policy(self.model, rows).double().cpu().numpy()
             head = torch.matmul(single(hidden).float(), term.soft.head).double().cpu().numpy()
         for k, i in enumerate(indices):
-            label = term.rows[i].label; bonus = M.search_bonus(label, self.revision['label_scale'])
-            counts = np.asarray(label['counts']); visited = counts > 0
+            label = term.rows[i].label; counts = np.asarray(label['counts']); visited = counts > 0; n = len(counts)
             if visited.sum() < 2: continue
-            z = (np.asarray(label['logits']) + bonus)[visited] / 4.; p = np.exp(z - z.max()); p /= p.sum()
-            q = head[k, :len(counts)][visited]; q = q - q.max(); logq = q - np.log(np.exp(q).sum())
+            base = np.asarray(label['logits']) if stored else logits[k, :n]
+            z = (base + term.bonus[i])[visited] / 4.; p = np.exp(z - z.max()); p /= p.sum()
+            q = head[k, :n][visited]; q = q - q.max(); logq = q - np.log(np.exp(q).sum())
             total += float(np.sum(p * (np.log(p) - logq)))
         return total / len(indices)
 
-    def test_the_head_trains_on_the_fixed_visited_targets_with_weight_zero_rows(self):
+    def test_the_head_trains_on_current_logit_targets_over_the_visited_actions(self):
         from brass_ai.recovery.value_preservation import TrunkGradients
         soft = self.soft(); term = self.term(soft); indices = term.batches[0]
-        expected = self.expected(term, indices)
-        term.apply(self.model, TrunkGradients(self.model), 1); self.model.zero_grad(set_to_none=True)
+        # Move the policy after the rows were drawn, so its logits differ from the stored collection logits.
+        scorer = self.model.policy_scorer[2].weight; original = scorer.detach().clone()
+        with torch.no_grad(): scorer.mul_(1.5)
+        try:
+            expected, stored = self.expected(term, indices), self.expected(term, indices, stored=True)
+            term.apply(self.model, TrunkGradients(self.model), 1); self.model.zero_grad(set_to_none=True)
+        finally:
+            with torch.no_grad(): scorer.copy_(original)
         self.assertAlmostEqual(soft.steps[-1]['loss'], expected, places=5)
+        self.assertGreater(abs(expected - stored), 1e-4)  # the current logits, not the collection ones
         self.assertEqual(soft.iteration_steps, 1)
-        report = soft.report()['fixed_targets']
-        self.assertEqual(report['weight_zero_rows'], sum(1 for i in term.soft_fixed if not term.soft_fixed[i][2]['eligible']))
-        # The target is built from the stored label logits and the bonus only, not from the current policy.
-        from brass_ai.recovery.soft_policy import fixed_target
-        for i, (target, _, _) in term.soft_fixed.items():
-            np.testing.assert_array_equal(target, fixed_target(term.rows[i].label, term.bonus[i], 4.)[0].astype(np.float32))
+        report = soft.report()['masked_targets']
+        self.assertEqual(report['weight_zero_rows'], sum(1 for v in term.soft_support.values() if not v[1]['eligible']))
+        self.assertGreater(report['weight_zero_rows'], 0)
 
     def test_a_step_with_only_weight_zero_rows_takes_no_soft_step(self):
         from brass_ai.recovery.value_preservation import TrunkGradients
@@ -228,9 +233,9 @@ class Term(unittest.TestCase):
 
     def test_the_unrevised_head_keeps_the_g3270_target(self):
         from brass_ai.recovery.value_preservation import TrunkGradients
-        soft = self.soft(fixed=False); term = self.term(soft)
+        soft = self.soft(masked=False); term = self.term(soft)
         term.apply(self.model, TrunkGradients(self.model), 1); self.model.zero_grad(set_to_none=True)
-        self.assertEqual(term.soft_fixed, {}); self.assertNotIn('fixed_targets', soft.report())
+        self.assertEqual(term.soft_support, {}); self.assertNotIn('masked_targets', soft.report())
 
 
 class Phase(unittest.TestCase):
@@ -254,7 +259,7 @@ class Phase(unittest.TestCase):
         p.receipt, p.reward_id, p.admission_seconds, p.soft_state = None, 'r', 0., None
         return p
 
-    def test_one_soft_check_after_ppo_on_fixed_targets(self):
+    def test_one_soft_check_after_ppo_on_targets_built_the_same_way(self):
         from test_soft_policy_g3423 import soft_settings
         from brass_ai.recovery.teacher_term import policy_logits
         from brass_ai.recovery.value_preservation import TrunkGradients
@@ -263,34 +268,36 @@ class Phase(unittest.TestCase):
         p = self.phase(config)
         calls = []
         from brass_ai.recovery import soft_policy
-        heldout, fixed = soft_policy.SoftPolicy.heldout, soft_policy.SoftPolicy.heldout_fixed
+        heldout, masked = soft_policy.SoftPolicy.heldout, soft_policy.SoftPolicy.heldout_masked
         from unittest import mock
         with mock.patch.object(soft_policy.SoftPolicy, 'heldout', lambda s, *a: calls.append('old') or heldout(s, *a)), \
-                mock.patch.object(soft_policy.SoftPolicy, 'heldout_fixed', lambda s, *a: calls.append('fixed') or fixed(s, *a)):
+                mock.patch.object(soft_policy.SoftPolicy, 'heldout_masked', lambda s, *a: calls.append('masked') or masked(s, *a)):
             term = p.prepare(self.model); term.plan(2)
-            self.assertTrue(p.soft.fixed)
+            self.assertTrue(p.soft.masked)
             for a, b in zip(p.pre_logits, policy_logits(self.model, p.heldout), strict=True): np.testing.assert_array_equal(a, b)
             for step in (1, 2):
                 term.apply(self.model, TrunkGradients(self.model), step); self.model.zero_grad(set_to_none=True)
             p.after_ppo(self.model)
             report = p.finish(self.model, {})
-        self.assertEqual(calls, ['fixed'])  # once, after PPO
+        self.assertEqual(calls, ['masked'])  # once, after PPO
         soft = report['heldout']['soft']
         self.assertEqual(set(soft) - {'scope'}, {'after_ppo', 'after_ppo_seconds'})
         self.assertEqual((soft['after_ppo']['rows'], soft['after_ppo']['skipped_rows']), (4, 2))
+        self.assertIsNotNone(soft['after_ppo']['dropped_unvisited_mass']['median'])
         self.assertIn('after_ppo', report['heldout']); self.assertIn('ppo_delta', report['heldout'])
         rate = report['term']['soft']['learning_rate']
         self.assertEqual((rate['source'], rate['last']), ('g6230-fixed-0.0001-until-g3370', 1e-4))
-        # Manual KL of one held-out row against the fixed target.
+        # Manual KL of one held-out row against softmax((current logits + bonus) / T) over its visited actions.
         from brass_ai.recovery import teacher_term as M
         r = p.heldout[0]; scale = self.revision['label_scale']
-        target, support, _ = soft_policy.fixed_target(r.label, M.search_bonus(r.label, scale), 4.)
-        _, one = p.soft.heldout_fixed(self.model, [r], scale)
+        _, one = p.soft.heldout_masked(self.model, [r], scale)
         with M.policy_context(self.model), soft_policy.capture_hidden(self.model) as hidden, torch.no_grad():
-            M.forward_policy(self.model, [r])
-            head = torch.matmul(soft_policy.single(hidden).float(), p.soft.head).double().cpu().numpy()[0, :len(target)]
-        use = support > 0; q = head[use] - head[use].max(); logq = q - np.log(np.exp(q).sum())
-        self.assertAlmostEqual(one['kl'], float(np.sum(target[use] * (np.log(target[use]) - logq))), places=9)
+            logits = M.forward_policy(self.model, [r]).double().cpu().numpy()[0]
+            head = torch.matmul(soft_policy.single(hidden).float(), p.soft.head).double().cpu().numpy()[0]
+        n = len(r.label['legal_ids']); use = np.asarray(r.label['counts']) > 0
+        z = (logits[:n] + M.search_bonus(r.label, scale))[use] / 4.; target = np.exp(z - z.max()); target /= target.sum()
+        q = head[:n][use] - head[:n][use].max(); logq = q - np.log(np.exp(q).sum())
+        self.assertAlmostEqual(one['kl'], float(np.sum(target * (np.log(target) - logq))), places=6)
 
 
 if __name__ == '__main__':

@@ -1,10 +1,10 @@
 """g6230 soft-head revision (the user's request of 2026-11-26; doc ai-research/G6230_SOFT_HEAD_REVISION.md).
 Adopted once with --soft-head-revision at a committed boundary, on top of the g5685 clip revision, then kept.
 
-Soft target  each teacher label row's soft target is fixed: softmax((old logits + search bonus) / T) over its legal
-             actions with visits > 0 only, renormalized there (zero elsewhere), where the old logits are the policy
-             logits stored at collection (label['logits']) and the bonus is the teacher term's own
-             (teacher_term.search_bonus at the g3270 label scale). It no longer follows the current policy.
+Soft target  each teacher label row's soft target is still softmax((current logits + search bonus) / T), held fixed
+             for the gradient, with the teacher term's own bonus (teacher_term.search_bonus at the g3270 label
+             scale), but over the legal actions with visits > 0 only, renormalized there (zero elsewhere). The
+             user kept the current logits; fixed targets from the collection logits were rolled back before use.
 Soft output  the soft head's output is masked the same way: its log-softmax runs over the visited legal actions only.
 Weight 0     a row with at most one visited legal action (a forced move, a one-candidate search) has soft loss
              weight 0 and its loss is not computed. The step's soft loss stays the sum of the other rows' KL over
@@ -39,11 +39,12 @@ SEARCH = 40
 CLIP_RATE_TOLERANCE = 10.
 SETTINGS = dict(
     contract=CONTRACT,
-    soft_target=dict(kind='fixed', logits='collection-time (label logits)', bonus='teacher-term search bonus',
-                     support='legal actions with visits > 0', normalized='over the support'),
+    soft_target=dict(kind='rebuilt-from-current-policy', logits='current (held fixed for the gradient)',
+                     bonus='teacher-term search bonus', support='legal actions with visits > 0',
+                     normalized='over the support'),
     soft_output='log-softmax over the same support',
     soft_min_visited=MIN_VISITED,
-    soft_heldout='after-ppo-only, fixed targets',
+    soft_heldout='after-ppo-only, targets built the same way',
     soft_learning_rate=dict(rate=SOFT_RATE, iterations=SOFT_RATE_ITERATIONS, then='ppo-step-rate'),
     ppg_grad_clip=PPG_GRAD_CLIP,
     window_iterations=WINDOW,
@@ -138,8 +139,8 @@ def ppg_grad_clip(config):
     return g5685.ppg_grad_clip(config)
 
 
-def fixed_soft_targets(config):
-    """True when the soft head trains and is measured on the fixed, visited-only targets."""
+def masked_soft_targets(config):
+    """True when the soft head trains and is measured on visited-only targets."""
     return applied(config)
 
 
@@ -165,7 +166,7 @@ def rescale_ppg(optimizer, config, generation):
 
 
 def tag(config):
-    return 'softfixed-lr1e4x100-ppgclip25' if applied(config) else 'none'
+    return 'softvisited-lr1e4x100-ppgclip25' if applied(config) else 'none'
 
 
 def summary(config):

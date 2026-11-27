@@ -25,11 +25,11 @@ State. JSON lists of exact float32 values, carried in the teacher phase's payloa
 ``weight`` (state.json and the checkpoint hold the same dict): the head, its origin copy,
 the Adam moments and step, and the warm-up counter.
 
-g6230 (training_revision_g6230, ``fixed`` set by the teacher phase): the target is fixed per row,
-softmax((stored collection logits + search bonus) / T) over the legal actions with visits > 0,
-renormalized there (fixed_target); the head's log-softmax runs over the same actions; a row with
-at most one visited action has weight 0 and no loss (fixed_loss); the held-out KL uses the same
-targets (heldout_fixed), measured once after PPO.
+g6230 (training_revision_g6230, ``masked`` set by the teacher phase): the target is still
+softmax((current logits + search bonus) / T), held fixed for the gradient, but over the legal actions
+with visits > 0 only, renormalized there (visited_support); the head's log-softmax runs over the
+same actions; a row with at most one visited action has weight 0 and no loss (masked_loss); the
+held-out KL uses targets built the same way (heldout_masked), measured once after PPO.
 """
 import copy
 import math
@@ -74,21 +74,24 @@ def soften(probabilities, temperature):
     return p / p.sum()
 
 
-def fixed_target(label, bonus, temperature, min_visited=2):
-    """g6230: (target, visited, info) for one label row. target = softmax((label logits + bonus) / T) over the
-    legal actions with visits > 0, renormalized there and zero elsewhere (float64); visited = 1.0 on those
-    actions. info: the visited count, whether the row has a soft loss (at least `min_visited` visited) and the
-    mass the unmasked softmax put on unvisited actions."""
-    logits = np.asarray(label['logits'], dtype=np.float64); counts = np.asarray(label['counts'])
-    bonus = np.asarray(bonus, dtype=np.float64)
-    require(logits.shape == counts.shape == bonus.shape and np.isfinite(logits).all() and np.isfinite(bonus).all(),
-            'Invalid soft target inputs')
-    visited = counts > 0; n = int(visited.sum())
-    z = (logits + bonus) / temperature; full = np.exp(z - z.max()); full /= full.sum()
-    target = np.zeros(len(logits)); support = np.zeros(len(logits))
-    if n:
-        part = z[visited]; part = np.exp(part - part.max()); target[visited] = part / part.sum(); support[visited] = 1.
-    return target, support, dict(visited=n, eligible=n >= min_visited, dropped=float(full[~visited].sum()))
+def visited_support(label, min_visited=2):
+    """g6230: (support, info) for one label row: 1.0 on the legal actions with visits > 0, else 0 (float64), and
+    the visited count with whether the row has a soft loss (at least `min_visited` visited actions)."""
+    counts = np.asarray(label['counts'])
+    require(counts.ndim == 1 and len(counts) == len(label['legal_ids']), 'Invalid soft target counts')
+    support = (counts > 0).astype(np.float64); n = int(support.sum())
+    return support, dict(visited=n, eligible=n >= min_visited)
+
+
+def masked_target(logits, bonus, support, temperature):
+    """g6230: softmax((logits + bonus) / T) over the support, renormalized there and zero elsewhere (host, float64),
+    and the mass the unmasked softmax put outside it."""
+    z = (np.asarray(logits, dtype=np.float64) + np.asarray(bonus, dtype=np.float64)) / temperature
+    use = np.asarray(support) > 0
+    require(np.isfinite(z).all() and use.any(), 'Invalid soft target inputs')
+    full = np.exp(z - z.max()); full /= full.sum()
+    target = np.zeros(len(z)); part = np.exp(z[use] - z[use].max()); target[use] = part / part.sum()
+    return target, float(full[~use].sum())
 
 
 def multiplier(trained, warmup):
@@ -170,8 +173,8 @@ class SoftPolicy:
         self.multiplier = multiplier(self.trained, settings['warmup'])
         self.steps = []; self.iteration_steps = 0; self.clipped = 0; self.seconds = 0.; self.beta_weight = None
         self.rate_source = None; self.last_rate = None
-        # g6230: fixed visited-only targets (set by the teacher phase), the fixed-rate window and target statistics.
-        self.fixed = False; self.rate_note = None; self.skipped_steps = 0; self.targets = []
+        # g6230: visited-only targets (set by the teacher phase), the fixed-rate window and support statistics.
+        self.masked = False; self.rate_note = None; self.skipped_steps = 0; self.targets = []
 
     def follow(self, optimizer):
         """g5402: step at the PPO LR of the same PPO step (learning_rate.upcoming of the PPO Adam), not the settings' own
@@ -204,15 +207,18 @@ class SoftPolicy:
         logq = self.logits(hidden, mask).log_softmax(-1).masked_fill(~mask, 0.)
         return (torch.special.xlogy(target, target) - target * logq).sum(-1).mean()
 
-    def fixed_loss(self, hidden, target, visited, keep):
-        """g6230: sum over the step's eligible rows (batch positions `keep`) of KL(fixed target || soft head over the
-        visited legal actions), divided by all the step's rows: the other rows have weight 0 and no loss is computed
-        for them. None when no row is eligible (the head skips the step)."""
+    def masked_loss(self, logits, bonus, hidden, visited, keep):
+        """g6230: sum over the step's eligible rows (batch positions `keep`) of KL(target || soft head over the visited
+        legal actions), divided by all the step's rows, where the target is softmax((current logits + bonus) / T)
+        over the same actions, held fixed. The other rows have weight 0 and no loss is computed for them. None when
+        no row is eligible (the head skips the step)."""
         if not keep: return None
         rows = hidden.shape[0]
         index = torch.as_tensor(keep, dtype=torch.int64, device=hidden.device)
         support = visited.index_select(0, index) > 0
-        t = target.index_select(0, index)
+        with torch.no_grad():
+            base = (logits.detach().index_select(0, index) + bonus.index_select(0, index)) / self.temperature
+            t = base.masked_fill(~support, -torch.inf).softmax(-1)
         logq = self.logits(hidden.index_select(0, index), support).log_softmax(-1).masked_fill(~support, 0.)
         return (torch.special.xlogy(t, t) - t * logq).sum() / rows
 
@@ -271,13 +277,14 @@ class SoftPolicy:
         result['by_phase'] = {phase: float(np.mean(v)) if (v := [k for p, k in measured if p == phase]) else None for phase in PHASES}
         return main, result
 
-    def heldout_fixed(self, model, rows, label_scale):
-        """g6230: (main logits, soft KL) with the training targets: on each long label, KL(fixed target || soft head
-        over the visited legal actions), rows with fewer than MIN_VISITED visited actions left out; by phase."""
+    def heldout_masked(self, model, rows, label_scale):
+        """g6230: (main logits, soft KL) with targets built like the training ones: on each long label,
+        KL(softmax((current logits + bonus) / T) over the visited legal actions || soft head over the same actions),
+        rows with fewer than MIN_VISITED visited actions left out; by phase, with the target mass the mask drops."""
         from .teacher_labels import PHASES
         from .teacher_term import forward_policy, policy_context, profile, search_bonus
         from .training_revision_g6230 import MIN_VISITED
-        main, measured, skipped = [], [], 0
+        main, measured, skipped, dropped = [], [], 0, []
         with policy_context(model), torch.no_grad():
             for start in range(0, len(rows), 64):
                 part = rows[start:start + 64]
@@ -291,15 +298,17 @@ class SoftPolicy:
                     require(np.isfinite(l).all(), 'Non-finite teacher policy logits')
                     main.append(l)
                     if profile(r) != 'full': continue
-                    target, support, info = fixed_target(r.label, search_bonus(r.label, label_scale), self.temperature,
-                                                         MIN_VISITED)
+                    support, info = visited_support(r.label, MIN_VISITED)
                     if not info['eligible']:
                         skipped += 1; continue
+                    target, outside = masked_target(l, search_bonus(r.label, label_scale), support, self.temperature)
+                    dropped.append(outside)
                     use = support > 0; q = s[:n][use]; q = q - q.max(); q = q - np.log(np.exp(q).sum())
                     p = target[use]; positive = p > 0
                     measured.append((r.label['phase'], float(np.sum(p[positive] * (np.log(p[positive]) - q[positive])))))
         result = dict(rows=len(measured), skipped_rows=skipped,
-                      kl=float(np.mean([k for _, k in measured])) if measured else None)
+                      kl=float(np.mean([k for _, k in measured])) if measured else None,
+                      dropped_unvisited_mass=_summary(dropped))
         result['by_phase'] = {phase: float(np.mean(v)) if (v := [k for p, k in measured if p == phase]) else None for phase in PHASES}
         return main, result
 
@@ -314,12 +323,11 @@ class SoftPolicy:
         return dict(state, identity=identity(state))
 
     def target_report(self):
-        """g6230: the fixed targets built this iteration (the rows the step plan drew), and the steps skipped."""
+        """g6230: the visited supports of the rows the step plan drew this iteration, and the steps skipped."""
         infos = self.targets; eligible = [i for i in infos if i['eligible']]
-        return dict(kind='softmax((collection logits + bonus) / T) over visited legal actions', rows=len(infos),
+        return dict(kind='softmax((current logits + bonus) / T) over visited legal actions', rows=len(infos),
                     eligible_rows=len(eligible), weight_zero_rows=len(infos) - len(eligible), skipped_steps=self.skipped_steps,
-                    visited_actions=_summary([float(i['visited']) for i in eligible]),
-                    dropped_unvisited_mass=_summary([i['dropped'] for i in eligible]))
+                    visited_actions=_summary([float(i['visited']) for i in eligible]))
 
     def report(self):
         with torch.no_grad():
@@ -338,7 +346,7 @@ class SoftPolicy:
             head_change=change, distance_from_main=distance, seconds=self.seconds,
             learning_rate=dict(source='ppo-step-rate' if self.rate_source is not None else self.rate_note or 'settings',
                                last=self.last_rate, configured=self.learning_rate),
-            **({'fixed_targets': self.target_report()} if self.fixed else {}),
+            **({'masked_targets': self.target_report()} if self.masked else {}),
             scope='Soft KL on the teacher term\'s label rows before each step; share = 8 beta x soft trunk norm / PPO actor '
                   'norm on the measured steps (shared state/entity encoders, before clipping); head_change = |w - w0| / |w0| '
                   'from the copy at adoption; distance_from_main = |w - main/T| / |main/T| after the update')

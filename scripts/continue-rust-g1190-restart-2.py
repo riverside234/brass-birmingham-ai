@@ -253,8 +253,8 @@ measured or reported.
 
 --soft-head-revision (at a committed boundary, after --clip-revision) adopts the g6230 soft-head
 revision (ai-research/G6230_SOFT_HEAD_REVISION.md); set once, then kept:
-  soft target  fixed per row: softmax((collection logits + search bonus) / T) over the legal actions
-               with visits > 0, renormalized there; the soft head's output masked the same way.
+  soft target  softmax((current logits + search bonus) / T) over only the legal actions with
+               visits > 0, renormalized there; the soft head's output masked the same way.
   weight 0     rows with at most one visited action have no soft loss.
   held-out     the soft KL once per iteration, after PPO, on targets built the same way.
   soft rate    1e-4 for 100 iterations from adoption, then the PPO step rate again.

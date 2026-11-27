@@ -244,7 +244,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                 gradient_norms=None if adopted else g5685.committed_norms(run,state))
         from brass_ai.recovery import training_revision_g6230 as g6230
         if soft_head_revision:
-            # Fixed visited-only soft targets, the soft check after PPO only, the soft head at 1e-4 for 100
+            # Visited-only soft targets, the soft check after PPO only, the soft head at 1e-4 for 100
             # iterations, PPG clip 2.5 with a one-time Adam rescale from the last 30 committed PPG phases.
             adopted=g6230.applied(config)
             config=g6230.configure(config,state['iteration'],
@@ -718,7 +718,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if g6230.applied(options):
             report['g6230_soft_head_revision']=g6230.summary(options)
             r=report['g6230_soft_head_revision'];s=r['ppg_adam_rescale'];rate=r['soft_learning_rate']
-            print(f"g6230 soft-head revision (from g{r['from_generation']}): soft targets fixed, softmax((collection "
+            print(f"g6230 soft-head revision (from g{r['from_generation']}): soft targets softmax((current "
                   f"logits + bonus) / T) over the visited legal actions, the head's output masked the same way, rows with "
                   f"fewer than {r['soft_min_visited']} visited actions at weight 0; the soft held-out KL once, after PPO; "
                   f"the soft head at {rate['rate']:g} until g{r['from_generation']+rate['iterations']}, then the PPO step "

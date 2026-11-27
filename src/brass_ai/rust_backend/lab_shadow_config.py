@@ -192,7 +192,7 @@ def signature_transition(before,after):
     from brass_ai.recovery import training_revision_g5685 as g5685
     old=g5685.project(old,new)
     if old is None:return False
-    # g6230 soft-head revision: fixed visited-only soft targets, the soft check after PPO only, the soft head at
+    # g6230 soft-head revision: visited-only soft targets, the soft check after PPO only, the soft head at
     # 1e-4 for 100 iterations, PPG clip 2.5 with a one-time Adam rescale; adopted once, then kept; trainer-only.
     from brass_ai.recovery import training_revision_g6230 as g6230
     old=g6230.project(old,new)

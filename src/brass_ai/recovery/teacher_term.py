@@ -128,7 +128,7 @@ class StagedRows:
         self.states = torch.as_tensor(np.stack([r.encoded.state for r in rows]), device=device)
         self.actions = torch.as_tensor(np.ascontiguousarray(actions, dtype=np.float32), device=device)
         self.targets = torch.as_tensor(targets, device=device)
-        # g6230: further per-action vectors (the soft head's fixed targets and visited actions), staged the same way.
+        # g6230: further per-action vectors (the soft head's visited actions), staged the same way.
         self.extras = {name: torch.as_tensor(np.concatenate([np.zeros(1, np.float32)] + [np.asarray(v, np.float32) for v in vectors]),
                                              device=device) for name, vectors in (extras or {}).items()}
         self.offsets = torch.as_tensor(offsets, dtype=torch.int64, device=device)
@@ -254,7 +254,7 @@ class TeacherTerm:
         self.config = config; self.mode = config['mode']; self.seed = seed; self.generation = generation
         self.revision = copy.deepcopy(revision); self.soft = soft
         self.batches = None; self.plan_report = None; self.bonus = None; self.position = None
-        self.soft_fixed = {}  # g6230: row index -> (fixed soft target, visited, info), built for the rows the plan draws
+        self.soft_support = {}  # g6230: row index -> (visited actions, info), built for the rows the plan draws
         self.state = copy.deepcopy(state or {})
         self.beta = self.state.get('beta', 1.); self.calibrated = self.state.get('calibrated', False)
         from .teacher_gradient_qualification import restore
@@ -350,20 +350,19 @@ class TeacherTerm:
                 'Short-search teacher labels need the g1491 recipe')
 
     def soft_vectors(self, i):
-        """g6230: row i's fixed soft target and visited actions (soft_policy.fixed_target with this row's bonus)."""
-        if i not in self.soft_fixed:
-            from .soft_policy import fixed_target
+        """g6230: row i's visited actions and their count (soft_policy.visited_support)."""
+        if i not in self.soft_support:
+            from .soft_policy import visited_support
             from .training_revision_g6230 import MIN_VISITED
-            target, support, info = fixed_target(self.rows[i].label, self.bonus[i], self.soft.temperature, MIN_VISITED)
-            self.soft_fixed[i] = (target.astype(np.float32), support.astype(np.float32), info)
+            support, info = visited_support(self.rows[i].label, MIN_VISITED)
+            self.soft_support[i] = (support.astype(np.float32), info)
             self.soft.targets.append(info)
-        return self.soft_fixed[i]
+        return self.soft_support[i]
 
     def soft_extras(self, soft, indices):
-        """g6230: the staged extras of these rows for a fixed-target soft head, else None."""
-        if soft is None or not soft.fixed: return None
-        vectors = [self.soft_vectors(i) for i in indices]
-        return dict(soft_target=[v[0] for v in vectors], visited=[v[1] for v in vectors])
+        """g6230: the staged extras of these rows for a visited-only soft head, else None."""
+        if soft is None or not soft.masked: return None
+        return dict(visited=[self.soft_vectors(i)[0] for i in indices])
 
     def stratified(self, step):
         """Age-weighted draws from each pool; per-row weights give each pool its share of the loss."""
@@ -474,17 +473,14 @@ class TeacherTerm:
                 require(bool(torch.isfinite(loss)), 'Non-finite teacher loss')
                 if soft is not None:
                     soft_began = time.perf_counter()
-                    if soft.fixed:
-                        # g6230: the fixed visited-only targets; rows with at most one visited action have weight 0.
+                    if soft.masked:
+                        # g6230: the current-logit target over the visited actions; rows with at most one have weight 0.
                         if self.staged is not None:
-                            soft_target = self.staged.extra('soft_target', positions)
                             visited = self.staged.extra('visited', positions)
                         else:
-                            vectors = [self.soft_vectors(i) for i in indices]
-                            soft_target = target_tensor(rows, logits, [v[0] for v in vectors])
-                            visited = target_tensor(rows, logits, [v[1] for v in vectors])
-                        keep = [k for k, i in enumerate(indices) if self.soft_vectors(i)[2]['eligible']]
-                        soft_loss = soft.fixed_loss(single(hidden), soft_target, visited, keep)
+                            visited = target_tensor(rows, logits, [self.soft_vectors(i)[0] for i in indices])
+                        keep = [k for k, i in enumerate(indices) if self.soft_vectors(i)[1]['eligible']]
+                        soft_loss = soft.masked_loss(logits, bonus, single(hidden), visited, keep)
                     else:
                         soft_loss = soft.loss(logits, bonus, single(hidden))
                     soft_seconds += time.perf_counter() - soft_began
