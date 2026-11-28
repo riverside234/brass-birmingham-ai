@@ -259,6 +259,16 @@ revision (ai-research/G6230_SOFT_HEAD_REVISION.md); set once, then kept:
   held-out     the soft KL once per iteration, after PPO, on targets built the same way.
   soft rate    1e-4 for 100 iterations from adoption, then the PPO step rate again.
   PPG clip     2.5 (was 2.4), with the PPG Adam moments rescaled once (mean and P98 fit).
+
+--g6670-revision (at a committed boundary, after --soft-head-revision) adopts the g6670 revision
+(ai-research/G6670_SEARCH_HEAD_CUT_AND_PL_WINDOW.md); set once, then kept:
+  search head  the paused search-value head and its Adam are removed at the adoption iteration's
+               PPG boundary; the value shards and the era heads' search rows go on.
+  PL rating    only the latest 64 rated checkpoints are kept and used (older weights go to the
+               scheduled cleanup); the fit reads only the latest 40,960 rated games.
+  PPG floor    .25 (was .125); beta raised to .25 once if below.
+  PPG clip     3.0 (was 2.5), with the PPG Adam moments rescaled once (mean and P98 fit).
+  PPO clip     unchanged (6.5).
 """
 import importlib.util
 from pathlib import Path

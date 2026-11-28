@@ -1,7 +1,7 @@
 {
   "contract": "brass-b07-replay-location-review/1.0.0",
   "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
-  "execution_implementation": "6e2152b136a7f94bb4aa75c68e66970f6513c6031df0321bd75360fe4f058006",
+  "execution_implementation": "12294b942491b953219a6fb9b4114113ce5fefb5b3bc2acf9caefb38cb751f1a",
   "base_commit": "7244d6b",
   "changes": {
     "configs/learning/collector-performance-teacher-reuse.json": {
@@ -74,7 +74,7 @@
     },
     "src/brass_ai/recovery/config.py": {
       "before": "30082bf54f1cc25ce045df01c0bcebefe76e273abfb95958e37c7e2bdb547afa",
-      "after": "6f27c7ea4887049ad3f0c2dcb1152adff4970d4676260b6152155f50ee3eed35"
+      "after": "0204f7c46f5a1e894b4015f83a03b591ce022402bf585571518e85410a896e0f"
     },
     "src/brass_ai/recovery/entropy_schedule.py": {
       "before": "e3b333823fe734e282c283f1b969ad3d933c23c6d044508f523e9706f6bb2ea4",
@@ -114,7 +114,7 @@
     },
     "src/brass_ai/recovery/league.py": {
       "before": "62e4a3613e44ea69f910f9ecde342e1b36d31bfa9005eec383311f8e8055097b",
-      "after": "6abfbef07c494c4779d21911d2ee64efb6bf45c32a03b191f4fbe2302c4de994"
+      "after": "a4c78259da4b37937a4af767927522e2d33cb032806d8224e9c972794d9ac1d4"
     },
     "src/brass_ai/recovery/ordinary.py": {
       "before": "1caa8aaa7d0e9ad5cb555da8b6cd105b21250460b2d297292b269e52770476e6",
@@ -126,7 +126,7 @@
     },
     "src/brass_ai/recovery/ppg_g210.py": {
       "before": "7b7a8d391a56f56ea36d2b97c79af8b5c45fc3c1bfb7494b93886280674e5940",
-      "after": "36ca7273c2ca7c2755c0c731b35cc98d4d3937aa4e4dd932260366d732c68624"
+      "after": "47d60d786e36f429ec13baef26dd5fcc0f2e29f8736eae79dc39c71ae8cde7dd"
     },
     "src/brass_ai/recovery/ppg_policy_cache.py": {
       "before": "1724b71a097795cd34961dd81fd99cf25f4c94cf1860b1269b7327203f0684b4",
@@ -158,7 +158,7 @@
     },
     "src/brass_ai/recovery/search_value_iteration.py": {
       "before": "36c1d1a7580760255b0b1228a5c5d4f384529ec2b07194997118c480d21c29ae",
-      "after": "10d5621ef221573c69f257833f22c26ae4d5b98e67331ffb899e4693b76afb3a"
+      "after": "b230e2a0e00e23514dd68a1c23a00ff0a5c0fd365b4b85a02a5afb23bd982e33"
     },
     "src/brass_ai/recovery/search_value_phase.py": {
       "before": "9bd6cff9d5a34fa41f997eea6005d0c2d4ba31ca53c0479d15cc74474f5380d2",
@@ -190,7 +190,7 @@
     },
     "src/brass_ai/recovery/teacher_phase.py": {
       "before": "39c0af06ae0b59fede563760cd0b0b239f15bf79ed4cdfd3d6172be17043f328",
-      "after": "e7a4d099551bd86147f900cfe3f44f8ccb3d2beb2ab3ab7a52fea0423642e481"
+      "after": "1d37a471692915faaa3f416c5a463a5827d6319757681ed96978d09403206202"
     },
     "src/brass_ai/recovery/teacher_phase_config.py": {
       "before": "739bab126c983d42bac73b6c14a7c80288c2e9972d6e01c442f65c9b8e30366f",
@@ -290,7 +290,7 @@
     },
     "src/brass_ai/rust_backend/lab_shadow_config.py": {
       "before": null,
-      "after": "12917e3651f2c42a4faba0a2e1476b7ee9dc28cae4363d5a7118fccdf99b10d3"
+      "after": "06ab182b1759289c467c139de2e72de3034263de86e7b377d9ea425dfd10aa91"
     },
     "src/brass_ai/rust_backend/lab_shared.py": {
       "before": null,
@@ -334,7 +334,7 @@
     },
     "scripts/continue-rust-g1491.py": {
       "before": "2b83f47ca47823ae62134142fd0c39426f19c51ccf09ea0cae009b0d9362c6ea",
-      "after": "8ebaee5625e348364f1f4454e5f0f8ccb255a2cd2839097ddca12710f846a7e2"
+      "after": "eb3db85120ad0ca03f76b4a2a23c0af91b58e80afaeae925f8339c2842941baf"
     },
     "scripts/prepare-rust-cpu-inference.py": {
       "before": "d3265802135796023e5d1e01635c3da09774c362406e6d24082eaab34d0736e6",
@@ -382,7 +382,7 @@
     },
     "scripts/continue-rust-shadow.py": {
       "before": "69d4821ed5d04a8bc6f558f5512c1191926b8bd8ce0adace0ba1335f5ec04848",
-      "after": "9538ff15c1347b9719eda8e32ae463603431d3539a105540098fafb138cc6458"
+      "after": "65773a99ec9ed6ae4c1773886a61a13c5570b40a34e2c6cbd342e2a028b319d8"
     },
     "tests/RustBackendLab/test_collection_overlap.py": {
       "before": null,
@@ -422,7 +422,7 @@
     },
     "scripts/continue-rust-g1190-restart-2.py": {
       "before": null,
-      "after": "1b167397a4fd828b898e1b0ae5102fa4506cd8981bbdb8e0091b59530cfc471e"
+      "after": "bd40d18ab0dd3e1053dc284f31993710c0bbe729d0dff53915ca364e1a22cf1c"
     },
     "src/brass_ai/recovery/adaptive_teacher_beta.py": {
       "before": null,
@@ -454,7 +454,7 @@
     },
     "src/brass_ai/recovery/ratings.py": {
       "before": "aa3a2b635bea1b3bf5418215994e02df155a2863724a95e28bdd2fa6f293435f",
-      "after": "c5df96151d04b85ea33aedd070a42d7da01b24be9d84fee81f8b375cb7786656"
+      "after": "1465f7b51e80e7d92aae6088e14fac2ed94404a6aafc28ee48259f9d30534dbf"
     },
     "tests/Recovery/test_rating_plot.py": {
       "before": "74e8e07077139d647095ab00fc3c4bc9b7d7d41805ba8617b2d1f3ff5c1367ee",
@@ -682,7 +682,7 @@
     },
     "src/brass_ai/recovery/training_revision_g3658.py": {
       "before": null,
-      "after": "0bb7fd78ed9b29c06a5ac8c77a839e1e33bc6436de05503dd8f068581ccdc66d"
+      "after": "ac8cecec11f72020ba6340f4e756b05873d0c7c3ff276851ebca6b06324dc490"
     },
     "tests/Recovery/test_iteration_speed_g3658.py": {
       "before": null,
@@ -742,7 +742,7 @@
     },
     "scripts/continue-rust-g4970.py": {
       "before": null,
-      "after": "b45da268a05fbb850b8a5dcbdf23e5ea3a1e1c94d385949cacc282cb232bdd66"
+      "after": "9556afc756859268fba8e5cfddc5a845be6b8b2554b8090e9c5904b8c5d9b246"
     },
     "scripts/reports/export-training-reports.py": {
       "before": "abd0c78e87cce84d01659b590d5664e8062418b4e790ff2a735263ac35abdcc6",
@@ -839,6 +839,18 @@
     "tests/Recovery/test_soft_weight_g6547.py": {
       "before": null,
       "after": "d82a641c24f1ac9bc16602025c892f6e4a5c257b4db5bf9343479eaefa97eb2b"
+    },
+    "src/brass_ai/recovery/rating_parent_cleanup.py": {
+      "before": null,
+      "after": "0e75eea5a6106386f04e797d6575b92fa97875ef2410170317ab841039aac204"
+    },
+    "src/brass_ai/recovery/training_revision_g6670.py": {
+      "before": null,
+      "after": "f056107388e847769f358427c983d90f649d8f35851ea3fe53529af0030f218c"
+    },
+    "tests/Recovery/test_g6670_revision.py": {
+      "before": null,
+      "after": "a1b65c31a6e1e830c0304502b561f06412dccb413166a44ebb836d886dab4cb1"
     }
   },
   "scope": "Exact reviewed ordinary collector transport/publication/immutable replay optimization, preserving current shadow32 teacher, search_v1, checkpoint/Adam/RNG, sampling, reward/features/targets and frozen jobs. Existing ordinary source/predecessor and derived-array receipts retain their own identity; unknown sources never inherit the fast path.",
@@ -1244,6 +1256,11 @@
       "implementation": "310796d78385ea572902734ed5dbbf9fbdcf8394a9bed79318ad7b6731348f60",
       "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
       "replay_location_review": "4a895afc903581ae4a88d028dc0d39ffa2f6ad54a5a1fd671b81c72c0b9583f1"
+    },
+    {
+      "implementation": "6e2152b136a7f94bb4aa75c68e66970f6513c6031df0321bd75360fe4f058006",
+      "qualified_implementation": "9efcf34f853d75ab844366b6819da4b0921be38d3e2dfb806cf282ace76e7a30",
+      "replay_location_review": "38ea7d72369d4f9d5f7a970912b1d5e87d6939b9013f951f8f220d0a4f9aa084"
     }
   ],
   "performance_evidence": "results/joint7-v11-2-g1290-trained-restart-g1253-20261107T145415686647Z/iteration-1252/report.json",
@@ -1697,6 +1714,10 @@
   },
   "g6547_soft_weight_and_heldout": {
     "scope": "The soft policy head's weight 8 -> 4 x beta from g6547 through g3423's reviewed weight change (--soft-policy-weight 4, recorded as weight_change {generation 6547, before 8}; the head, its Adam and warm-up carry over, the committed head re-stamped at the change); scripts/continue-rust-g4970.py takes --soft-policy-weight and otherwise passes the weight in force in the run instead of a fixed 8. The g6230 visited-only soft held-out check runs before PPO as well as after it (teacher_phase.prepare -> heldout_masked; report heldout.soft.before and ppo_delta; reporting only, nothing that trains changes).",
+    "qualified_implementation_unchanged": true
+  },
+  "g6670_revision": {
+    "scope": "--g6670-revision (training_revision_g6670) at a committed boundary, after g6230: (1) the paused search-value head and its own Adam are removed at the adoption iteration's PPG boundary (SearchValueIteration.finish_ppg -> cut_head; the teacher tables already bind w = 0, plan_jobs requires it), so the next checkpoint has neither; the stage record, value shards, their retirement and the era heads' search rows stay; (2) the PL rating keeps and uses only the latest 64 rated checkpoints (ratings.retire_checkpoints moves older ones to ratings.retired_agents without weights paths, at each schedule pass and slot commit, so retention deletes this run's unpinned weights at its next scheduled cleanup) and fits only the latest 40,960 rated games (ratings.latest_games; agents in them stay fit parameters, known_agents for the plot and alerts); (3) value_phase.beta_clone_min .125 -> .25 with beta raised to .25 once (ppg_g210.initialize, FLOOR_MIGRATION; g3658.applied stays true for the lineage); (4) PPG clip 2.5 -> 3.0 with a one-time PPG Adam rescale from g5466's mean/P98 fit of the last 30 committed PPG phases. PPO clip unchanged (6.5). (5) Retired rating checkpoints stored in another run (the parent g1190-restart-3) are removed there once, after the first committed iteration (league.py -> rating_parent_cleanup.cleanup): planned into this run's .retention receipt, retired from that run's registry under its lock with a state.json backup, then deleted where retention.references finds no pin in any run; ratings fit retired agents by name when a registry has them (known_agents).",
     "qualified_implementation_unchanged": true
   }
 }

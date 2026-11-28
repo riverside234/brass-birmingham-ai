@@ -201,6 +201,12 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
              'have weight 0; its held-out KL is measured once, after PPO, on targets built the same way; it steps at '
              '1e-4 for 100 iterations, then at the PPO rate again; PPG clips at 2.5 (was 2.4) with its Adam rescaled '
              'once. Trainer-only; set once (training_revision_g6230).')
+    parser.add_argument('--g6670-revision', action='store_true',
+        help='Adopt the g6670 revision at this committed generation (after --soft-head-revision): the paused '
+             'search-value head and its Adam are cut; the PL rating keeps and uses only the latest 64 rated '
+             'checkpoints and fits only the latest 40,960 rated games; the PPG beta floor goes back to .25; PPG '
+             'clips at 3.0 (was 2.5) with its Adam rescaled once. PPO clip unchanged. Trainer-only; set once '
+             '(training_revision_g6670).')
     parser.add_argument('--teacher-search-head-weight', type=int, choices=(0, 1),
         help='Override the teacher search-head weight in the retuned recipe. '
              'After --reset-search-head the override applies from Stage C. The setting persists.')
@@ -278,6 +284,7 @@ def main(*, run=RUN, teacher_fast=128, description=__doc__, share_target_require
         recovery.auxiliary_revision = False
         recovery.clip_revision = False
         recovery.soft_head_revision = False
+        recovery.g6670_revision = False
         state = module.continuation(recovery, mode='on', expected=generation, iterations=1, revise_stages=True)
         generation = state['iteration']
     done, needed = calibrated(state,skip_utility_qualification=args.skip_utility_qualification)

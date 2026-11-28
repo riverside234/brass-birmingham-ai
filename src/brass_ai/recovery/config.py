@@ -752,6 +752,13 @@ def validate_config(config):
         require(CLIP_REVISION in config and 'soft_policy' in config,
                 'The g6230 soft-head revision needs the g5685 clip revision and the g3423 soft policy head')
         fields.add(SOFT_HEAD_REVISION);validate_soft_head_revision(config[SOFT_HEAD_REVISION])
+    from .training_revision_g6670 import KEY as G6670_REVISION,validate as validate_g6670_revision
+    if G6670_REVISION in config:
+        # g6670: search-value head cut, PL on the latest 64 checkpoints and 40,960 games, PPG floor .25, PPG clip 3.0.
+        block=validate_g6670_revision(config[G6670_REVISION])
+        require(SOFT_HEAD_REVISION in config and config['value_phase']['beta_clone_min']==block['ppg_beta_floor'],
+                'The g6670 revision needs the g6230 soft-head revision and holds the PPG floor it adopted')
+        fields.add(G6670_REVISION)
     if 'context_evaluation' in config:
         from .context_evaluation_config import validate as validate_context_evaluation
         fields.add('context_evaluation');validate_context_evaluation(config['context_evaluation'],config)

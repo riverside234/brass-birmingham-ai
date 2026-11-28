@@ -104,7 +104,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             update_opening_sampling=False,update_cotton_sampling=False,update_cotton_network=False,update_rail_cotton=False,update_cotton_timing=False,update_search_lambda=False,value_revision=None,rating_every=None,
             teacher_revision=False,soft_policy=False,soft_policy_weight=None,ppg_beta_floor=None,teacher_search_revision=False,
             teacher_training_revision=False,table_revision=False,era_head_revision=False,rail_end_weight=None,
-            optimizer_revision=False,auxiliary_revision=False,clip_revision=False,soft_head_revision=False):
+            optimizer_revision=False,auxiliary_revision=False,clip_revision=False,soft_head_revision=False,
+            g6670_revision=False):
     from brass_ai.bank import read,sha
     from brass_ai.learning.contracts import project_path,require
     from brass_ai.recovery.collector_runtime import configured,cpu_block,from_config,recipe,validate_teacher_budget
@@ -262,6 +263,13 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             adopted=g6230.applied(config)
             config=g6230.configure(config,state['iteration'],
                 gradient_norms=None if adopted else g6230.committed_ppg_norms(run,state))
+        from brass_ai.recovery import training_revision_g6670 as g6670
+        if g6670_revision:
+            # The search-value head cut, the PL rating on the latest 64 checkpoints and 40,960 games, PPG floor .25,
+            # PPG clip 3.0 with a one-time Adam rescale from the last 30 committed PPG phases.
+            adopted=g6670.applied(config)
+            config=g6670.configure(config,state['iteration'],
+                gradient_norms=None if adopted else g6670.committed_ppg_norms(run,state))
         require(is_on(config) if mode=='on' else is_shadow(config),'Invalid teacher continuation recipe')
         diagnostic_only=qualification_upgrade(before,config)
         require(config==before or diagnostic_only or state['iteration']==expected,'Change shadow settings at the requested starting generation')
@@ -398,6 +406,8 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
             prefix=prefix.replace('-share', '-'+g5685.tag(config)+'-share');stages.append(prefix)
         if g6230.applied(config):
             prefix=prefix.replace('-share', '-'+g6230.tag(config)+'-share');stages.append(prefix)
+        if g6670.applied(config):
+            prefix=prefix.replace('-share', '-'+g6670.tag(config)+'-share');stages.append(prefix)
         output=recipe_path(root,run.name,prefix,tag)
         adopting_teacher=g3270.applied(config) and not g3270.applied(before)
         adopting_soft=g3423.applied(config) and config.get(g3423.KEY)!=before.get(g3423.KEY)
@@ -410,6 +420,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
         adopting_auxiliary=g5466.applied(config) and not g5466.applied(before)
         adopting_clips=g5685.applied(config) and not g5685.applied(before)
         adopting_soft_head=g6230.applied(config) and not g6230.applied(before)
+        adopting_g6670=g6670.applied(config) and not g6670.applied(before)
         adopting_cotton=(g2240.applied(config) and not g2240.applied(before) or
                          g2400.applied(config) and not g2400.applied(before) or
                          g2654.applied(config) and not g2654.applied(before) or
@@ -418,7 +429,7 @@ def prepare(root,run_path,expected,iterations,share_target=.25,*,mode='shadow',r
                          g2880.applied(config) and not g2880.applied(before) or
                          g3140.changed(before,config) or adopting_teacher or adopting_soft or adopting_floor or adopting_search or
                          adopting_training or adopting_tables or adopting_era_heads or adopting_optimizer or
-                         adopting_auxiliary or adopting_clips or adopting_soft_head)
+                         adopting_auxiliary or adopting_clips or adopting_soft_head or adopting_g6670)
         existing=read(output) if output.exists() else state['signature']['config']
         require(not output.exists() or recipe(existing)==config or qualification_upgrade(recipe(existing),config),'Existing shadow config differs')
         earlier=next((p for p in (recipe_path(root,run.name,name,tag) for name in reversed(stages[:-1])) if p.exists()),None)
@@ -559,6 +570,7 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
         if getattr(args,'auxiliary_revision',False):kwargs['auxiliary_revision']=True
         if getattr(args,'clip_revision',False):kwargs['clip_revision']=True
         if getattr(args,'soft_head_revision',False):kwargs['soft_head_revision']=True
+        if getattr(args,'g6670_revision',False):kwargs['g6670_revision']=True
         state,config,remaining=prepare(ROOT,args.run,expected,iterations,args.share_target,**kwargs)
         from brass_ai.recovery.collector_runtime import from_config
         options=read(config);report['collector_runtime']=from_config(options)
@@ -739,6 +751,18 @@ def continuation(args,*,mode,expected,iterations,revise_stages=False,revision=No
                   f"x{s['first_moment']:.4f}, exp_avg_sq x{s['second_moment']:.4f}, from {s['steps']} logged steps of "
                   f"{len(s['norms'])} iterations; fit clip rate {s['predicted_clipped_percent']:.1f}% vs logged "
                   f"{s['logged_clipped_percent']:.1f}%).",flush=True)
+        from brass_ai.recovery import training_revision_g6670 as g6670
+        if g6670.applied(options):
+            report['g6670_revision']=g6670.summary(options)
+            r=report['g6670_revision'];s=r['ppg_adam_rescale'];pl=r['rating']
+            print(f"g6670 revision (from g{r['from_generation']}): the paused search-value head and its Adam are cut at "
+                  f"the adoption iteration's PPG boundary; the PL rating keeps and uses the latest {pl['checkpoints']} "
+                  f"rated checkpoints (older ones retired, their weights left to the scheduled cleanup) and fits the "
+                  f"latest {pl['games']} rated games; PPG beta floor {r['ppg_beta_floor']:g} (beta raised to it once if "
+                  f"below); PPG grad clip {s['old_clip']:g} -> {s['new_clip']:g}, PPG Adam moments rescaled once (exp_avg "
+                  f"x{s['first_moment']:.4f}, exp_avg_sq x{s['second_moment']:.4f}, from {s['steps']} logged steps of "
+                  f"{len(s['norms'])} iterations; fit clip rate {s['predicted_clipped_percent']:.1f}% vs logged "
+                  f"{s['logged_clipped_percent']:.1f}%). PPO clip unchanged.",flush=True)
         print('Collector runtime: '+str(report['collector_runtime'])+' (training config)',flush=True)
         if remaining:
             argv=[sys.executable,'-u',str(ROOT/'scripts/step5.py'),'--root',str(ROOT),'--config',str(config),

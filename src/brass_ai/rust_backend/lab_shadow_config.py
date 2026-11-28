@@ -45,12 +45,13 @@ def is_shadow(config):
     from brass_ai.recovery.training_revision_g5466 import previous as before_auxiliary_revision
     from brass_ai.recovery.training_revision_g5685 import previous as before_clip_revision
     from brass_ai.recovery.training_revision_g6230 import previous as before_soft_head_revision
+    from brass_ai.recovery.training_revision_g6670 import previous as before_g6670_revision
     try:
         config=previous_tables(previous_opening(before_value_revision(before_rating_cadence(
             before_teacher_revision(before_soft_policy(before_eighth_floor(before_teacher_search(
                 before_teacher_training(before_table_revision(before_era_head_revision(
                     before_optimizer_revision(before_auxiliary_revision(before_clip_revision(
-                        before_soft_head_revision(recipe(config))))))))))))))))
+                        before_soft_head_revision(before_g6670_revision(recipe(config)))))))))))))))))
         config=previous_rating(previous_recipe(previous_reward(without_utility_qualification(config))))
     except (ValueError,TypeError):return False
     before=copy.deepcopy(config);phase=before.pop('teacher_phase',None)
@@ -196,6 +197,11 @@ def signature_transition(before,after):
     # 1e-4 for 100 iterations, PPG clip 2.5 with a one-time Adam rescale; adopted once, then kept; trainer-only.
     from brass_ai.recovery import training_revision_g6230 as g6230
     old=g6230.project(old,new)
+    if old is None:return False
+    # g6670 revision: the search-value head cut, the PL rating on the latest 64 checkpoints and 40,960 games, PPG
+    # floor .25 and PPG clip 3.0 with a one-time Adam rescale; adopted once, then kept; trainer-only.
+    from brass_ai.recovery import training_revision_g6670 as g6670
+    old=g6670.project(old,new)
     if old is None:return False
     # Width changes need a converted checkpoint, not an ordinary recipe switch.
     if old.get('utility_hidden',32)!=new.get('utility_hidden',32):return False

@@ -378,7 +378,12 @@ def initialize(phases,model,config,*,raw,generation,root,run):
             lowering_floor = (saved_value['contract'] == config['value_phase']['contract'] == KL_STOP_CONTRACT
                 and saved_value['beta_clone_min'] == .25 and config['value_phase']['beta_clone_min'] == .125
                 and dict(saved['options'], value_phase=dict(saved_value, beta_clone_min=.125)) == phases.options)
-            options_match = options_match or raising_floor or lowering_floor
+            # g6670: the floor goes back up to .25 once, from g3658's .125 (training_revision_g6670).
+            from .training_revision_g6670 import raises_ppg_floor
+            raising_quarter = (raises_ppg_floor(config) and saved_value['contract'] == config['value_phase']['contract'] == KL_STOP_CONTRACT
+                and saved_value['beta_clone_min'] == .125 and config['value_phase']['beta_clone_min'] == .25
+                and dict(saved['options'], value_phase=dict(saved_value, beta_clone_min=.25)) == phases.options)
+            options_match = options_match or raising_floor or lowering_floor or raising_quarter
             if two_iteration(saved['options']['value_phase']):fields.add('phase_origin')
             expected_contract=TWO_ITER_CHECKPOINT if two_iteration(saved['options']['value_phase']) else CHECKPOINT
             require(saved.get('contract')==expected_contract and set(saved)==fields and options_match,
@@ -397,6 +402,17 @@ def initialize(phases,model,config,*,raw,generation,root,run):
                     scope='PPG beta floor .25 -> .125 (value phase and search-head Stage C) and beta set to .125 once. '
                           'Preserve the KL trip history, both Adams/RNG, cached replay, cadence and gate evidence.')
                 phases.adoption=copy.deepcopy(phases.ppg_schedule_migration);phases.beta=.125
+            if raising_quarter:
+                # The user's g6670 change: beta at least .25 at once. Trips, Adams/RNG, replay and cadence stay.
+                from .training_revision_g6670 import FLOOR_MIGRATION
+                require(type(phases.beta) in (int, float) and math.isfinite(phases.beta) and .125 <= phases.beta <= 32,
+                        'Invalid saved PPG beta before the .25 floor')
+                phases.ppg_schedule_migration=dict(contract=FLOOR_MIGRATION,origin=generation,
+                    beta_before=phases.beta,beta_after=max(.25,phases.beta),previous_adoption=copy.deepcopy(phases.adoption),
+                    scope='PPG beta floor .125 -> .25 (value phase; the search-head Stage C floor .125 no longer binds) and '
+                          'beta raised to .25 once if below. Preserve the KL trip history, both Adams/RNG, cached replay, '
+                          'cadence and gate evidence.')
+                phases.adoption=copy.deepcopy(phases.ppg_schedule_migration);phases.beta=max(.25,phases.beta)
             if adopting_kl_stop:
                 phases.ppg_schedule_migration=dict(contract=KL_STOP_MIGRATION,origin=generation,
                     beta_before=phases.beta,beta_after=phases.beta,previous_adoption=copy.deepcopy(phases.adoption),
@@ -469,15 +485,18 @@ def initialize(phases,model,config,*,raw,generation,root,run):
     require(len(phases.optimizer.param_groups)==1 and math.isfinite(group['lr']) and group['lr']>0
         and group['weight_decay']==0,'Invalid g210 value Adam')
     # g5466: once, on the adoption generation's checkpoint, the moments move from the 1.0 clip to 2.2;
-    # g5685: the same from 2.2 to 2.4; g6230: from 2.4 to 2.5 (an earlier receipt in the group makes its own a no-op).
+    # g5685: the same from 2.2 to 2.4; g6230: from 2.4 to 2.5; g6670: from 2.5 to 3.0 (an earlier receipt in the
+    # group makes its own a no-op).
     from .training_revision_g5466 import rescale_ppg
     from .training_revision_g5685 import rescale_ppg as rescale_ppg_g5685
     from .training_revision_g6230 import rescale_ppg as rescale_ppg_g6230
+    from .training_revision_g6670 import rescale_ppg as rescale_ppg_g6670
     phases.ppg_adam_rescale=None
     if saved is not None:
         phases.ppg_adam_rescale=(rescale_ppg(phases.optimizer,config,generation) or
                                  rescale_ppg_g5685(phases.optimizer,config,generation) or
-                                 rescale_ppg_g6230(phases.optimizer,config,generation))
+                                 rescale_ppg_g6230(phases.optimizer,config,generation) or
+                                 rescale_ppg_g6670(phases.optimizer,config,generation))
     require(type(phases.cache_origin) is int and 0<=phases.cache_origin<=generation,'Invalid g210 replay origin')
     from .utility import reward_spec,reviewed_reward_upgrade
     previous_reward=(raw or {}).get('model_config',{}).get('utility')
@@ -511,8 +530,8 @@ def fit(phases,model,preparation_pool):
     require(phases.collection_source is not None,'g210 PPG requires sealed collection provenance')
     began=time.perf_counter();c=phases.options['value_phase'];rate=getattr(phases,'ppo_peak',None)
     from . import training_revision_g5466 as g5466
-    from .training_revision_g6230 import ppg_grad_clip
-    clip=ppg_grad_clip(phases.config)  # g5402: PPG's own clip (1.0); g5466: 2.2; g5685: 2.4; g6230: 2.5
+    from .training_revision_g6670 import ppg_grad_clip
+    clip=ppg_grad_clip(phases.config)  # g5402: PPG's own clip (1.0); g5466: 2.2; g5685: 2.4; g6230: 2.5; g6670: 3.0
     # g5466: the era heads step at the PPO rate (the one PPG's peak is .65 of), fixed for the phase.
     heads_rate=rate['ppo_lr'] if rate is not None and g5466.fixed_head_rate(phases.config) else None
     from .training_revision_g3140 import bootstrap as bootstrap_settings

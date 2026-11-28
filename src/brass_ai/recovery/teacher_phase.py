@@ -124,6 +124,9 @@ def plan_jobs(config, state, *, model_id, export_hash, epoch, ready, native_sour
         use_override = teacher_weight is not None and (not seated or stage == 'C')
         value = binding(teacher_weight if use_override else
                         (0. if c['search_value']['stage']=='off' else weight))
+        from .training_revision_g6670 import search_head_cut
+        require(not search_head_cut(config) or value['w'] == 0.,
+                'The g6670 revision cut the search-value head; the teacher tables bind the main value (w = 0)')
         for job in jobs:
             job.update(seating=c['seating'], fast_search=copy.deepcopy(c['fast_search']),
                        search_value=dict(value))

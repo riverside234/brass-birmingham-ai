@@ -40,6 +40,11 @@ class SearchValueIteration:
                     'Search value reward/contract differs; reviewed retirement required')
             require((saved['companion'] is not None) == hasattr(model,'search_value_head'),
                     'Missing search head/companion optimizer')
+            # g6670: after the adoption generation the committed checkpoint has neither the head nor its Adam.
+            from .training_revision_g6670 import KEY as G6670, search_head_cut
+            if search_head_cut(config) and state['iteration'] > config[G6670]['from_generation']:
+                require(saved['companion'] is None and not hasattr(model,'search_value_head'),
+                        'The g6670 revision cut the search-value head; the checkpoint still has it')
         if rebuild is not None:
             from .transfer_resume import search_payload
             saved = search_payload(saved,rebuild)
@@ -77,6 +82,9 @@ class SearchValueIteration:
         # g4475: the head's training is paused; admission, shard retirement and the era heads' search rows go on.
         from .training_revision_g4475 import search_value_paused
         self.paused = self.mode == 'on' and search_value_paused(config)
+        # g6670: the paused head is cut at this iteration's PPG boundary (removed before the next checkpoint).
+        from .training_revision_g6670 import search_head_cut
+        self.cut = self.paused and search_head_cut(config)
         self.report = None
         self.pending_generation = None
         self._publication = None
@@ -180,11 +188,28 @@ class SearchValueIteration:
         if self.report is None and getattr(self, 'paused', False):
             # g4475: retire aged-out shards at the collection checkpoint G, as the training pass would, and stop.
             self.report = self.phase.paused(self.generation)
+            if getattr(self, 'cut', False) and hasattr(self.model, 'search_value_head'):
+                self.report['cut'] = self.cut_head()
         if self.report is None:
             if self.mode == 'on' and self.phase.trunk_scale() > 0 and 'schedule' not in self.phase.options:
                 self.report = dict(updated=False,reason='No ordinary PPG probe; guarded pass deferred')
             else: self._finish()
         return self.report
+
+    def cut_head(self):
+        """g6670: remove the paused search-value head and its own Adam from the model before the commit. Nothing reads
+        it (the teacher tables bind w = 0 and its training is paused); the shards and their retirement go on."""
+        from brass_ai.learning.search_value import width
+        from .training_revision_g6670 import CUT_CONTRACT
+        head = self.model.search_value_head
+        receipt = dict(contract=CUT_CONTRACT, generation=self.generation, width=width(self.model),
+                       parameters=sum(p.numel() for p in head.parameters()),
+                       companion_steps=self.phase.companion.steps if self.phase.companion is not None else None,
+                       stage=copy.deepcopy(self.phase.machine.state.get('stage')),
+                       kept="the stage record, the value shards, their retirement and the era heads' search rows")
+        del self.model.search_value_head
+        self.phase.companion = None
+        return receipt
 
     def payload(self, generation):
         require(generation == self.generation+1, 'Search value commit generation differs')

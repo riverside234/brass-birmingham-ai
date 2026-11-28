@@ -408,7 +408,7 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
         phases.diversity=diversity
         scale=getattr(phases,'ppg_adam_rescale',None)
         if scale is not None:
-            # The receipt's contract names its revision (g5466, g5685 or g6230).
+            # The receipt's contract names its revision (g5466, g5685, g6230 or g6670).
             print(f'{scale["contract"].split("/")[0]}: PPG clip {scale["old_clip"]:g} -> {scale["new_clip"]:g}; PPG Adam exp_avg '
                   f'x{scale["first_moment"]:.3f}, exp_avg_sq x{scale["second_moment"]:.3f} on {scale["parameters"]} tensors '
                   f'(from {scale["steps"]} logged steps; fit clip rate {scale["predicted_clipped_percent"]:.1f}% vs '
@@ -977,6 +977,19 @@ def _train(root,run_path,config,*,iterations=1,device='cpu',initial=None,mono=No
                             exploration_state,floor_transition=exploration.anchor_floor_transition(config,exploration_state,state.get('policy_anchor'))
                             if floor_transition:report['entropy_floor_transition']=floor_transition
                     report['timings']['evaluation_seconds']=time.monotonic()-evaluation_began
+                    from .training_revision_g6670 import removes_parent_checkpoints
+                    if quality and removes_parent_checkpoints(config):
+                        # g6670: once, after the first committed iteration, the retired rating checkpoints stored in
+                        # the parent run are removed there where nothing pins them (rating_parent_cleanup).
+                        from .rating_parent_cleanup import cleanup as parent_rating_cleanup
+                        parent_cleanup=parent_rating_cleanup(root,run,state,generation=state['iteration'])
+                        if parent_cleanup is not None:
+                            report['parent_rating_cleanup']=parent_cleanup
+                            for where,item in parent_cleanup['parents'].items():
+                                print(f'g6670 parent rating cleanup {where}: {item["status"]}; {item["removed"]} of '
+                                      f'{item["planned"]} weights files removed ({item["removed_bytes"]/2**30:.2f} GiB), '
+                                      f'{item["kept_pinned"]} kept (still pinned), {item["missing"]} already gone'
+                                      +(f'; {item["reason"]}' if item.get('reason') else ''),flush=True)
                     from .retention import scheduled_prune
                     cleanup_began=time.monotonic()
                     report['cleanup']=scheduled_prune(root,run,config['retention'],background=background_purge)

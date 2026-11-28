@@ -26,9 +26,12 @@ def _schedule(config):
 
 
 def applied(config):
+    """True on the lineage that adopted the .125 floor, including after g6670 raised it back to .25 (its recipe
+    projection restores .125, so the transitions and the recipe stages read the same history)."""
     from .ppg_g210 import KL_STOP_CONTRACT
+    from .training_revision_g6670 import raises_ppg_floor
     value = (config or {}).get('value_phase') or {}
-    return value.get('contract') == KL_STOP_CONTRACT and value.get('beta_clone_min') == FLOOR
+    return value.get('contract') == KL_STOP_CONTRACT and (value.get('beta_clone_min') == FLOOR or raises_ppg_floor(config))
 
 
 def configure(config):
@@ -50,7 +53,8 @@ def configure(config):
 
 
 def previous(config):
-    """The recipe with the .25 floors, used only when comparing reviewed transitions."""
+    """The recipe with the .25 floors, used only when comparing reviewed transitions. With g6670 the value-phase
+    floor is .25 already, and both sides of a comparison get the same .25 Stage C floor."""
     if not applied(config): return config
     result = copy.deepcopy(config)
     result['value_phase']['beta_clone_min'] = BEFORE

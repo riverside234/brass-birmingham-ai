@@ -201,6 +201,8 @@ def main():
                         help='Adopt the g5685 clip revision at this committed generation (set once, then kept)')
     parser.add_argument('--soft-head-revision', action='store_true',
                         help='Adopt the g6230 soft-head revision at this committed generation (set once, then kept)')
+    parser.add_argument('--g6670-revision', action='store_true',
+                        help='Adopt the g6670 revision at this committed generation (set once, then kept)')
     parser.add_argument('--soft-policy-weight', type=float, choices=(2., 4., 6., 8., 10., 12., 16.),
                         help="The soft head's weight x beta from this committed generation (8 -> 4 at g6547); defaults "
                              'to the weight in force in this run')
@@ -226,6 +228,7 @@ def main():
         *(['--auxiliary-revision'] if args.auxiliary_revision else []),
         *(['--clip-revision'] if args.clip_revision else []),
         *(['--soft-head-revision'] if args.soft_head_revision else []),
+        *(['--g6670-revision'] if args.g6670_revision else []),
     ], cwd=ROOT)
 
 

@@ -97,6 +97,54 @@ def compact_history(root,run,state):
     state['ratings']=updated
 
 
+def stored_in(path):
+    """The run directory that holds a rated checkpoint's weights (population/ and seed/ files sit one level down);
+    a directory name, never a file path, so a retired entry pins nothing."""
+    from pathlib import PurePosixPath
+    parent=PurePosixPath(path).parent
+    return (parent.parent if parent.name in ('population','seed') else parent).as_posix()
+
+
+def retire_named(rating,names,**extra):
+    """g6670: move the named rated checkpoints from rating['agents'] to rating['retired_agents'] as name ->
+    dict(kind, generation, model_id, stored_in, **extra), without a weights path, so retention no longer pins their
+    files. Names already retired or absent are skipped. Returns the names retired now."""
+    agents=rating['agents'];retired=rating.setdefault('retired_agents',{});done=[]
+    for a in names:
+        if a not in agents:continue
+        require(a not in (IL,V4,SEED) and agents[a]['kind']=='model','Only rated history checkpoints retire')
+        require(a not in retired,'A rated checkpoint was retired twice')
+        entry=agents.pop(a)['checkpoint']
+        retired[a]=dict(kind='model',generation=entry['generation'],model_id=entry['model_id'],
+                        stored_in=stored_in(entry['path']),**extra)
+        done.append(a)
+    return done
+
+
+def retire_checkpoints(rating,keep):
+    """g6670: keep the latest `keep` rated history checkpoints in rating['agents'] (generation-0, v4 and the
+    trained-start baseline stay as references) and retire the older ones (retire_named). Returns the names retired
+    now."""
+    agents=rating['agents']
+    rated=sorted((a for a,e in agents.items() if a not in (IL,V4,SEED) and e['kind']=='model'),
+                 key=lambda a:(agents[a]['checkpoint']['generation'],a))
+    return retire_named(rating,rated[:-keep] if len(rated)>keep else [])
+
+
+def known_agents(rating):
+    """g6670: the kept agents and the retired ones (generation and model id only), for the PL report's plot and
+    alerts, which name every agent of the fitted games."""
+    retired={a:dict(kind=e['kind'],checkpoint=dict(generation=e['generation'],model_id=e['model_id']))
+             for a,e in rating.get('retired_agents',{}).items()}
+    return dict(retired,**rating['agents'])
+
+
+def latest_games(games,count):
+    """g6670: the latest `count` rated games, in the PL encoding's order (slot, setup, candidate seat, game id)."""
+    ordered=sorted(games,key=lambda g:(g['slot'],g['setup_id'],g['candidate_seat'],g['game_id']))
+    return ordered[-count:]
+
+
 def initialize(root,run,state,config):
     c=validate_rating(config['rating'])
     if c['enabled']:
@@ -385,6 +433,11 @@ def plot_report(path,report,agents,run=None,state=None):
 def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=None):
     rating=validate_state(root,state['ratings'],config['rating']);c=config['rating']
     if not c['enabled']:return None
+    # g6670: only the latest 64 rated history checkpoints are kept and used; the first trim is this pass.
+    from .training_revision_g6670 import rating_window
+    window=rating_window(config)
+    if window is not None and retire_checkpoints(rating,window['checkpoints']):
+        write_json(run/'state.json',state)
     from .rating_coverage import seed_reference
     baseline=seed_reference(root,state,config)
     if baseline is not None and SEED not in rating['agents']:
@@ -452,15 +505,29 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
         all_rows=read_games(root,rating)+rows
         timing['history_read_seconds']=time.perf_counter()-phase
         compute=config.get('rating_compute')
-        fitted,samples=estimate([r for r in all_rows if r['kind']=='rating'],working['agents'],c,
+        rated=[r for r in all_rows if r['kind']=='rating'];fit_agents=working['agents']
+        retired='retired_agents' in working
+        if window is None and retired:
+            # g6670 cleanup of a parent run: every game still fitted, its retired agents included by name.
+            fit_agents=sorted(known_agents(working))
+        if window is not None:
+            # g6670: the latest 40,960 rated games; every agent in them (kept or retired) and the references.
+            rated=latest_games(rated,window['games'])
+            fit_agents=sorted({a for r in rated for a in r['agents']}|{IL,V4,spec.get('baseline',IL)})
+            known=known_agents(working)
+            require(all(a in known for a in fit_agents),'A fitted PL agent is neither kept nor retired')
+            timing['fit_window']=dict(games=len(rated),first_slot=rated[0]['slot'],agents=len(fit_agents),
+                                      kept_checkpoints=len(working['agents']))
+        fitted,samples=estimate(rated,fit_agents,c,
             telemetry=timing,baseline=spec.get('baseline',IL),bootstrap=rating_bootstrap(),
             **(dict(compute=compute) if compute is not None else {}))
+        shown=dict(working,agents=known_agents(working)) if window is not None or retired else working
         phase=time.perf_counter()
         recent=state.get('recent_training',[])
         health=next((r['il_kl_limit']['health'] for r in reversed(recent) if r.get('il_kl_limit') and r['iteration']+1==generation),None)
         panels=panel_report(rows,spec['candidate'],health,c['seed'],gates=rating.get('panel_gates'));write_once(directory/'panels.json',panels)
         previous_panels=panel_history(root,rating)
-        fitted.update(generation=generation,candidate=spec['candidate'],alerts=alerts(fitted,working,panels,previous_panels),
+        fitted.update(generation=generation,candidate=spec['candidate'],alerts=alerts(fitted,shown,panels,previous_panels),
             protocol=dict(main_games=c['setups']*4,panel_games=sum(p['games'] for p in panels['panels'].values()),search=False,exploration=0.,focus='neutral'),
             spec=receipt(root,directory/'spec.json'),records=receipt(root,records_path),panels=receipt(root,directory/'panels.json'))
         if 'coverage' in spec:fitted['coverage']=copy.deepcopy(spec['coverage'])
@@ -477,13 +544,14 @@ def schedule(root,run,state,config,*,device='cpu',mono=None,inference_devices=No
             temporary.replace(samples_path)
         timing['report_publish_seconds']=time.perf_counter()-phase
         phase=time.perf_counter()
-        plot_report(directory/'progress.svg',fitted,working['agents'],run,state)
+        plot_report(directory/'progress.svg',fitted,shown['agents'],run,state)
         timing['plot_seconds']=time.perf_counter()-phase
         phase=time.perf_counter()
         slot=dict(generation=generation,records=receipt(root,records_path),report=receipt(root,directory/'report.json'),
                   spec=receipt(root,directory/'spec.json'),panels=receipt(root,directory/'panels.json'),
                   bootstrap=receipt(root,samples_path))
         working['slots'].append(slot);working['latest_report']=slot['report'];rating=working;state['ratings']=rating
+        if window is not None:retire_checkpoints(rating,window['checkpoints'])  # g6670: the new candidate is kept
         gates=panel_gates.prepare(root,state,config)
         if gates is not None:rating['panel_gates']=gates
         coverage=prepare_coverage(root,state,config)
