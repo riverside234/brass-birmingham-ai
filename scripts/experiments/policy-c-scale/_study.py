@@ -52,19 +52,48 @@ def generation_entry(state, generation):
     return rows[0]
 
 
-def source_roots(run, incoming, saved, reward_id):
+def source_collections(run, entries):
+    archive = None
+    for entry in entries:
+        generation = entry['generation']
+        directory = f'iteration-{generation:04d}'
+        collection_path = run / directory / 'teacher-shadow/collection.json'
+        if collection_path.is_file():
+            yield read_json(collection_path)
+            continue
+        report_key = directory + '/report.json'
+        if (run / report_key).is_file():
+            report = read_json(run / report_key)
+        else:
+            if archive is None:
+                archive_path = run / 'retention-history.json'
+                compressed = archive_path.with_suffix('.json.gz')
+                if archive_path.is_file():
+                    archive = read_json(archive_path)
+                elif compressed.is_file():
+                    with gzip.open(compressed, 'rt', encoding='utf-8') as stream:
+                        archive = json.load(stream)
+                else:
+                    archive = {}
+            report = archive.get(report_key, {}).get('summary', {})
+        collection = (report.get('teacher_phase') or {}).get('collection')
+        require(collection, f'Missing source collection evidence for g{generation}: {collection_path}')
+        yield collection
+
+
+def source_roots(run, incoming, saved, reward_id, report):
     generation = incoming['generation']
-    report_path = run / f'iteration-{generation:04d}/teacher-shadow/collection.json'
-    require(report_path.is_file(), f'Missing source collection report: {report_path}')
-    report = read_json(report_path)
+    actions = report['teacher_actions']['per_table']
+    metrics = report.get('collection_metrics') or []
+    if metrics and 'job' in (metrics[0].get('cpu_inference') or {}).get('revision', {}):
+        for table, metric in zip(actions, metrics, strict=True):
+            exploration = metric['cpu_inference']['revision']['job']['exploration']
+            require(table['cotton_exploration'] == ('cotton' in exploration), 'Teacher cotton assignment differs')
     tables = {}
-    for job, table, metrics in zip(report['post_admission_per_table_seconds'],
-                                   report['teacher_actions']['per_table'], report['collection_metrics'], strict=True):
-        exploration = metrics['cpu_inference']['revision']['job']['exploration']
-        require(table['cotton_exploration'] == ('cotton' in exploration), 'Teacher cotton assignment differs')
+    for job, table in zip(report['post_admission_per_table_seconds'], actions, strict=True):
         group = 'cotton' if table['cotton_exploration'] else 'normal'
         tables['teacher/' + job] = (table['split'], group)
-    require(len(tables) == len(report['teacher_actions']['per_table']), 'Duplicate teacher table')
+    require(len(tables) == len(actions), 'Duplicate teacher table')
 
     receipts = [receipt for receipt in saved['buffer']['receipts']
                 if receipt['generation'] == generation and receipt['reward_id'] == reward_id]
@@ -111,8 +140,8 @@ def source_roots(run, incoming, saved, reward_id):
 def pooled_roots(run, entries, saved, reward_id):
     groups = {group: [] for group in GROUPS[1:]}
     source_counts = {}
-    for entry in entries:
-        rows = source_roots(run, entry, saved, reward_id)
+    for entry, report in zip(entries, source_collections(run, entries), strict=True):
+        rows = source_roots(run, entry, saved, reward_id, report)
         source_counts[entry['generation']] = {group: len(values) for group, values in rows.items()}
         for group, values in rows.items():
             groups[group].extend(values)
@@ -192,9 +221,10 @@ class DiagnosticTurn:
 
 
 class Probes:
-    def __init__(self, binary, core, job, inference, ref_scale, stop):
+    def __init__(self, binary, core, job, inference, ref_scale, stop, *, reference_n=REF_N, fast_n=SHORT_N):
         self.binary, self.core, self.job, self.inference = binary, core, job, inference
         self.ref_scale, self.stop = ref_scale, stop
+        self.reference_n, self.fast_n = reference_n, fast_n
         calibration = lab_teacher.count_calibration(core, job)
         self.timing = dict(estimate_ns=calibration['estimate_ns'], calibration_id=digest(calibration))
 
@@ -210,7 +240,8 @@ class Probes:
         require(not self.stop.is_set(), 'C_scale study cancelled')
         archived = row['teacher']
         profile = 'fast' if fast else 'full'
-        budget = dict(mode='count', full=REF_N if fast else n, full_k=K, fast=n if fast else SHORT_N, fast_k=K,
+        budget = dict(mode='count', full=self.reference_n if fast else n, full_k=K,
+                      fast=n if fast else self.fast_n, fast_k=K,
                       c_scale=self.ref_scale if fast else scale)
         if fast:
             budget['fast_c_scale'] = scale
@@ -369,11 +400,11 @@ def compare_roots(sampler, rows, probes, targets, compare, scales, lanes):
 
 
 def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_choices=None,
-         default_targets=TARGETS, default_weight=1):
-    parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study')
+         default_targets=TARGETS, default_weight=1, default_run=RUN, reference_n=REF_N):
+    parser = argparse.ArgumentParser(description=f'Offline {kind} search C_scale study with a K{K}/{reference_n} reference')
     parser.add_argument('--candidate-n', type=int, choices=candidate_choices, default=candidate_n,
                         help=f'Candidate search trajectories with requested K={K} (default: {candidate_n})')
-    parser.add_argument('--run', default=RUN)
+    parser.add_argument('--run', default=default_run, help=f'Training run (default: {default_run})')
     parser.add_argument('--generation', type=int, default=os.getenv('GEN'),
                         help='Frozen checkpoint (default: GEN or the latest committed generation in the run)')
     parser.add_argument('--collected-generation', '--collected-generations', type=int, nargs='+',
@@ -381,9 +412,10 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     parser.add_argument('--lanes', type=int, default=int(os.getenv('LANES', str(DEFAULT_LANES))),
                         help=f'Concurrent CPU workers (default: {DEFAULT_LANES} or LANES)')
     parser.add_argument('--ref-scale', type=float, choices=(0.1, 1.0), default=float(os.getenv('REF_SCALE', '0.1')))
+    weight_help = '1 if the checkpoint has a search head, otherwise 0' if default_weight is None else str(default_weight)
     parser.add_argument('--w', type=float, default=default_weight,
                         help=f'Search head weight from 0 to 1 in steps of 0.01, applied to both searches '
-                             f'(default: {default_weight})')
+                             f'(default: {weight_help})')
     parser.add_argument('--normal-positions', type=int, default=default_targets['normal'],
                         help=f'Normal position target (default: {default_targets["normal"]})')
     parser.add_argument('--cotton-positions', type=int, default=default_targets['cotton'],
@@ -394,10 +426,11 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     parser.add_argument('--sampler', default=os.getenv('BRASS_NATIVE_WORKER'))
     parser.add_argument('--toolchain', default='1.99.1')
     args = parser.parse_args()
-    try:
-        binding(args.w)
-    except ValueError:
-        parser.error('--w must be between 0 and 1 in steps of 0.01.')
+    if args.w is not None:
+        try:
+            binding(args.w)
+        except ValueError:
+            parser.error('--w must be between 0 and 1 in steps of 0.01.')
     candidate_n = args.candidate_n
     if candidate_choices is None and not 8 <= candidate_n <= 4096:
         parser.error('--candidate-n must be between 8 and 4096.')
@@ -427,8 +460,13 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     torch.set_num_threads(2)
     model, raw = load_checkpoint(checkpoint)
     model.eval()
-    require(raw['step'] == args.generation and raw['model_id'] == entry['model_id']
-            and hasattr(model, 'search_value_head'), 'Expected checkpoint with a search value head')
+    require(raw['step'] == args.generation and raw['model_id'] == entry['model_id'],
+            'Loaded checkpoint does not match the committed generation')
+    has_search_head = hasattr(model, 'search_value_head')
+    if args.w is None:
+        args.w = float(has_search_head)
+    if args.w > 0 and not has_search_head:
+        parser.error('This checkpoint has no search value head. Use --w 0.')
     saved = raw['training']['search_value']
     job = diagnostic_job(state['signature']['config'], state, entry, saved,
                          raw['training'].get('utility_calibration'), weight=args.w)
@@ -437,11 +475,11 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     build = lab_cpu_runtime.resolve(ROOT)
     core = build['teacher_execution_core']
     lab_cpu_runtime.raise_open_file_limit()
-    cap_seconds = max(REF_N, candidate_n) * lab_cpu_runtime.COUNT_CAP_PER_TRAJECTORY_NS / 1e9
+    cap_seconds = max(reference_n, candidate_n) * lab_cpu_runtime.COUNT_CAP_PER_TRAJECTORY_NS / 1e9
     lab_teacher.COUNT_TURN_SECONDS = max(lab_teacher.COUNT_TURN_SECONDS, cap_seconds + 30)
     sources = ', '.join(f'g{generation}' for generation in referenced)
     print(f'g{args.generation} | {sources} positions | targets {targets} | '
-          f'{args.lanes} lanes | w={args.w:g} | reference K{K}/{REF_N} C_scale={args.ref_scale:g} | '
+          f'{args.lanes} lanes | w={args.w:g} | reference K{K}/{reference_n} C_scale={args.ref_scale:g} | '
           f'candidate K{K}/{candidate_n} | '
           f'opening T={STUDY_OPENING["temperature"]:g}',
           flush=True)
@@ -454,16 +492,18 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
         if not sampler.is_file() and not args.sampler:
             sampler = build_binary(ROOT / 'native/Cargo.toml', scratch / 'sampler', 'brass-ai-worker', args.toolchain)
         require(sampler.is_file(), f'Missing native position sampler: {sampler}')
-        manifest = lab_cpu_models.bundle_root(ROOT) / entry['model_id'] / 'manifest.json'
+        bundle = lab_cpu_models.bundle_directory(lab_cpu_models.bundle_root(ROOT), entry['model_id'], has_search_head)
+        manifest = bundle / 'manifest.json'
         if not manifest.is_file():
             manifest = scratch / 'model/manifest.json'
-            lab_cpu_models.export_bundle(model, manifest.parent)
+            lab_cpu_models.export_bundle(model, manifest.parent, search_delta=has_search_head)
         binary = study_worker(runtime_path(build['teacher']['path']), scratch, args.toolchain, core)
         inference = dict(contract=lab_cpu_runtime.CONTRACT,
                          runtime=dict(path=str(runtime_path(build['runtime']['path'])), sha256=build['runtime']['sha256']),
                          bundle=dict(manifest=str(manifest), sha256=sha(manifest)))
         del raw, model
-        probes = Probes(binary, core, job, inference, args.ref_scale, Event())
+        probes = Probes(binary, core, job, inference, args.ref_scale, Event(), reference_n=reference_n,
+                        fast_n=candidate_n if kind == 'short' else SHORT_N)
         results, attempts = compare_roots(sampler, rows, probes, targets, compare, args.scales, args.lanes)
         worker_sha = sha(binary)
 
@@ -480,7 +520,7 @@ def main(kind, default_scales, compare, summarize, *, candidate_n, candidate_cho
     if len(referenced) == 1:
         source_context['collected_generation'] = referenced[0]
     print_and_save(kind, dict(run=str(run), generation=args.generation, **source_context,
-                              checkpoint=entry, w=args.w, k=K, ref_scale=args.ref_scale, ref_n=REF_N,
+                              checkpoint=entry, w=args.w, k=K, ref_scale=args.ref_scale, ref_n=reference_n,
                               candidate_n=candidate_n, method='native-scale-sweep', game_opening=STUDY_OPENING,
                               lanes=args.lanes, scales=args.scales, worker_sha256=worker_sha, core_sha256=core),
                    groups)

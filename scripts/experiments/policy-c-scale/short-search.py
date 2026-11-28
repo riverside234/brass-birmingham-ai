@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Run short K8 searches (default 96 simulations) against a K8/3000 reference."""
+"""Run short K8 searches (default 128 simulations) against a K8/4000 reference."""
 
 from statistics import mean
 
 import numpy as np
 
-from _study import REF_N, SHORT_N, completed_q, main
+from _study import completed_q, main
 
+RUN = 'artifacts/step5/joint7-v11-2-g4970-rail025-soft8-beta0.02'
+SHORT_N = 128
+REF_N = 4000
 SCALES = (0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 HEADER = 'short_scale  match_long_move  differs_from_policy  mean_Q_gap  miss_Q_gap  Q_supported_misses'
 
@@ -55,4 +58,5 @@ def summarize(valid, scales):
 
 
 if __name__ == '__main__':
-    main('short', SCALES, compare, summarize, candidate_n=SHORT_N)
+    main('short', SCALES, compare, summarize, candidate_n=SHORT_N, default_weight=None,
+         default_run=RUN, reference_n=REF_N)
